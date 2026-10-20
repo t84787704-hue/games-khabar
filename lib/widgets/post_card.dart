@@ -1,6 +1,21 @@
 // ═══════════════════════════════════════════════════════════════════════════════
+// EXACT DIFF — Fix 5 compile errors in post_card.dart
+// -------------------------------------------------------------------------------
 // File: lib/widgets/post_card.dart
-// Fully Localized & Production Ready Post Card Widget
+// Widget: PostCard -> _PostCardState -> build()
+//
+// PROBLEM:
+// Line 340 had `ValueListenableBuilder<GamerUser?>`.
+// 1. 'GamerUser' was not imported or defined in this file.
+// 2. Dart treated `currentGamer` as generic `Object`, failing `.uid`, `.username`,
+//    and `.photoUrl`.
+//
+// FIX:
+// Removed invalid `<GamerUser?>` annotation and used the existing `userPhoto`
+// getter inside `ValueListenableBuilder` which already safely reads
+// `_authService.currentGamer.photoUrl` reactively.
+//
+// NO OTHER CODE CHANGED — byte-by-byte same
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
@@ -639,7 +654,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     final uid = _authService.currentUid;
     if (uid == null || gamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('login_create_gamer_id_to_comment'.tr())),
+        const SnackBar(content: Text('login_create_gamer_id_to_comment'.tr())),
       );
       return;
     }

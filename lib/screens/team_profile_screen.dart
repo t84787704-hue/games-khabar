@@ -1,7 +1,7 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
-import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/team_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -186,9 +186,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('msg_match_started_live'.tr()),
-            backgroundColor: const Color(0xFF00FF88),
-            duration: const Duration(seconds: 3),
+            content: Text('match_started_live'.tr()),
+            backgroundColor: Color(0xFF00FF88),
+            duration: Duration(seconds: 3),
           ),
         );
       }
@@ -197,7 +197,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('err_failed_with_msg'.tr(args: [e.toString()])),
+              content: Text('Error: $e'),
               backgroundColor: const Color(0xFFFF4655)),
         );
       }
@@ -221,7 +221,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           .update({'status': 'rejected'}).eq('id', cId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('msg_challenge_rejected'.tr())),
+          const SnackBar(content: Text('Challenge rejected')),
         );
       }
     } catch (e) {
@@ -243,8 +243,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('msg_challenge_cancelled'.tr()),
-            backgroundColor: const Color(0xFF1877F2),
+            content: Text('challenge_cancelled'.tr()),
+            backgroundColor: Color(0xFF1877F2),
           ),
         );
       }
@@ -262,9 +262,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     if (effectiveUid.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('err_login_first'.tr()),
-            backgroundColor: const Color(0xFFFF4655),
+          const SnackBar(
+            content: Text('Please login first'),
+            backgroundColor: Color(0xFFFF4655),
           ),
         );
       }
@@ -292,16 +292,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     if (mounted) {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('msg_join_request_sent'.tr()),
-            backgroundColor: const Color(0xFF00FF88),
+          const SnackBar(
+            content: Text('✅ Join request sent to team leader!'),
+            backgroundColor: Color(0xFF00FF88),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('err_failed_send_join_request'.tr()),
-              backgroundColor: const Color(0xFFFF4655)),
+          const SnackBar(
+              content: Text('Failed to send join request'),
+              backgroundColor: Color(0xFFFF4655)),
         );
       }
     }
@@ -315,9 +315,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
     if (myLeaderTeams.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('err_must_be_leader_to_challenge'.tr()),
-          backgroundColor: const Color(0xFFFF6B00),
+        const SnackBar(
+          content: Text('leader_required_to_challenge'.tr()),
+          backgroundColor: Color(0xFFFF6B00),
         ),
       );
       return;
@@ -340,8 +340,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('err_already_sent_challenge'.tr()),
-              backgroundColor: const Color(0xFFFF4655),
+              content: Text('challenge_already_sent'.tr()),
+              backgroundColor: Color(0xFFFF4655),
             ),
           );
         }
@@ -359,7 +359,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('msg_challenge_sent_to'.tr(args: [opponentTeam.name])),
+            content: Text('⚔️ Challenge sent to ${opponentTeam.name}!'),
             backgroundColor: const Color(0xFF1877F2),
           ),
         );
@@ -374,21 +374,21 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161F2E),
-        title: Text('dialog_delete_team_title'.tr(),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Delete Team?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
-            'dialog_delete_team_desc'.tr(args: [team.name]),
+            'Are you sure you want to delete ${team.name}? This action cannot be undone.',
             style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('cancel'.tr(), style: const TextStyle(color: Colors.white70)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFF4655)),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('delete'.tr(), style: const TextStyle(color: Colors.white)),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -400,26 +400,26 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     if (res == 'ok') {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('msg_team_deleted_success'.tr()),
-              backgroundColor: const Color(0xFF2E7D32)),
+          const SnackBar(
+              content: Text('Team deleted successfully'),
+              backgroundColor: Color(0xFF2E7D32)),
         );
         Navigator.pop(context);
       }
     } else if (res == 'active_match') {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('err_cannot_delete_active_match'.tr()),
-              backgroundColor: const Color(0xFFFF4655)),
+          const SnackBar(
+              content: Text('Cannot delete team during an active match!'),
+              backgroundColor: Color(0xFFFF4655)),
         );
       }
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('err_failed_delete_team'.tr()),
-              backgroundColor: const Color(0xFFFF4655)),
+          const SnackBar(
+              content: Text('Failed to delete team'),
+              backgroundColor: Color(0xFFFF4655)),
         );
       }
     }
@@ -435,8 +435,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161F2E),
-        title: Text('dialog_edit_team_title'.tr(),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Edit Team',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -444,35 +444,35 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               TextField(
                 controller: nameCtrl,
                 style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                    labelText: 'label_team_name'.tr(),
-                    labelStyle: const TextStyle(color: Colors.white70)),
+                decoration: const InputDecoration(
+                    labelText: 'Team Name',
+                    labelStyle: TextStyle(color: Colors.white70)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: tagCtrl,
                 style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                    labelText: 'label_team_tag'.tr(),
-                    labelStyle: const TextStyle(color: Colors.white70)),
+                decoration: const InputDecoration(
+                    labelText: 'Tag',
+                    labelStyle: TextStyle(color: Colors.white70)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: descCtrl,
                 style: const TextStyle(color: Colors.white),
                 maxLines: 2,
-                decoration: InputDecoration(
-                    labelText: 'label_description'.tr(),
-                    labelStyle: const TextStyle(color: Colors.white70)),
+                decoration: const InputDecoration(
+                    labelText: 'Description',
+                    labelStyle: TextStyle(color: Colors.white70)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: reqCtrl,
                 style: const TextStyle(color: Colors.white),
                 maxLines: 2,
-                decoration: InputDecoration(
-                    labelText: 'label_requirements'.tr(),
-                    labelStyle: const TextStyle(color: Colors.white70)),
+                decoration: const InputDecoration(
+                    labelText: 'Requirements',
+                    labelStyle: TextStyle(color: Colors.white70)),
               ),
             ],
           ),
@@ -480,7 +480,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('cancel'.tr(), style: const TextStyle(color: Colors.white70)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -497,13 +497,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               if (ctx.mounted) Navigator.pop(ctx);
               if (ok && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: Text('msg_team_updated_success'.tr()),
-                      backgroundColor: const Color(0xFF2E7D32)),
+                  const SnackBar(
+                      content: Text('Team updated successfully'),
+                      backgroundColor: Color(0xFF2E7D32)),
                 );
               }
             },
-            child: Text('save'.tr(), style: const TextStyle(color: Colors.white)),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -528,11 +528,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
         final team = snapshot.data;
         if (team == null) {
-          return Scaffold(
-            backgroundColor: const Color(0xFF0B0F17),
+          return const Scaffold(
+            backgroundColor: Color(0xFF0B0F17),
             body: Center(
-                child: Text('err_team_not_found'.tr(),
-                    style: const TextStyle(color: Colors.white))),
+                child: Text('Team not found',
+                    style: TextStyle(color: Colors.white))),
           );
         }
 
@@ -573,6 +573,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     SupabaseService.toUuid(widget.teamId).toLowerCase();
                 final targetRawId = widget.teamId.toLowerCase();
 
+                // Find active match involving this viewed team
                 final activeMatch = activeMatches.firstWhere(
                   (m) {
                     final participants = m['participants'];
@@ -593,6 +594,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 final t1 = activeMatch['team1_id']?.toString() ?? '';
                 final t2 = activeMatch['team2_id']?.toString() ?? '';
 
+                // Check if viewer belongs to THIS viewed team
                 final bool isUserInThisTeam = isLeader ||
                     isMember ||
                     userTeams.any((t) {
@@ -604,6 +606,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 final bool isMyOwnTeam = isUserInThisTeam;
                 final bool isViewedMyTeam = isUserInThisTeam;
 
+                // Check which of current user's teams is in this active match (if any)
                 TeamModel? userMatchTeam;
                 for (final ut in userTeams) {
                   final uRaw = ut.id.toLowerCase();
@@ -615,10 +618,18 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   }
                 }
 
+                // 🌟 INTERNATIONAL ESPORTS PERMISSION CHECKS:
+                // 1. Current user is participant in this match (either as this team, or opponent team)
                 final bool isCurrentUserInMatch = hasActiveMatch && userMatchTeam != null;
+                // 2. Current user is the OPPONENT team in this match
                 final bool isMatchOpponent = hasActiveMatch && !isUserInThisTeam && isCurrentUserInMatch;
+                // 3. User can ONLY access live match features if they are participating in this match!
                 final bool canAccessMatch = hasActiveMatch && (isUserInThisTeam || isMatchOpponent);
 
+                // Privacy Level:
+                // LEVEL 1: Team Member / Leader
+                // LEVEL 3: Opponent Team (actually playing against this team right now)
+                // LEVEL 2: Outsider / Non-member (completely restricted from match & DM)
                 final int privacyLevel =
                     isUserInThisTeam ? 1 : (isMatchOpponent ? 3 : 2);
 
@@ -656,10 +667,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           fontSize: 16),
                     ),
                     actions: [
+                      // 1. OWN TEAM ACTIONS
                       if (privacyLevel == 1) ...[
                         if (canAccessMatch) ...[
                           IconButton(
-                            tooltip: 'btn_team_dm'.tr(),
+                            tooltip: 'Team DM 💬',
                             icon: const Icon(Icons.chat_bubble_rounded,
                                 color: Color(0xFF00FF88), size: 22),
                             onPressed: () {
@@ -675,7 +687,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     opponentId: opponentTeamId,
                                     opponentName:
                                         activeMatch['opponent_name'] ??
-                                            'default_opponent'.tr(),
+                                            'Opponent',
                                   ),
                                 ),
                               );
@@ -694,8 +706,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   border: Border.all(
                                       color: const Color(0xFF00FF88)),
                                 ),
-                                child: Text('badge_match_live'.tr(),
-                                    style: const TextStyle(
+                                child: const Text('MATCH LIVE',
+                                    style: TextStyle(
                                         color: Color(0xFF00FF88),
                                         fontWeight: FontWeight.bold,
                                         fontSize: 11)),
@@ -715,16 +727,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 _handleDeleteTeam(team, currentUid);
                               }
                             },
-                            itemBuilder: (ctx) => [
+                            itemBuilder: (ctx) => const [
                               PopupMenuItem(
                                 value: 'edit',
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.edit_rounded,
+                                    Icon(Icons.edit_rounded,
                                         color: Colors.white70, size: 18),
-                                    const SizedBox(width: 8),
-                                    Text('menu_edit_team'.tr(),
-                                        style: const TextStyle(color: Colors.white)),
+                                    SizedBox(width: 8),
+                                    Text('Edit Team',
+                                        style: TextStyle(color: Colors.white)),
                                   ],
                                 ),
                               ),
@@ -732,21 +744,22 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 value: 'delete',
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.delete_forever_rounded,
+                                    Icon(Icons.delete_forever_rounded,
                                         color: Color(0xFFFF4655), size: 18),
-                                    const SizedBox(width: 8),
-                                    Text('menu_delete_team'.tr(),
+                                    SizedBox(width: 8),
+                                    Text('Delete Team',
                                         style:
-                                            const TextStyle(color: Color(0xFFFF4655))),
+                                            TextStyle(color: Color(0xFFFF4655))),
                                   ],
                                 ),
                               ),
                             ],
                           ),
                       ] else if (privacyLevel == 3) ...[
+                        // 2. OPPONENT IN LIVE MATCH (Can coordinate & view live badge)
                         if (canAccessMatch) ...[
                           IconButton(
-                            tooltip: 'btn_team_dm'.tr(),
+                            tooltip: 'Team DM 💬',
                             icon: const Icon(Icons.chat_bubble_rounded,
                                 color: Color(0xFF00FF88), size: 22),
                             onPressed: () {
@@ -758,7 +771,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   builder: (_) => PrivateMatchRoomScreen(
                                     matchId: activeMatchId,
                                     myTeamId: myTeamIdInMatch,
-                                    myTeamName: userMatchTeam?.name ?? 'label_team'.tr(),
+                                    myTeamName: userMatchTeam?.name ?? 'My Team',
                                     opponentId: opponentTeamId,
                                     opponentName: team.name,
                                   ),
@@ -779,8 +792,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   border: Border.all(
                                       color: const Color(0xFF00FF88)),
                                 ),
-                                child: Text('badge_match_live'.tr(),
-                                    style: const TextStyle(
+                                child: const Text('MATCH LIVE',
+                                    style: TextStyle(
                                         color: Color(0xFF00FF88),
                                         fontWeight: FontWeight.bold,
                                         fontSize: 11)),
@@ -789,9 +802,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           ),
                         ],
                       ] else ...[
+                        // 3. OUTSIDER VIEW: NO DM, NO LIVE BADGE!
                         if (myLeaderTeams.isNotEmpty)
                           IconButton(
-                            tooltip: 'btn_challenge_team'.tr(),
+                            tooltip: 'Challenge Team',
                             icon: const Icon(Icons.flash_on_rounded,
                                 color: Color(0xFF1877F2)),
                             onPressed: () => _handleChallenge(team, currentUid),
@@ -804,6 +818,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // 🌟 ONLY SHOW ACTIVE MATCH CARD IF USER IS IN THE MATCH!
                         if (canAccessMatch)
                           Builder(
                             builder: (context) {
@@ -818,7 +833,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       .toLowerCase();
                               final adminNote = activeMatch['admin_note']
                                       ?.toString() ??
-                                  'sub_proof_rejected_mismatch'.tr();
+                                  'Invalid proof screenshot';
 
                               final submittedBy = (activeMatch[
                                           'submitted_by_team_id'] ??
@@ -883,15 +898,15 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       ),
                                     ],
                                   ),
-                                  child: Row(
+                                  child: const Row(
                                     children: [
-                                      const Icon(Icons.emoji_events_rounded,
+                                      Icon(Icons.emoji_events_rounded,
                                           color: Color(0xFF00FF88), size: 24),
-                                      const SizedBox(width: 10),
+                                      SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
-                                          'msg_proof_accepted_win'.tr(),
-                                          style: const TextStyle(
+                                          '✅ Proof Accepted - You Are Win! 🏆',
+                                          style: TextStyle(
                                             color: Color(0xFF00FF88),
                                             fontWeight: FontWeight.bold,
                                             fontSize: 14,
@@ -946,7 +961,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              'msg_proof_rejected_retry'.tr(args: [adminNote, '$proofCount', '3']),
+                                              '❌ Proof Rejected - $adminNote - Dubara Proof Add Karo (Attempts: $proofCount/3)',
                                               style: const TextStyle(
                                                 color: Color(0xFFFF4655),
                                                 fontWeight: FontWeight.bold,
@@ -979,8 +994,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               size: 16),
                                           label: Text(
                                               canAddMore
-                                                  ? 'btn_add_proof_again'.tr(args: ['$proofCount', '3'])
-                                                  : 'btn_proof_limit_reached'.tr(),
+                                                  ? 'Add Proof Again ($proofCount/3)'
+                                                  : '❌ Proof Limit Reached (3/3)',
                                               style: const TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 12)),
@@ -995,21 +1010,21 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                     opponentId: opponentTeamId,
                                                     myTeamName: isMyOwnTeam
                                                         ? team.name
-                                                        : (userMatchTeam?.name ?? 'label_team'.tr()),
+                                                        : (userMatchTeam?.name ?? 'My Team'),
                                                     opponentName: isMyOwnTeam
                                                         ? (activeMatch[
                                                                 'opponent_name'] ??
-                                                            'default_opponent'.tr())
+                                                            'Opponent')
                                                         : team.name,
                                                   );
                                                   if (ended == true && mounted) {
                                                     ScaffoldMessenger.of(context)
                                                         .showSnackBar(
-                                                      SnackBar(
+                                                      const SnackBar(
                                                         content: Text(
-                                                            'msg_new_proof_under_review'.tr()),
+                                                            'Naya proof bhej diya gaya! Under Review.'),
                                                         backgroundColor:
-                                                            const Color(0xFFFFB800),
+                                                            Color(0xFFFFB800),
                                                       ),
                                                     );
                                                   }
@@ -1051,23 +1066,23 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           color: Color(0xFFFFB800),
                                           size: 22),
                                       const SizedBox(width: 10),
-                                      Expanded(
+                                      const Expanded(
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'heading_proof_under_review'.tr(),
-                                              style: const TextStyle(
+                                              '⏳ Your Proof Under Review',
+                                              style: TextStyle(
                                                 color: Color(0xFFFFB800),
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 14,
                                               ),
                                             ),
-                                            const SizedBox(height: 2),
+                                            SizedBox(height: 2),
                                             Text(
-                                              'sub_proof_under_review'.tr(),
-                                              style: const TextStyle(
+                                              'Admin is reviewing your submitted match proof.',
+                                              style: TextStyle(
                                                   color: Color(0xFF8B949E),
                                                   fontSize: 11),
                                             ),
@@ -1082,8 +1097,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           borderRadius:
                                               BorderRadius.circular(10),
                                         ),
-                                        child: Text('badge_review'.tr(),
-                                            style: const TextStyle(
+                                        child: const Text('REVIEW',
+                                            style: TextStyle(
                                                 color: Colors.black,
                                                 fontWeight: FontWeight.w900,
                                                 fontSize: 10)),
@@ -1133,9 +1148,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                       ?.toString() ??
                                                   (!isMyOwnTeam
                                                       ? team.name
-                                                      : 'default_opponent'.tr());
+                                                      : 'Opponent Team');
                                               return Text(
-                                                'heading_active_match_live'.tr(args: [opName]),
+                                                '🔥 Active Match vs $opName - Match is Live',
                                                 style: const TextStyle(
                                                   color: Color(0xFF00FF88),
                                                   fontWeight: FontWeight.bold,
@@ -1153,8 +1168,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                             borderRadius:
                                                 BorderRadius.circular(10),
                                           ),
-                                          child: Text('badge_live'.tr(),
-                                              style: const TextStyle(
+                                          child: const Text('LIVE',
+                                              style: TextStyle(
                                                   color: Colors.black,
                                                   fontWeight: FontWeight.w900,
                                                   fontSize: 10)),
@@ -1181,8 +1196,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           icon: const Icon(
                                               Icons.chat_bubble_rounded,
                                               size: 15),
-                                          label: Text('btn_team_dm'.tr(),
-                                              style: const TextStyle(
+                                          label: const Text('Team DM 💬',
+                                              style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 12)),
                                           onPressed: () {
@@ -1195,12 +1210,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                   myTeamId: myTeamIdInMatch,
                                                   myTeamName: isMyOwnTeam
                                                       ? team.name
-                                                      : (userMatchTeam?.name ?? 'label_team'.tr()),
+                                                      : (userMatchTeam?.name ?? 'My Team'),
                                                   opponentId: opponentTeamId,
                                                   opponentName: isMyOwnTeam
                                                       ? (activeMatch[
                                                               'opponent_name'] ??
-                                                          'default_opponent'.tr())
+                                                          'Opponent')
                                                       : team.name,
                                                 ),
                                               ),
@@ -1225,8 +1240,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                             icon: const Icon(
                                                 Icons.stop_circle_rounded,
                                                 size: 16),
-                                            label: Text('btn_end_match'.tr(),
-                                                style: const TextStyle(
+                                            label: const Text('End Match',
+                                                style: TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 12)),
                                             onPressed: () async {
@@ -1239,11 +1254,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                 opponentId: opponentTeamId,
                                                 myTeamName: isMyOwnTeam
                                                     ? team.name
-                                                    : (userMatchTeam?.name ?? 'label_team'.tr()),
+                                                    : (userMatchTeam?.name ?? 'My Team'),
                                                 opponentName: isMyOwnTeam
                                                     ? (activeMatch[
                                                             'opponent_name'] ??
-                                                        'default_opponent'.tr())
+                                                        'Opponent')
                                                     : team.name,
                                               );
                                               if (ended == true) {
@@ -1257,13 +1272,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                   ScaffoldMessenger.of(
                                                           context)
                                                       .showSnackBar(
-                                                    SnackBar(
+                                                    const SnackBar(
                                                       content: Text(
-                                                          'msg_proof_submitted_review'.tr()),
+                                                          'Proof submitted! Under Review.'),
                                                       backgroundColor:
-                                                          const Color(0xFF00FF88),
+                                                          Color(0xFF00FF88),
                                                       duration:
-                                                          const Duration(seconds: 4),
+                                                          Duration(seconds: 4),
                                                     ),
                                                   );
                                                 }
@@ -1279,6 +1294,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             },
                           ),
 
+                        // Incoming / Outgoing Challenges (Own Team Only)
                         if (isMyOwnTeam) ...[
                           StreamBuilder<List<Map<String, dynamic>>>(
                             stream: SupabaseService.client
@@ -1321,17 +1337,17 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         const Icon(Icons.send_rounded,
                                             color: Color(0xFFFF6B00), size: 18),
                                         const SizedBox(width: 8),
-                                        Expanded(
+                                        const Expanded(
                                           child: Text(
-                                            'heading_outgoing_requests'.tr(),
-                                            style: const TextStyle(
+                                            'My Outgoing Requests',
+                                            style: TextStyle(
                                               color: Colors.white,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 15,
                                             ),
                                           ),
                                         ),
-                                        Text('badge_sent_count'.tr(args: ['${outgoingList.length}']),
+                                        Text('${outgoingList.length} Sent',
                                             style: const TextStyle(
                                                 color: Color(0xFFFF6B00),
                                                 fontWeight: FontWeight.bold,
@@ -1343,7 +1359,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       final challengeId = doc['id'];
                                       final toTeamName = doc['to_team_name']
                                               ?.toString() ??
-                                          'default_opponent'.tr();
+                                          'Opponent Team';
 
                                       return Container(
                                         margin: const EdgeInsets.only(bottom: 8),
@@ -1357,7 +1373,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           children: [
                                             Expanded(
                                               child: Text(
-                                                'msg_challenge_sent_to_team'.tr(args: [toTeamName]),
+                                                'Challenge sent to $toTeamName',
                                                 style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 13,
@@ -1374,8 +1390,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                     horizontal: 10, vertical: 4),
                                                 minimumSize: const Size(0, 30),
                                               ),
-                                              child: Text('btn_cancel_caps'.tr(),
-                                                  style: const TextStyle(
+                                              child: const Text('CANCEL',
+                                                  style: TextStyle(
                                                       fontWeight: FontWeight.bold,
                                                       fontSize: 11)),
                                             ),
@@ -1430,17 +1446,17 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         const Icon(Icons.flash_on_rounded,
                                             color: Color(0xFF00FF88), size: 18),
                                         const SizedBox(width: 8),
-                                        Expanded(
+                                        const Expanded(
                                           child: Text(
-                                            'heading_incoming_challenges'.tr(),
-                                            style: const TextStyle(
+                                            'Incoming Challenges',
+                                            style: TextStyle(
                                               color: Colors.white,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 15,
                                             ),
                                           ),
                                         ),
-                                        Text('badge_new_count'.tr(args: ['${incomingList.length}']),
+                                        Text('${incomingList.length} New',
                                             style: const TextStyle(
                                                 color: Color(0xFF00FF88),
                                                 fontWeight: FontWeight.bold,
@@ -1452,7 +1468,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       final challengeId = doc['id'];
                                       final fromTeamName =
                                           doc['from_team_name']?.toString() ??
-                                              'default_opponent'.tr();
+                                              'Opponent Team';
                                       final fromTeamId =
                                           doc['from_team_id']?.toString() ??
                                               '';
@@ -1476,7 +1492,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'msg_team_challenged_you'.tr(args: [fromTeamName]),
+                                              '$fromTeamName challenged your team!',
                                               style: const TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 13.5,
@@ -1502,7 +1518,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                           color: Color(
                                                               0xFFFF4655)),
                                                     ),
-                                                    child: Text('btn_reject_caps'.tr()),
+                                                    child: const Text('REJECT'),
                                                   ),
                                                 ),
                                                 const SizedBox(width: 10),
@@ -1532,8 +1548,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                           Colors.black,
                                                     ),
                                                     child: isAccepting
-                                                        ? Text('btn_accepting'.tr())
-                                                        : Text('btn_accept_caps'.tr()),
+                                                        ? const Text('Accepting...')
+                                                        : const Text('ACCEPT'),
                                                   ),
                                                 ),
                                               ],
@@ -1549,6 +1565,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           ),
                         ],
 
+                        // TEAM SHOWCASE CARD (Publicly Visible)
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -1635,7 +1652,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                             BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        'label_game_prefix'.tr(args: [team.game]),
+                                        'Game: ${team.game}',
                                         style: const TextStyle(
                                             color: Color(0xFF00FF88),
                                             fontWeight: FontWeight.bold,
@@ -1644,7 +1661,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      'label_team_leader_prefix'.tr(args: [team.leaderName]),
+                                      '👑 Team Leader: ${team.leaderName}',
                                       style: const TextStyle(
                                           color: Color(0xFF8B949E),
                                           fontSize: 12),
@@ -1657,6 +1674,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         ),
                         const SizedBox(height: 14),
 
+                        // Stats
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
@@ -1667,16 +1685,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              _buildRecordStat('stat_wins'.tr(), '${team.wins}',
+                              _buildRecordStat('WINS', '${team.wins}',
                                   const Color(0xFF00FF88)),
                               _buildDivider(),
-                              _buildRecordStat('stat_losses'.tr(), '${team.losses}',
+                              _buildRecordStat('LOSSES', '${team.losses}',
                                   const Color(0xFFFF4655)),
                               _buildDivider(),
-                              _buildRecordStat('stat_draws'.tr(), '${team.draws}',
+                              _buildRecordStat('DRAWS', '${team.draws}',
                                   const Color(0xFFFFB020)),
                               _buildDivider(),
-                              _buildRecordStat('stat_points'.tr(), '${team.points}',
+                              _buildRecordStat('POINTS', '${team.points}',
                                   const Color(0xFFFF6B00)),
                             ],
                           ),
@@ -1684,7 +1702,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         const SizedBox(height: 16),
 
                         if (team.description.isNotEmpty) ...[
-                          _buildSectionHeader('label_description'.tr()),
+                          _buildSectionHeader('Description'),
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
@@ -1704,7 +1722,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         ],
 
                         if (team.requirements.isNotEmpty) ...[
-                          _buildSectionHeader('label_requirements'.tr()),
+                          _buildSectionHeader('Requirements'),
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
@@ -1726,9 +1744,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           const SizedBox(height: 16),
                         ],
 
+                        // Join Requests (Leader Only)
                         if (isLeader && team.pendingJoinRequests.isNotEmpty) ...[
                           _buildSectionHeader(
-                              'heading_pending_requests_count'.tr(args: ['${team.pendingJoinRequests.length}'])),
+                              'Pending Requests (${team.pendingJoinRequests.length})'),
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
@@ -1749,10 +1768,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         ConnectionState.waiting;
                                     final gamerId = userData?['gamerId'];
                                     final displayGamerId = isLoading
-                                        ? 'status_loading'.tr()
-                                        : (gamerId != null && gamerId.isNotEmpty
-                                            ? 'gamer_id_display'.tr(args: [gamerId])
-                                            : 'id_not_set'.tr());
+                                        ? 'Loading...'
+                                        : 'Gamer ID: ${gamerId != null && gamerId.isNotEmpty ? gamerId : 'ID not set'}';
                                     final displayUsername =
                                         userData?['username'] ?? 'Player';
 
@@ -1831,7 +1848,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           const SizedBox(height: 16),
                         ],
 
-                        _buildSectionHeader('heading_team_members_count'.tr(args: ['${team.memberCount}'])),
+                        _buildSectionHeader('Team Members (${team.memberCount})'),
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFF161F2E),
@@ -1941,7 +1958,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       ),
                                       child: Text(
                                         isThisLeader
-                                            ? 'badge_leader_caps'.tr()
+                                            ? '👑 LEADER'
                                             : role.toUpperCase(),
                                         style: TextStyle(
                                           color: isThisLeader
@@ -1960,12 +1977,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         ),
                         const SizedBox(height: 16),
 
+                        // Match History (With Protected Proof Screenshots)
                         _buildMatchHistorySection(team, currentUid, userTeams),
                         const SizedBox(height: 20),
                       ],
                     ),
                   ),
 
+                  // 🌟 DYNAMIC BOTTOM BAR (OUTSIDERS CANNOT DM OR END MATCH)
                   bottomNavigationBar: Container(
                     padding: EdgeInsets.only(
                       left: 16,
@@ -1981,6 +2000,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     ),
                     child: Builder(
                       builder: (context) {
+                        // 1. User is viewing their own team
                         if (isViewedMyTeam) {
                           return Container(
                             width: double.infinity,
@@ -1991,16 +2011,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               border: Border.all(
                                   color: const Color(0xFF1877F2), width: 1.2),
                             ),
-                            child: Center(
+                            child: const Center(
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.shield_rounded,
+                                  Icon(Icons.shield_rounded,
                                       color: Color(0xFF1877F2), size: 18),
-                                  const SizedBox(width: 8),
+                                  SizedBox(width: 8),
                                   Text(
-                                    'label_your_team'.tr(),
-                                    style: const TextStyle(
+                                    'YOUR TEAM (Aap ki apni team)',
+                                    style: TextStyle(
                                       color: Color(0xFF1877F2),
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
@@ -2012,6 +2032,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           );
                         }
 
+                        // 2. User is OPPONENT in Live Match (Allowed to DM & End Match)
                         if (canAccessMatch && isMatchOpponent) {
                           return Row(
                             children: [
@@ -2029,7 +2050,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               PrivateMatchRoomScreen(
                                             matchId: activeMatchId,
                                             myTeamId: myTeamIdInMatch,
-                                            myTeamName: userMatchTeam?.name ?? 'label_team'.tr(),
+                                            myTeamName: userMatchTeam?.name ?? 'My Team',
                                             opponentId: opponentTeamId,
                                             opponentName: team.name,
                                           ),
@@ -2047,9 +2068,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     icon: const Icon(
                                         Icons.chat_bubble_rounded,
                                         size: 16),
-                                    label: Text(
-                                      'btn_team_dm'.tr(),
-                                      style: const TextStyle(
+                                    label: const Text(
+                                      'Team DM 💬',
+                                      style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13),
                                     ),
@@ -2074,9 +2095,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       icon: const Icon(
                                           Icons.stop_circle_rounded,
                                           size: 16),
-                                      label: Text(
-                                        'btn_end_match'.tr(),
-                                        style: const TextStyle(
+                                      label: const Text(
+                                        'End Match',
+                                        style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 13),
                                       ),
@@ -2090,7 +2111,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           activeMatchId: activeMatchId,
                                           myTeamId: myTeamIdInMatch,
                                           opponentId: opponentTeamId,
-                                          myTeamName: userMatchTeam?.name ?? 'label_team'.tr(),
+                                          myTeamName: userMatchTeam?.name ?? 'My Team',
                                           opponentName: team.name,
                                         );
                                         if (ended == true && mounted) {
@@ -2109,6 +2130,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           );
                         }
 
+                        // 3. OUTSIDER / NON-MEMBER (Strictly Join & Challenge Only)
                         return StreamBuilder<List<Map<String, dynamic>>>(
                           stream: myTeamId.isNotEmpty
                               ? SupabaseService.client
@@ -2179,8 +2201,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           ),
                                           label: Text(
                                             isRequested
-                                                ? 'btn_requested_wait'.tr()
-                                                : 'btn_join_team'.tr(),
+                                                ? 'Requested ⏳'
+                                                : 'Join Team',
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 12,
@@ -2215,10 +2237,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                         color: const Color(
                                                             0xFFFFB800)),
                                                   ),
-                                                  child: Center(
+                                                  child: const Center(
                                                     child: Text(
-                                                      'badge_requested_wait'.tr(),
-                                                      style: const TextStyle(
+                                                      'REQUESTED ⏳',
+                                                      style: TextStyle(
                                                         color: Color(
                                                             0xFFFFB800),
                                                         fontWeight:
@@ -2253,8 +2275,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                           pendingDoc['id']
                                                                   ?.toString() ??
                                                               ''),
-                                                  child: Text('btn_cancel_caps'.tr(),
-                                                      style: const TextStyle(
+                                                  child: const Text('CANCEL',
+                                                      style: TextStyle(
                                                           fontWeight:
                                                               FontWeight.bold,
                                                           fontSize: 11)),
@@ -2279,9 +2301,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                 Icons.flash_on_rounded,
                                                 size: 18,
                                                 color: Colors.white),
-                                            label: Text(
-                                              'btn_challenge_team'.tr(),
-                                              style: const TextStyle(
+                                            label: const Text(
+                                              'Challenge Team',
+                                              style: TextStyle(
                                                 fontWeight: FontWeight.w900,
                                                 fontSize: 13,
                                               ),
@@ -2351,9 +2373,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'dialog_match_proof_title'.tr(),
-                    style: const TextStyle(
+                  const Text(
+                    'Match Proof Screenshot 📸',
+                    style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14),
@@ -2412,7 +2434,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      'dialog_team_logo_title'.tr(args: [teamName]),
+                      '$teamName • Team Logo',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -2463,11 +2485,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     );
   }
 
+  // 🌟 MATCH HISTORY (OUTSIDERS CANNOT VIEW OR TAP PRIVATE PROOF SCREENSHOTS)
   Widget _buildMatchHistorySection(
       TeamModel team, String currentUid, List<TeamModel> userTeams) {
     final targetUuid = SupabaseService.toUuid(widget.teamId).toLowerCase();
     final targetRawId = widget.teamId.toLowerCase();
 
+    // Check all team IDs current user belongs to
     final Set<String> myTeamIds = {};
     for (final ut in userTeams) {
       myTeamIds.add(ut.id.toLowerCase());
@@ -2477,7 +2501,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('heading_match_history'.tr()),
+        _buildSectionHeader('Match History 📜'),
         StreamBuilder<List<Map<String, dynamic>>>(
           stream: SupabaseService.client
               .from('active_matches')
@@ -2515,23 +2539,23 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFF2A3447)),
                 ),
-                child: Column(
+                child: const Column(
                   children: [
-                    const Icon(Icons.history_rounded,
+                    Icon(Icons.history_rounded,
                         color: Colors.white24, size: 36),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Text(
-                      'no_match_history_title'.tr(),
-                      style: const TextStyle(
+                      'No Match History Yet',
+                      style: TextStyle(
                           color: Colors.white70,
                           fontWeight: FontWeight.bold,
                           fontSize: 13),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
-                      'no_match_history_sub'.tr(),
+                      'Completed matches with verified proofs will appear here.',
                       style:
-                          const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                          TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -2567,6 +2591,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   }
                 }
 
+                // 🌟 Anti-Leak Check: Sirf match ke participants proof screenshot dekh sakte hain
                 final bool canViewProof = team.isMember(currentUid) ||
                     team.isLeader(currentUid) ||
                     myTeamIds.contains(t1.toLowerCase()) ||
@@ -2582,6 +2607,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   ),
                   child: Row(
                     children: [
+                      // Proof Container (Outsiders see Verified Shield, Participants see Screenshot)
                       GestureDetector(
                         onTap: (canViewProof && proofUrl != null && proofUrl.isNotEmpty)
                             ? () => _showProofDialog(context, proofUrl)
@@ -2677,12 +2703,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
                                 final fallbackName =
                                     m['opponent_name']?.toString() ??
-                                        'default_opponent'.tr();
+                                        'Opponent';
                                 return {'name': fallbackName, 'tag': ''};
                               }(),
                               builder: (context, opSnap) {
                                 final opData = opSnap.data;
-                                final opName = opData?['name'] ?? 'default_opponent'.tr();
+                                final opName = opData?['name'] ?? 'Opponent';
                                 final opTag = opData?['tag'] ?? '';
                                 final tagStr =
                                     opTag.isNotEmpty ? ' [$opTag]' : '';
@@ -2733,10 +2759,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         ),
                         child: Text(
                           isWon
-                              ? 'match_won_badge'.tr()
+                              ? 'WON 🏆'
                               : isDraw
-                                  ? 'match_draw_badge'.tr()
-                                  : 'match_lost_badge'.tr(),
+                                  ? 'DRAW 🤝'
+                                  : 'LOST ❌',
                           style: TextStyle(
                             color: isWon
                                 ? const Color(0xFF00FF88)

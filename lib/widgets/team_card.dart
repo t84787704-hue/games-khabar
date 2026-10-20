@@ -228,7 +228,7 @@ class _TeamCardState extends State<TeamCard> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: Text('btn_ok'.tr(), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
+                    child: const Text('OK', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -239,20 +239,6 @@ class _TeamCardState extends State<TeamCard> {
       } catch (e) {
         debugPrint('[TeamCard] Error checking target team wallet: $e');
       }
-    }
-
-    final currentUid = GamerAuthService().currentUid ??
-        (SupabaseService.client.auth.currentUser?.id ?? '');
-    if (currentUid.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('please_login_first'.tr()),
-            backgroundColor: Color(0xFFFF4655),
-          ),
-        );
-      }
-      return;
     }
 
     final myTeams = await _teamService.getUserTeams(currentUid);
@@ -601,14 +587,14 @@ class _TeamCardState extends State<TeamCard> {
           ),
         ],
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('👑', style: TextStyle(fontSize: 11)),
-          const SizedBox(width: 3),
+          Text('👑', style: TextStyle(fontSize: 11)),
+          SizedBox(width: 3),
           Text(
             'badge_owner_caps'.tr(),
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 10,
@@ -634,14 +620,14 @@ class _TeamCardState extends State<TeamCard> {
           ),
         ],
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('🛡️', style: TextStyle(fontSize: 11)),
-          const SizedBox(width: 3),
+          Text('🛡️', style: TextStyle(fontSize: 11)),
+          SizedBox(width: 3),
           Text(
             'badge_member_caps'.tr(),
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 10,
@@ -695,14 +681,14 @@ class _TeamCardState extends State<TeamCard> {
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF131A29),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
+          title: const Row(
             children: [
-              const Icon(Icons.edit_rounded, color: Color(0xFF00FF88), size: 22),
-              const SizedBox(width: 8),
+              Icon(Icons.edit_rounded, color: Color(0xFF00FF88), size: 22),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'edit_team'.tr(),
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 17),
@@ -956,15 +942,15 @@ class _TeamCardState extends State<TeamCard> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF131A29),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.warning_amber_rounded,
+            Icon(Icons.warning_amber_rounded,
                 color: Color(0xFFFF4655), size: 24),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Expanded(
               child: Text(
                 'delete_team_q'.tr(),
-                style: const TextStyle(
+                style: TextStyle(
                     color: Color(0xFFFF4655),
                     fontWeight: FontWeight.bold,
                     fontSize: 17),
@@ -1015,8 +1001,8 @@ class _TeamCardState extends State<TeamCard> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('cancel'.tr(),
-                style: const TextStyle(color: Color(0xFF8B949E))),
+            child: const Text('Cancel',
+                style: TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -1222,12 +1208,12 @@ class _TeamCardState extends State<TeamCard> {
 
                               if (_checkingMembership) ...[
                                 const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 1.5,
-                                        color: Color(0xFF1877F2)),
-                                  ),
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: Color(0xFF1877F2)),
+                                ),
                               ] else if (isOwnerFinal) ...[
                                 _buildOwnerBadge(),
                               ] else if (isMemberFinal) ...[
@@ -1586,8 +1572,8 @@ class _TeamCardState extends State<TeamCard> {
                                           fontWeight: FontWeight.bold,
                                           fontSize: 11.5,
                                           color: isRequested
-                                            ? ThemeService.textSecondary
-                                            : Colors.white,
+                                              ? ThemeService.textSecondary
+                                              : Colors.white,
                                         ),
                                       ),
                                       onPressed: (isRequested || _isRequesting)

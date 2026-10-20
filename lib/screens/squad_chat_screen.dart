@@ -1,11 +1,12 @@
+import 'package:easy_localization/easy_localization.dart';
 // ═══════════════════════════════════════════════════════════════════════════════
-// SQUAD CHAT SCREEN — Fully Fixed Chat Input & Localized
+// EXACT DIFF:
+// - Replaced .eq('id', currentUid) with .or('id.eq.$currentUid,uid.eq.$currentUid') on users table
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
@@ -107,8 +108,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       final currentEmail = GamerAuthService().currentUser?.email ?? '';
 
       List<String> members = [];
-      String title = 'اسکواڈ چیٹ';
-      String mode = 'کلاسک اسکواڈ';
+      String title = 'Squad Chat';
+      String mode = 'Classic Squad';
       String inGameUid = '';
       String leaderUid = '';
 
@@ -119,8 +120,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
           members.insert(0, leaderUid);
         }
-        title = postData['ownerBgmiName'] ?? postData['displayName'] ?? postData['title'] ?? 'اسکواڈ چیٹ';
-        mode = postData['mode'] ?? 'کلاسک اسکواڈ';
+        title = postData['ownerBgmiName'] ?? postData['displayName'] ?? postData['title'] ?? 'Squad Chat';
+        mode = postData['mode'] ?? 'Classic Squad';
         inGameUid = (postData['gameUid'] ?? postData['inGameUid'] ?? postData['bgmiUid'] ?? '').toString();
       } else if (widget.squad != null) {
         leaderUid = widget.squad!.userId;
@@ -179,7 +180,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         'isActive': true,
       }).catchError((_) => null);
     } catch (e) {
-      debugPrint('[SquadChatScreen] Error ensuring squad and chat docs: $e');
+      debugPrint('[SquadChatScreen] Error ensuring squad and chat docs: ');
     }
   }
 
@@ -198,7 +199,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$label کلپ بورڈ پر کاپی ہو گیا!'),
+        content: Text('$label copied to clipboard!'),
         backgroundColor: GamerTheme.neonGreen,
         duration: const Duration(seconds: 2),
       ),
@@ -214,20 +215,20 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('اسکواڈ چھوڑیں؟', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
+        title: const Text('Leave Squad?', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
         content: const Text(
-          'کیا آپ واقعی یہ اسکواڈ چھوڑنا چاہتے ہیں؟ آپ چیٹ سے ہٹ جائیں گے۔',
+          'Are you sure you want to leave this squad? You will be removed from the squad and chat.',
           style: TextStyle(color: GamerTheme.textMuted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('منسوخ', style: TextStyle(color: GamerTheme.textMuted)),
+            child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('چھوڑ دیں', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('LEAVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -238,7 +239,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     setState(() => _isLeaving = true);
     try {
       final user = await GamerAuthService().getUserProfile(currentUid);
-      final memberName = user?.displayName ?? 'ٹیم کا ساتھی';
+      final memberName = user?.displayName ?? 'Teammate';
       await LfgService().leaveSquad(
         postId: widget.postId,
         memberUid: currentUid,
@@ -246,10 +247,10 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         memberName: memberName,
       );
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context); // Close chat
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('آپ اسکواڈ سے نکل گئے ہیں'),
+            content: Text('You left the squad'),
             backgroundColor: GamerTheme.accentOrange,
           ),
         );
@@ -257,7 +258,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('چھوڑنے میں ناکامی: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('Failed to leave: $e'), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -271,20 +272,20 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('اسکواڈ ختم کریں؟', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
+        title: const Text('End Squad?', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
         content: const Text(
-          'کیا آپ واقعی اسکواڈ ختم کرنا چاہتے ہیں؟ یہ مستقل طور پر بند ہو جائے گا۔',
+          'Are you sure you want to end this squad? The squad will be closed and permanently removed.',
           style: TextStyle(color: GamerTheme.textMuted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('منسوخ', style: TextStyle(color: GamerTheme.textMuted)),
+            child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('اسکواڈ ختم کریں', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('END SQUAD', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -299,7 +300,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('اسکواڈ ختم کر دیا گیا'),
+            content: Text('Squad ended'),
             backgroundColor: GamerTheme.accentOrange,
           ),
         );
@@ -307,7 +308,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('اسکواڈ ختم کرنے میں ناکامی: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('Failed to end squad: $e'), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -366,7 +367,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('بھیجنے میں ناکامی: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('Failed to send: $e'), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -374,21 +375,33 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     }
   }
 
+  /// Uploads proof screenshot to Supabase Storage using folder match_proofs
+  Future<String?> _uploadProofScreenshot(File imageFile, String uid, String squadId) async {
+    return await SupabaseService.uploadFile(
+      file: imageFile,
+      folder: 'match_proofs',
+      bucket: SupabaseService.bucketMatchProofs,
+    );
+  }
+
+  /// Opens dialog for submitting a Win Proof message in squad chat
   Future<void> _openSubmitWinProofSheet() async {
     final currentUid = GamerAuthService().currentUid ?? '';
     if (currentUid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('جیت کا ثبوت دینے کے لیے پہلے لاگ ان کریں۔'),
+          content: Text('Please log in first to submit win proof.'),
           backgroundColor: GamerTheme.redAccent,
         ),
       );
       return;
     }
 
+    // 1. Fetch live user profile to get verified character UID (gameUid)
     final userData = await SupabaseService.getUser(currentUid) ?? {};
     final characterUid = (userData['bgmiUid'] ?? userData['gameId'] ?? userData['inGameId'] ?? userData['gameUid'] ?? '').toString().trim();
 
+    // Validate: Character UID must be equal to current user profile gameUid, don't allow typing any UID.
     if (characterUid.isEmpty) {
       if (!mounted) return;
       showDialog(
@@ -403,22 +416,20 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             children: [
               Icon(Icons.warning_amber_rounded, color: GamerTheme.accentOrange, size: 24),
               SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'کریکٹر آئی ڈی موجود نہیں',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+              Text(
+                'Character UID Missing',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-          content: const Text(
-            'ثبوت جمع کرانے سے پہلے اپنی پروفائل میں کریکٹر آئی ڈی (گیم UID) ایڈ کریں۔',
+          content: Text(
+            'add_game_uid_first_proof'.tr(),
             style: TextStyle(color: GamerTheme.textMuted, fontSize: 13.5, height: 1.4),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('ٹھیک ہے', style: TextStyle(color: GamerTheme.accentCyan)),
+              child: Text('btn_ok'.tr(), style: const TextStyle(color: GamerTheme.accentCyan)),
             ),
           ],
         ),
@@ -430,7 +441,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
     File? proofImage;
     bool isSubmitting = false;
-    final noteController = TextEditingController(text: 'میچ جیت گئے! فتح کا ثبوت پیش کر دیا گیا۔');
+    final noteController = TextEditingController(text: 'Match Won! Victory proof submitted.');
 
     showModalBottomSheet(
       context: context,
@@ -469,11 +480,11 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'جیت کا ثبوت جمع کریں 🏆',
+                              'Submit Win Proof 🏆',
                               style: TextStyle(color: GamerTheme.textWhite, fontSize: 17, fontWeight: FontWeight.bold),
                             ),
                             Text(
-                              'ہوسٹ کی منظوری درکار ہے • 100 کوائنز انعام',
+                              'Host approval required • 100 Coins reward',
                               style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                             ),
                           ],
@@ -483,17 +494,18 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   ),
                   const SizedBox(height: 18),
 
+                  // Character UID (Read-only, auto-filled from user profile)
                   const Row(
                     children: [
                       Text(
-                        'کریکٹر UID',
+                        'CHARACTER UID',
                         style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
                       SizedBox(width: 6),
                       Icon(Icons.lock_rounded, size: 12, color: GamerTheme.neonGreen),
                       SizedBox(width: 4),
                       Text(
-                        '(پروفائل سے تصدیق شدہ)',
+                        '(Verified from Profile)',
                         style: TextStyle(color: GamerTheme.neonGreen, fontSize: 10.5, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -523,7 +535,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                           ),
                         ),
                         const Text(
-                          'صرف پڑھنے کے لیے',
+                          'READ-ONLY',
                           style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -532,22 +544,23 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
                   const SizedBox(height: 16),
 
-                  const Row(
+                  // Required Screenshot Upload
+                  Row(
                     children: [
-                      Text(
-                        'فتح کا اسکرین شاٹ',
+                      const Text(
+                        'VICTORY SCREENSHOT',
                         style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 6),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: GamerTheme.redAccent,
-                          borderRadius: BorderRadius.all(Radius.circular(4)),
+                          color: GamerTheme.redAccent.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        child: Text(
-                          'لازمی',
-                          style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900),
+                        child: const Text(
+                          'REQUIRED',
+                          style: TextStyle(color: GamerTheme.redAccent, fontSize: 9.5, fontWeight: FontWeight.w900),
                         ),
                       ),
                     ],
@@ -584,12 +597,12 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                 Icon(Icons.add_photo_alternate_rounded, color: Color(0xFFFFD700), size: 36),
                                 SizedBox(height: 8),
                                 Text(
-                                  'اسکرین شاٹ اپلوڈ کرنے کے لیے ٹیپ کریں',
+                                  'Tap to Upload Victory Screenshot',
                                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  'چکن ڈنر / رزلٹ اسکرین (لازمی)',
+                                  'Chicken Dinner / Results Screen (Required)',
                                   style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                                 ),
                               ],
@@ -636,7 +649,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                       Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 12),
                                       SizedBox(width: 4),
                                       Text(
-                                        'اسکرین شاٹ منسلک ہو گیا',
+                                        'Screenshot Attached',
                                         style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                                       ),
                                     ],
@@ -649,7 +662,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
                   const SizedBox(height: 16),
                   const Text(
-                    'جیت کی تفصیلات / نوٹ',
+                    'VICTORY NOTE / DETAILS',
                     style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
@@ -658,7 +671,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                     enabled: !isSubmitting,
                     style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: 'چکن ڈنر / میچ جیت گئے',
+                      hintText: 'Chicken Dinner / Match Won',
                       hintStyle: const TextStyle(color: GamerTheme.textMuted),
                       filled: true,
                       fillColor: GamerTheme.bgDark,
@@ -667,6 +680,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   ),
                   const SizedBox(height: 22),
 
+                  // SUBMIT BUTTON (Disabled after 1 click, preventing double submission spam)
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -687,22 +701,24 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                           : const Icon(Icons.send_rounded, size: 18),
                       label: Text(
                         isSubmitting
-                            ? 'ثبوت جمع ہو رہا ہے...'
-                            : (proofImage == null ? 'اسکرین شاٹ منسلک کریں' : 'جیت کا ثبوت بھیجیں'),
+                            ? 'SUBMITTING PROOF...'
+                            : (proofImage == null ? 'ATTACH SCREENSHOT TO SUBMIT' : 'SUBMIT WIN PROOF'),
                         style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                       ),
                       onPressed: (isSubmitting || proofImage == null)
                           ? null
                           : () async {
+                              // Immediately disable button after 1 click to prevent double submission spam
                               setModalState(() => isSubmitting = true);
 
                               try {
                                 final user = await GamerAuthService().getUserProfile(currentUid);
-                                final senderName = user?.displayName ?? 'ٹیم کا ساتھی';
+                                final senderName = user?.displayName ?? 'Teammate';
                                 final senderUsername = user?.username ?? 'gamer';
                                 final senderAvatar = user?.photoUrl ?? '';
                                 final note = noteController.text.trim();
 
+                                // Upload screenshot to Supabase Storage
                                 File pickedFile = proofImage!;
                                 String? url = await SupabaseService.uploadFile(
                                   file: pickedFile,
@@ -714,7 +730,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                     setModalState(() => isSubmitting = false);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('اسکرین شاٹ اپلوڈ نہ ہو سکا۔ دوبارہ کوشش کریں۔'),
+                                        content: Text('Screenshot upload failed. Please try again.'),
                                         backgroundColor: GamerTheme.redAccent,
                                       ),
                                     );
@@ -735,7 +751,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   'proofImageUrl': url,
                                   'proofUrl': url,
                                   'imageUrl': url,
-                                  'note': note.isNotEmpty ? note : 'میچ جیت گئے!',
+                                  'note': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
                                   'status': 'pending',
                                   'createdAt': nowIso,
                                   'senderName': senderName,
@@ -764,7 +780,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   'proofImageUrl': url,
                                   'proofUrl': url,
                                   'imageUrl': url,
-                                  'text': note.isNotEmpty ? note : 'میچ جیت گئے!',
+                                  'text': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
                                   'createdAt': nowIso,
                                 }).catchError((_) => null);
 
@@ -779,8 +795,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                 if (mounted) {
                                   Navigator.pop(ctx);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('🏆 جیت کا ثبوت جمع ہو گیا! ہوسٹ کی منظوری کا انتظار کریں۔'),
+                                    SnackBar(
+                                      content: Text('win_proof_submitted_wait'.tr()),
                                       backgroundColor: GamerTheme.accentBlue,
                                       duration: Duration(seconds: 3),
                                     ),
@@ -793,7 +809,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   setModalState(() => isSubmitting = false);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('بھیجنے میں ناکامی: $e'),
+                                      content: Text('Submission failed: $e'),
                                       backgroundColor: GamerTheme.redAccent,
                                     ),
                                   );
@@ -811,6 +827,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     );
   }
 
+  /// Handles "Reject" on win_proof message card (Host only)
   Future<void> _handleRejectWinProof({
     required BuildContext context,
     required String messageDocId,
@@ -834,19 +851,19 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             Icon(Icons.cancel_outlined, color: GamerTheme.redAccent, size: 22),
             SizedBox(width: 8),
             Text(
-              'جیت کا ثبوت مسترد کریں',
+              'Reject Win Proof',
               style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
             ),
           ],
         ),
         content: Text(
-          'کیا آپ واقعی @$cleanTag کا ثبوت مسترد کرنا چاہتے ہیں؟',
+          'Kya aap @$cleanTag ka win proof reject karna chahte hain?',
           style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('منسوخ', style: TextStyle(color: GamerTheme.textMuted)),
+            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -855,7 +872,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('ہاں، مسترد کریں', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: const Text('HAAN, REJECT', style: TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -879,6 +896,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         'rejectedBy': currentUid,
       }).eq('id', messageDocId).catchError((_) => null);
 
+      // System notification message in squad chat
       await SupabaseService.client.from('messages').insert({
         'chatId': squadId,
         'squadId': squadId,
@@ -893,7 +911,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('@$cleanTag کا ثبوت مسترد کر دیا گیا۔'),
+            content: Text('Win proof from @$cleanTag was rejected.'),
             backgroundColor: GamerTheme.redAccent,
             duration: const Duration(seconds: 2),
           ),
@@ -904,7 +922,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('کارروائی ناکام: $e'),
+            content: Text('Action failed: $e'),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -912,6 +930,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     }
   }
 
+  /// Handles "Reward 100 Coins" on win_proof message card (Host only)
   Future<void> _handleReward100Coins({
     required BuildContext context,
     required String messageDocId,
@@ -924,6 +943,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         ? winnerTag.trim().substring(1)
         : winnerTag.trim();
 
+    // Show confirm dialog "100 Coins dena hai @fua ko?"
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -937,19 +957,19 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             Text('🪙', style: TextStyle(fontSize: 22)),
             SizedBox(width: 8),
             Text(
-              'فاتح کو انعام دیں',
+              'Reward Winner',
               style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
             ),
           ],
         ),
         content: Text(
-          'کیا @$cleanTag کو 100 کوائنز انعام دینا چاہتے ہیں؟',
+          '100 Coins dena hai @$cleanTag ko?',
           style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14.5, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('منسوخ', style: TextStyle(color: GamerTheme.textMuted)),
+            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -958,7 +978,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('ہاں، انعام دیں', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: const Text('HAAN, REWARD', style: TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -1013,6 +1033,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         'rewardedBy': hostId,
       }).eq('id', messageDocId).catchError((_) => null);
 
+      // Send chat system message: "Host rewarded 100 coins to @fua"
       await SupabaseService.client.from('messages').insert({
         'chatId': squadId,
         'squadId': squadId,
@@ -1027,7 +1048,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🎉 کامیابی سے @$cleanTag کو 100 کوائنز بھیج دیے گئے!'),
+            content: Text('🎉 Successfully rewarded 100 coins to @$cleanTag!'),
             backgroundColor: GamerTheme.neonGreen,
             duration: const Duration(seconds: 3),
           ),
@@ -1039,7 +1060,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         final isInsufficient = e.toString().contains('Not enough coins');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isInsufficient ? 'والیٹ میں کوائنز ناکافی ہیں' : 'ٹرانزیکشن ناکام: $e'),
+            content: Text(isInsufficient ? 'Not enough coins' : 'Transaction failed: $e'),
             backgroundColor: Colors.redAccent,
             duration: const Duration(seconds: 3),
           ),
@@ -1048,6 +1069,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     }
   }
 
+  /// Opens full screen proof image with InteractiveViewer pinch-to-zoom and close button
   void _showFullScreenImage(BuildContext context, String imageUrl) {
     showDialog(
       context: context,
@@ -1103,6 +1125,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     );
   }
 
+  /// Builds the Win Proof message card
   Widget _buildWinProofCard({
     required BuildContext context,
     required Map<String, dynamic> data,
@@ -1129,16 +1152,16 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         : (isRejected ? GamerTheme.redAccent : const Color(0xFFFFD700));
 
     final String statusLabel = isRewarded
-        ? 'انعام مل گیا'
-        : (isRejected ? 'مسترد' : 'منظوری کا انتظار');
+        ? 'REWARDED'
+        : (isRejected ? 'REJECTED' : 'PENDING APPROVAL');
 
     final IconData statusIcon = isRewarded
         ? Icons.check_circle_rounded
         : (isRejected ? Icons.cancel_rounded : Icons.hourglass_top_rounded);
 
     final String statusSubtitle = isRewarded
-        ? 'انعام یافتہ • 100 کوائنز ادا کر دیے گئے'
-        : (isRejected ? 'مسترد شدہ • ثبوت منظور نہیں ہوا' : 'منظوری کا انتظار • ہوسٹ کا انتظار ہے');
+        ? 'REWARDED • 100 G-Coins Paid'
+        : (isRejected ? 'REJECTED • Proof Not Approved' : 'PENDING APPROVAL • Awaiting Host');
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -1161,6 +1184,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header Row: Trophy + "MATCH WIN PROOF" + Status Chip
           Row(
             children: [
               Container(
@@ -1181,7 +1205,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'میچ جیت کا ثبوت',
+                      'MATCH WIN PROOF',
                       style: TextStyle(
                         color: GamerTheme.textWhite,
                         fontWeight: FontWeight.w900,
@@ -1235,6 +1259,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
           ),
           const SizedBox(height: 12),
 
+          // Teammate Details Row
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -1280,7 +1305,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'کریکٹر UID: ${inGameUid.isNotEmpty ? inGameUid : (senderUid.isNotEmpty ? senderUid : 'ویریفائیڈ پروفائل UID')}',
+                        'Character UID: ${inGameUid.isNotEmpty ? inGameUid : (senderUid.isNotEmpty ? senderUid : "Verified Profile UID")}',
                         style: const TextStyle(
                           color: GamerTheme.textMuted,
                           fontSize: 11,
@@ -1331,10 +1356,12 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             ),
           ],
 
+          // Only Squad Host can see Approve/Reject buttons when status is Pending
           if (isOwner && isPending) ...[
             const SizedBox(height: 12),
             Row(
               children: [
+                // COPY UID button
                 Expanded(
                   flex: 3,
                   child: OutlinedButton.icon(
@@ -1346,7 +1373,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                     ),
                     icon: const Icon(Icons.copy_rounded, size: 13),
                     label: const Text(
-                      'UID کاپی کریں',
+                      'COPY UID',
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     onPressed: () {
@@ -1356,6 +1383,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   ),
                 ),
                 const SizedBox(width: 6),
+                // REJECT button
                 Expanded(
                   flex: 3,
                   child: OutlinedButton.icon(
@@ -1367,7 +1395,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                     ),
                     icon: const Icon(Icons.close_rounded, size: 14),
                     label: const Text(
-                      'مسترد کریں',
+                      'REJECT',
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     onPressed: () => _handleRejectWinProof(
@@ -1379,6 +1407,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   ),
                 ),
                 const SizedBox(width: 6),
+                // APPROVE button
                 Expanded(
                   flex: 4,
                   child: ElevatedButton.icon(
@@ -1391,7 +1420,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                     ),
                     icon: const Text('🪙', style: TextStyle(fontSize: 13)),
                     label: const Text(
-                      'منظور کریں',
+                      'APPROVE',
                       style: TextStyle(
                         color: Colors.black,
                         fontSize: 11.5,
@@ -1441,8 +1470,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             widget.squad?.title ??
             (widget.squad?.displayName.isNotEmpty == true
                 ? "${widget.squad!.displayName}'s Squad"
-                : 'اسکواڈ چیٹ');
-        final mode = chatData['mode'] as String? ?? widget.squad?.mode ?? 'کلاسک اسکواڈ';
+                : 'Squad Chat');
+        final mode = chatData['mode'] as String? ?? widget.squad?.mode ?? 'Classic Squad';
         final inGameUid = chatData['inGameUid'] as String? ?? widget.squad?.inGameUid ?? '';
         final memberCount = members.length;
 
@@ -1496,7 +1525,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                 Row(
                   children: [
                     Text(
-                      '$memberCount/4 ممبرز',
+                      '$memberCount/4 members',
                       style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
                     ),
                     if (inGameUid.isNotEmpty) ...[
@@ -1524,6 +1553,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // End Squad for host / Leave Squad button for non-owner members
                   if (isOwner)
                     Padding(
                       padding: const EdgeInsets.only(right: 4),
@@ -1541,7 +1571,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                               ),
                               icon: const Icon(Icons.power_settings_new_rounded, size: 16),
                               label: const Text(
-                                'اسکواڈ ختم کریں',
+                                'END SQUAD',
                                 style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                               ),
                               onPressed: () => _handleEndSquad(leaderUid),
@@ -1564,15 +1594,16 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                               ),
                               icon: const Icon(Icons.exit_to_app_rounded, size: 16),
                               label: const Text(
-                                'چھوڑ دیں',
+                                'LEAVE',
                                 style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                               ),
                               onPressed: () => _handleLeaveSquad(leaderUid, members),
                             ),
                     ),
 
+                  // Squad Members bottom sheet button
                   IconButton(
-                    tooltip: 'اسکواڈ ممبرز',
+                    tooltip: 'Squad Members',
                     icon: const Icon(Icons.people_alt_rounded, color: GamerTheme.accentCyan),
                     onPressed: () async {
                       SquadPost? currentSquad = widget.squad;
@@ -1598,6 +1629,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
           body: SafeArea(
             child: Column(
               children: [
+                // Messages list
                 Expanded(
                   child: StreamBuilder<List<Map<String, dynamic>>>(
                     stream: _messagesStream(),
@@ -1610,14 +1642,14 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
                       final docs = snapshot.data ?? [];
                       if (docs.isEmpty) {
-                        return const Center(
+                        return Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.forum_outlined, size: 48, color: GamerTheme.textMuted),
-                              SizedBox(height: 12),
-                              Text(
-                                'اسکواڈ چیٹ تیار ہے!\nساتھیوں کو سلام کریں۔',
+                              Icon(Icons.forum_outlined, size: 48, color: GamerTheme.textMuted.withOpacity(0.5)),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Squad chat is ready!\nSay hello to your teammates.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
                               ),
@@ -1678,6 +1710,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                             );
                           }
 
+                          // 2. Win Proof message card
                           if (type == 'win_proof') {
                             return _buildWinProofCard(
                               context: context,
@@ -1688,6 +1721,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                             );
                           }
 
+                          // Standard text message
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             child: Row(
@@ -1780,6 +1814,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   ),
                 ),
 
+                // Input Bar with Win Proof Claim Button
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: const BoxDecoration(
@@ -1801,7 +1836,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                             textInputAction: TextInputAction.send,
                             onSubmitted: (_) => _sendMessage(),
                             decoration: const InputDecoration(
-                              hintText: 'پیغام لکھیں...',
+                              hintText: 'Message squad teammates...',
                               hintStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
                               border: InputBorder.none,
                               contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),

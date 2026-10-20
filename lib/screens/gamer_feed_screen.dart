@@ -1,6 +1,6 @@
 // ===============================================================================
 // EXACT DIFF — Full Adaptive Day & Night Mode Support for GamerFeedScreen
-// + Updated App Branding to "Gamers ID" + Full Localization (.tr())
+// + Updated App Branding to "Gamers ID"
 // -------------------------------------------------------------------------------
 // File: lib/screens/gamer_feed_screen.dart
 // ===============================================================================
@@ -210,7 +210,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   void _openUserProfile(String userId, String username) {
     if (userId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('user_not_found'.tr())),
+        const SnackBar(content: Text('user_not_found'.tr())),
       );
       return;
     }
@@ -227,7 +227,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
     if (currentUserId.isEmpty || !_uuidRegex.hasMatch(currentUserId)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('err_login_to_like'.tr())),
+        const SnackBar(content: Text('err_login_to_like'.tr())),
       );
       return;
     }
@@ -357,7 +357,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
   Future<void> _reportPost(String postId, String postContent, String postOwnerId) async {
     if (postOwnerId == currentUserId) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('err_cannot_report_own_post'.tr())),
+        const SnackBar(content: Text('err_cannot_report_own_post'.tr())),
       );
       return;
     }
@@ -377,7 +377,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(c, true),
-            child: Text('report'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text('report'.tr(), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -446,9 +446,9 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
             if (isMyPost) ...[
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: Text(
-                  'delete_post'.tr(),
-                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                title: const Text(
+                  'Delete Post',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                 ),
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -467,7 +467,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                           onPressed: () => Navigator.pop(c, true),
-                          child: Text('delete'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          child: Text('delete'.tr(), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -492,7 +492,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                           posts.removeWhere((p) => p['id'].toString() == postId);
                         });
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('msg_post_deleted'.tr()), backgroundColor: Colors.green),
+                          const SnackBar(content: Text('msg_post_deleted'.tr()), backgroundColor: Colors.green),
                         );
                       }
                     } catch (e) {
@@ -614,9 +614,9 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
 
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
+                                    const SnackBar(
                                       content: Text('msg_post_created'.tr()),
-                                      backgroundColor: const Color(0xFF1877F2),
+                                      backgroundColor: Color(0xFF1877F2),
                                     ),
                                   );
                                   _loadFeed();
@@ -645,7 +645,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                 color: Colors.white,
                               ),
                             )
-                          : Text('post'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                          : const Text('Post', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -671,20 +671,20 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
   }
 
   String _formatTimeAgo(dynamic raw) {
-    if (raw == null) return 'time_just_now'.tr();
+    if (raw == null) return 'Just now';
     DateTime? dt;
     if (raw is DateTime) {
       dt = raw;
     } else if (raw is String) {
       dt = DateTime.tryParse(raw);
     }
-    if (dt == null) return 'time_just_now'.tr();
+    if (dt == null) return 'Just now';
 
     final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'time_now'.tr();
-    if (diff.inMinutes < 60) return 'time_minutes_ago'.tr(args: ['${diff.inMinutes}']);
-    if (diff.inHours < 24) return 'time_hours_ago'.tr(args: ['${diff.inHours}']);
-    if (diff.inDays < 7) return 'time_days_ago'.tr(args: ['${diff.inDays}']);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
     return '${dt.day}/${dt.month}/${dt.year}';
   }
 
@@ -791,7 +791,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        'whats_on_your_mind'.tr(),
+                                        "What's on your mind?",
                                         style: TextStyle(color: ThemeService.textSecondary, fontSize: 14),
                                       ),
                                     ),
@@ -903,7 +903,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                     ],
                                   ),
                                   Text(
-                                    'comments'.tr() + ' ($commentsCount)',
+                                    '$commentsCount comments',
                                     style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
                                   ),
                                 ],
@@ -927,7 +927,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                           ),
                                           const SizedBox(width: 6),
                                           Text(
-                                            'like'.tr(),
+                                            'Like',
                                             style: TextStyle(
                                               color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
                                               fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
@@ -1089,7 +1089,7 @@ class _CommentSheetState extends State<CommentSheet> {
 
     if (widget.currentUserId.isEmpty || !_uuidRegex.hasMatch(widget.currentUserId)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('err_login_to_comment'.tr())),
+        const SnackBar(content: Text('err_login_to_comment'.tr())),
       );
       return;
     }
@@ -1132,10 +1132,10 @@ class _CommentSheetState extends State<CommentSheet> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('msg_comment_posted'.tr()),
-            duration: const Duration(seconds: 2),
-            backgroundColor: const Color(0xFF1877F2),
+            duration: Duration(seconds: 2),
+            backgroundColor: Color(0xFF1877F2),
           ),
         );
       }
@@ -1167,7 +1167,7 @@ class _CommentSheetState extends State<CommentSheet> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(c, true),
-            child: Text('report'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text('report'.tr(), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1243,9 +1243,9 @@ class _CommentSheetState extends State<CommentSheet> {
             if (isMyComment) ...[
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: Text(
-                  'delete_comment'.tr(),
-                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                title: const Text(
+                  'Delete Comment',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                 ),
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -1259,7 +1259,7 @@ class _CommentSheetState extends State<CommentSheet> {
                     await _loadComments();
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('msg_comment_deleted'.tr()), backgroundColor: Colors.green),
+                        const SnackBar(content: Text('msg_comment_deleted'.tr()), backgroundColor: Colors.green),
                       );
                     }
                   } catch (e) {
@@ -1312,7 +1312,7 @@ class _CommentSheetState extends State<CommentSheet> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'comments'.tr(),
+                    'Comments',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -1326,7 +1326,7 @@ class _CommentSheetState extends State<CommentSheet> {
                         : comments.isEmpty
                             ? Center(
                                 child: Text(
-                                  'no_comments_be_first'.tr(),
+                                  'No comments yet. Be the first to comment!',
                                   style: TextStyle(color: ThemeService.textSecondary),
                                 ),
                               )
