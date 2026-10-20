@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/team_match_model.dart';
 import '../services/gamer_auth_service.dart';
@@ -56,11 +57,11 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
 
   Duration _calculateRemaining(DateTime target) {
     final diff = target.difference(DateTime.now());
-    return diff.isNegative? Duration.zero : diff;
+    return diff.isNegative ? Duration.zero : diff;
   }
 
   String _formatDuration(Duration d) {
-    if (d == Duration.zero) return '00:00:00 (Match Time!)';
+    if (d == Duration.zero) return 'match_time_started'.tr();
     final hours = d.inHours.toString().padLeft(2, '0');
     final minutes = (d.inMinutes % 60).toString().padLeft(2, '0');
     final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
@@ -78,20 +79,20 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161F2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('میچ کا نتیجہ منتخب کریں', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-        content: const Text(
-          'کیا آپ کی ٹیم نے یہ مقابلہ جیتا ہے یا آپ ہار رپورٹ کر رہے ہیں؟\nاسکرین شاٹ میں Score اور Win صاف نظر آنا چاہیے۔',
-          style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+        title: Text('select_match_result_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text(
+          'select_match_result_desc'.tr(),
+          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'loss'),
-            child: const Text('Report Loss / Defeat', style: TextStyle(color: Colors.grey)),
+            child: Text('report_loss_btn'.tr(), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF88), foregroundColor: Colors.black),
             onPressed: () => Navigator.pop(ctx, 'win'),
-            child: const Text('WE WON! (جیت کا دعویٰ)', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('claim_win_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -115,10 +116,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
 
     if (mounted) {
       if (result['success'] == true) {
-        final attempts = result['attempts']?? 1;
-        final message = attempts >= 2
-           ? 'آپ کا نیا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں'
-            : 'آپ کا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں';
+        final message = 'proof_submitted_wait_admin'.tr();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -138,7 +136,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
           ),
         );
       } else {
-        final errorMsg = result['error']?.toString()?? 'اسکرین شاٹ اپلوڈ کرنے میں ناکامی۔ دوبارہ کوشش کریں۔';
+        final errorMsg = result['error']?.toString() ?? 'screenshot_upload_failed'.tr();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMsg),
@@ -157,9 +155,9 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
     setState(() => _isSendingChat = true);
 
     final currentGamer = GamerAuthService().currentGamer;
-    final teamName = isTeam1? match.team1Name : match.team2Name;
-    final senderName = currentGamer?.displayName?? currentGamer?.username?? 'Player';
-    final senderAvatar = currentGamer?.photoUrl?? '';
+    final teamName = isTeam1 ? match.team1Name : match.team2Name;
+    final senderName = currentGamer?.displayName ?? currentGamer?.username ?? 'Player';
+    final senderAvatar = currentGamer?.photoUrl ?? '';
 
     await _matchService.sendChatMessage(
       matchId: match.matchId,
@@ -190,7 +188,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
     if (picked == null) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Uploading image to chat...'), duration: Duration(seconds: 2)),
+      SnackBar(content: Text('uploading_chat_image'.tr()), duration: const Duration(seconds: 2)),
     );
 
     final url = await SupabaseService.uploadFile(
@@ -198,16 +196,16 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
       folder: 'match_chat',
       bucket: SupabaseService.bucketUploads,
     );
-    if (url!= null && mounted) {
+    if (url != null && mounted) {
       final currentGamer = GamerAuthService().currentGamer;
-      final teamName = isTeam1? match.team1Name : match.team2Name;
-      final senderName = currentGamer?.displayName?? currentGamer?.username?? 'Player';
+      final teamName = isTeam1 ? match.team1Name : match.team2Name;
+      final senderName = currentGamer?.displayName ?? currentGamer?.username ?? 'Player';
 
       await _matchService.sendChatMessage(
         matchId: match.matchId,
         senderId: currentUid,
         senderName: senderName,
-        senderAvatar: currentGamer?.photoUrl?? '',
+        senderAvatar: currentGamer?.photoUrl ?? '',
         teamName: teamName,
         isTeam1: isTeam1,
         imageUrl: url,
@@ -224,29 +222,29 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161F2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Update Room ID & Password', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        title: Text('update_room_details_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: roomController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Custom Room ID',
-                labelStyle: TextStyle(color: Color(0xFF8B949E)),
+              decoration: InputDecoration(
+                labelText: 'custom_room_id_label'.tr(),
+                labelStyle: const TextStyle(color: Color(0xFF8B949E)),
                 filled: true,
-                fillColor: Color(0xFF10141D),
+                fillColor: const Color(0xFF10141D),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: passController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Room Password',
-                labelStyle: TextStyle(color: Color(0xFF8B949E)),
+              decoration: InputDecoration(
+                labelText: 'room_password_label'.tr(),
+                labelStyle: const TextStyle(color: Color(0xFF8B949E)),
                 filled: true,
-                fillColor: Color(0xFF10141D),
+                fillColor: const Color(0xFF10141D),
               ),
             ),
           ],
@@ -254,7 +252,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B00), foregroundColor: Colors.black),
@@ -263,11 +261,11 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               await _matchService.updateRoomCredentials(match.matchId, roomController.text, passController.text);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Room details updated & Live!'), backgroundColor: Color(0xFFFF6B00)),
+                  SnackBar(content: Text('room_details_updated_snackbar'.tr()), backgroundColor: const Color(0xFFFF6B00)),
                 );
               }
             },
-            child: const Text('Save & Publish', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('save_and_publish_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -302,21 +300,21 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161F2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 22),
-            SizedBox(width: 8),
-            Text('چیلنج منسوخ (Cancel) کریں؟', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 22),
+            const SizedBox(width: 8),
+            Text('cancel_challenge_confirm_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         content: Text(
-          'کیا آپ واقعی ${match.team2Name} کو بھیجا گیا چیلنج واپس لینا چاہتے ہیں؟ اس کے بعد آپ دوبارہ نیا چیلنج بھیج سکیں گے۔',
+          'cancel_challenge_confirm_desc'.tr(args: [match.team2Name]),
           style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('نہیں (Back)', style: TextStyle(color: Colors.grey)),
+            child: Text('btn_no_back'.tr(), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -329,22 +327,22 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               if (mounted) {
                 if (success) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('چیلنج کامیابی سے Cancel کر دیا گیا!'),
-                      backgroundColor: Color(0xFFFF6B00),
+                    SnackBar(
+                      content: Text('challenge_cancelled_success'.tr()),
+                      backgroundColor: const Color(0xFFFF6B00),
                     ),
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('چیلنج منسوخ کرنے میں خرابی ہوئی'),
-                      backgroundColor: Color(0xFFFF4655),
+                    SnackBar(
+                      content: Text('challenge_cancel_failed'.tr()),
+                      backgroundColor: const Color(0xFFFF4655),
                     ),
                   );
                 }
               }
             },
-            child: const Text('ہاں، Cancel کریں', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('btn_yes_cancel'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -375,7 +373,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
                 onPressed: () => Navigator.pop(context),
               ),
-              title: const Text('Match Room', style: TextStyle(color: Colors.white, fontSize: 16)),
+              title: Text('match_room_title'.tr(), style: const TextStyle(color: Colors.white, fontSize: 16)),
             ),
             body: Center(
               child: Column(
@@ -383,12 +381,12 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 children: [
                   const Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFFF4655)),
                   const SizedBox(height: 12),
-                  const Text('میچ نہیں ملا (Match not found)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('match_not_found'.tr(), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2)),
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Back', style: TextStyle(color: Colors.white)),
+                    child: Text('btn_back'.tr(), style: const TextStyle(color: Colors.white)),
                   ),
                 ],
               ),
@@ -402,8 +400,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
         final isTeam2Member = match.team2Members.contains(currentUid) || isTeam2Leader;
         final isParticipant = isTeam1Member || isTeam2Member;
 
-        final isConfirmedByMyTeam = isTeam1Member? match.team1Confirmed : (isTeam2Member? match.team2Confirmed : false);
-
+        final isConfirmedByMyTeam = isTeam1Member ? match.team1Confirmed : (isTeam2Member ? match.team2Confirmed : false);
         final remaining = _calculateRemaining(match.matchTime);
 
         return Scaffold(
@@ -461,10 +458,10 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               labelColor: const Color(0xFFFF6B00),
               unselectedLabelColor: const Color(0xFF8B949E),
               indicatorWeight: 3,
-              tabs: const [
-                Tab(icon: Icon(Icons.shield_outlined, size: 18), text: 'Match Room'),
-                Tab(icon: Icon(Icons.chat_bubble_outline_rounded, size: 18), text: 'Team Chat'),
-                Tab(icon: Icon(Icons.camera_alt_outlined, size: 18), text: 'Win Proof'),
+              tabs: [
+                Tab(icon: const Icon(Icons.shield_outlined, size: 18), text: 'tab_match_room'.tr()),
+                Tab(icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18), text: 'tab_team_chat'.tr()),
+                Tab(icon: const Icon(Icons.camera_alt_outlined, size: 18), text: 'tab_win_proof'.tr()),
               ],
             ),
           ),
@@ -496,7 +493,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (match.isPending && isTeam2Leader)...[
+          if (match.isPending && isTeam2Leader) ...[
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -507,19 +504,19 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.notification_important_rounded, color: Color(0xFFFFB020), size: 20),
-                      SizedBox(width: 8),
+                      const Icon(Icons.notification_important_rounded, color: Color(0xFFFFB020), size: 20),
+                      const SizedBox(width: 8),
                       Text(
-                        'آپ کو چیلنج ملا ہے!',
-                        style: TextStyle(color: Color(0xFFFFB020), fontWeight: FontWeight.w900, fontSize: 15),
+                        'you_got_challenge_title'.tr(),
+                        style: const TextStyle(color: Color(0xFFFFB020), fontWeight: FontWeight.w900, fontSize: 15),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '${match.team1Name} کے لیڈر ${match.team1LeaderName} نے آپ کو ${match.game} (${match.mode}) میں چیلنج کیا ہے۔',
+                    'challenge_invitation_desc'.tr(args: [match.team1Name, match.team1LeaderName, match.game, match.mode]),
                     style: const TextStyle(color: Colors.white, fontSize: 13),
                   ),
                   const SizedBox(height: 12),
@@ -532,7 +529,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                             foregroundColor: const Color(0xFFFF4655),
                             side: const BorderSide(color: Color(0xFFFF4655)),
                           ),
-                          child: const Text('REJECT', style: TextStyle(fontWeight: FontWeight.bold)),
+                          child: Text('btn_reject'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -543,7 +540,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                             backgroundColor: const Color(0xFF00FF88),
                             foregroundColor: Colors.black,
                           ),
-                          child: const Text('ACCEPT CHALLENGE ✅', style: TextStyle(fontWeight: FontWeight.w900)),
+                          child: Text('btn_accept_challenge'.tr(), style: const TextStyle(fontWeight: FontWeight.w900)),
                         ),
                       ),
                     ],
@@ -553,7 +550,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
             ),
             const SizedBox(height: 16),
           ],
-          if (match.isPending && isTeam1Leader)...[
+          if (match.isPending && isTeam1Leader) ...[
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -564,19 +561,19 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFB020), size: 20),
-                      SizedBox(width: 8),
+                      const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFB020), size: 20),
+                      const SizedBox(width: 8),
                       Text(
-                        'چیلنج جواب کا منتظر ہے (Pending)',
-                        style: TextStyle(color: Color(0xFFFFB020), fontWeight: FontWeight.w900, fontSize: 14.5),
+                        'challenge_pending_response'.tr(),
+                        style: const TextStyle(color: Color(0xFFFFB020), fontWeight: FontWeight.w900, fontSize: 14.5),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'آپ نے ${match.team2Name} کو چیلنج بھیجا ہوا ہے۔ اگر آپ اس چیلنج کو واپس لینا چاہتے ہیں تو منسوخ کر سکتے ہیں۔',
+                    'challenge_sent_can_cancel_desc'.tr(args: [match.team2Name]),
                     style: const TextStyle(color: Colors.white70, fontSize: 12.5),
                   ),
                   const SizedBox(height: 12),
@@ -590,7 +587,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                         padding: const EdgeInsets.symmetric(vertical: 10),
                       ),
                       icon: const Icon(Icons.close_rounded, size: 18),
-                      label: const Text('CANCEL CHALLENGE (چیلنج منسوخ کریں)', style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: Text('cancel_challenge_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -615,15 +612,15 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      remaining == Duration.zero? Icons.play_circle_filled_rounded : Icons.timer_outlined,
-                      color: remaining == Duration.zero? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
+                      remaining == Duration.zero ? Icons.play_circle_filled_rounded : Icons.timer_outlined,
+                      color: remaining == Duration.zero ? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
                       size: 20,
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      remaining == Duration.zero? 'MATCH IS LIVE NOW! 🔴' : 'COUNTDOWN TO MATCH TIME',
+                      remaining == Duration.zero ? 'match_live_now_banner'.tr() : 'countdown_match_time'.tr(),
                       style: TextStyle(
-                        color: remaining == Duration.zero? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
+                        color: remaining == Duration.zero ? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
                         fontSize: 12.5,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.8,
@@ -644,7 +641,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Scheduled: ${DateFormat('dd MMM yyyy, hh:mm a').format(match.matchTime)}',
+                  '${'scheduled_label'.tr()}: ${DateFormat('dd MMM yyyy, hh:mm a').format(match.matchTime)}',
                   style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                 ),
               ],
@@ -671,11 +668,11 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                           color: const Color(0xFF26334D),
                           border: Border.all(color: const Color(0xFFFF6B00), width: 2),
                           image: match.team1Avatar.isNotEmpty
-                             ? DecorationImage(image: NetworkImage(match.team1Avatar), fit: BoxFit.cover)
+                              ? DecorationImage(image: NetworkImage(match.team1Avatar), fit: BoxFit.cover)
                               : null,
                         ),
                         child: match.team1Avatar.isEmpty
-                           ? const Center(child: Text('⚔️', style: TextStyle(fontSize: 24)))
+                            ? const Center(child: Text('⚔️', style: TextStyle(fontSize: 24)))
                             : null,
                       ),
                       const SizedBox(height: 8),
@@ -687,7 +684,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        'Leader: ${match.team1LeaderName}',
+                        '${'team_leader'.tr()}: ${match.team1LeaderName}',
                         style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                         maxLines: 1,
                       ),
@@ -695,13 +692,13 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: match.team1Confirmed? const Color(0xFF00FF88).withOpacity(0.2) : Colors.white10,
+                          color: match.team1Confirmed ? const Color(0xFF00FF88).withOpacity(0.2) : Colors.white10,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          match.team1Confirmed? 'CONFIRMED ✅' : 'NOT READY',
+                          match.team1Confirmed ? 'status_confirmed'.tr() : 'status_not_ready'.tr(),
                           style: TextStyle(
-                            color: match.team1Confirmed? const Color(0xFF00FF88) : Colors.white54,
+                            color: match.team1Confirmed ? const Color(0xFF00FF88) : Colors.white54,
                             fontWeight: FontWeight.bold,
                             fontSize: 10,
                           ),
@@ -717,9 +714,9 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFFFF4655)),
                   ),
-                  child: const Text(
-                    'VS',
-                    style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 16),
+                  child: Text(
+                    'versus_vs'.tr(),
+                    style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 16),
                   ),
                 ),
                 Expanded(
@@ -733,11 +730,11 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                           color: const Color(0xFF26334D),
                           border: Border.all(color: const Color(0xFF38BDF8), width: 2),
                           image: match.team2Avatar.isNotEmpty
-                             ? DecorationImage(image: NetworkImage(match.team2Avatar), fit: BoxFit.cover)
+                              ? DecorationImage(image: NetworkImage(match.team2Avatar), fit: BoxFit.cover)
                               : null,
                         ),
                         child: match.team2Avatar.isEmpty
-                           ? const Center(child: Text('🛡️', style: TextStyle(fontSize: 24)))
+                            ? const Center(child: Text('🛡️', style: TextStyle(fontSize: 24)))
                             : null,
                       ),
                       const SizedBox(height: 8),
@@ -749,7 +746,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        'Leader: ${match.team2LeaderName}',
+                        '${'team_leader'.tr()}: ${match.team2LeaderName}',
                         style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                         maxLines: 1,
                       ),
@@ -757,13 +754,13 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: match.team2Confirmed? const Color(0xFF00FF88).withOpacity(0.2) : Colors.white10,
+                          color: match.team2Confirmed ? const Color(0xFF00FF88).withOpacity(0.2) : Colors.white10,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          match.team2Confirmed? 'CONFIRMED ✅' : 'NOT READY',
+                          match.team2Confirmed ? 'status_confirmed'.tr() : 'status_not_ready'.tr(),
                           style: TextStyle(
-                            color: match.team2Confirmed? const Color(0xFF00FF88) : Colors.white54,
+                            color: match.team2Confirmed ? const Color(0xFF00FF88) : Colors.white54,
                             fontWeight: FontWeight.bold,
                             fontSize: 10,
                           ),
@@ -789,17 +786,17 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.vpn_key_rounded, color: Color(0xFFFF6B00), size: 18),
-                        SizedBox(width: 8),
+                        const Icon(Icons.vpn_key_rounded, color: Color(0xFFFF6B00), size: 18),
+                        const SizedBox(width: 8),
                         Text(
-                          'CUSTOM ROOM DETAILS',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13.5),
+                          'custom_room_details_title'.tr(),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13.5),
                         ),
                       ],
                     ),
-                    if (isTeam1Leader || isTeam2Leader)...[
+                    if (isTeam1Leader || isTeam2Leader) ...[
                       InkWell(
                         onTap: () => _showRoomCredentialsDialog(match),
                         child: Container(
@@ -808,21 +805,21 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                             color: const Color(0xFFFF6B00).withOpacity(0.2),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text('EDIT ROOM', style: TextStyle(color: Color(0xFFFF6B00), fontSize: 10, fontWeight: FontWeight.bold)),
+                          child: Text('edit_room_btn'.tr(), style: const TextStyle(color: Color(0xFFFF6B00), fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (match.customRoomId.isNotEmpty)...[
+                if (match.customRoomId.isNotEmpty) ...[
                   Row(
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Room ID:', style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                            Text('${'room_id_label'.tr()}:', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                             Text(
                               match.customRoomId,
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, fontFamily: 'monospace'),
@@ -835,7 +832,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: match.customRoomId));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Room ID copied!'), duration: Duration(seconds: 1)),
+                            SnackBar(content: Text('room_id_copied'.tr()), duration: const Duration(seconds: 1)),
                           );
                         },
                       ),
@@ -848,9 +845,9 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Password:', style: TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                            Text('${'room_password_label'.tr()}:', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                             Text(
-                              match.customRoomPassword.isNotEmpty? match.customRoomPassword : '(None)',
+                              match.customRoomPassword.isNotEmpty ? match.customRoomPassword : 'label_none'.tr(),
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, fontFamily: 'monospace'),
                             ),
                           ],
@@ -862,18 +859,18 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: match.customRoomPassword));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Password copied!'), duration: Duration(seconds: 1)),
+                              SnackBar(content: Text('room_password_copied'.tr()), duration: const Duration(seconds: 1)),
                             );
                           },
                         ),
                     ],
                   ),
-                ] else...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
+                ] else ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Text(
-                      'روم ID اور پاسورڈ میچ کے وقت لیڈر کی طرف سے فراہم کیا جائے گا۔',
-                      style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                      'room_credentials_waiting_desc'.tr(),
+                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     ),
                   ),
                 ],
@@ -881,7 +878,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
             ),
           ),
           const SizedBox(height: 16),
-          if ((isTeam1Member || isTeam2Member) &&!isConfirmedByMyTeam)...[
+          if ((isTeam1Member || isTeam2Member) && !isConfirmedByMyTeam) ...[
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -892,15 +889,15 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.black),
-                label: const Text(
-                  'MATCH CONFIRMED (ہم تیار ہیں)',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                label: Text(
+                  'btn_confirm_match_ready'.tr(),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
                 ),
                 onPressed: () async {
                   await _matchService.confirmMatch(match.matchId, isTeam1Member);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('میچ کی تصدیق کر دی گئی!'), backgroundColor: Color(0xFF00FF88)),
+                      SnackBar(content: Text('match_confirmed_success'.tr()), backgroundColor: const Color(0xFF00FF88)),
                     );
                   }
                 },
@@ -915,23 +912,23 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
 
   Widget _buildChatTab(TeamMatch match, String currentUid, bool isParticipant, bool isTeam1) {
     if (!isParticipant) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.lock_rounded, size: 48, color: Color(0xFF8B949E)),
-              SizedBox(height: 12),
+              const Icon(Icons.lock_rounded, size: 48, color: Color(0xFF8B949E)),
+              const SizedBox(height: 12),
               Text(
-                'پرائیویٹ ٹیم چیٹ',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                'private_team_chat_title'.tr(),
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              SizedBox(height: 6),
+              const SizedBox(height: 6),
               Text(
-                'یہ چیٹ صرف انہی دونوں ٹیموں کے ممبران کے لیے مخصوص ہے جو یہ مقابلہ کھیل رہی ہیں۔',
+                'private_team_chat_desc'.tr(),
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
               ),
             ],
           ),
@@ -948,10 +945,10 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
             children: [
               const Icon(Icons.security_rounded, size: 14, color: Color(0xFF00FF88)),
               const SizedBox(width: 6),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Private Match Chat • End-to-End Logged for dispute resolution',
-                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                  'private_chat_security_note'.tr(),
+                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                 ),
               ),
               InkWell(
@@ -963,9 +960,9 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: const Color(0xFF00FF88)),
                   ),
-                  child: const Text(
-                    'Confirm Match',
-                    style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 10),
+                  child: Text(
+                    'confirm_match_btn'.tr(),
+                    style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 10),
                   ),
                 ),
               ),
@@ -982,10 +979,10 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
 
               final messages = snapshot.data ?? [];
               if (messages.isEmpty) {
-                return const Center(
+                return Center(
                   child: Text(
-                    'کوئی پیغام نہیں ہے۔ بات چیت کا آغاز کریں!',
-                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                    'no_chat_messages_yet'.tr(),
+                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
                   ),
                 );
               }
@@ -997,10 +994,10 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 itemBuilder: (context, index) {
                   final data = messages[index];
                   final isMe = data['senderId'] == currentUid;
-                  final msgTeam = (data['teamName']?? '').toString();
-                  final msgSender = (data['senderName']?? 'Player').toString();
+                  final msgTeam = (data['teamName'] ?? '').toString();
+                  final msgSender = (data['senderName'] ?? 'Player').toString();
                   final msgText = (data['text'] ?? data['message'] ?? '').toString();
-                  final msgImage = (data['imageUrl']?? '').toString();
+                  final msgImage = (data['imageUrl'] ?? '').toString();
                   DateTime? timestamp;
                   final rawTs = data['timestamp'] ?? data['created_at'];
                   if (rawTs is DateTime) {
@@ -1014,15 +1011,15 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     child: Row(
-                      mainAxisAlignment: isMe? MainAxisAlignment.end : MainAxisAlignment.start,
+                      mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (!isMe)...[
+                        if (!isMe) ...[
                           CircleAvatar(
                             radius: 14,
                             backgroundColor: const Color(0xFF26334D),
                             child: Text(
-                              msgSender.isNotEmpty? msgSender[0].toUpperCase() : 'P',
+                              msgSender.isNotEmpty ? msgSender[0].toUpperCase() : 'P',
                               style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -1030,12 +1027,12 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                         ],
                         Flexible(
                           child: Column(
-                            crossAxisAlignment: isMe? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
                               Text(
                                 '$msgSender ($msgTeam)',
                                 style: TextStyle(
-                                  color: isMe? const Color(0xFFFF6B00) : const Color(0xFF38BDF8),
+                                  color: isMe ? const Color(0xFFFF6B00) : const Color(0xFF38BDF8),
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -1044,16 +1041,16 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: isMe? const Color(0xFFFF6B00).withOpacity(0.2) : const Color(0xFF1B2436),
+                                  color: isMe ? const Color(0xFFFF6B00).withOpacity(0.2) : const Color(0xFF1B2436),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: isMe? const Color(0xFFFF6B00).withOpacity(0.6) : const Color(0xFF2A3447),
+                                    color: isMe ? const Color(0xFFFF6B00).withOpacity(0.6) : const Color(0xFF2A3447),
                                   ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    if (msgImage.isNotEmpty)...[
+                                    if (msgImage.isNotEmpty) ...[
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
                                         child: CachedNetworkImage(
@@ -1070,7 +1067,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                                         msgText,
                                         style: const TextStyle(color: Colors.white, fontSize: 13.5),
                                       ),
-                                    if (timestamp!= null)...[
+                                    if (timestamp != null) ...[
                                       const SizedBox(height: 2),
                                       Text(
                                         DateFormat('hh:mm a').format(timestamp),
@@ -1106,13 +1103,13 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                   child: TextField(
                     controller: _chatController,
                     style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: const InputDecoration(
-                      hintText: 'پیغام یا روم کی تفصیلات لکھیں...',
-                      hintStyle: TextStyle(color: Color(0xFF555E6D), fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'chat_input_hint'.tr(),
+                      hintStyle: const TextStyle(color: Color(0xFF555E6D), fontSize: 13),
                       border: InputBorder.none,
                       filled: true,
-                      fillColor: Color(0xFF1A2234),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      fillColor: const Color(0xFF1A2234),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                     onSubmitted: (_) => _handleSendChat(match, currentUid, isTeam1),
                   ),
@@ -1120,7 +1117,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 const SizedBox(width: 8),
                 IconButton(
                   icon: _isSendingChat
-                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6B00)))
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6B00)))
                       : const Icon(Icons.send_rounded, color: Color(0xFFFF6B00)),
                   onPressed: () => _handleSendChat(match, currentUid, isTeam1),
                 ),
@@ -1136,29 +1133,20 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
   // TAB 3: WIN PROOF - FIXED FOR TEAM-SPECIFIC NOTIFICATION
   // ==========================================
   Widget _buildWinProofTab(TeamMatch match, String currentUid, bool isTeam1Member, bool isTeam2Member) {
+    final String? myProofUrl = isTeam1Member ? match.team1Proof : match.team2Proof;
+    final bool iHaveUploadedProof = myProofUrl != null && myProofUrl.isNotEmpty;
 
-    // ===== CRITICAL FIX: Only show rejection to team who actually uploaded proof =====
-    final String? myProofUrl = isTeam1Member? match.team1Proof : match.team2Proof;
-    final String? opponentProofUrl = isTeam1Member? match.team2Proof : match.team1Proof;
-
-    final bool iHaveUploadedProof = myProofUrl!= null && myProofUrl.isNotEmpty;
-    final bool opponentHasUploaded = opponentProofUrl!= null && opponentProofUrl.isNotEmpty;
-
-    // Rejection banner should ONLY show if MY team uploaded and admin rejected
-    // If I never uploaded, I should NEVER see rejection banner
     final bool isMyProofRejectedForMe = iHaveUploadedProof &&
-        match.adminNote!= null &&
+        match.adminNote != null &&
         match.adminNote!.isNotEmpty &&
-       !match.isProofSubmitted &&
-       !match.isPermanentlyRejected;
+        !match.isProofSubmitted &&
+        !match.isPermanentlyRejected;
 
-    // Waiting banner should only show to team who uploaded
     final bool isWaitingForMyReview = iHaveUploadedProof && match.isProofSubmitted;
 
-    // Can I upload? First time OR my proof was rejected
     final bool canIUploadNow = (isTeam1Member || isTeam2Member) &&
-       !match.isVerified &&
-       !match.isPermanentlyRejected &&
+        !match.isVerified &&
+        !match.isPermanentlyRejected &&
         (!iHaveUploadedProof || isMyProofRejectedForMe || match.canUploadNewProof);
 
     final bool isReupload = iHaveUploadedProof && isMyProofRejectedForMe;
@@ -1171,23 +1159,23 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'جیت کا ثبوت (WIN PROOF)',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+              Text(
+                'win_proof_tab_heading'.tr(),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (match.proofAttempts >= 2? const Color(0xFFFF4655) : const Color(0xFFFF6B00)).withOpacity(0.18),
+                  color: (match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFF6B00)).withOpacity(0.18),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: match.proofAttempts >= 2? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
+                    color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
                   ),
                 ),
                 child: Text(
-                  'کوششیں: ${match.proofAttempts}/2',
+                  'attempts_count_fraction'.tr(args: ['${match.proofAttempts}', '2']),
                   style: TextStyle(
-                    color: match.proofAttempts >= 2? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
+                    color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFF6B00),
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1196,14 +1184,14 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
             ],
           ),
           const SizedBox(height: 4),
-          const Text(
-            'میچ ختم ہونے پر اسکرین شاٹ اپلوڈ کریں جس میں Score / Victory صاف نظر آئے۔ (زیادہ سے زیادہ 2 بار اپلوڈ کرنے کی اجازت ہے)',
-            style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+          Text(
+            'win_proof_upload_instruction'.tr(),
+            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
           ),
           const SizedBox(height: 14),
 
-          // 1. Proof Submitted Banner - ONLY for team who uploaded
-          if (isWaitingForMyReview)...[
+          // 1. Proof Submitted Banner
+          if (isWaitingForMyReview) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -1217,9 +1205,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      isReupload
-                         ? 'آپ کا نیا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں'
-                          : 'آپ کا ثبوت ایڈمن کے پاس چلا گیا ہے، براہ کرم انتظار کریں',
+                      'proof_submitted_wait_admin'.tr(),
                       style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
@@ -1229,8 +1215,8 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
             const SizedBox(height: 14),
           ],
 
-          // 2. Permanently Rejected Banner - ONLY for team who uploaded
-          if (iHaveUploadedProof && match.isPermanentlyRejected)...[
+          // 2. Permanently Rejected Banner
+          if (iHaveUploadedProof && match.isPermanentlyRejected) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -1241,22 +1227,22 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.cancel_rounded, color: Color(0xFFFF4655), size: 20),
-                      SizedBox(width: 8),
+                      const Icon(Icons.cancel_rounded, color: Color(0xFFFF4655), size: 20),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'آپ کے دونوں ثبوت مسترد ہو گئے ہیں، یہ میچ ختم ہو گیا',
-                          style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
+                          'both_proofs_rejected_match_ended'.tr(),
+                          style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
                         ),
                       ),
                     ],
                   ),
-                  if (match.adminNote!= null && match.adminNote!.isNotEmpty)...[
+                  if (match.adminNote != null && match.adminNote!.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
-                      'ایڈمن کی وجہ: ${match.adminNote}',
+                      '${'admin_reason_label'.tr()}: ${match.adminNote}',
                       style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ],
@@ -1266,8 +1252,8 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
             const SizedBox(height: 14),
           ],
 
-          // 3. Admin Note / Rejection Banner - FIXED: ONLY show to team who uploaded proof
-          if (isMyProofRejectedForMe)...[
+          // 3. Admin Note / Rejection Banner
+          if (isMyProofRejectedForMe) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -1278,25 +1264,25 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 18),
-                      SizedBox(width: 8),
+                      const Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 18),
+                      const SizedBox(width: 8),
                       Text(
-                        'آپ کا Win Proof مسترد کر دیا گیا ہے',
-                        style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
+                        'your_proof_rejected_title'.tr(),
+                        style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'ایڈمن کی وجہ: ${match.adminNote}',
+                    '${'admin_reason_label'.tr()}: ${match.adminNote}',
                     style: const TextStyle(color: Colors.white, fontSize: 12.5),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    '💡 آپ کے پاس دوبارہ ثبوت جمع کرانے کا ایک اور موقع ہے۔ براہ کرم نیچے دیئے گئے بٹن سے نیا ثبوت اپلوڈ کریں۔',
-                    style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5, fontWeight: FontWeight.bold),
+                  Text(
+                    'reupload_second_chance_hint'.tr(),
+                    style: const TextStyle(color: Color(0xFF00FF88), fontSize: 11.5, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -1304,9 +1290,9 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
             const SizedBox(height: 14),
           ],
 
-          // Upload / Upload New Proof Action Button - FIXED: Team specific
-          if (canIUploadNow)...[
-            if (isWaitingForMyReview)...[
+          // Upload Action Button
+          if (canIUploadNow) ...[
+            if (isWaitingForMyReview) ...[
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
@@ -1315,47 +1301,46 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.access_time_filled_rounded, color: Color(0xFF38BDF8), size: 18),
-                    SizedBox(width: 8),
+                    const Icon(Icons.access_time_filled_rounded, color: Color(0xFF38BDF8), size: 18),
+                    const SizedBox(width: 8),
                     Text(
-                      'نیا ثبوت زیرِ جائزہ ہے (Under Admin Review)',
-                      style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
+                      'new_proof_under_review'.tr(),
+                      style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
-            ] else...[
+            ] else ...[
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isReupload? const Color(0xFF00FF88) : const Color(0xFFFF6B00),
+                    backgroundColor: isReupload ? const Color(0xFF00FF88) : const Color(0xFFFF6B00),
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   icon: _isUploadingProof
-                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                      : Icon(isReupload? Icons.replay_rounded : Icons.upload_file_rounded, color: Colors.black),
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : Icon(isReupload ? Icons.replay_rounded : Icons.upload_file_rounded, color: Colors.black),
                   label: Text(
                     _isUploadingProof
-                       ? 'Uploading Proof...'
+                        ? 'uploading_proof_progress'.tr()
                         : (isReupload
-                           ? 'UPLOAD NEW PROOF (دوبارہ نیا ثبوت اپلوڈ کریں) 📸'
-                            : 'UPLOAD RESULT SCREENSHOT 📸'),
+                            ? 'btn_upload_new_proof'.tr()
+                            : 'btn_upload_result_screenshot'.tr()),
                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                   ),
-                  onPressed: _isUploadingProof? null : () => _handleUploadProof(match, isTeam1Member),
+                  onPressed: _isUploadingProof ? null : () => _handleUploadProof(match, isTeam1Member),
                 ),
               ),
             ],
             const SizedBox(height: 20),
-          ] else if (!match.isVerified &&!match.isPermanentlyRejected && (isTeam1Member || isTeam2Member) &&!isWaitingForMyReview)...[
-            // Limit reached - only show to team who uploaded
-            if (iHaveUploadedProof)...[
+          ] else if (!match.isVerified && !match.isPermanentlyRejected && (isTeam1Member || isTeam2Member) && !isWaitingForMyReview) ...[
+            if (iHaveUploadedProof) ...[
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
@@ -1364,14 +1349,14 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.white24),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.block_rounded, color: Colors.white54, size: 18),
-                    SizedBox(width: 8),
+                    const Icon(Icons.block_rounded, color: Colors.white54, size: 18),
+                    const SizedBox(width: 8),
                     Text(
-                      'ثبوت اپلوڈ کرنے کی حد (2 بار) ختم ہو چکی ہے',
-                      style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                      'proof_limit_exhausted_2_attempts'.tr(),
+                      style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -1397,7 +1382,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
           ),
           const SizedBox(height: 20),
 
-          if (match.isVerified)...[
+          if (match.isVerified) ...[
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -1408,32 +1393,32 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.emoji_events_rounded, color: Color(0xFF00FF88), size: 22),
-                      SizedBox(width: 8),
+                      const Icon(Icons.emoji_events_rounded, color: Color(0xFF00FF88), size: 22),
+                      const SizedBox(width: 8),
                       Text(
-                        'OFFICIAL ADMIN VERIFIED WINNER',
-                        style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.w900, fontSize: 14),
+                        'official_admin_verified_winner'.tr(),
+                        style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.w900, fontSize: 14),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'فاتح ٹیم: ${match.winnerName}',
+                    '${'winner_team_label'.tr()}: ${match.winnerName}',
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
                   ),
-                  if (match.verifiedBy!= null)...[
+                  if (match.verifiedBy != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'تصدیق کنندہ: ${match.verifiedBy}',
+                      '${'verified_by_label'.tr()}: ${match.verifiedBy}',
                       style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                     ),
                   ],
                 ],
               ),
             ),
-          ] else if (match.isDisputed)...[
+          ] else if (match.isDisputed) ...[
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -1441,16 +1426,16 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFFFF4655)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 22),
-                  SizedBox(width: 10),
+                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 22),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('DISPUTED MATCH ⚠️', style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold)),
-                        Text('دونوں ٹیموں کے ثبوت ایڈمن کو بھیج دیے گئے ہیں۔ ایڈمن حتمی فیصلہ کرے گا۔', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text('disputed_match_badge'.tr(), style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold)),
+                        Text('dispute_submitted_to_admin_note'.tr(), style: const TextStyle(color: Colors.white70, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -1475,7 +1460,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
       decoration: BoxDecoration(
         color: const Color(0xFF161F2E),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isWinning? const Color(0xFF00FF88) : const Color(0xFF2A3447)),
+        border: Border.all(color: isWinning ? const Color(0xFF00FF88) : const Color(0xFF2A3447)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1487,17 +1472,17 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 teamName,
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
               ),
-              if (claim!= null)
+              if (claim != null)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: claim == 'win'? const Color(0xFF00FF88).withOpacity(0.2) : Colors.white10,
+                    color: claim == 'win' ? const Color(0xFF00FF88).withOpacity(0.2) : Colors.white10,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    claim == 'win'? 'CLAIMED WIN 🏆' : 'CLAIMED LOSS',
+                    claim == 'win' ? 'claimed_win_badge'.tr() : 'claimed_loss_badge'.tr(),
                     style: TextStyle(
-                      color: claim == 'win'? const Color(0xFF00FF88) : Colors.white70,
+                      color: claim == 'win' ? const Color(0xFF00FF88) : Colors.white70,
                       fontSize: 10.5,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1506,7 +1491,7 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
             ],
           ),
           const SizedBox(height: 10),
-          if (proofUrl!= null && proofUrl.isNotEmpty)...[
+          if (proofUrl != null && proofUrl.isNotEmpty) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: CachedNetworkImage(
@@ -1518,14 +1503,14 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 errorWidget: (c, u, e) => const Center(child: Icon(Icons.broken_image, color: Colors.white30)),
               ),
             ),
-            if (uploadedAt!= null)...[
+            if (uploadedAt != null) ...[
               const SizedBox(height: 6),
               Text(
-                'Uploaded: ${DateFormat('dd MMM, hh:mm a').format(uploadedAt)}',
+                '${'uploaded_at_label'.tr()}: ${DateFormat('dd MMM, hh:mm a').format(uploadedAt)}',
                 style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
               ),
             ],
-          ] else...[
+          ] else ...[
             Container(
               height: 80,
               decoration: BoxDecoration(
@@ -1533,10 +1518,10 @@ class _TeamMatchRoomScreenState extends State<TeamMatchRoomScreen> with SingleTi
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.white10),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  'ابھی تک کوئی ثبوت جمع نہیں کرایا گیا',
-                  style: TextStyle(color: Color(0xFF555E6D), fontSize: 12),
+                  'no_proof_submitted_yet'.tr(),
+                  style: const TextStyle(color: Color(0xFF555E6D), fontSize: 12),
                 ),
               ),
             ),
