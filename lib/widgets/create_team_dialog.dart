@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../models/team_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/team_service.dart';
@@ -77,18 +78,16 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
     }
   }
 
-  /// FIX: Sirf Supabase auth ID use karo, error ko user ko dikhao.
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // ============ FIX: Sirf Supabase auth use karo ============
     final sbUserId = SupabaseService.client.auth.currentUser?.id;
 
     if (sbUserId == null || sbUserId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('براہ کرم پہلے لاگ ان کریں'),
-          backgroundColor: Color(0xFFFF4655),
+        SnackBar(
+          content: Text('login_required_prompt'.tr()),
+          backgroundColor: const Color(0xFFFF4655),
         ),
       );
       return;
@@ -99,7 +98,6 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
     setState(() => _isLoading = true);
 
     if (_isEditMode) {
-      // ===== UPDATE EXISTING TEAM =====
       final success = await TeamService().updateTeam(
         teamId: widget.existingTeam!.id,
         name: _nameController.text.trim(),
@@ -116,25 +114,24 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
         if (success) {
           Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ ٹیم کامیابی سے اپڈیٹ ہو گئی!'),
-              backgroundColor: Color(0xFF00FF88),
+            SnackBar(
+              content: Text('team_updated_success'.tr()),
+              backgroundColor: const Color(0xFF00FF88),
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ٹیم اپڈیٹ کرنے میں خرابی پیش آئی۔'),
-              backgroundColor: Color(0xFFFF4655),
+            SnackBar(
+              content: Text('team_update_failed'.tr()),
+              backgroundColor: const Color(0xFFFF4655),
             ),
           );
         }
       }
     } else {
-      // ===== CREATE NEW TEAM =====
       final leaderName = currentGamer?.displayName ??
           currentGamer?.username ??
-          'Team Leader';
+          'team_leader'.tr();
       final leaderAvatar = currentGamer?.photoUrl ?? '';
 
       try {
@@ -158,16 +155,15 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                    '🎉 ٹیم "${_nameController.text.trim()}" کامیابی سے بن گئی!'),
+                    'team_created_success'.tr(args: [_nameController.text.trim()])),
                 backgroundColor: const Color(0xFF00FF88),
               ),
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content:
-                    Text('ٹیم بنانے میں خرابی پیش آئی۔ دوبارہ کوشش کریں۔'),
-                backgroundColor: Color(0xFFFF4655),
+              SnackBar(
+                content: Text('team_create_failed'.tr()),
+                backgroundColor: const Color(0xFFFF4655),
               ),
             );
           }
@@ -177,7 +173,7 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: $e'),
+              content: Text('${'err_prefix'.tr()}: $e'),
               backgroundColor: const Color(0xFFFF4655),
               duration: const Duration(seconds: 5),
             ),
@@ -189,13 +185,13 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final title = _isEditMode ? 'EDIT TEAM' : 'CREATE NEW TEAM';
+    final title = _isEditMode ? 'edit_team_title'.tr() : 'create_new_team_title'.tr();
     final subtitle = _isEditMode
-        ? 'اپنی ٹیم کی تفصیلات اپڈیٹ کریں'
-        : 'اپنی ای اسپورٹس ٹیم بنائیں اور چیلنجز کھیلیں';
+        ? 'edit_team_subtitle'.tr()
+        : 'create_team_subtitle'.tr();
     final buttonText = _isEditMode
-        ? (_isLoading ? 'Updating Team...' : 'UPDATE TEAM (ٹیم اپڈیٹ کریں)')
-        : (_isLoading ? 'Creating Team...' : 'CREATE TEAM (ٹیم بنائیں)');
+        ? (_isLoading ? 'updating_team_status'.tr() : 'btn_update_team'.tr())
+        : (_isLoading ? 'creating_team_status'.tr() : 'btn_create_team'.tr());
 
     final currentLogo = _isEditMode && widget.existingTeam!.logo.isNotEmpty
         ? widget.existingTeam!.logo
@@ -304,14 +300,14 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
                                   : null),
                         ),
                         child: (_logoFile == null && currentLogo == null)
-                            ? const Column(
+                            ? Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.add_a_photo_rounded,
+                                  const Icon(Icons.add_a_photo_rounded,
                                       color: Color(0xFFFF6B00), size: 26),
-                                  SizedBox(height: 2),
-                                  Text('Logo',
-                                      style: TextStyle(
+                                  const SizedBox(height: 2),
+                                  Text('logo_label'.tr(),
+                                      style: const TextStyle(
                                           color: Colors.white70,
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold)),
@@ -322,9 +318,7 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      _isEditMode
-                          ? 'نیا لوگو منتخب کریں (اختیاری)'
-                          : 'ٹیم کا لوگو منتخب کریں (اختیاری)',
+                      'select_logo_optional'.tr(),
                       style: const TextStyle(
                           color: Color(0xFF8B949E), fontSize: 11),
                     ),
@@ -334,9 +328,9 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
               const SizedBox(height: 18),
 
               // Team Name Field
-              const Text(
-                'ٹیم کا نام (Team Name) *',
-                style: TextStyle(
+              Text(
+                'team_name_field_label'.tr(),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12.5,
                     fontWeight: FontWeight.bold),
@@ -346,7 +340,7 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
                 controller: _nameController,
                 style: const TextStyle(color: Colors.white, fontSize: 13.5),
                 decoration: InputDecoration(
-                  hintText: 'مثلاً: Thunder Strikers',
+                  hintText: 'team_name_hint'.tr(),
                   hintStyle:
                       const TextStyle(color: Color(0xFF555E6D), fontSize: 13),
                   filled: true,
@@ -364,19 +358,21 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
                       horizontal: 14, vertical: 12),
                 ),
                 validator: (val) {
-                  if (val == null || val.trim().isEmpty)
-                    return 'ٹیم کا نام لکھنا لازمی ہے';
-                  if (val.trim().length < 3)
-                    return 'کم از کم 3 حروف کا نام لکھیں';
+                  if (val == null || val.trim().isEmpty) {
+                    return 'team_name_required'.tr();
+                  }
+                  if (val.trim().length < 3) {
+                    return 'team_name_min_chars'.tr();
+                  }
                   return null;
                 },
               ),
               const SizedBox(height: 14),
 
               // Team Tag Field
-              const Text(
-                'ٹیم کا ٹیگ (Tag - 4 Letters) *',
-                style: TextStyle(
+              Text(
+                'team_tag_field_label'.tr(),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12.5,
                     fontWeight: FontWeight.bold),
@@ -395,7 +391,7 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
                 ],
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
-                  hintText: 'مثلاً: GIDN, SOUL, GODL',
+                  hintText: 'team_tag_hint'.tr(),
                   hintStyle: const TextStyle(
                       color: Color(0xFF555E6D),
                       fontSize: 13,
@@ -415,19 +411,21 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
                       horizontal: 14, vertical: 12),
                 ),
                 validator: (val) {
-                  if (val == null || val.trim().isEmpty)
-                    return 'ٹیم کا 4 حرفی ٹیگ لازمی ہے';
-                  if (val.trim().length != 4)
-                    return 'ٹیگ لازمی 4 حروف پر مشتمل ہو (مثلاً GIDN)';
+                  if (val == null || val.trim().isEmpty) {
+                    return 'team_tag_required'.tr();
+                  }
+                  if (val.trim().length != 4) {
+                    return 'team_tag_must_be_4_chars'.tr();
+                  }
                   return null;
                 },
               ),
               const SizedBox(height: 14),
 
               // Game Selection
-              const Text(
-                'گیم کا انتخاب (Game) *',
-                style: TextStyle(
+              Text(
+                'select_game_field_label'.tr(),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12.5,
                     fontWeight: FontWeight.bold),
@@ -458,9 +456,9 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
               const SizedBox(height: 14),
 
               // Team Description
-              const Text(
-                'ٹیم کی تفصیل (Description)',
-                style: TextStyle(
+              Text(
+                'team_description_field_label'.tr(),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12.5,
                     fontWeight: FontWeight.bold),
@@ -471,8 +469,7 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
                 maxLines: 2,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 decoration: InputDecoration(
-                  hintText:
-                      'ہماری ٹیم سخت محنت اور ای اسپورٹس ٹورنامنٹس میں حصہ لیتی ہے...',
+                  hintText: 'team_description_hint'.tr(),
                   hintStyle: const TextStyle(
                       color: Color(0xFF555E6D), fontSize: 12.5),
                   filled: true,
@@ -493,9 +490,9 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
               const SizedBox(height: 14),
 
               // Requirements
-              const Text(
-                'شرائط (Requirements)',
-                style: TextStyle(
+              Text(
+                'team_requirements_field_label'.tr(),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12.5,
                     fontWeight: FontWeight.bold),
@@ -506,7 +503,7 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
                 maxLines: 2,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 decoration: InputDecoration(
-                  hintText: 'K/D 3.5+, Ace Rank, شام 7 بجے پریکٹس لازمی...',
+                  hintText: 'team_requirements_hint'.tr(),
                   hintStyle: const TextStyle(
                       color: Color(0xFF555E6D), fontSize: 12.5),
                   filled: true,
