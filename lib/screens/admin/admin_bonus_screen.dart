@@ -1,8 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXACT DIFF:
 // - Replaced .eq('id', docId) with .or('id.eq.$docId,uid.eq.$docId') on users table
+// - Added easy_localization (.tr()) for all Admin UI and notification strings
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
@@ -48,9 +50,9 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
     final rev = actualAvgRevenuePerAd;
     if (rev <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFFFF4655),
-          content: Text('Please enter a valid revenue per ad in PKR (e.g. 5.0)'),
+        SnackBar(
+          backgroundColor: const Color(0xFFFF4655),
+          content: Text('enter_valid_revenue_error'.tr()),
         ),
       );
       return;
@@ -61,7 +63,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFFF4655),
-          content: Text('Bonus per ad is ${calculatedBonusPerAd.toStringAsFixed(1)} (<= 0). No bonus to distribute.'),
+          content: Text('no_bonus_to_distribute_warning'.tr(args: [calculatedBonusPerAd.toStringAsFixed(1)])),
         ),
       );
       return;
@@ -79,9 +81,11 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
           children: [
             const Icon(Icons.stars_rounded, color: Colors.amber, size: 24),
             const SizedBox(width: 8),
-            Text(
-              'Distribute Daily Bonus?',
-              style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+            Expanded(
+              child: Text(
+                'distribute_daily_bonus_title'.tr(),
+                style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+              ),
             ),
           ],
         ),
@@ -90,9 +94,10 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Rate: Rs. ${rev.toStringAsFixed(2)} / ad\n'
-              'Bonus: ${calculatedBonusPerAd.toStringAsFixed(1)} coins per ad yesterday.\n\n'
-              'Are you sure you want to credit all qualifying users now?',
+              'distribute_bonus_confirm_desc'.tr(args: [
+                rev.toStringAsFixed(2),
+                calculatedBonusPerAd.toStringAsFixed(1),
+              ]),
               style: TextStyle(color: textGray, fontSize: 13, height: 1.4),
             ),
           ],
@@ -100,7 +105,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: textGray)),
+            child: Text('btn_cancel'.tr(), style: TextStyle(color: textGray)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -109,7 +114,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm & Distribute', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('confirm_and_distribute_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -119,7 +124,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
 
     setState(() {
       _isDistributing = true;
-      _statusMessage = 'Reading users data...';
+      _statusMessage = 'reading_users_data'.tr();
     });
 
     try {
@@ -145,11 +150,11 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
             await SupabaseService.client.from('notifications').insert({
               'userId': docId,
               'user_id': docId,
-              'title': '🎁 Daily Bonus!',
-              'body': '🎁 Daily Bonus! $totalBonus Coins mil gaye! Kal ki activity ka inaam!',
+              'title': 'daily_bonus_notification_title'.tr(),
+              'body': 'daily_bonus_notification_body'.tr(args: [totalBonus.toString()]),
               'type': 'bonus_reward',
               'timestamp': DateTime.now().toIso8601String(),
-              'created_at': DateTime.now().toIso8601String(),
+              'created_at': DateTime.now().toUtc().toIso8601String(),
             });
 
             usersRewarded += 1;
@@ -160,7 +165,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
 
       setState(() {
         _isDistributing = false;
-        _statusMessage = 'Completed! $usersRewarded users rewarded ($totalBonusCoinsDistributed coins).';
+        _statusMessage = 'bonus_distributed_status'.tr(args: [usersRewarded.toString(), totalBonusCoinsDistributed.toString()]);
       });
 
       if (mounted) {
@@ -176,15 +181,16 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
               children: [
                 const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 24),
                 const SizedBox(width: 8),
-                Text(
-                  'Bonus Distributed! 🎉',
-                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+                Expanded(
+                  child: Text(
+                    'bonus_distributed_success_title'.tr(),
+                    style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                 ),
               ],
             ),
             content: Text(
-              'Successfully rewarded $usersRewarded users with a total of $totalBonusCoinsDistributed GK Coins!\n\n'
-              'In-app notifications have been delivered to their accounts.',
+              'bonus_distributed_dialog_desc'.tr(args: [usersRewarded.toString(), totalBonusCoinsDistributed.toString()]),
               style: TextStyle(color: textGray, fontSize: 13, height: 1.4),
             ),
             actions: [
@@ -194,7 +200,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
                   foregroundColor: const Color(0xFF05080D),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text('btn_ok'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -209,7 +215,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: alertRed,
-            content: Text('Failed to distribute bonus: $e'),
+            content: Text('${'failed_distribute_bonus'.tr()}: $e'),
           ),
         );
       }
@@ -237,7 +243,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
                 border: Border.all(color: neonGreen),
               ),
               child: Text(
-                'ADMIN',
+                'admin_badge'.tr(),
                 style: TextStyle(
                   color: neonGreen,
                   fontSize: 10,
@@ -247,7 +253,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Daily Bonus Pool',
+              'daily_bonus_pool_title'.tr(),
               style: TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
@@ -278,20 +284,21 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
                     children: [
                       const Icon(Icons.monetization_on_outlined, color: Colors.amber, size: 22),
                       const SizedBox(width: 8),
-                      Text(
-                        'AdMob Revenue Share Adjustment',
-                        style: TextStyle(
-                          color: textWhite,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                      Expanded(
+                        child: Text(
+                          'admob_rev_share_title'.tr(),
+                          style: TextStyle(
+                            color: textWhite,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Users receive instant rewards upon app actions (12 coins/ad). '
-                    'Enter your actual AdMob dashboard eCPM/revenue per ad below to automatically distribute the remaining 50% revenue share bonus to yesterday\'s active users.',
+                    'admob_rev_share_desc'.tr(),
                     style: TextStyle(color: textGray, fontSize: 12, height: 1.4),
                   ),
                 ],
@@ -302,7 +309,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
 
             // Input Field: actualAvgRevenuePerAd
             Text(
-              'Actual Average Revenue Per Ad (PKR)',
+              'actual_avg_rev_label'.tr(),
               style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -343,7 +350,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'CALCULATION BREAKDOWN',
+                    'calculation_breakdown_header'.tr(),
                     style: TextStyle(
                       color: neonGreen,
                       fontSize: 11,
@@ -352,14 +359,14 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _buildMathRow('Actual Revenue Per Ad:', 'Rs. ${actualAvgRevenuePerAd.toStringAsFixed(2)}'),
-                  _buildMathRow('Target Revenue Share (50%):', 'Rs. ${(actualAvgRevenuePerAd * 0.5).toStringAsFixed(2)}'),
-                  _buildMathRow('Coin Value:', 'Rs. 0.10 / coin'),
-                  _buildMathRow('Final Target Coins / Ad:', '${finalCoinsPerAd.toStringAsFixed(1)} coins'),
-                  _buildMathRow('Instant Reward Already Given:', '$instantPerAd coins'),
+                  _buildMathRow('${'actual_rev_per_ad_label'.tr()}:', 'Rs. ${actualAvgRevenuePerAd.toStringAsFixed(2)}'),
+                  _buildMathRow('${'target_rev_share_label'.tr()}:', 'Rs. ${(actualAvgRevenuePerAd * 0.5).toStringAsFixed(2)}'),
+                  _buildMathRow('${'coin_value_label'.tr()}:', 'Rs. 0.10 / coin'),
+                  _buildMathRow('${'final_target_coins_label'.tr()}:', '${finalCoinsPerAd.toStringAsFixed(1)} coins'),
+                  _buildMathRow('${'instant_reward_given_label'.tr()}:', '$instantPerAd coins'),
                   Divider(color: borderDark, height: 16),
                   _buildMathRow(
-                    'Bonus Coins Per Ad (Yesterday):',
+                    '${'bonus_coins_yesterday_label'.tr()}:',
                     '+${bonusPerAd.toStringAsFixed(1)} coins',
                     highlight: true,
                   ),
@@ -407,7 +414,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
                       )
                     : const Icon(Icons.send_rounded, size: 20),
                 label: Text(
-                  _isDistributing ? 'Distributing Bonus...' : 'Distribute Bonus',
+                  _isDistributing ? 'distributing_bonus_label'.tr() : 'distribute_bonus_btn'.tr(),
                   style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
                 ),
               ),
@@ -430,9 +437,7 @@ class _AdminBonusScreenState extends State<AdminBonusScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Automated notifications sent to users will only state: '
-                      '"🎁 Daily Bonus! {totalBonus} Coins mil gaye! Kal ki activity ka inaam!" '
-                      'and will never disclose internal ad metrics or revenue ratios.',
+                      'admin_bonus_privacy_notice'.tr(),
                       style: TextStyle(color: textGray, fontSize: 11, height: 1.4),
                     ),
                   ),
