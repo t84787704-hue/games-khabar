@@ -236,7 +236,7 @@ class GamerRoom {
       filledSlots: (row['filled_slots'] is num) ? (row['filled_slots'] as num).toInt() : 1,
       status: (row['status'] ?? 'active').toString(),
       createdAt: created,
-      hostName: (row['host_name'] ?? 'Host').toString(),
+      hostName: (row['host_name'] ?? 'host_label'.tr()).toString(),
       joinedUserIds: joinedUserIds,
       joinedUsers: joinedUsers,
       startTime: startTime ?? created,
@@ -277,7 +277,7 @@ class GamerRoomsScreen extends StatefulWidget {
         amount: prize,
         type: 'win_prize',
         roomId: room.id,
-        description: 'Tournament win prize: ${room.title}',
+        description: 'tournament_win_prize_desc'.tr(args: [room.title]),
       );
     } catch (e) {
       debugPrint('Error updating winner coins: $e');
@@ -312,7 +312,7 @@ class GamerRoomsScreen extends StatefulWidget {
         'room_id': room.id,
         'sender_id': 'system',
         'sender_name': 'ROOM BOT',
-        'message': '🏆 $winnerName won! +$prize coins',
+        'message': 'room_won_coins_msg'.tr(args: [winnerName, prize.toString()]),
         'type': 'system_reward',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -322,8 +322,8 @@ class GamerRoomsScreen extends StatefulWidget {
       await NotificationService().sendNotification(
         userId: winnerId,
         type: 'match_result',
-        title: '🏆 You won! +$prize coins',
-        body: 'Congratulations $winnerName! You won ${room.title}.',
+        title: 'room_won_coins_msg'.tr(args: [winnerName, prize.toString()]),
+        body: 'room_won_congrats_body'.tr(args: [winnerName, room.title]),
         data: {'room_id': room.id, 'prize': prize},
         priority: 'high',
       );
@@ -394,7 +394,7 @@ class GamerRoomsScreen extends StatefulWidget {
                 decoration: InputDecoration(
                   labelText: 'in_game_name_ign'.tr(),
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
-                  hintText: 'e.g. Sniper_King',
+                  hintText: 'ign_example_hint'.tr(),
                   hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
                   prefixIcon: Icon(Icons.badge_outlined, size: 20, color: ThemeService.textSecondary),
                   filled: true,
@@ -414,7 +414,7 @@ class GamerRoomsScreen extends StatefulWidget {
                 decoration: InputDecoration(
                   labelText: 'game_uid_label'.tr(),
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
-                  hintText: 'e.g. 5123456789',
+                  hintText: 'game_uid_example_hint'.tr(),
                   hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
                   prefixIcon: Icon(Icons.tag, size: 20, color: ThemeService.textSecondary),
                   filled: true,
@@ -518,7 +518,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   String get currentUserName =>
       _authService.currentGamer?.displayName ??
       SupabaseService.client.auth.currentUser?.userMetadata?["full_name"]?.toString() ??
-      'Gamer';
+      'label_gamer'.tr();
 
   String get currentUserPhoto =>
       _authService.currentGamer?.photoUrl ??
@@ -906,11 +906,11 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     bool isCreating = false;
 
     int selectedSlots = 2;
-    String selectedFormat = '1 vs 1 (2 Slots)';
+    String selectedFormatKey = 'format_1v1_slots';
     final Map<String, int> formatOptions = {
-      '1 vs 1 (2 Slots)': 2,
-      '2 vs 2 (4 Slots)': 4,
-      '4 vs 4 TDM (8 Slots)': 8,
+      'format_1v1_slots': 2,
+      'format_2v2_slots': 4,
+      'format_4v4_slots': 8,
     };
 
     showDialog(
@@ -944,23 +944,23 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   ),
                 ),
                 DropdownButtonFormField<String>(
-                  value: selectedFormat,
+                  value: selectedFormatKey,
                   dropdownColor: ThemeService.card,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
                     labelText: 'match_format_slots'.tr(),
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
-                  items: formatOptions.keys.map((format) {
+                  items: formatOptions.keys.map((formatKey) {
                     return DropdownMenuItem(
-                      value: format,
-                      child: Text(format, style: TextStyle(fontSize: 13, color: ThemeService.textPrimary)),
+                      value: formatKey,
+                      child: Text(formatKey.tr(), style: TextStyle(fontSize: 13, color: ThemeService.textPrimary)),
                     );
                   }).toList(),
                   onChanged: (val) {
                     if (val != null) {
                       setDialogState(() {
-                        selectedFormat = val;
+                        selectedFormatKey = val;
                         selectedSlots = formatOptions[val]!;
                       });
                     }
@@ -1279,7 +1279,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'room_id': widget.roomId,
         'sender_id': 'system',
         'sender_name': 'ROOM BOT',
-        'message': '👋 ${widget.currentUserName} ($myIgn) joined the match!',
+        'message': 'player_joined_match_msg'.tr(args: [widget.currentUserName, myIgn]),
         'type': 'system',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1359,7 +1359,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         } catch (_) {}
       }
 
-      // Upload count track karein
       Map<String, dynamic> attemptsMap = {};
       final rawAttempts = currentRoomRow?['upload_attempts'];
       if (rawAttempts is Map) {
@@ -1410,7 +1409,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
 
       if (hasMultipleClaims) {
         updateData['disputed'] = true;
-        updateData['dispute_reason'] = 'Both players claimed win. Admin verification required.';
+        updateData['dispute_reason'] = 'both_players_claimed_win_reason'.tr();
         updateData['disputed_at'] = DateTime.now().toUtc().toIso8601String();
       }
 
@@ -1420,7 +1419,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'room_id': widget.roomId,
         'sender_id': 'system',
         'sender_name': 'ROOM BOT',
-        'message': '📸 ${widget.currentUserName} uploaded proof (Attempt $newAttemptCount/3)! Waiting for admin review.',
+        'message': 'player_uploaded_proof_msg'.tr(args: [widget.currentUserName, newAttemptCount.toString(), '3']),
         'type': 'system',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1481,7 +1480,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 'room_id': widget.roomId,
                 'sender_id': 'system',
                 'sender_name': 'DISPUTE BOT',
-                'message': '⚠️ Dispute raised by ${widget.currentUserName}: "$reason". Admin will review.',
+                'message': 'dispute_raised_by_player_msg'.tr(args: [widget.currentUserName, reason]),
                 'type': 'system_dispute',
                 'created_at': DateTime.now().toUtc().toIso8601String(),
               });
