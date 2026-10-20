@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/supabase_service.dart';
 import '../models/news_model.dart';
 import '../services/supabase_store_service.dart';
@@ -37,12 +38,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         if (mounted) {
           Navigator.of(context).pushReplacementNamed('/');
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Color(0xFFFF4655),
+            SnackBar(
+              backgroundColor: const Color(0xFFFF4655),
               behavior: SnackBarBehavior.floating,
               content: Text(
-                'Access Denied - Not Admin',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                'access_denied_admin'.tr(),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
           );
@@ -71,15 +72,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         backgroundColor: cardDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: borderDark),
+          side: const BorderSide(color: borderDark),
         ),
         title: Row(
-          children: const [
-            Icon(Icons.delete_forever_rounded, color: alertRed, size: 24),
-            SizedBox(width: 8),
+          children: [
+            const Icon(Icons.delete_forever_rounded, color: alertRed, size: 24),
+            const SizedBox(width: 8),
             Text(
-              'Delete Khabar?',
-              style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
+              'delete_khabar_title'.tr(),
+              style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
         ),
@@ -88,8 +89,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Are you sure you want to delete this article?',
-              style: TextStyle(color: textGray, fontSize: 13),
+              'delete_khabar_confirm_desc'.tr(),
+              style: const TextStyle(color: textGray, fontSize: 13),
             ),
             const SizedBox(height: 8),
             Container(
@@ -103,7 +104,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   color: textWhite,
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
@@ -112,15 +113,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'This action will remove it live from all users.',
-              style: TextStyle(color: alertRed, fontSize: 11, fontWeight: FontWeight.w500),
+              'delete_khabar_warning'.tr(),
+              style: const TextStyle(color: alertRed, fontSize: 11, fontWeight: FontWeight.w500),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: textGray, fontWeight: FontWeight.bold)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: textGray, fontWeight: FontWeight.bold)),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -133,7 +134,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             onPressed: () => Navigator.pop(ctx, true),
             icon: const Icon(Icons.delete_outline, size: 18),
-            label: const Text('Delete Permanently', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: Text('delete_permanently_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -149,15 +150,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: neonGreen, width: 1),
+                side: const BorderSide(color: neonGreen, width: 1),
               ),
               content: Row(
-                children: const [
-                  Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
-                  SizedBox(width: 10),
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
+                  const SizedBox(width: 10),
                   Text(
-                    'Khabar deleted successfully',
-                    style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                    'khabar_deleted_success'.tr(),
+                    style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -169,7 +170,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: alertRed,
-              content: Text('Error deleting: $e',
+              content: Text('${'error_prefix'.tr()}: $e',
                   style: const TextStyle(color: Colors.white)),
             ),
           );
@@ -213,12 +214,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           side: const BorderSide(color: borderDark),
         ),
         title: Row(
-          children: const [
-            Icon(Icons.rss_feed_rounded, color: neonGreen, size: 22),
-            SizedBox(width: 8),
+          children: [
+            const Icon(Icons.rss_feed_rounded, color: neonGreen, size: 22),
+            const SizedBox(width: 8),
             Text(
-              'Add RSS Source',
-              style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
+              'add_rss_source_title'.tr(),
+              style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
         ),
@@ -230,7 +231,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 controller: nameCtrl,
                 style: const TextStyle(color: textWhite, fontSize: 13),
                 decoration: InputDecoration(
-                  labelText: 'Source Name (e.g. Sportskeeda / IGN)',
+                  labelText: 'source_name_label'.tr(),
                   labelStyle: const TextStyle(color: textGray, fontSize: 12),
                   filled: true,
                   fillColor: cardDark2,
@@ -245,7 +246,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 controller: urlCtrl,
                 style: const TextStyle(color: textWhite, fontSize: 13),
                 decoration: InputDecoration(
-                  labelText: 'RSS Feed URL (https://...)',
+                  labelText: 'rss_url_label'.tr(),
                   labelStyle: const TextStyle(color: textGray, fontSize: 12),
                   filled: true,
                   fillColor: cardDark2,
@@ -260,7 +261,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 controller: hintCtrl,
                 style: const TextStyle(color: textWhite, fontSize: 13),
                 decoration: InputDecoration(
-                  labelText: 'Category (e.g. Free Fire / BGMI / GTA)',
+                  labelText: 'category_label'.tr(),
                   labelStyle: const TextStyle(color: textGray, fontSize: 12),
                   filled: true,
                   fillColor: cardDark2,
@@ -276,7 +277,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dCtx),
-            child: const Text('Cancel', style: TextStyle(color: textGray)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: textGray)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -287,9 +288,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               final url = urlCtrl.text.trim();
               if (url.isEmpty || (!url.startsWith('http://') && !url.startsWith('https://'))) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(
+                  SnackBar(
                     backgroundColor: alertRed,
-                    content: Text('Please enter a valid RSS feed URL starting with https://'),
+                    content: Text('enter_valid_rss_url_warning'.tr()),
                   ),
                 );
                 return;
@@ -302,14 +303,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               if (dCtx.mounted) Navigator.pop(dCtx);
               if (ctx.mounted) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(
+                  SnackBar(
                     backgroundColor: cardDark,
-                    content: Text('RSS Source Added Successfully!', style: TextStyle(color: neonGreen)),
+                    content: Text('rss_source_added_success'.tr(), style: const TextStyle(color: neonGreen)),
                   ),
                 );
               }
             },
-            child: const Text('Add Source', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('add_source_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -317,7 +318,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   void _showAutoScraperSheet() {
-    // Ensure 10 default sources are seeded if collection is empty
     AutoNewsScraper.seedDefaultSourcesIfEmpty();
 
     showModalBottomSheet(
@@ -339,7 +339,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               builder: (context, snapshot) {
                 final docs = snapshot.data ?? [];
                 
-                // If query is ready but empty, auto seed once
                 if (snapshot.connectionState == ConnectionState.active && docs.isEmpty) {
                   AutoNewsScraper.seedDefaultSourcesIfEmpty();
                 }
@@ -371,7 +370,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 Row(
                                   children: [
                                     Text(
-                                      'Active RSS Sources (${docs.length})',
+                                      'active_rss_sources_count'.tr(args: [docs.length.toString()]),
                                       style: const TextStyle(
                                         color: textWhite,
                                         fontSize: 16,
@@ -397,9 +396,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 2),
-                                const Text(
-                                  'Top 10 High Search Volume Feeds (Every 30m)',
-                                  style: TextStyle(color: textGray, fontSize: 11),
+                                Text(
+                                  'top_feeds_subtext'.tr(),
+                                  style: const TextStyle(color: textGray, fontSize: 11),
                                 ),
                               ],
                             ),
@@ -438,7 +437,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      _isSyncing ? 'Syncing RSS Feeds via Cloud Functions...' : 'Ready to sync latest gaming news',
+                                      _isSyncing ? 'syncing_rss_cloud_functions'.tr() : 'ready_sync_latest_news'.tr(),
                                       style: TextStyle(
                                         color: _isSyncing ? Colors.orange : textWhite,
                                         fontSize: 13,
@@ -474,7 +473,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                     SnackBar(
                                                       backgroundColor: cardDark,
                                                       content: Text(
-                                                        'Success: ${count ?? 'News synced'} news published',
+                                                        'success_news_synced_count'.tr(args: [count?.toString() ?? '']),
                                                         style: const TextStyle(color: neonGreen),
                                                       ),
                                                     ),
@@ -482,7 +481,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                 }
                                               } catch (e) {
                                                 debugPrint('Sync error: $e');
-                                                // Local client scraper fallback
                                                 try {
                                                   final fallbackCount = await AutoNewsScraper().runScraper();
                                                   if (context.mounted) {
@@ -490,7 +488,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                       SnackBar(
                                                         backgroundColor: cardDark,
                                                         content: Text(
-                                                          'Synced: $fallbackCount news published',
+                                                          'synced_news_published_count'.tr(args: [fallbackCount.toString()]),
                                                           style: const TextStyle(color: neonGreen),
                                                         ),
                                                       ),
@@ -530,9 +528,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                 strokeWidth: 2,
                                               ),
                                             )
-                                          : const Text(
-                                              'Sync Feeds Now',
-                                              style: TextStyle(fontWeight: FontWeight.w900),
+                                          : Text(
+                                              'sync_feeds_now_btn'.tr(),
+                                              style: const TextStyle(fontWeight: FontWeight.w900),
                                             ),
                                     ),
                                   ),
@@ -548,7 +546,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     ),
                                     onPressed: () => _showAddSourceDialog(bCtx),
                                     icon: const Icon(Icons.add, size: 18),
-                                    label: const Text('Add Source', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    label: Text('add_source_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
@@ -573,9 +571,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     children: [
                                       const Icon(Icons.rss_feed, color: textGray, size: 40),
                                       const SizedBox(height: 12),
-                                      const Text(
-                                        'No RSS Sources found',
-                                        style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                                      Text(
+                                        'no_rss_sources_found'.tr(),
+                                        style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold),
                                       ),
                                       const SizedBox(height: 12),
                                       ElevatedButton(
@@ -586,7 +584,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         onPressed: () async {
                                           await AutoNewsScraper.resetDefaultSources();
                                         },
-                                        child: const Text('Seed 10 Default Sources'),
+                                        child: Text('seed_default_sources_btn'.tr()),
                                       ),
                                     ],
                                   ),
@@ -693,7 +691,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                           ),
                                           IconButton(
                                             icon: const Icon(Icons.delete_outline, color: alertRed, size: 20),
-                                            tooltip: 'Delete Source',
+                                            tooltip: 'delete_source_tooltip'.tr(),
                                             onPressed: () async {
                                               await AutoNewsScraper.deleteSource(docId);
                                             },
@@ -719,15 +717,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               await AutoNewsScraper.resetDefaultSources();
                               if (bCtx.mounted) {
                                 ScaffoldMessenger.of(bCtx).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     backgroundColor: cardDark,
-                                    content: Text('Reset to 10 Default High Search Sources', style: TextStyle(color: neonGreen)),
+                                    content: Text('reset_default_sources_snackbar'.tr(), style: const TextStyle(color: neonGreen)),
                                   ),
                                 );
                               }
                             },
                             icon: const Icon(Icons.restore, color: textGray, size: 16),
-                            label: const Text('Reset 10 Sources', style: TextStyle(color: textGray, fontSize: 12)),
+                            label: Text('reset_10_sources_btn'.tr(), style: const TextStyle(color: textGray, fontSize: 12)),
                           ),
                           const Spacer(),
                           ElevatedButton(
@@ -737,7 +735,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               side: const BorderSide(color: borderDark),
                             ),
                             onPressed: () => Navigator.pop(bCtx),
-                            child: const Text('Done'),
+                            child: Text('done_btn'.tr()),
                           ),
                         ],
                       ),
@@ -760,7 +758,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         backgroundColor: cardDark,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
           onPressed: () => Navigator.pushReplacementNamed(context, '/'),
         ),
         title: Row(
@@ -773,8 +771,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 border: Border.all(color: neonGreen),
               ),
               child: Text(
-                'ADMIN',
-                style: TextStyle(
+                'admin_badge'.tr(),
+                style: const TextStyle(
                   color: neonGreen,
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
@@ -783,8 +781,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Manage News',
-              style: TextStyle(
+              'manage_news_title'.tr(),
+              style: const TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
@@ -794,7 +792,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Ad Revenue & Bonus Share',
+            tooltip: 'ad_rev_bonus_share_tooltip'.tr(),
             icon: const Icon(Icons.monetization_on_rounded, color: Colors.amber, size: 23),
             onPressed: () {
               Navigator.push(
@@ -804,18 +802,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             },
           ),
           IconButton(
-            tooltip: 'Auto RSS Scraper',
-            icon: Icon(Icons.rss_feed_rounded, color: neonGreen, size: 22),
+            tooltip: 'auto_rss_scraper_tooltip'.tr(),
+            icon: const Icon(Icons.rss_feed_rounded, color: neonGreen, size: 22),
             onPressed: _showAutoScraperSheet,
           ),
           IconButton(
-            tooltip: 'Add New Khabar',
-            icon: Icon(Icons.add_circle_outline, color: neonGreen, size: 24),
+            tooltip: 'add_new_khabar_tooltip'.tr(),
+            icon: const Icon(Icons.add_circle_outline, color: neonGreen, size: 24),
             onPressed: _openAddScreen,
           ),
           IconButton(
-            tooltip: 'Logout',
-            icon: Icon(Icons.logout_rounded, color: alertRed, size: 22),
+            tooltip: 'logout_tooltip'.tr(),
+            icon: const Icon(Icons.logout_rounded, color: alertRed, size: 22),
             onPressed: () async {
               try {
                 await SupabaseService.client.auth.signOut();
@@ -832,9 +830,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         foregroundColor: const Color(0xFF05080D),
         onPressed: _openAddScreen,
         icon: const Icon(Icons.add, color: Color(0xFF05080D), size: 22),
-        label: const Text(
-          'Add New Khabar',
-          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+        label: Text(
+          'add_new_khabar_title'.tr(),
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
         ),
       ),
       body: Column(
@@ -863,7 +861,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           color: neonGreen.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(Icons.rss_feed_rounded, color: neonGreen, size: 20),
+                        child: const Icon(Icons.rss_feed_rounded, color: neonGreen, size: 20),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -872,9 +870,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           children: [
                             Row(
                               children: [
-                                const Text(
-                                  'Auto Scraper (10 Feeds)',
-                                  style: TextStyle(
+                                Text(
+                                  'auto_scraper_10_feeds_title'.tr(),
+                                  style: const TextStyle(
                                     color: textWhite,
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.bold,
@@ -891,7 +889,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
-                                        isScraping ? 'SYNCING...' : 'ACTIVE 30m',
+                                        isScraping ? 'syncing_caps_label'.tr() : 'active_30m_caps_label'.tr(),
                                         style: TextStyle(
                                           color: isScraping ? neonGreen : Colors.greenAccent,
                                           fontSize: 9,
@@ -909,7 +907,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               builder: (context, statusMsg, _) {
                                 return Text(
                                   statusMsg == 'Idle'
-                                      ? 'Sportskeeda, FF Mania, AFK, TalkEsport, GameRant, IGN & 4 more'
+                                      ? 'auto_scraper_default_subtext'.tr()
                                       : statusMsg,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -933,9 +931,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           ),
                         ),
                         onPressed: _showAutoScraperSheet,
-                        child: const Text(
-                          'Sources',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                        child: Text(
+                          'sources_btn_label'.tr(),
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
@@ -954,14 +952,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   _searchQuery = val.toLowerCase().trim();
                 });
               },
-              style: TextStyle(color: textWhite, fontSize: 13),
+              style: const TextStyle(color: textWhite, fontSize: 13),
               decoration: InputDecoration(
-                hintText: 'Search by title or category...',
-                hintStyle: TextStyle(color: textGray, fontSize: 13),
-                prefixIcon: Icon(Icons.search, color: textGray, size: 20),
+                hintText: 'search_news_hint'.tr(),
+                hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                prefixIcon: const Icon(Icons.search, color: textGray, size: 20),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.clear, color: textGray, size: 18),
+                        icon: const Icon(Icons.clear, color: textGray, size: 18),
                         onPressed: () {
                           setState(() {
                             _searchQuery = '';
@@ -974,15 +972,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: borderDark),
+                  borderSide: const BorderSide(color: borderDark),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: borderDark),
+                  borderSide: const BorderSide(color: borderDark),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: neonGreen, width: 1.5),
+                  borderSide: const BorderSide(color: neonGreen, width: 1.5),
                 ),
               ),
             ),
@@ -1001,7 +999,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 final isSelected = _selectedFilter == filter;
                 return ChoiceChip(
                   label: Text(
-                    filter,
+                    filter == 'All'
+                        ? 'filter_all'.tr()
+                        : (filter == 'Auto Scraped' ? 'filter_auto_scraped'.tr() : filter),
                     style: TextStyle(
                       color: isSelected ? const Color(0xFF05080D) : textGray,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
@@ -1034,7 +1034,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               stream: SupabaseStoreService().getNewsStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
+                  return const Center(
                     child: CircularProgressIndicator(
                       valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
                     ),
@@ -1043,7 +1043,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                 final rawList = snapshot.data ?? [];
 
-                // Filter by search and category
                 final newsList = rawList.where((item) {
                   final bool matchesFilter;
                   if (_selectedFilter == 'All') {
@@ -1068,13 +1067,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.newspaper_outlined, color: textGray, size: 48),
+                          const Icon(Icons.newspaper_outlined, color: textGray, size: 48),
                           const SizedBox(height: 12),
                           Text(
                             _searchQuery.isNotEmpty || _selectedFilter != 'All'
-                                ? 'No matching news found'
-                                : 'No news found',
-                            style: TextStyle(
+                                ? 'no_matching_news_found'.tr()
+                                : 'no_news_found'.tr(),
+                            style: const TextStyle(
                                 color: textWhite,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold),
@@ -1082,9 +1081,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(height: 6),
                           Text(
                             _searchQuery.isNotEmpty || _selectedFilter != 'All'
-                                ? 'Try changing your search or filter'
-                                : 'Tap "Add New Khabar" to publish your first article',
-                            style: TextStyle(color: textGray, fontSize: 12),
+                                ? 'try_changing_search_filter'.tr()
+                                : 'tap_add_khabar_first_article'.tr(),
+                            style: const TextStyle(color: textGray, fontSize: 12),
                             textAlign: TextAlign.center,
                           ),
                           if (_searchQuery.isEmpty && _selectedFilter == 'All') ...[
@@ -1097,8 +1096,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               onPressed: () =>
                                   Navigator.pushNamed(context, '/add-news'),
                               icon: const Icon(Icons.add),
-                              label: const Text('Add News Now',
-                                  style: TextStyle(fontWeight: FontWeight.bold)),
+                              label: Text('add_news_now_btn'.tr(),
+                                  style: const TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ],
@@ -1151,7 +1150,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                             borderRadius: BorderRadius.circular(3),
                                             border: Border.all(color: alertRed, width: 0.8),
                                           ),
-                                          child: Icon(Icons.play_arrow_rounded, color: alertRed, size: 10),
+                                          child: const Icon(Icons.play_arrow_rounded, color: alertRed, size: 10),
                                         ),
                                       ),
                                     Positioned(
@@ -1204,7 +1203,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                           ),
                                           child: Text(
                                             item.category.toUpperCase(),
-                                            style: TextStyle(
+                                            style: const TextStyle(
                                               color: neonGreen,
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
@@ -1237,7 +1236,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         const Spacer(),
                                         Text(
                                           item.timeAgo,
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                               color: textGray, fontSize: 10),
                                         ),
                                       ],
@@ -1247,7 +1246,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       item.title,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         color: textWhite,
                                         fontSize: 13.5,
                                         fontWeight: FontWeight.bold,
@@ -1259,7 +1258,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       item.description,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                           color: textGray, fontSize: 11),
                                     ),
                                   ],
@@ -1270,7 +1269,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // Edit Button
                                   IconButton(
                                     visualDensity: VisualDensity.compact,
                                     padding: EdgeInsets.zero,
@@ -1282,14 +1280,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         color: neonGreen.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Icon(Icons.edit_outlined,
+                                      child: const Icon(Icons.edit_outlined,
                                           color: neonGreen, size: 18),
                                     ),
                                     onPressed: () => _openEditScreen(item),
-                                    tooltip: 'Edit Khabar',
+                                    tooltip: 'edit_khabar_title'.tr(),
                                   ),
                                   const SizedBox(height: 4),
-                                  // Delete Button
                                   IconButton(
                                     visualDensity: VisualDensity.compact,
                                     padding: EdgeInsets.zero,
@@ -1301,14 +1298,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         color: alertRed.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Icon(
+                                      child: const Icon(
                                           Icons.delete_outline_rounded,
                                           color: alertRed,
                                           size: 18),
                                     ),
                                     onPressed: () => _deleteNews(
                                         context, item.id, item.title),
-                                    tooltip: 'Delete Khabar',
+                                    tooltip: 'delete_khabar_title'.tr(),
                                   ),
                                 ],
                               ),
