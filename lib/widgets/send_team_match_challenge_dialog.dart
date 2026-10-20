@@ -128,7 +128,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('create_team_first_to_challenge'.tr()),
-          backgroundColor: Color(0xFFFF4655),
+          backgroundColor: const Color(0xFFFF4655),
         ),
       );
       return;
@@ -138,7 +138,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('cannot_challenge_own_team'.tr()),
-          backgroundColor: Color(0xFFFF4655),
+          backgroundColor: const Color(0xFFFF4655),
         ),
       );
       return;
@@ -168,9 +168,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
       if (existing.isNotEmpty) {
         setState(() => _isSending = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('challenge_already_sent_warning'.tr()),
-            backgroundColor: Color(0xFFFF4655),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
         return;
@@ -297,11 +297,11 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                   child: const Text('⚔️', style: TextStyle(fontSize: 20)),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'SEND TEAM CHALLENGE',
                         style: TextStyle(
                           color: Colors.white,
@@ -312,7 +312,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                       ),
                       Text(
                         'team_vs_team_challenge_title'.tr(),
-                        style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                       ),
                     ],
                   ),
@@ -357,9 +357,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'opponent_team_label'.tr(),
-                          style: TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                         Text(
                           '${opponent.name} [${opponent.tag}]',
@@ -413,14 +413,14 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 20),
-                          SizedBox(width: 8),
+                          const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655), size: 20),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'challenge_already_sent'.tr(),
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Color(0xFFFF4655),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13.5,
@@ -430,9 +430,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                         ],
                       ),
                       const SizedBox(height: 6),
-                      const Text(
+                      Text(
                         'challenge_already_sent_desc'.tr(),
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                       const SizedBox(height: 10),
                       SizedBox(
@@ -447,9 +447,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                               await _matchService.cancelChallenge(pId, cancelledByUid: uid);
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text('challenge_cancelled_success'.tr()),
-                                    backgroundColor: Color(0xFF1877F2),
+                                    backgroundColor: const Color(0xFF1877F2),
                                   ),
                                 );
                               }
@@ -464,9 +464,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           icon: const Icon(Icons.close_rounded, size: 16),
-                          label: const Text(
+                          label: Text(
                             'cancel_challenge_btn'.tr(),
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                         ),
                       ),
@@ -478,9 +478,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
 
             // Select My Team
             if (widget.myTeams.isNotEmpty) ...[
-              const Text(
+              Text(
                 'select_your_team_label'.tr(),
-                style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
               Container(
@@ -516,9 +516,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
             ],
 
             // Game Selection
-            const Text(
+            Text(
               'select_game_label'.tr(),
-              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             Wrap(
@@ -540,9 +540,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
             const SizedBox(height: 14),
 
             // Mode Selection
-            const Text(
+            Text(
               'match_mode_label'.tr(),
-              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             Wrap(
@@ -564,9 +564,9 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
             const SizedBox(height: 16),
 
             // Date & Time Picker
-            const Text(
+            Text(
               'match_datetime_label'.tr(),
-              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             Row(
@@ -632,14 +632,14 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.3)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 16),
-                  SizedBox(width: 8),
+                  const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 16),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'entry_free_skills_ranking'.tr(),
-                      style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5, fontWeight: FontWeight.w600),
+                      style: const TextStyle(color: Color(0xFF00FF88), fontSize: 11.5, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
