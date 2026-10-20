@@ -48,20 +48,17 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
   }
 
   bool _isSelfUser(GamerUser u, String currentUid, String pageOwnerId) {
-    // GamerUser model mein sirf 'uid' hai
     final targetId = u.uid.trim().toLowerCase();
     final curId = currentUid.trim().toLowerCase();
     final ownerId = pageOwnerId.trim().toLowerCase();
     final curUuid = SupabaseService.toUuid(curId).toLowerCase();
     final ownerUuid = SupabaseService.toUuid(ownerId).toLowerCase();
 
-    // Check by ID and UUID
     if (targetId.isNotEmpty) {
       if (targetId == curId || targetId == ownerId) return true;
       if (targetId == curUuid || targetId == ownerUuid) return true;
     }
 
-    // Check by Username if available
     final curUsername = (_authService.currentGamer?.username ?? '').trim().toLowerCase();
     if (curUsername.isNotEmpty && u.username.trim().toLowerCase() == curUsername) {
       return true;
@@ -82,7 +79,6 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
 
     if (mounted) {
       setState(() {
-        // Strict Filter: Self-follow user ko list se baahar nikaalna
         _followers = followers.where((u) => !_isSelfUser(u, currentUid, widget.userId)).toList();
         _following = following.where((u) => !_isSelfUser(u, currentUid, widget.userId)).toList();
 
