@@ -609,7 +609,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               ],
             ),
             content: Text(
-              'Aap ek waqt mein sirf 2 rooms bana sakte hain.\n\nJab aapke rooms ka result proof verify hone ke baad winner banner show hoga aur 5 minutes baad room auto-delete hoga, tabhi aap naya room bana sakein ge.',
+              'room_limit_reached_desc'.tr(),
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
             ),
             actions: [

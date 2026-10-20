@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
 import '../services/team_service.dart';
@@ -105,10 +106,10 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'فی الوقت کوئی ایکٹو چیلنج یا لائیو میچ نہیں ہے۔ نئی ٹیموں کو چیلنج بھیجیں!',
+                        Text(
+                          'no_active_challenge_prompt'.tr(),
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
                         ),
                       ],
                     ),

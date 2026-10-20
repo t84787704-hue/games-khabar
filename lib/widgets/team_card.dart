@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 // ===============================================================================
 // EXACT DIFF — Full Adaptive Day & Night Mode Support for TeamCard
 // + Match Verification Rules Dialog on Challenge Action
@@ -182,7 +183,7 @@ class _TeamCardState extends State<TeamCard> {
             ),
             content: Text(
               LanguageService.isUrdu
-                  ? 'آپ کی ٹیم منجمد ہے۔ چیلنج بھیجنے کے لیے پہلے اپنے والٹ میں 1,000 کوائنز کا بیلنس پورا کریں۔'
+                  ? 'team_frozen_leader_alert'.tr()
                   : 'Your team is frozen because your balance is below 1,000 coins. Top up to 1,000 coins to send challenges.',
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
             ),
@@ -221,7 +222,7 @@ class _TeamCardState extends State<TeamCard> {
                 ),
                 content: Text(
                   LanguageService.isUrdu
-                      ? 'یہ ٹیم اس وقت منجمد (Frozen) ہے کیونکہ ان کے لیڈر کا بیلنس 1,000 کوائنز سے کم ہے۔ آپ اس ٹیم کو چیلنج نہیں کر سکتے۔'
+                      ? 'opponent_team_frozen_alert'.tr()
                       : 'This team is frozen because their leader balance fell below 1,000 coins. You cannot challenge this team.',
                   style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
                 ),
@@ -905,7 +906,7 @@ class _TeamCardState extends State<TeamCard> {
                           SnackBar(
                             content: Text(ok
                                 ? '✅ Team updated successfully!'
-                                : '❌ Team update fail ho gaya'),
+                                : 'team_update_failed'.tr()),
                             backgroundColor: ok
                                 ? const Color(0xFF00FF88)
                                 : const Color(0xFFFF4655),
@@ -1050,15 +1051,15 @@ class _TeamCardState extends State<TeamCard> {
         bg = const Color(0xFF00FF88);
         break;
       case 'not_owner':
-        msg = '❌ Aap team ke owner nahi hain';
+        msg = 'not_team_owner'.tr();
         bg = const Color(0xFFFF4655);
         break;
       case 'active_match':
-        msg = '❌ Team ka active match chal raha hai. Pehle match end karein.';
+        msg = 'team_active_match_end_first'.tr();
         bg = const Color(0xFFFF4655);
         break;
       default:
-        msg = '❌ Team delete fail ho gayi';
+        msg = 'team_delete_failed'.tr();
         bg = const Color(0xFFFF4655);
     }
 

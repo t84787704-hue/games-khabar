@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 // ===============================================================================
 // TEAM LEADERBOARD SCREEN — Points Based Ranking (Top 100 Teams)
 // - Ranked by Total Points (Descending)
@@ -122,9 +123,7 @@ class _TeamLeaderboardScreenState extends State<TeamLeaderboardScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          LanguageService.isUrdu
-                              ? 'ٹیموں کے درمیان مقابلے کروائیں، ہر جیت پر 5 پوائنٹس ملیں گے اور رینکنگ بڑھے گی!'
-                              : 'Compete in team matches! Each win awards +5 Points to climb the Top 100 Leaderboard.',
+                          'team_leaderboard_promo_desc'.tr(),
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
                         ),

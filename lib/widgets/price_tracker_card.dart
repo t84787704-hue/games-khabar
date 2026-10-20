@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' as math;
@@ -112,8 +113,8 @@ class _PriceTrackerCardState extends State<PriceTrackerCard> {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Alert set! Hum batayenge jab sasta hoga',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    'price_alert_set_desc'.tr(),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
               ],
@@ -312,7 +313,7 @@ class _PriceTrackerCardState extends State<PriceTrackerCard> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '✅ Alert Active at Rs. $targetPKR - Abhi Rs. $_currentPriceInPKR hai',
+                            'alert_active_pkr_info'.tr(args: [targetPKR, _currentPriceInPKR.toString()]),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12.5,

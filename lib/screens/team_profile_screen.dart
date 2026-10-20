@@ -1022,7 +1022,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                         .showSnackBar(
                                                       const SnackBar(
                                                         content: Text(
-                                                            'Naya proof bhej diya gaya! Under Review.'),
+                                                            'proof_submitted_under_review'.tr()),
                                                         backgroundColor:
                                                             Color(0xFFFFB800),
                                                       ),
@@ -2019,7 +2019,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       color: Color(0xFF1877F2), size: 18),
                                   SizedBox(width: 8),
                                   Text(
-                                    'YOUR TEAM (Aap ki apni team)',
+                                    'your_own_team'.tr(),
                                     style: TextStyle(
                                       color: Color(0xFF1877F2),
                                       fontWeight: FontWeight.bold,

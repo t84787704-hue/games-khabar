@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/team_model.dart';
@@ -125,8 +126,8 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
 
     if (myTeam == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('چیلنج بھیجنے کے لیے پہلے اپنی ٹیم بنائیں!'),
+        SnackBar(
+          content: Text('create_team_first_to_challenge'.tr()),
           backgroundColor: Color(0xFFFF4655),
         ),
       );
@@ -135,8 +136,8 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
 
     if (myTeam.id == widget.opponentTeam.id) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('آپ اپنی ہی ٹیم کو چیلنج نہیں بھیج سکتے!'),
+        SnackBar(
+          content: Text('cannot_challenge_own_team'.tr()),
           backgroundColor: Color(0xFFFF4655),
         ),
       );
@@ -168,7 +169,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
         setState(() => _isSending = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Aap ne pehle hi challenge bheja hai!'),
+            content: Text('challenge_already_sent_warning'.tr()),
             backgroundColor: Color(0xFFFF4655),
           ),
         );
@@ -192,7 +193,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
       game: _selectedGame,
       mode: _selectedMode,
       matchTime: finalMatchDateTime,
-      entryFee: 'Free (مفت)',
+      entryFee: 'free_label'.tr(),
     );
 
     // Also insert directly into Supabase challenges table
@@ -212,14 +213,14 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
 
     if (mounted) {
       final isSuccess = result['success'] == true;
-      final errorMsg = result['error'] as String? ?? 'چیلنج بھیجنے میں خرابی پیش آئی';
+      final errorMsg = result['error'] as String? ?? 'err_sending_challenge_simple'.tr();
 
       if (isSuccess) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '⚔️ چیلنج کامیابی سے ${widget.opponentTeam.name} کو بھیج دیا گیا!',
+              'challenge_sent_success_to'.tr(args: [widget.opponentTeam.name]),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             backgroundColor: const Color(0xFFFF6B00),
@@ -310,7 +311,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                         ),
                       ),
                       Text(
-                        'ٹیم vs ٹیم مقابلے کا چیلنج بھیجیں',
+                        'team_vs_team_challenge_title'.tr(),
                         style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                       ),
                     ],
@@ -357,7 +358,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'مخالف ٹیم (Opponent Team)',
+                          'opponent_team_label'.tr(),
                           style: TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                         Text(
@@ -418,7 +419,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Aap ne pehle hi challenge bheja hai',
+                              'challenge_already_sent'.tr(),
                               style: TextStyle(
                                 color: Color(0xFFFF4655),
                                 fontWeight: FontWeight.bold,
@@ -430,7 +431,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'آپ نے اس ٹیم کو پہلے سے چیلنج بھیجا ہوا ہے۔ اگر آپ نیا چیلنج بھیجنا چاہتے ہیں تو پہلے موجودہ چیلنج کو Cancel کریں۔',
+                        'challenge_already_sent_desc'.tr(),
                         style: TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                       const SizedBox(height: 10),
@@ -447,7 +448,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('🚫 چیلنج کامیابی سے Cancel کر دیا گیا ہے'),
+                                    content: Text('challenge_cancelled_success'.tr()),
                                     backgroundColor: Color(0xFF1877F2),
                                   ),
                                 );
@@ -464,7 +465,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                           ),
                           icon: const Icon(Icons.close_rounded, size: 16),
                           label: const Text(
-                            'CANCEL CHALLENGE (چیلنج منسوخ کریں)',
+                            'cancel_challenge_btn'.tr(),
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                         ),
@@ -478,7 +479,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
             // Select My Team
             if (widget.myTeams.isNotEmpty) ...[
               const Text(
-                'آپ کی ٹیم (Select Your Team):',
+                'select_your_team_label'.tr(),
                 style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
@@ -516,7 +517,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
 
             // Game Selection
             const Text(
-              'گیم کا انتخاب (Game):',
+              'select_game_label'.tr(),
               style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
@@ -540,7 +541,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
 
             // Mode Selection
             const Text(
-              'میچ کا موڈ (Match Mode):',
+              'match_mode_label'.tr(),
               style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
@@ -564,7 +565,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
 
             // Date & Time Picker
             const Text(
-              'میچ کا وقت اور تاریخ (Date & Time):',
+              'match_datetime_label'.tr(),
               style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
@@ -637,7 +638,7 @@ class _SendTeamMatchChallengeDialogState extends State<SendTeamMatchChallengeDia
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'انٹری: بالکل مفت (Free) — خالص اسکلز اور لیڈر بورڈ رینکنگ کے لیے',
+                      'entry_free_skills_ranking'.tr(),
                       style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5, fontWeight: FontWeight.w600),
                     ),
                   ),

@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 // ===============================================================================
 // TEAMS SCREEN — Full Adaptive Day & Night Mode
 // + Strict 1,000 Coins Rule for Team Creation & Maintenance
@@ -170,10 +171,8 @@ class _TeamsScreenState extends State<TeamsScreen>
   }) async {
     if (isMyTeamFrozen) {
       _showCoinRequirementDialog(
-        title: LanguageService.isUrdu ? 'ٹیم منجمد ہے (Frozen)' : 'Team Frozen',
-        message: LanguageService.isUrdu
-            ? 'آپ کی ٹیم منجمد ہے۔ چیلنج قبول کرنے کے لیے پہلے اپنے والٹ میں 1,000 کوائنز کا بیلنس پورا کریں۔'
-            : 'Your team is frozen because your wallet has less than 1,000 coins. Top up to 1,000 coins to accept challenges.',
+        title: 'team_frozen_title'.tr(),
+        message: 'team_frozen_accept_alert'.tr(),
       );
       return;
     }
@@ -290,10 +289,8 @@ class _TeamsScreenState extends State<TeamsScreen>
       final wallet = await CoinWalletService().getOrCreateWallet(currentUid);
       if (wallet.coins < 1000) {
         _showCoinRequirementDialog(
-          title: LanguageService.isUrdu ? 'ناکافی بیلنس' : 'Insufficient Coins',
-          message: LanguageService.isUrdu
-              ? 'ٹیم بنانے کے لیے آپ کے والٹ میں کم از کم 1,000 کوائنز ہونا لازمی ہیں۔ آپ کے پاس اس وقت ${wallet.coins} کوائنز ہیں۔ کوائنز حاصل کر کے 1,000 بیلنس پورا کریں۔'
-              : 'You need at least 1,000 coins in your wallet to create a team. Your current balance is ${wallet.coins} coins.',
+          title: 'insufficient_balance'.tr(),
+          message: 'insufficient_coins_for_team'.tr(args: [wallet.coins.toString()]),
         );
         return;
       }
@@ -474,14 +471,12 @@ class _TeamsScreenState extends State<TeamsScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        LanguageService.isUrdu ? 'ٹیم منجمد ہے (Frozen)' : 'Team Frozen (Leader Balance Low)',
+                        'team_frozen_title'.tr(),
                         style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        LanguageService.isUrdu
-                            ? 'آپ کا بیلنس 1,000 کوائنز سے کم ہو گیا ہے۔ چیلنجز اور میچز بحال کرنے کے لیے والٹ میں 1,000 کوائنز پورے کریں۔'
-                            : 'Your team is frozen because your balance fell below 1,000 coins. Top up to 1,000 coins to unfreeze.',
+                        'team_frozen_balance_low_desc'.tr(),
                         style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                       ),
                     ],
@@ -789,7 +784,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                "✅ Challenge bhej diya gaya hai - $toTeamName ke jawab ka intezar hai",
+                                'challenge_sent_to_team_waiting'.tr(args: [toTeamName]),
                                 style: const TextStyle(
                                   color: Color(0xFF1877F2),
                                   fontWeight: FontWeight.bold,
@@ -897,7 +892,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    "سب سے پہلے اپنی ٹیم بنائیں اور دوسری ٹیموں کے ساتھ مقابلہ کریں!",
+                                    'create_team_compete_others'.tr(),
                                     textAlign: TextAlign.center,
                                     style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                                   ),
@@ -1296,7 +1291,7 @@ class _ActiveMatchBothTeamsBannerState
             type: 'match_cancelled',
             title: 'Match Cancelled',
             body:
-                '❌ Aapki 3 proof attempts khatam ho gayi hain. Match adhoora reh gaya. Prize refunded.',
+                'proof_attempts_exhausted'.tr(),
             data: {'match_id': matchId},
           );
         }

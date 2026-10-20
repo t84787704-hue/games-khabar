@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -50,8 +51,8 @@ class _RssScreenState extends State<RssScreen> {
       if (sources.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Koi active source nahi hai'),
+            SnackBar(
+              content: Text('no_active_source'.tr()),
               backgroundColor: Colors.orange,
             ),
           );
@@ -175,7 +176,7 @@ class _RssScreenState extends State<RssScreen> {
           SnackBar(
             content: Text(published > 0
                 ? 'SUCCESS: $published news published!'
-                : '0 news - Saare feeds up to date hain ya URL galat hai'),
+                : 'feeds_up_to_date_or_invalid_url'.tr()),
             backgroundColor: published > 0 ? Colors.green : Colors.orange,
             duration: const Duration(seconds: 5),
           ),

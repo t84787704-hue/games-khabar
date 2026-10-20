@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import '../data/game_bots_100.dart';
 import '../data/fallback_images.dart';
 
@@ -258,9 +259,7 @@ class GamingNewsModel {
     if (summary.trim().isNotEmpty) {
       return summary.trim();
     }
-    return langCode == 'ur'
-        ? 'مضمون کی تفصیلات جلد دستیاب ہوں گی۔'
-        : 'Detailed gaming article will appear here shortly.';
+    return 'article_details_coming_soon'.tr();
   }
 
   String get displayContent {

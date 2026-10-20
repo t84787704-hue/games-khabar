@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 // ===============================================================================
 // EXACT DIFF — Full Adaptive Day & Night Mode Support for GamerFeedScreen
 // + Updated App Branding to "Gamers ID"
@@ -401,8 +402,8 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Post report ho gayi — Admin review karega'),
+          SnackBar(
+            content: Text('post_reported_success'.tr()),
             backgroundColor: Colors.green,
           ),
         );
@@ -1191,8 +1192,8 @@ class _CommentSheetState extends State<CommentSheet> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Comment report ho gayi — Admin review karega'),
+          SnackBar(
+            content: Text('comment_reported_success'.tr()),
             backgroundColor: Colors.green,
           ),
         );

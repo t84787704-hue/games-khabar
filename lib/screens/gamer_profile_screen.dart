@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 // ===============================================================================
 // GAMER PROFILE SCREEN — With eSports 500/1000 Coins Team Eligibility Badges
 // + Multi-Language Live Translation Sync via LanguageService
@@ -226,22 +227,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
             : const Color(0xFFFF4655);
 
     final String title = isLeaderEligible
-        ? (LanguageService.isUrdu ? 'اہل: ٹیم لیڈر اور ممبر' : 'Leader & Member Eligible')
+        ? 'eligible_leader_and_member'.tr()
         : isMemberEligible
-            ? (LanguageService.isUrdu ? 'اہل: صرف ٹیم ممبر' : 'Team Member Eligible')
-            : (LanguageService.isUrdu ? 'نااہل: کم بیلنس (<500)' : 'Not Eligible for Teams');
+            ? 'eligible_member_only'.tr()
+            : 'ineligible_low_balance'.tr();
 
     final String subtitle = isLeaderEligible
-        ? (LanguageService.isUrdu
-            ? 'آپ ٹیم بنا سکتے ہیں اور میچز میں حصہ لے سکتے ہیں۔'
-            : 'Can create teams and play tournaments.')
+        ? 'can_create_team_desc'.tr()
         : isMemberEligible
-            ? (LanguageService.isUrdu
-                ? 'ٹیم میں شامل ہو سکتے ہیں؛ نئی ٹیم بنانے کے لیے 1,000 کوائنز درکار ہیں۔'
-                : 'Can join teams. Need 1,000 coins to create a team.')
-            : (LanguageService.isUrdu
-                ? 'ٹیم میں شامل ہونے یا رہنے کے لیے کم از کم 500 کوائنز درکار ہیں۔'
-                : 'Need 500+ coins to join or maintain team membership.');
+            ? 'can_join_team_need_coins_desc'.tr()
+            : 'min_coins_to_remain_desc'.tr();
 
     final IconData icon = isLeaderEligible
         ? Icons.verified_user_rounded

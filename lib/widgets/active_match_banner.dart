@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/supabase_service.dart';
@@ -158,7 +159,7 @@ class ActiveMatchBanner extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                           content: Text(
-                              "Naya proof bhej diya gaya! Under Review."),
+                              'proof_submitted_under_review'.tr()),
                           backgroundColor: Color(0xFFFFB800)),
                     );
                   }
@@ -345,7 +346,7 @@ class ActiveMatchBanner extends StatelessWidget {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                               content: Text(
-                                  "Match End Request Submit ho gaya! Status Under Review."),
+                                  'match_end_under_review'.tr()),
                               backgroundColor: Color(0xFFFFB800),
                               duration: Duration(seconds: 4)),
                         );

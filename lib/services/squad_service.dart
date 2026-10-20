@@ -50,7 +50,7 @@ class SquadService {
             .limit(1);
 
         if (existing.isNotEmpty) {
-          debugPrint("Squad pehle se hai in lfg_posts");
+          debugPrint("[SquadService] Squad already exists in lfg_posts");
           isCreating = false;
           return;
         }

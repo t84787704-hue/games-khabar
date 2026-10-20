@@ -857,7 +857,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
           ],
         ),
         content: Text(
-          'Kya aap @$cleanTag ka win proof reject karna chahte hain?',
+          'confirm_reject_win_proof_tag'.tr(args: ['@$cleanTag']),
           style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14, height: 1.4),
         ),
         actions: [
@@ -963,7 +963,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
           ],
         ),
         content: Text(
-          '100 Coins dena hai @$cleanTag ko?',
+          'confirm_give_coins_to_winner_tag'.tr(args: ['@$cleanTag']),
           style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14.5, height: 1.4),
         ),
         actions: [

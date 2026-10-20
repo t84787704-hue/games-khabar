@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 // ===============================================================================
 // TEAM MATCH SERVICE — Updated with 5 Points per Win & Top 100 Leaderboard
 // -------------------------------------------------------------------------------
@@ -58,7 +59,7 @@ class TeamMatchService {
       if (existingActive != null) {
         return {
           'success': false,
-          'error': 'آپ نے پہلے ہی اس ٹیم کو چیلنج بھیجا ہوا ہے۔ پہلے اسے مکمل یا Cancel کریں۔',
+          'error': 'challenge_already_active_finish_or_cancel'.tr(),
           'matchId': existingActive.matchId,
         };
       }
@@ -98,7 +99,7 @@ class TeamMatchService {
           'senderUid': team1LeaderId,
           'type': 'team_challenge',
           'title': '⚔️ Team Match Challenge!',
-          'message': 'آپ کو $team1Name کی طرف سے $game ($mode) کا چیلنج ملا ہے!',
+          'message': 'challenge_received_notif'.tr(args: [team1Name, game, mode]),
           'matchId': matchId,
           'match_id': matchId,
           'read': false,
@@ -115,7 +116,7 @@ class TeamMatchService {
       debugPrint('[TeamMatchService] Error sending challenge: $e');
       return {
         'success': false,
-        'error': 'چیلنج بھیجنے میں خرابی پیش آئی: $e',
+        'error': 'err_sending_challenge'.tr(args: [e.toString()]),
       };
     }
   }
@@ -153,7 +154,7 @@ class TeamMatchService {
             'senderUid': match.team2LeaderId,
             'type': 'team_challenge_accepted',
             'title': '✅ Challenge Accepted!',
-            'message': '${match.team2Name} نے آپ کا چیلنج قبول کر لیا ہے! میچ روم تیار ہے۔',
+            'message': 'challenge_accepted_notif'.tr(args: [match.team2Name]),
             'matchId': matchId,
             'match_id': matchId,
             'read': false,
@@ -195,7 +196,7 @@ class TeamMatchService {
             'senderUid': match.team2LeaderId,
             'type': 'team_challenge_rejected',
             'title': '❌ Challenge Declined',
-            'message': '${match.team2Name} نے چیلنج مسترد کر دیا ہے۔',
+            'message': 'challenge_rejected_notif'.tr(args: [match.team2Name]),
             'matchId': matchId,
             'match_id': matchId,
             'read': false,
@@ -243,7 +244,7 @@ class TeamMatchService {
               'senderUid': cancelledByUid,
               'type': 'team_challenge_cancelled',
               'title': '🚫 Challenge Cancelled',
-              'message': 'ٹیم چیلنج واپس (Cancel) لے لیا گیا ہے۔',
+              'message': 'challenge_cancelled_notif'.tr(),
               'matchId': matchId,
               'match_id': matchId,
               'read': false,
@@ -332,7 +333,7 @@ class TeamMatchService {
     try {
       final fileToUpload = proofImage ?? imageFile;
       if (fileToUpload == null) {
-        return {'success': false, 'error': 'کوئی تصویر منتخب نہیں کی گئی'};
+        return {'success': false, 'error': 'no_image_selected'.tr()};
       }
       final imageUrl = await SupabaseService.uploadFile(
         file: fileToUpload,
@@ -341,12 +342,12 @@ class TeamMatchService {
       );
 
       if (imageUrl == null || imageUrl.isEmpty) {
-        return {'success': false, 'error': 'تصویر اپلوڈ نہیں ہو سکی'};
+        return {'success': false, 'error': 'image_upload_failed'.tr()};
       }
 
       final matchData = await SupabaseService.getTeamMatch(matchId);
       if (matchData == null) {
-        return {'success': false, 'error': 'میچ نہیں ملا'};
+        return {'success': false, 'error': 'match_not_found'.tr()};
       }
       final match = TeamMatch.fromMap(matchData);
       final resolvedIsTeam1 = isTeam1 ?? (match.team1Id == (teamId ?? '') || match.team1LeaderId == (userId ?? ''));

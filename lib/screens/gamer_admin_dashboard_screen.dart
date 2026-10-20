@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
@@ -1654,7 +1655,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           userId: targetUserId,
           title: 'Rank Verified! 🎉',
           body:
-              'آپ کا ${item.game.claimedRank} (${item.game.gameName}) رینک ایڈمن کی طرف سے منظور ہو گیا ہے۔',
+              'rank_approved_notif_body'.tr(args: [item.game.claimedRank, item.game.gameName]),
           type: 'rank_verified',
         );
       } catch (e) {}
@@ -1691,8 +1692,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           : item.user.uid;
       final currentAdmin =
           GamerAuthService().currentGamer?.displayName ?? 'Admin';
-      const defaultUrduMsg =
-          'آپ کا اسکرین شاٹ درست نہیں ہے، دوبارہ اپلوڈ کریں';
+      final defaultUrduMsg = 'screenshot_invalid_reupload'.tr();
       final finalReason =
           reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
 
@@ -2628,7 +2628,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
     final target = _targetController.text.trim();
     if (target.isEmpty) {
       setState(() {
-        _errorMessage = 'صارف نہیں ملا';
+        _errorMessage = 'user_not_found'.tr();
         _successMessage = null;
         _foundUser = null;
         _foundDocId = null;
@@ -2655,7 +2655,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       } else {
         _foundUser = null;
         _foundDocId = null;
-        _errorMessage = 'صارف نہیں ملا';
+        _errorMessage = 'user_not_found'.tr();
       }
     });
 
@@ -2669,7 +2669,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'صارف نہیں ملا ("$target")',
+                  'user_not_found_target'.tr(args: [target]),
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 13),
                 ),
@@ -2688,7 +2688,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
   Future<void> _awardCoins() async {
     final target = _targetController.text.trim();
     if (target.isEmpty) {
-      setState(() => _errorMessage = 'صارف نہیں ملا');
+      setState(() => _errorMessage = 'user_not_found'.tr());
       return;
     }
 
@@ -2696,11 +2696,10 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
     final amount = int.tryParse(amountText);
     if (amount == null || amount <= 0) {
       setState(
-          () => _errorMessage = 'براہ کرم 1 یا اس سے زیادہ سکے کی درست تعداد درج کریں');
+          () => _errorMessage = 'enter_valid_coin_amount'.tr());
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('براہ کرم 1 یا اس سے زیادہ سکے کی درست تعداد درج کریں'),
+        SnackBar(
+          content: Text('enter_valid_coin_amount'.tr()),
           backgroundColor: Color(0xFFFF4655),
         ),
       );
@@ -2730,7 +2729,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           _isAwarding = false;
           _foundUser = null;
           _foundDocId = null;
-          _errorMessage = 'صارف نہیں ملا';
+          _errorMessage = 'user_not_found'.tr();
         });
         return;
       }
@@ -2738,8 +2737,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       final targetDocId = docId;
       final targetDisplayName = (user['display_name'] ??
               user['displayName'] ??
-              user['username'] ??
-              'صارف')
+              user['username'] ?? 'user'.tr())
           .toString();
 
       final sbAdminId = SupabaseService.client.auth.currentUser?.id ?? '';
@@ -2754,15 +2752,14 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
         if (!mounted) return;
         setState(() {
           _isAwarding = false;
-          _errorMessage = 'سکے بھیجنے میں خرابی';
+          _errorMessage = 'err_sending_coins'.tr();
         });
         return;
       }
 
       final freshUser = await _findUser(target);
 
-      final successText =
-          'کامیابی! $targetDisplayName کو $amount سکے بھیج دیے گئے';
+      final successText = 'coins_sent_success'.tr(namedArgs: {'user': targetDisplayName, 'amount': amount.toString()});
 
       if (!mounted) return;
       setState(() {
@@ -2802,7 +2799,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       if (!mounted) return;
       setState(() {
         _isAwarding = false;
-        _errorMessage = 'سکے بھیجنے میں خرابی: $e';
+        _errorMessage = 'err_sending_coins_with_e'.tr(args: [e.toString()]);
       });
     }
   }
@@ -2870,8 +2867,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 fontSize: 15),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'صارف کو Username، UID یا Email سے تلاش کر کے سکے بھیجیں',
+          Text(
+            'search_user_to_send_coins_desc'.tr(),
             style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
           ),
           const SizedBox(height: 12),
@@ -2951,7 +2948,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.search_rounded, size: 20),
-                            Text('تلاش کریں',
+                            Text('search'.tr(),
                                 style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold)),
@@ -3023,7 +3020,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                                       color: Color(0xFF00FF88), size: 12),
                                   SizedBox(width: 3),
                                   Text(
-                                    'صارف مل گیا',
+                                    'user_found'.tr(),
                                     style: TextStyle(
                                         color: Color(0xFF00FF88),
                                         fontSize: 10,
@@ -3044,8 +3041,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Text(
-                              'موجودہ بیلنس: ',
+                            Text(
+                              'current_balance_prefix'.tr(),
                               style: TextStyle(
                                   color: Colors.white70, fontSize: 11),
                             ),
@@ -3075,8 +3072,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               labelStyle: const TextStyle(color: Color(0xFF8B949E)),
               prefixIcon: const Icon(Icons.monetization_on_rounded,
                   color: Color(0xFFFFD700)),
-              helperText:
-                  'کوئی حد نہیں — ایڈمن جتنی چاہے سکے بھیج سکتا ہے',
+              helperText: 'admin_unlimited_coins_desc'.tr(),
               helperStyle: const TextStyle(
                   color: Color(0xFF8B949E), fontSize: 11),
               filled: true,
@@ -3197,7 +3193,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                     )
                   : const Icon(Icons.send_rounded, size: 20),
               label: Text(
-                _isAwarding ? 'سکے بھیجے جا رہے ہیں...' : 'Award Coins Now',
+                _isAwarding ? 'sending_coins_progress'.tr() : 'Award Coins Now',
                 style: const TextStyle(
                     fontWeight: FontWeight.w900, fontSize: 15),
               ),
@@ -3262,9 +3258,9 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFF1F2B3E)),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
-                      'کوئی حالیہ ٹرانزیکشن نہیں ملی',
+                      'no_recent_transactions_found'.tr(),
                       style:
                           TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     ),

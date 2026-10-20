@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
@@ -274,7 +275,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                       ),
                       const SizedBox(width: 3),
                       Text(
-                        isUrdu ? 'ٹرینڈنگ' : 'Trending',
+                        'trending_tag'.tr(),
                         style: const TextStyle(
                           color: Color(0xFFFFB703),
                           fontSize: 10,
@@ -431,7 +432,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          isUrdu ? 'شیئر' : 'Share',
+                          'share'.tr(),
                           style: const TextStyle(
                             color: Color(0xFF8B9BB4),
                             fontSize: 12,
@@ -507,8 +508,8 @@ class _NewsPostCardState extends State<NewsPostCard> {
                   ),
                   label: Text(
                     _isExpanded
-                        ? (isUrdu ? 'کم دکھائیں' : 'Show Less')
-                        : (isUrdu ? 'مزید پڑھیں' : 'Read More'),
+                        ? 'show_less'.tr()
+                        : 'read_more'.tr(),
                     style: const TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w900,
@@ -604,7 +605,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    isUrdu ? 'ذریعہ: $sourceName' : 'Source: $sourceName',
+                    'source_label'.tr(args: [sourceName]),
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,

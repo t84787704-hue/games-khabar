@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
@@ -114,8 +115,8 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
     final mySquad = selectedMySquad;
     if (mySquad == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('براہ کرم چیلنج بھیجنے کے لیے اپنی ٹیم منتخب کریں یا بنائیں!'),
+        SnackBar(
+          content: Text('select_or_create_team_to_challenge'.tr()),
           backgroundColor: Color(0xFFFF4655),
         ),
       );
@@ -161,7 +162,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
       game: _selectedGame,
       mode: _selectedMode,
       matchTime: finalMatchDateTime,
-      entryFee: 'Free (مفت)',
+      entryFee: 'free_label'.tr(),
     );
 
     setState(() => _isSending = false);
@@ -172,7 +173,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '⚔️ چیلنج کامیابی سے ${widget.opponentSquad.displayName} کو بھیج دیا گیا!',
+              'challenge_sent_success_to'.tr(args: [widget.opponentSquad.displayName]),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             backgroundColor: const Color(0xFFFF6B00),
@@ -182,7 +183,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('چیلنج بھیجنے میں خرابی پیش آئی'),
+            content: Text('err_sending_challenge_simple'.tr()),
             backgroundColor: Color(0xFFFF4655),
           ),
         );
@@ -250,7 +251,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
                         ),
                       ),
                       Text(
-                        'ٹیم vs ٹیم مقابلے کا چیلنج بھیجیں',
+                        'team_vs_team_challenge_title'.tr(),
                         style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                       ),
                     ],
@@ -297,7 +298,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'مخالف ٹیم (Opponent Team)',
+                          'opponent_team_label'.tr(),
                           style: TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                         Text(
@@ -330,7 +331,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
             // Select My Team (if user has multiple)
             if (widget.mySquads.isNotEmpty) ...[
               const Text(
-                'آپ کی ٹیم (Select Your Team):',
+                'select_your_team_label'.tr(),
                 style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
@@ -368,7 +369,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
 
             // Game Selection
             const Text(
-              'گیم کا انتخاب (Game):',
+              'select_game_label'.tr(),
               style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
@@ -392,7 +393,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
 
             // Mode Selection
             const Text(
-              'میچ کا موڈ (Match Mode):',
+              'match_mode_label'.tr(),
               style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
@@ -416,7 +417,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
 
             // Match Time & Date
             const Text(
-              'میچ کا وقت اور تاریخ (Date & Time):',
+              'match_datetime_label'.tr(),
               style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
@@ -489,7 +490,7 @@ class _SendTeamChallengeDialogState extends State<SendTeamChallengeDialog> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'انٹری: مفت (Free) — خالص اسکلز اور لیڈر بورڈ رینکنگ کے لیے',
+                      'entry_free_skills_ranking'.tr(),
                       style: TextStyle(color: Color(0xFF00FF88), fontSize: 11.5, fontWeight: FontWeight.w600),
                     ),
                   ),

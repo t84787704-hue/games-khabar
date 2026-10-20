@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../services/streak_service.dart';
 import '../services/theme_service.dart';
@@ -110,7 +111,7 @@ class StreakBannerWidget extends StatelessWidget {
               foregroundColor: const Color(0xFF05080D),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Samajh Gaya!', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: Text('got_it'.tr(), style: const TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),

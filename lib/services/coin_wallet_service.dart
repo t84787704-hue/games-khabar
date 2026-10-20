@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 // ===============================================================================
 // COIN WALLET SERVICE — With Automatic 500/1000 Coins Team Moderation & Alerts
 // -------------------------------------------------------------------------------
@@ -90,7 +91,7 @@ class CoinWalletService extends ChangeNotifier {
               type: 'team_frozen',
               title: '⚠️ Team Frozen: Low Balance Alert!',
               message:
-                  'Aapka wallet balance 1,000 coins se kam ho kar ($newCoins coins) reh gaya hai. Rules ke mutabiq aapki team "$teamName" ko temporarily Freeze kar diya gaya hai. Team ko dobara active karne ke liye wallet mein kam az kam 1,000 coins ka balance poora karein.',
+                  'wallet_team_frozen_notification'.tr(args: [newCoins.toString(), teamName]),
             );
           }
           // B: Leader balance restored to 1000+ -> UNFREEZE / REACTIVATE
@@ -107,7 +108,7 @@ class CoinWalletService extends ChangeNotifier {
               type: 'team_reactivated',
               title: '🎉 Team Reactivated!',
               message:
-                  'Mubarak ho! Aapka balance dobara 1,000+ coins ($newCoins coins) ho gaya hai. Aapki team "$teamName" ab dobara Active ho chuki hai aur matches ke liye tayar hai.',
+                  'wallet_team_reactivated_notification'.tr(args: [newCoins.toString(), teamName]),
             );
           }
         }
@@ -158,7 +159,7 @@ class CoinWalletService extends ChangeNotifier {
                 type: 'team_removed',
                 title: '🚨 Removed from Team: Low Balance',
                 message:
-                    'Aapka wallet balance 500 coins se kam ho kar ($newCoins coins) ho gaya hai. eSports rules ke mutabiq kisi bhi team ka hissa rehne ke liye kam az kam 500 coins hona zaroori hain. Is wajah se aapko team "$teamName" se remove kar diya gaya hai. Dobara join karne ke liye pehle apna balance 500 coins karein.',
+                    'wallet_team_removed_low_balance_notification'.tr(args: [newCoins.toString(), teamName]),
               );
             }
           }
