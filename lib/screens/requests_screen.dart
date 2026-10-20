@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/supabase_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../constants/gamer_theme.dart';
@@ -37,6 +38,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
       await Future.delayed(const Duration(seconds: 4));
     }
   }
+
   final Set<String> _processingUids = {};
 
   Future<void> _handleAccept(String requesterUid, Map<String, dynamic> userData, SquadPost? currentSquad) async {
@@ -56,7 +58,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$name added to squad!'),
+            content: Text('msg_player_added_to_squad'.tr(args: [name])),
             backgroundColor: GamerTheme.neonGreen,
           ),
         );
@@ -65,7 +67,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to accept: $e'),
+            content: Text('err_failed_to_accept'.tr(args: [e.toString()])),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -88,8 +90,8 @@ class _RequestsScreenState extends State<RequestsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Request rejected'),
+          SnackBar(
+            content: Text('msg_request_rejected'.tr()),
             backgroundColor: GamerTheme.cardDark,
           ),
         );
@@ -98,7 +100,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to reject: $e'),
+            content: Text('err_failed_to_reject'.tr(args: [e.toString()])),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -121,9 +123,9 @@ class _RequestsScreenState extends State<RequestsScreen> {
           icon: const Icon(Icons.arrow_back_ios_rounded, color: GamerTheme.textWhite, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Join Requests',
-          style: TextStyle(
+        title: Text(
+          'title_join_requests'.tr(),
+          style: const TextStyle(
             color: GamerTheme.textWhite,
             fontWeight: FontWeight.w900,
             fontSize: 18,
@@ -139,10 +141,10 @@ class _RequestsScreenState extends State<RequestsScreen> {
 
           final postData = snapshot.data ?? {};
           if (postData.isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
-                'Squad post not found',
-                style: TextStyle(color: GamerTheme.textMuted),
+                'err_squad_post_not_found'.tr(),
+                style: const TextStyle(color: GamerTheme.textMuted),
               ),
             );
           }
@@ -166,18 +168,18 @@ class _RequestsScreenState extends State<RequestsScreen> {
                     child: const Icon(Icons.group_off_rounded, size: 36, color: GamerTheme.textMuted),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'No pending requests',
-                    style: TextStyle(
+                  Text(
+                    'no_pending_requests_title'.tr(),
+                    style: const TextStyle(
                       color: GamerTheme.textWhite,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Players requesting to join will appear here.',
-                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                  Text(
+                    'no_pending_requests_desc'.tr(),
+                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
                   ),
                 ],
               ),
@@ -256,7 +258,6 @@ class _RequestsScreenState extends State<RequestsScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        // Badges: Tier, KD, Mic
                         Wrap(
                           spacing: 8,
                           runSpacing: 6,
@@ -293,7 +294,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                   const Icon(Icons.speed_rounded, size: 13, color: Color(0xFFFF2D55)),
                                   const SizedBox(width: 4),
                                   Text(
-                                    '$kd K/D',
+                                    'kd_ratio_label'.tr(args: [kd]),
                                     style: const TextStyle(color: Color(0xFFFF2D55), fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                 ],
@@ -312,7 +313,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                   Icon(mic ? Icons.mic_rounded : Icons.mic_off_rounded, size: 13, color: mic ? GamerTheme.neonGreen : GamerTheme.textMuted),
                                   const SizedBox(width: 4),
                                   Text(
-                                    mic ? 'Mic On' : 'Mic Off',
+                                    mic ? 'mic_on_label'.tr() : 'mic_off_label'.tr(),
                                     style: TextStyle(color: mic ? GamerTheme.neonGreen : GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                 ],
@@ -321,7 +322,6 @@ class _RequestsScreenState extends State<RequestsScreen> {
                           ],
                         ),
                         const SizedBox(height: 14),
-                        // Action Buttons: Accept (green) / Reject (red)
                         Row(
                           children: [
                             Expanded(
@@ -340,9 +340,9 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                                       )
                                     : const Icon(Icons.check_rounded, size: 16, color: Colors.black),
-                                label: const Text(
-                                  'Accept',
-                                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.black),
+                                label: Text(
+                                  'btn_accept'.tr(),
+                                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.black),
                                 ),
                                 onPressed: isProcessing ? null : () => _handleAccept(requesterUid, userData, squad),
                               ),
@@ -357,9 +357,9 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                   padding: const EdgeInsets.symmetric(vertical: 10),
                                 ),
                                 icon: const Icon(Icons.close_rounded, size: 16, color: Colors.redAccent),
-                                label: const Text(
-                                  'Reject',
-                                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.redAccent),
+                                label: Text(
+                                  'btn_reject'.tr(),
+                                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.redAccent),
                                 ),
                                 onPressed: isProcessing ? null : () => _handleReject(requesterUid),
                               ),
