@@ -17,7 +17,7 @@ import '../screens/coin_store_screen.dart';
 class CoinHistorySheet extends StatefulWidget {
   final String userId;
 
-  const CoinHistorySheet({Key? key, required this.userId}) : super(key: key);
+  const CoinHistorySheet({super.key, required this.userId});
 
   static Future<void> show(BuildContext context, {String? userId}) async {
     final targetUid = userId?.isNotEmpty == true
@@ -42,7 +42,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
   int _lastSyncedBalance = -1;
   bool _isBackgroundSyncing = false;
 
-  /// Background Safe Auto-Sync: Kabhi bhi balance 0 overwrite nahi karega
+  /// Background Safe Auto-Sync
   Future<void> _safeBackgroundSync(int targetCoins) async {
     if (targetCoins <= 0 || _isBackgroundSyncing) return;
     _isBackgroundSyncing = true;
@@ -202,12 +202,10 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
                   final int expectedBalance = (totalAdded - totalDeducted).clamp(0, 9999999);
 
-                  // Self-Healing Balance: Agar table mein 0 dikh raha ho to calculated ledger balance dikhao
                   final int displayCoins = (currentCoins > 0 && currentCoins == expectedBalance)
                       ? currentCoins
                       : (expectedBalance > 0 ? expectedBalance : currentCoins);
 
-                  // Agar mismatch ho to background mein Supabase table ko khud ba khud lock kar do
                   if (expectedBalance > 0 && currentCoins != expectedBalance && _lastSyncedBalance != expectedBalance) {
                     _lastSyncedBalance = expectedBalance;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -412,7 +410,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
           ),
           const SizedBox(height: 14),
 
-          // Filter Tabs: All, Added (+), Deducted (-)
+          // Filter Tabs
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -519,7 +517,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
     final IconData typeIcon = _getIconForType(tx.type, isCredit);
     final String badgeText = isCredit
         ? 'tag_earned'.tr()
-        : (isRelease ? 'جاری کیا گیا' : (isEscrowHold ? 'اسکرو' : 'tag_spent'.tr()));
+        : (isRelease ? 'tag_released'.tr() : (isEscrowHold ? 'tag_escrow'.tr() : 'tag_spent'.tr()));
     final String amountText = isCredit
         ? '+${'coins_amount_format'.tr(args: [tx.amount.toString()])}'
         : '-${'coins_amount_format'.tr(args: [tx.amount.abs().toString()])}';
@@ -582,7 +580,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        tx.description.isNotEmpty ? tx.description : (isCredit ? 'کوائنز شامل کیے گئے' : 'کوائنز کاٹے گئے'),
+                        tx.description.isNotEmpty ? tx.description : (isCredit ? 'coins_added_desc'.tr() : 'coins_deducted_desc'.tr()),
                         style: const TextStyle(
                           color: GamerTheme.textGray,
                           fontSize: 12,
@@ -649,10 +647,10 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             const SizedBox(height: 16),
             Text(
               _selectedFilter == 1
-                  ? 'ابھی تک کوئی کوائن نہیں کمایا گیا'
+                  ? 'no_coins_earned_yet'.tr()
                   : _selectedFilter == 2
-                      ? 'ابھی تک کوئی کوائن خرچ نہیں ہوا'
-                      : 'ابھی تک کوئی کوائن ہسٹری موجود نہیں',
+                      ? 'no_coins_spent_yet'.tr()
+                      : 'no_coin_history_yet'.tr(),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 15,
@@ -661,10 +659,10 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
-            const Text(
-              'رومز جوائن کریں، میچز جیتیں، اشتہارات دیکھیں یا یہاں سرگرمی دیکھنے کے لیے روزانہ کا بونس حاصل کریں۔',
+            Text(
+              'coin_history_empty_hint'.tr(),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: GamerTheme.textMuted,
                 fontSize: 12,
                 height: 1.4,
@@ -769,12 +767,12 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                 child: Column(
                   children: [
                     Text(
-                      isCredit ? 'کوائنز شامل کیے گئے' : 'کوائنز کاٹے گئے',
+                      isCredit ? 'coins_added_desc'.tr() : 'coins_deducted_desc'.tr(),
                       style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${isCredit ? '+' : ''}${tx.amount} کوائنز',
+                      '${isCredit ? '+' : ''}${tx.amount} ${'coins_label'.tr()}',
                       style: TextStyle(
                         color: color,
                         fontSize: 24,
@@ -785,27 +783,27 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              _detailRow('وجہ:', tx.description.isNotEmpty ? tx.description : tx.title),
+              _detailRow('${'reason_label'.tr()}:', tx.description.isNotEmpty ? tx.description : tx.title),
               const SizedBox(height: 8),
-              _detailRow('قسم:', tx.type.replaceAll('_', ' ').toUpperCase()),
+              _detailRow('${'type_label'.tr()}:', tx.type.replaceAll('_', ' ').toUpperCase()),
               const SizedBox(height: 8),
-              _detailRow('تاریخ اور وقت:', DateFormat('dd MMMM yyyy، hh:mm:ss a').format(tx.timestamp)),
+              _detailRow('${'date_and_time_label'.tr()}:', DateFormat('dd MMMM yyyy، hh:mm:ss a').format(tx.timestamp)),
               if (tx.roomId != null && tx.roomId!.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                _detailRow('روم آئی ڈی:', tx.roomId!),
+                _detailRow('${'room_id_label'.tr()}:', tx.roomId!),
               ],
               const SizedBox(height: 8),
-              _detailRow('اسٹیٹس:', tx.status.toUpperCase()),
+              _detailRow('${'status_label'.tr()}:', tx.status.toUpperCase()),
               if (tx.id.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                _detailRow('ٹرانزیکشن ID:', tx.id),
+                _detailRow('${'transaction_id_label'.tr()}:', tx.id),
               ],
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('بند کریں', style: TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold)),
+              child: Text('btn_close'.tr(), style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold)),
             ),
           ],
         );
