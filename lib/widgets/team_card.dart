@@ -2,15 +2,14 @@
 // EXACT DIFF — Full Adaptive Day & Night Mode Support for TeamCard
 // + Match Verification Rules Dialog on Challenge Action
 // + Frozen Team Challenge Blocking Logic (Both Sender & Receiver)
-// + Full Localization (easy_localization) Support - No Hardcoded Urdu
 // -------------------------------------------------------------------------------
 // File: lib/widgets/team_card.dart
 // ===============================================================================
 
 import 'dart:io';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:easy_localization/easy_localization.dart';
 import '../models/team_model.dart';
 import '../services/team_service.dart';
 import '../services/supabase_service.dart';
@@ -20,7 +19,7 @@ import '../screens/teams_screen.dart';
 import '../screens/private_match_room_screen.dart';
 import '../services/theme_service.dart';
 import '../services/coin_wallet_service.dart';
-import '../services/notification_service.dart';
+import '../services/language_service.dart';
 import 'coin_or_ad_popup.dart';
 import 'match_rules_dialog.dart';
 
@@ -110,9 +109,9 @@ class _TeamCardState extends State<TeamCard> {
     if (effectiveUid.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('please_login_first'.tr()),
-            backgroundColor: const Color(0xFFFF4655),
+            backgroundColor: Color(0xFFFF4655),
           ),
         );
       }
@@ -121,7 +120,7 @@ class _TeamCardState extends State<TeamCard> {
 
     await CoinOrAdPopup.show(
       context: context,
-      actionName: 'action_team_join'.tr(),
+      actionName: 'Team Join',
       onConfirm: () async {
         final currentGamer = GamerAuthService().currentGamer;
         final userName =
@@ -144,16 +143,16 @@ class _TeamCardState extends State<TeamCard> {
         if (mounted) {
           if (success) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('team_join_request_sent'.tr()),
-                backgroundColor: const Color(0xFF1877F2),
+              const SnackBar(
+                content: Text('msg_join_request_sent'.tr()),
+                backgroundColor: Color(0xFF1877F2),
               ),
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('team_join_request_error'.tr()),
-                backgroundColor: const Color(0xFFFF4655),
+              const SnackBar(
+                content: Text('err_sending_request_retry'.tr()),
+                backgroundColor: Color(0xFFFF4655),
               ),
             );
           }
@@ -163,6 +162,7 @@ class _TeamCardState extends State<TeamCard> {
   }
 
   Future<void> _handleChallenge(String currentUid) async {
+    // 🛑 CHECK 1: Agar meri apni team Frozen hai to main kisi ko challenge nahi bhej sakta
     if (widget.isMyTeamFrozen) {
       if (mounted) {
         showDialog(
@@ -175,13 +175,15 @@ class _TeamCardState extends State<TeamCard> {
                 const Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
                 const SizedBox(width: 8),
                 Text(
-                  'team_frozen_title'.tr(),
+                  'team_frozen'.tr(),
                   style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ],
             ),
             content: Text(
-              'team_frozen_my_balance_warning'.tr(),
+              LanguageService.isUrdu
+                  ? 'آپ کی ٹیم منجمد ہے۔ چیلنج بھیجنے کے لیے پہلے اپنے والٹ میں 1,000 کوائنز کا بیلنس پورا کریں۔'
+                  : 'Your team is frozen because your balance is below 1,000 coins. Top up to 1,000 coins to send challenges.',
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
             ),
             actions: [
@@ -196,6 +198,7 @@ class _TeamCardState extends State<TeamCard> {
       return;
     }
 
+    // 🛑 CHECK 2: Agar samnay wali target team Frozen hai to usko bhi challenge nahi bhej sakte
     if (widget.team.leaderId.isNotEmpty) {
       try {
         final targetWallet = await CoinWalletService().getOrCreateWallet(widget.team.leaderId);
@@ -211,13 +214,15 @@ class _TeamCardState extends State<TeamCard> {
                     const Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
                     const SizedBox(width: 8),
                     Text(
-                      'team_frozen_title'.tr(),
+                      'team_frozen'.tr(),
                       style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ],
                 ),
                 content: Text(
-                  'team_frozen_target_balance_warning'.tr(),
+                  LanguageService.isUrdu
+                      ? 'یہ ٹیم اس وقت منجمد (Frozen) ہے کیونکہ ان کے لیڈر کا بیلنس 1,000 کوائنز سے کم ہے۔ آپ اس ٹیم کو چیلنج نہیں کر سکتے۔'
+                      : 'This team is frozen because their leader balance fell below 1,000 coins. You cannot challenge this team.',
                   style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
                 ),
                 actions: [
@@ -234,6 +239,20 @@ class _TeamCardState extends State<TeamCard> {
       } catch (e) {
         debugPrint('[TeamCard] Error checking target team wallet: $e');
       }
+    }
+
+    final currentUid = GamerAuthService().currentUid ??
+        (SupabaseService.client.auth.currentUser?.id ?? '');
+    if (currentUid.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('please_login_first'.tr()),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+      return;
     }
 
     final myTeams = await _teamService.getUserTeams(currentUid);
@@ -267,8 +286,8 @@ class _TeamCardState extends State<TeamCard> {
         existing = await SupabaseService.client
             .from('challenges')
             .select()
-            .or('from_team_id.eq.$effectiveMyTeamId,from_team_id.eq.${effectiveMyTeam.id}')
-            .or('to_team_id.eq.$effectiveTargetId,to_team_id.eq.${widget.team.id}')
+            .eq('from_team_id', effectiveMyTeamId)
+            .eq('to_team_id', effectiveTargetId)
             .inFilter('status',
                 ['pending', 'requested', 'active', 'under_review']);
       } catch (_) {
@@ -289,7 +308,7 @@ class _TeamCardState extends State<TeamCard> {
                   const Icon(Icons.warning_amber_rounded,
                       color: Color(0xFFFF4655), size: 24),
                   const SizedBox(width: 8),
-                  Text('challenge_already_sent_title'.tr(),
+                  Text('challenge_already_sent'.tr(),
                       style: const TextStyle(
                           color: Color(0xFFFF4655),
                           fontWeight: FontWeight.bold,
@@ -297,13 +316,13 @@ class _TeamCardState extends State<TeamCard> {
                 ],
               ),
               content: Text(
-                'challenge_already_sent_desc'.tr(args: [widget.team.name]),
+                'msg_challenge_already_sent_detailed'.tr(args: [widget.team.name]),
                 style: const TextStyle(color: Colors.white, fontSize: 13),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: Text('btn_close'.tr(),
+                  child: Text('cancel'.tr(),
                       style: const TextStyle(color: Color(0xFF8B949E))),
                 ),
                 ElevatedButton(
@@ -319,7 +338,7 @@ class _TeamCardState extends State<TeamCard> {
                     backgroundColor: const Color(0xFFFF4655),
                     foregroundColor: Colors.white,
                   ),
-                  child: Text('btn_cancel'.tr(),
+                  child: Text('btn_cancel_caps'.tr(),
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
@@ -329,60 +348,36 @@ class _TeamCardState extends State<TeamCard> {
         return;
       }
 
+      // Verification Rules dialog show karein challenge bhejte waqt
       MatchRulesDialog.show(
         context,
-        title: '${'challenge_rules_title'.tr()} (${widget.team.name})',
+        title: 'Challenge Rules (${widget.team.name})',
         onProceed: () async {
           try {
-            Map<String, dynamic>? insertedChallenge;
             try {
-              insertedChallenge = await SupabaseService.client.from('challenges').insert({
+              await SupabaseService.client.from('challenges').insert({
                 'from_team_id': effectiveMyTeamId,
                 'to_team_id': effectiveTargetId,
                 'from_team_name': effectiveMyTeamName,
                 'to_team_name': widget.team.name,
                 'status': 'pending',
-                'game': widget.team.game.isNotEmpty ? widget.team.game : 'BGMI',
-              }).select().maybeSingle();
+                'game': 'BGMI',
+              });
             } catch (_) {
-              try {
-                insertedChallenge = await SupabaseService.client.from('challenges').insert({
-                  'from_team_id': effectiveMyTeamId,
-                  'to_team_id': effectiveTargetId,
-                  'from_team_name': effectiveMyTeamName,
-                  'to_team_name': widget.team.name,
-                  'status': 'pending',
-                }).select().maybeSingle();
-              } catch (_) {
-                insertedChallenge = await SupabaseService.client.from('challenges').insert({
-                  'from_team_id': effectiveMyTeamId,
-                  'to_team_id': widget.team.id,
-                  'from_team_name': effectiveMyTeamName,
-                  'to_team_name': widget.team.name,
-                  'status': 'pending',
-                }).select().maybeSingle();
-              }
-            }
-
-            if (widget.team.leaderId.isNotEmpty) {
-              try {
-                await NotificationService().sendNotification(
-                  userId: widget.team.leaderId,
-                  type: 'team_challenge',
-                  title: 'notif_new_challenge_title'.tr(),
-                  body: 'notif_new_challenge_body'.tr(args: [effectiveMyTeamName]),
-                  data: {
-                    'challenge_id': insertedChallenge?['id']?.toString() ?? '',
-                    'from_team_id': effectiveMyTeamId,
-                  },
-                );
-              } catch (_) {}
+              await SupabaseService.client.from('challenges').insert({
+                'from_team_id': effectiveMyTeamId,
+                'to_team_id': effectiveTargetId,
+                'from_team_name': effectiveMyTeamName,
+                'to_team_name': widget.team.name,
+                'status': 'pending',
+              });
             }
 
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('challenge_sent_success'.tr(args: [widget.team.name])),
+                  content: Text(
+                      'msg_challenge_sent_success_detailed'.tr(args: [widget.team.name])),
                   backgroundColor: const Color(0xFF1877F2),
                   duration: const Duration(seconds: 4),
                 ),
@@ -393,7 +388,7 @@ class _TeamCardState extends State<TeamCard> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('${'error_sending_challenge'.tr()}: $e'),
+                  content: Text('err_sending_challenge'.tr(args: [e.toString()])),
                   backgroundColor: const Color(0xFFFF4655),
                 ),
               );
@@ -419,9 +414,9 @@ class _TeamCardState extends State<TeamCard> {
       if (mounted) setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('challenge_cancelled_success'.tr()),
-            backgroundColor: const Color(0xFF1877F2),
+          const SnackBar(
+            content: Text('challenge_cancelled'.tr()),
+            backgroundColor: Color(0xFF1877F2),
           ),
         );
       }
@@ -447,7 +442,7 @@ class _TeamCardState extends State<TeamCard> {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'challenge_sent_waiting_reply'.tr(),
+              'challenge_sent_waiting'.tr(),
               style: const TextStyle(
                   color: Color(0xFF1877F2),
                   fontSize: 11,
@@ -465,7 +460,7 @@ class _TeamCardState extends State<TeamCard> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               child: Text(
-                'btn_cancel'.tr(),
+                'cancel'.tr(),
                 style: const TextStyle(
                   color: Color(0xFFFF4655),
                   fontSize: 11.5,
@@ -499,7 +494,7 @@ class _TeamCardState extends State<TeamCard> {
                   size: 12, color: ThemeService.textSecondary),
               const SizedBox(width: 4),
               Text(
-                'requested_label'.tr(),
+                'requested_badge'.tr(),
                 style: TextStyle(
                   color: ThemeService.textSecondary,
                   fontWeight: FontWeight.bold,
@@ -522,7 +517,7 @@ class _TeamCardState extends State<TeamCard> {
           ),
           icon: const Icon(Icons.close_rounded,
               size: 13, color: Color(0xFFFF4655)),
-          label: Text('btn_cancel'.tr(),
+          label: Text('cancel'.tr(),
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           onPressed: () {
             if (widget.onCancelChallenge != null) {
@@ -547,7 +542,7 @@ class _TeamCardState extends State<TeamCard> {
         elevation: 0,
       ),
       icon: const Icon(Icons.flash_on_rounded, size: 14, color: Colors.white),
-      label: Text('challenge_button'.tr(),
+      label: Text('btn_challenge_caps'.tr(),
           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
       onPressed: () => _handleChallenge(currentUid),
     );
@@ -558,13 +553,11 @@ class _TeamCardState extends State<TeamCard> {
       return _buildChallengeButton(currentUid);
     }
 
-    final myUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
-    final myRawId = widget.myTeamId.toLowerCase();
-
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.client
           .from('challenges')
-          .stream(primaryKey: ['id']),
+          .stream(primaryKey: ['id'])
+          .eq('from_team_id', SupabaseService.toUuid(widget.myTeamId)),
       builder: (context, cSnap) {
         final challenges = cSnap.data ?? [];
         final targetUuid = SupabaseService.toUuid(widget.team.id).toLowerCase();
@@ -572,17 +565,11 @@ class _TeamCardState extends State<TeamCard> {
 
         final pendingDoc = challenges.firstWhere(
           (d) {
-            final fromId = (d['from_team_id'] ?? '').toString().toLowerCase();
-            final toId = (d['to_team_id'] ?? '').toString().toLowerCase();
+            final toId = d['to_team_id']?.toString().toLowerCase();
             final st = (d['status'] ?? '').toString().toLowerCase();
             final id = d['id']?.toString() ?? '';
-
-            final isFromMe = (fromId == myUuid || fromId == myRawId);
-            final isToTarget = (toId == targetUuid || toId == rawTeamId);
-
-            return isFromMe &&
-                isToTarget &&
-                (st == 'pending' || st == 'requested') &&
+            return (toId == targetUuid || toId == rawTeamId) &&
+                st == 'pending' &&
                 !_localCancelledIds.contains(id);
           },
           orElse: () => {},
@@ -620,7 +607,7 @@ class _TeamCardState extends State<TeamCard> {
           const Text('👑', style: TextStyle(fontSize: 11)),
           const SizedBox(width: 3),
           Text(
-            'badge_owner'.tr(),
+            'badge_owner_caps'.tr(),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
@@ -653,7 +640,7 @@ class _TeamCardState extends State<TeamCard> {
           const Text('🛡️', style: TextStyle(fontSize: 11)),
           const SizedBox(width: 3),
           Text(
-            'badge_member'.tr(),
+            'badge_member_caps'.tr(),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
@@ -678,7 +665,7 @@ class _TeamCardState extends State<TeamCard> {
       ),
       icon: const Icon(Icons.login_rounded, size: 14, color: Colors.white),
       label: Text(
-        'open_team_button'.tr(),
+        'open_team'.tr(),
         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
       ),
       onPressed: () {
@@ -714,7 +701,7 @@ class _TeamCardState extends State<TeamCard> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'edit_team_title'.tr(),
+                  'edit_team'.tr(),
                   style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -797,7 +784,7 @@ class _TeamCardState extends State<TeamCard> {
                   controller: nameCtrl,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'team_name_label'.tr(),
+                    labelText: 'Team Name',
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -816,7 +803,7 @@ class _TeamCardState extends State<TeamCard> {
                   controller: tagCtrl,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'team_tag_label'.tr(),
+                    labelText: 'Team Tag',
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -835,7 +822,7 @@ class _TeamCardState extends State<TeamCard> {
                   controller: gameCtrl,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'game_label'.tr(),
+                    labelText: 'game_field_hint'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -855,7 +842,7 @@ class _TeamCardState extends State<TeamCard> {
                   maxLines: 2,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'description_label'.tr(),
+                    labelText: 'Description',
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -875,7 +862,7 @@ class _TeamCardState extends State<TeamCard> {
                   maxLines: 2,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'requirements_label'.tr(),
+                    labelText: 'Requirements',
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -894,7 +881,7 @@ class _TeamCardState extends State<TeamCard> {
           actions: [
             TextButton(
               onPressed: isSaving ? null : () => Navigator.pop(ctx),
-              child: Text('btn_cancel'.tr(),
+              child: Text('cancel'.tr(),
                   style: const TextStyle(color: Color(0xFF8B949E))),
             ),
             ElevatedButton.icon(
@@ -904,9 +891,9 @@ class _TeamCardState extends State<TeamCard> {
                       if (nameCtrl.text.trim().isEmpty ||
                           tagCtrl.text.trim().isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(
-                            content: Text('name_tag_required'.tr()),
-                            backgroundColor: const Color(0xFFFF4655),
+                          const SnackBar(
+                            content: Text('name_and_tag_required'.tr()),
+                            backgroundColor: Color(0xFFFF4655),
                           ),
                         );
                         return;
@@ -931,8 +918,8 @@ class _TeamCardState extends State<TeamCard> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(ok
-                                ? 'team_updated_success'.tr()
-                                : 'team_update_failed'.tr()),
+                                ? '✅ Team updated successfully!'
+                                : '❌ Team update fail ho gaya'),
                             backgroundColor: ok
                                 ? const Color(0xFF00FF88)
                                 : const Color(0xFFFF4655),
@@ -953,7 +940,7 @@ class _TeamCardState extends State<TeamCard> {
                     )
                   : const Icon(Icons.save_rounded, size: 16),
               label: Text(
-                isSaving ? 'saving_label'.tr() : 'save_changes_btn'.tr(),
+                isSaving ? 'btn_save_and_continue'.tr() : 'save'.tr(),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -976,7 +963,7 @@ class _TeamCardState extends State<TeamCard> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'delete_team_title'.tr(),
+                'delete_team_q'.tr(),
                 style: const TextStyle(
                     color: Color(0xFFFF4655),
                     fontWeight: FontWeight.bold,
@@ -990,7 +977,7 @@ class _TeamCardState extends State<TeamCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'delete_team_confirm'.tr(),
+              'confirm_delete_team_desc'.tr(),
               style: const TextStyle(color: Colors.white, fontSize: 13.5),
             ),
             const SizedBox(height: 10),
@@ -1020,7 +1007,7 @@ class _TeamCardState extends State<TeamCard> {
             ),
             const SizedBox(height: 10),
             Text(
-              'delete_team_warning'.tr(),
+              'delete_team_permanent_warning'.tr(),
               style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11.5),
             ),
           ],
@@ -1028,7 +1015,7 @@ class _TeamCardState extends State<TeamCard> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('btn_cancel'.tr(),
+            child: Text('cancel'.tr(),
                 style: const TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton.icon(
@@ -1037,7 +1024,7 @@ class _TeamCardState extends State<TeamCard> {
               foregroundColor: Colors.white,
             ),
             icon: const Icon(Icons.delete_forever_rounded, size: 16),
-            label: Text('delete_team_title'.tr(),
+            label: Text('delete_team'.tr(),
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () => Navigator.pop(ctx, true),
           ),
@@ -1053,9 +1040,9 @@ class _TeamCardState extends State<TeamCard> {
     if (currentUid.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('user_not_logged_in'.tr()),
-            backgroundColor: const Color(0xFFFF4655),
+            backgroundColor: Color(0xFFFF4655),
           ),
         );
       }
@@ -1073,19 +1060,19 @@ class _TeamCardState extends State<TeamCard> {
     Color bg;
     switch (result) {
       case 'ok':
-        msg = 'team_deleted_success'.tr();
+        msg = '✅ Team deleted successfully';
         bg = const Color(0xFF00FF88);
         break;
       case 'not_owner':
-        msg = 'not_team_owner_error'.tr();
+        msg = '❌ Aap team ke owner nahi hain';
         bg = const Color(0xFFFF4655);
         break;
       case 'active_match':
-        msg = 'active_match_exists_error'.tr();
+        msg = '❌ Team ka active match chal raha hai. Pehle match end karein.';
         bg = const Color(0xFFFF4655);
         break;
       default:
-        msg = 'team_delete_failed'.tr();
+        msg = '❌ Team delete fail ho gayi';
         bg = const Color(0xFFFF4655);
     }
 
@@ -1235,12 +1222,12 @@ class _TeamCardState extends State<TeamCard> {
 
                               if (_checkingMembership) ...[
                                 const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 1.5,
-                                      color: Color(0xFF1877F2)),
-                                ),
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 1.5,
+                                        color: Color(0xFF1877F2)),
+                                  ),
                               ] else if (isOwnerFinal) ...[
                                 _buildOwnerBadge(),
                               ] else if (isMemberFinal) ...[
@@ -1249,7 +1236,7 @@ class _TeamCardState extends State<TeamCard> {
 
                               const SizedBox(height: 3),
                               Text(
-                                '${'leader_label'.tr()}: ${team.leaderName}',
+                                'Leader: ${team.leaderName}',
                                 style: TextStyle(
                                     color: ThemeService.textSecondary, fontSize: 12),
                               ),
@@ -1281,7 +1268,7 @@ class _TeamCardState extends State<TeamCard> {
                                           size: 14, color: ThemeService.textSecondary),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '${team.memberCount} ${'members_count_label'.tr()}',
+                                        '${team.memberCount} Members',
                                         style: TextStyle(
                                             color: ThemeService.textSecondary,
                                             fontSize: 11.5,
@@ -1317,7 +1304,7 @@ class _TeamCardState extends State<TeamCard> {
                                     const Icon(Icons.edit_rounded,
                                         color: Color(0xFF00FF88), size: 18),
                                     const SizedBox(width: 10),
-                                    Text('edit_team_title'.tr(),
+                                    Text('edit_team'.tr(),
                                         style: const TextStyle(
                                             color: Colors.white, fontSize: 13)),
                                   ],
@@ -1330,7 +1317,7 @@ class _TeamCardState extends State<TeamCard> {
                                     const Icon(Icons.delete_forever_rounded,
                                         color: Color(0xFFFF4655), size: 18),
                                     const SizedBox(width: 10),
-                                    Text('delete_team_title'.tr(),
+                                    Text('delete_team'.tr(),
                                         style: const TextStyle(
                                             color: Color(0xFFFF4655),
                                             fontSize: 13)),
@@ -1360,27 +1347,24 @@ class _TeamCardState extends State<TeamCard> {
                       StreamBuilder<List<Map<String, dynamic>>>(
                         stream: SupabaseService.client
                             .from('challenges')
-                            .stream(primaryKey: ['id']),
+                            .stream(primaryKey: ['id'])
+                            .eq('from_team_id',
+                                SupabaseService.toUuid(widget.myTeamId)),
                         builder: (context, cSnap) {
                           final challenges = cSnap.data ?? [];
-                          final myUuid = SupabaseService.toUuid(widget.myTeamId).toLowerCase();
-                          final myRawId = widget.myTeamId.toLowerCase();
-                          final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
+                          final targetUuid =
+                              SupabaseService.toUuid(team.id).toLowerCase();
                           final rawTeamId = team.id.toLowerCase();
-
                           final pendingDoc = challenges.firstWhere(
                             (d) {
-                              final fromId = (d['from_team_id'] ?? '').toString().toLowerCase();
-                              final toId = (d['to_team_id'] ?? '').toString().toLowerCase();
-                              final st = (d['status'] ?? '').toString().toLowerCase();
+                              final toId =
+                                  d['to_team_id']?.toString().toLowerCase();
+                              final st =
+                                  (d['status'] ?? '').toString().toLowerCase();
                               final id = d['id']?.toString() ?? '';
-
-                              final isFromMe = (fromId == myUuid || fromId == myRawId);
-                              final isToTarget = (toId == targetUuid || toId == rawTeamId);
-
-                              return isFromMe &&
-                                  isToTarget &&
-                                  (st == 'pending' || st == 'requested') &&
+                              return (toId == targetUuid ||
+                                      toId == rawTeamId) &&
+                                  st == 'pending' &&
                                   !_localCancelledIds.contains(id);
                             },
                             orElse: () => {},
@@ -1400,7 +1384,7 @@ class _TeamCardState extends State<TeamCard> {
                     Row(
                       children: [
                         Text(
-                          'team_stats_w_l_pts'.tr(args: [team.wins.toString(), team.losses.toString(), team.points.toString()]),
+                          'W: ${team.wins} | L: ${team.losses} | Pts: ${team.points}',
                           style: TextStyle(
                               color: ThemeService.textSecondary,
                               fontSize: 11.5,
@@ -1433,7 +1417,7 @@ class _TeamCardState extends State<TeamCard> {
                                       ),
                                     );
                                   },
-                                  child: Text('view_team_button'.tr(),
+                                  child: Text('view_team'.tr(),
                                       style: TextStyle(
                                           color: ThemeService.textPrimary,
                                           fontSize: 11.5,
@@ -1499,18 +1483,18 @@ class _TeamCardState extends State<TeamCard> {
                                                 borderRadius:
                                                     BorderRadius.circular(8),
                                               ),
-                                              child: Row(
+                                              child: const Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  const Icon(
+                                                  Icon(
                                                       Icons
                                                           .local_fire_department_rounded,
                                                       size: 14,
                                                       color: Colors.black),
-                                                  const SizedBox(width: 4),
+                                                  SizedBox(width: 4),
                                                   Text(
-                                                    'status_live'.tr(),
-                                                    style: const TextStyle(
+                                                    'LIVE',
+                                                    style: TextStyle(
                                                       color: Colors.black,
                                                       fontWeight: FontWeight.w900,
                                                       fontSize: 11,
@@ -1536,7 +1520,7 @@ class _TeamCardState extends State<TeamCard> {
                                               icon: const Icon(
                                                   Icons.chat_bubble_rounded,
                                                   size: 14),
-                                              label: Text('team_dm_button'.tr(),
+                                              label: Text('team_dm'.tr(),
                                                   style: const TextStyle(
                                                       fontSize: 11.5,
                                                       fontWeight: FontWeight.bold)),
@@ -1597,13 +1581,13 @@ class _TeamCardState extends State<TeamCard> {
                                             : Colors.white,
                                       ),
                                       label: Text(
-                                        isRequested ? 'requested_label'.tr() : 'join_btn'.tr(),
+                                        isRequested ? 'Requested ⏳' : 'Join',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 11.5,
                                           color: isRequested
-                                              ? ThemeService.textSecondary
-                                              : Colors.white,
+                                            ? ThemeService.textSecondary
+                                            : Colors.white,
                                         ),
                                       ),
                                       onPressed: (isRequested || _isRequesting)
