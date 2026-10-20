@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../models/news_model.dart';
 import '../services/supabase_store_service.dart';
 import '../widgets/app_image_view.dart';
@@ -105,12 +106,12 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         if (mounted) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Color(0xFFFF4655),
+            SnackBar(
+              backgroundColor: const Color(0xFFFF4655),
               behavior: SnackBarBehavior.floating,
               content: Text(
-                'Access Denied - Not Admin',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                'access_denied_admin'.tr(),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
           );
@@ -176,15 +177,17 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: BorderSide(color: neonGreen, width: 1),
+              side: const BorderSide(color: neonGreen, width: 1),
             ),
             content: Row(
               children: [
-                Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
+                const Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
                 const SizedBox(width: 10),
-                Text(
-                  'Image compressed (600x600) & ready! (${(bytes.length / 1024).toStringAsFixed(1)} KB)',
-                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
+                Expanded(
+                  child: Text(
+                    'image_compressed_ready'.tr(args: [(bytes.length / 1024).toStringAsFixed(1)]),
+                    style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -199,7 +202,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: alertRed,
-            content: Text('Failed to pick image: $e', style: const TextStyle(color: Colors.white)),
+            content: Text('${'failed_pick_image'.tr()}: $e', style: const TextStyle(color: Colors.white)),
           ),
         );
       }
@@ -238,21 +241,20 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
 
     setState(() {
       _isPublishing = true;
-      _publishingStatus = 'Translating to 7 languages...';
+      _publishingStatus = 'translating_7_languages_status'.tr();
     });
 
     try {
       final title = _titleController.text.trim();
       final description = _descController.text.trim();
 
-      // Auto-translate title and description into 7 target languages:
-      // Roman, English, Hindi, Urdu, Bengali, Arabic, Chinese
+      // Auto-translate title and description into 7 target languages
       final titleMap = await TranslationService.translateTo7Languages(title);
       final contentMap = await TranslationService.translateTo7Languages(description);
 
       if (mounted) {
         setState(() {
-          _publishingStatus = 'Saving news...';
+          _publishingStatus = 'saving_news_status'.tr();
         });
       }
 
@@ -262,7 +264,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         'description': contentMap,
         'category': _selectedCategory,
         'imageUrl': finalImageUrl,
-        'videoUrl': videoUrl, // Empty string if empty
+        'videoUrl': videoUrl,
         'isFree': _selectedCategory.toLowerCase().contains('free'),
         'isFeatured': _isFeatured,
       };
@@ -271,7 +273,6 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         await _storeService.updateNews(widget.editItem!.id, payload);
       } else {
         final newNewsId = await _storeService.addNews(payload);
-        // Send FCM notification to topic 'all_news'
         try {
           await NotificationService().sendNewsNotification(
             newsId: newNewsId,
@@ -290,18 +291,18 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: BorderSide(color: neonGreen, width: 1),
+              side: const BorderSide(color: neonGreen, width: 1),
             ),
             content: Row(
               children: [
-                Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
+                const Icon(Icons.check_circle_rounded, color: neonGreen, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     isEditing
-                        ? 'Khabar Updated in 7 Languages! 🎮'
-                        : 'Khabar Published in 7 Languages! 🎉',
-                    style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+                        ? 'news_updated_7_languages_snackbar'.tr()
+                        : 'news_published_7_languages_snackbar'.tr(),
+                    style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -347,7 +348,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         backgroundColor: cardDark,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
@@ -360,8 +361,8 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
             ),
             const SizedBox(width: 8),
             Text(
-              isEditing ? 'Edit Khabar' : 'Add New Khabar',
-              style: TextStyle(
+              isEditing ? 'edit_khabar_title'.tr() : 'add_new_khabar_title'.tr(),
+              style: const TextStyle(
                 color: textWhite,
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
@@ -392,11 +393,11 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.g_translate_rounded, color: neonGreen, size: 20),
+                        const Icon(Icons.g_translate_rounded, color: neonGreen, size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          'Multi-Language 7X Auto-Publish',
-                          style: TextStyle(
+                          'multi_lang_auto_publish_header'.tr(),
+                          style: const TextStyle(
                             color: neonGreen,
                             fontWeight: FontWeight.bold,
                             fontSize: 13.5,
@@ -406,14 +407,14 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Write only in Roman (or English). On publish, it will automatically translate to 7 languages and save directly to database for instant display.',
-                      style: TextStyle(color: textGray, fontSize: 11.5, height: 1.35),
+                      'multi_lang_auto_publish_desc'.tr(),
+                      style: const TextStyle(color: textGray, fontSize: 11.5, height: 1.35),
                     ),
                     const SizedBox(height: 10),
-                    Wrap(
+                    const Wrap(
                       spacing: 6,
                       runSpacing: 6,
-                      children: const [
+                      children: [
                         _LangPill(label: 'Roman', flag: '🇵🇰'),
                         _LangPill(label: 'English', flag: '🇬🇧'),
                         _LangPill(label: 'हिंदी', flag: '🇮🇳'),
@@ -429,40 +430,40 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
 
               // Title Field
               Text(
-                'News Title (Heading in Roman / English)',
-                style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
+                'news_title_heading_label'.tr(),
+                style: const TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _titleController,
                 maxLength: 200,
-                style: TextStyle(color: textWhite, fontSize: 14),
+                style: const TextStyle(color: textWhite, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'e.g. BGMI 3.4 Update Release Date & Features',
-                  hintStyle: TextStyle(color: textGray, fontSize: 13),
+                  hintText: 'news_title_hint'.tr(),
+                  hintStyle: const TextStyle(color: textGray, fontSize: 13),
                   filled: true,
                   fillColor: cardDark,
-                  counterStyle: TextStyle(color: textGray, fontSize: 11),
+                  counterStyle: const TextStyle(color: textGray, fontSize: 11),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: borderDark),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: borderDark),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: neonGreen, width: 1.5),
+                    borderSide: const BorderSide(color: neonGreen, width: 1.5),
                   ),
                   contentPadding: const EdgeInsets.all(14),
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) {
-                    return 'Title is required';
+                    return 'title_is_required'.tr();
                   }
                   if (val.trim().length > 200) {
-                    return 'Title cannot exceed 200 characters';
+                    return 'title_max_characters'.tr();
                   }
                   return null;
                 },
@@ -471,8 +472,8 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
 
               // Category Dropdown
               Text(
-                'Category',
-                style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
+                'category_label'.tr(),
+                style: const TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
@@ -484,8 +485,8 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                     : (availableCategories.isNotEmpty ? availableCategories.first : 'Open World'),
                 dropdownColor: cardDark,
                 isExpanded: true,
-                icon: Icon(Icons.keyboard_arrow_down, color: neonGreen),
-                style: TextStyle(
+                icon: const Icon(Icons.keyboard_arrow_down, color: neonGreen),
+                style: const TextStyle(
                   color: textWhite,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -496,15 +497,15 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: borderDark),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: borderDark),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: neonGreen, width: 1.5),
+                    borderSide: const BorderSide(color: neonGreen, width: 1.5),
                   ),
                 ),
                 items: {
@@ -518,7 +519,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: neonGreen,
                             shape: BoxShape.circle,
                           ),
@@ -528,7 +529,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                           child: Text(
                             cat,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: textWhite, fontSize: 14),
+                            style: const TextStyle(color: textWhite, fontSize: 14),
                           ),
                         ),
                       ],
@@ -573,16 +574,16 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                     size: 24,
                   ),
                   title: Text(
-                    'Mark as Featured - Show on Top Banner',
-                    style: TextStyle(
+                    'mark_as_featured_label'.tr(),
+                    style: const TextStyle(
                       color: textWhite,
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   subtitle: Text(
-                    'Displays this news in the top big hero card on the home screen',
-                    style: TextStyle(
+                    'mark_as_featured_desc'.tr(),
+                    style: const TextStyle(
                       color: textGray,
                       fontSize: 11,
                     ),
@@ -603,11 +604,11 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.image_outlined, color: neonGreen, size: 18),
+                      const Icon(Icons.image_outlined, color: neonGreen, size: 18),
                       const SizedBox(width: 6),
                       Text(
-                        'News Cover Image (Compressed 600x600)',
-                        style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
+                        'news_cover_image_label'.tr(),
+                        style: const TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -615,8 +616,8 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                     GestureDetector(
                       onTap: _removeSelectedImage,
                       child: Text(
-                        'Remove',
-                        style: TextStyle(
+                        'btn_remove'.tr(),
+                        style: const TextStyle(
                           color: alertRed,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -646,7 +647,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: textWhite,
-                                side: BorderSide(color: borderDark),
+                                side: const BorderSide(color: borderDark),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
@@ -655,10 +656,10 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                               onPressed: _isProcessingImage
                                   ? null
                                   : () => _pickAndCompressImage(ImageSource.gallery),
-                              icon: Icon(Icons.photo_library_rounded, color: neonGreen, size: 18),
-                              label: const Text(
-                                'Gallery',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              icon: const Icon(Icons.photo_library_rounded, color: neonGreen, size: 18),
+                              label: Text(
+                                'gallery_label'.tr(),
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                               ),
                             ),
                           ),
@@ -671,7 +672,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: textWhite,
-                                side: BorderSide(color: borderDark),
+                                side: const BorderSide(color: borderDark),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
@@ -680,10 +681,10 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                               onPressed: _isProcessingImage
                                   ? null
                                   : () => _pickAndCompressImage(ImageSource.camera),
-                              icon: Icon(Icons.camera_alt_rounded, color: neonGreen, size: 18),
-                              label: const Text(
-                                'Camera',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              icon: const Icon(Icons.camera_alt_rounded, color: neonGreen, size: 18),
+                              label: Text(
+                                'camera_label'.tr(),
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                               ),
                             ),
                           ),
@@ -695,8 +696,8 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                       const SizedBox(height: 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          SizedBox(
+                        children: [
+                          const SizedBox(
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(
@@ -704,10 +705,10 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                               valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
                             ),
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Text(
-                            'Compressing to 600x600 base64...',
-                            style: TextStyle(color: textGray, fontSize: 12),
+                            'compressing_image_label'.tr(),
+                            style: const TextStyle(color: textGray, fontSize: 12),
                           ),
                         ],
                       ),
@@ -741,34 +742,34 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
 
               // Video (Optional) Section
               Row(
-                children: const [
-                  Icon(Icons.video_library_rounded, color: Color(0xFFFF4655), size: 18),
-                  SizedBox(width: 6),
+                children: [
+                  const Icon(Icons.video_library_rounded, color: Color(0xFFFF4655), size: 18),
+                  const SizedBox(width: 6),
                   Text(
-                    'Video (Optional)',
-                    style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
+                    'video_optional_label'.tr(),
+                    style: const TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _videoUrlController,
-                style: TextStyle(color: textWhite, fontSize: 14),
+                style: const TextStyle(color: textWhite, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'e.g. https://youtu.be/xxx or watch?v=xxx or Video ID',
-                  hintStyle: TextStyle(color: textGray, fontSize: 13),
-                  helperText: 'Supports youtu.be, youtube.com, Shorts, or 11-character Video ID',
-                  helperStyle: TextStyle(color: textGray, fontSize: 11),
-                  prefixIcon: Icon(Icons.link_rounded, color: neonGreen, size: 20),
+                  hintText: 'video_url_hint'.tr(),
+                  hintStyle: const TextStyle(color: textGray, fontSize: 13),
+                  helperText: 'video_url_helper'.tr(),
+                  helperStyle: const TextStyle(color: textGray, fontSize: 11),
+                  prefixIcon: const Icon(Icons.link_rounded, color: neonGreen, size: 20),
                   filled: true,
                   fillColor: cardDark,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: borderDark),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: borderDark),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -778,10 +779,10 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) {
-                    return null; // Optional
+                    return null;
                   }
                   if (!isValidYoutubeUrl(val)) {
-                    return 'Please enter a valid YouTube URL or 11-char Video ID';
+                    return 'valid_youtube_url_warning'.tr();
                   }
                   return null;
                 },
@@ -790,35 +791,35 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
 
               // Description Multi-line
               Text(
-                'Description / Content (in Roman / English)',
-                style: TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
+                'news_description_heading_label'.tr(),
+                style: const TextStyle(color: textWhite, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _descController,
                 maxLines: 6,
-                style: TextStyle(color: textWhite, fontSize: 14, height: 1.4),
+                style: const TextStyle(color: textWhite, fontSize: 14, height: 1.4),
                 decoration: InputDecoration(
-                  hintText: 'Enter full news details in Roman or English (auto-translates to 7 languages)...',
-                  hintStyle: TextStyle(color: textGray, fontSize: 13),
+                  hintText: 'news_description_input_hint'.tr(),
+                  hintStyle: const TextStyle(color: textGray, fontSize: 13),
                   filled: true,
                   fillColor: cardDark,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: borderDark),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: borderDark),
+                    borderSide: const BorderSide(color: borderDark),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: neonGreen, width: 1.5),
+                    borderSide: const BorderSide(color: neonGreen, width: 1.5),
                   ),
                   contentPadding: const EdgeInsets.all(14),
                 ),
                 validator: (val) =>
-                    val == null || val.trim().isEmpty ? 'Description is required' : null,
+                    val == null || val.trim().isEmpty ? 'description_is_required'.tr() : null,
               ),
               const SizedBox(height: 28),
 
@@ -852,7 +853,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                             Text(
                               _publishingStatus.isNotEmpty
                                   ? _publishingStatus
-                                  : 'Translating to 7 languages...',
+                                  : 'translating_7_languages_status'.tr(),
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w900,
@@ -871,7 +872,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              isEditing ? 'Update & Save Changes' : 'Save & Publish Khabar',
+                              isEditing ? 'update_save_changes_btn'.tr() : 'save_publish_khabar_btn'.tr(),
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w900,
