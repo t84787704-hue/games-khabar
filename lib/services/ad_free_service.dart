@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class AdFreeService {
   static final AdFreeService _instance = AdFreeService._internal();
@@ -123,13 +124,13 @@ class AdFreeService {
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Color(0xFF1E1F28),
+      SnackBar(
+        backgroundColor: const Color(0xFF1E1F28),
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
+        duration: const Duration(seconds: 2),
         content: Row(
           children: [
-            SizedBox(
+            const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
@@ -137,10 +138,10 @@ class AdFreeService {
                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00FF88)),
               ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Text(
-              'Loading Rewarded Ad...',
-              style: TextStyle(
+              'loading_rewarded_ad'.tr(),
+              style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.bold),
@@ -173,7 +174,7 @@ class AdFreeService {
                   SnackBar(
                     backgroundColor: const Color(0xFF1E1F28),
                     content: Text(
-                      'Failed to display ad: ${error.message}',
+                      'failed_to_display_ad'.tr(args: [error.message]),
                       style: const TextStyle(color: Colors.redAccent),
                     ),
                   ),
@@ -200,14 +201,14 @@ class AdFreeService {
                           color: Color(0xFF00FF88), width: 1.5),
                     ),
                     duration: const Duration(seconds: 4),
-                    content: const Row(
+                    content: Row(
                       children: [
-                        Icon(Icons.bolt, color: Color(0xFF00FF88), size: 22),
-                        SizedBox(width: 10),
+                        const Icon(Icons.bolt, color: Color(0xFF00FF88), size: 22),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '1 Ghante tak Ad-Free active!',
-                            style: TextStyle(
+                            'ad_free_active_one_hour'.tr(),
+                            style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
@@ -231,7 +232,7 @@ class AdFreeService {
               SnackBar(
                 backgroundColor: const Color(0xFF1E1F28),
                 content: Text(
-                  'Ad could not be loaded: ${error.message}',
+                  'ad_could_not_be_loaded'.tr(args: [error.message]),
                   style: const TextStyle(
                       color: Colors.redAccent, fontSize: 12),
                 ),
@@ -258,13 +259,13 @@ class AdFreeService {
     if (context.mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFF1E1F28),
+        SnackBar(
+          backgroundColor: const Color(0xFF1E1F28),
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
           content: Row(
             children: [
-              SizedBox(
+              const SizedBox(
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(
@@ -273,10 +274,10 @@ class AdFreeService {
                       AlwaysStoppedAnimation<Color>(Color(0xFF00FF88)),
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Text(
-                'Loading Ad...',
-                style: TextStyle(
+                'loading_ad'.tr(),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.bold),
@@ -304,8 +305,6 @@ class AdFreeService {
               debugPrint('Rewarded ad dismissed.');
               ad.dispose();
 
-              // Agar user ne ad poora nahi dekha (reward nahi mila),
-              // to fallback dialog dikhao taaki reward mile
               if (!rewardGiven && context.mounted) {
                 _showFallbackAdDialog(context, actionTitle, () {
                   if (!rewardGiven) {
@@ -424,24 +423,24 @@ class AdFreeService {
                     color: const Color(0xFF162032),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.tv_rounded,
+                        const Icon(Icons.tv_rounded,
                             color: Color(0xFF00FF88), size: 36),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Text(
-                          'Sponsored Ad',
-                          style: TextStyle(
+                          'sponsored'.tr(),
+                          style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 13),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          'Verifying reward...',
-                          style: TextStyle(
+                          'verifying_reward'.tr(),
+                          style: const TextStyle(
                               color: Color(0xFF94A3B8), fontSize: 11),
                         ),
                       ],
