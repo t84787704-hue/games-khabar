@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'supabase_service.dart';
 import 'gamer_auth_service.dart';
 import 'coin_wallet_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class CoinRewardService {
   static final CoinRewardService _instance = CoinRewardService._internal();
@@ -404,8 +405,8 @@ class CoinRewardService {
         userId: _userId,
         amount: coinsToShow,
         type: txType,
-        title: '+$coinsToShow Coins for $activityName! 🪙',
-        description: 'Earned from $activityName in Gamers ID',
+        title: 'coins_reward_title_format'.tr(args: ['$coinsToShow', activityName]),
+        description: 'coins_reward_desc_format'.tr(args: [activityName]),
       );
 
       debugPrint('[CoinRewardService] Successfully awarded +$coinsToShow coins for $activityName');
@@ -432,8 +433,8 @@ class CoinRewardService {
         userId: postAuthorId,
         amount: 5,
         type: 'helpful_received',
-        title: 'Helpful Upvote 🌟',
-        description: '+5 Coins: Your community post was marked helpful',
+        title: 'helpful_upvote_title'.tr(),
+        description: 'helpful_upvote_desc'.tr(),
       );
 
       final postData = await SupabaseService.client
@@ -481,7 +482,7 @@ class CoinRewardService {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '+$coins Coins for $activityName! 🪙',
+                  'coin_reward_toast_format'.tr(args: ['$coins', activityName]),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
