@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:easy_localization/easy_localization.dart';
 import '../../services/supabase_service.dart';
 import 'package:xml/xml.dart';
 
@@ -104,8 +105,7 @@ class _ManageNewsScreenState extends State<ManageNewsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'RSS Sync Complete\n'
-              'Added: $added | Skipped: $skipped',
+              'rss_sync_complete_msg'.tr(args: [added.toString(), skipped.toString()]),
             ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 4),
@@ -116,7 +116,7 @@ class _ManageNewsScreenState extends State<ManageNewsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('RSS Sync Error: $e'),
+            content: Text('${'rss_sync_error_prefix'.tr()}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -152,16 +152,13 @@ class _ManageNewsScreenState extends State<ManageNewsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
-
       appBar: AppBar(
-        title: const Text('Manage News'),
+        title: Text('manage_news_title'.tr()),
         backgroundColor: const Color(0xFF1E1E24),
       ),
-
       body: Center(
         child: ElevatedButton(
           onPressed: _isSyncing ? null : _syncRSS,
-
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.orange,
             padding: const EdgeInsets.symmetric(
@@ -169,12 +166,11 @@ class _ManageNewsScreenState extends State<ManageNewsScreen> {
               vertical: 20,
             ),
           ),
-
           child: _isSyncing
-              ? const Row(
+              ? Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(
+                    const SizedBox(
                       width: 22,
                       height: 22,
                       child: CircularProgressIndicator(
@@ -182,13 +178,13 @@ class _ManageNewsScreenState extends State<ManageNewsScreen> {
                         strokeWidth: 2,
                       ),
                     ),
-                    SizedBox(width: 12),
-                    Text('Syncing RSS...'),
+                    const SizedBox(width: 12),
+                    Text('syncing_rss_label'.tr()),
                   ],
                 )
-              : const Text(
-                  'Sync RSS News',
-                  style: TextStyle(
+              : Text(
+                  'sync_rss_news_btn'.tr(),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                   ),
