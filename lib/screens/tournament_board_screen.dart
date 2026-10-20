@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/supabase_service.dart';
 import '../models/tournament_room_model.dart';
 import '../widgets/gamer_avatar.dart';
@@ -31,16 +32,11 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> {
         }
       }
     } catch (_) {}
-    _hostNameCache[hostId] = 'Host';
+    _hostNameCache[hostId] = 'fallback_host'.tr();
   }
 
   /// Builds a tournament room card with proper hostDisplay resolution
   Widget _buildRoomCard(TournamentRoom room) {
-    // hostDisplay logic: if room.hostName is not null, not empty, and not equal to map values like
-    // "Erangel", "Miramar", "Sanhok", "Vikendi" then use room.hostName.
-    // Else, fetch username from 'users' table docId = room.hostId.
-    // Use field 'username' -> 'displayName' -> 'name' in that order.
-    // Cache result in a Map<String, String> _hostNameCache to avoid repeated reads.
     final String rawHostName = room.hostName.trim();
     const mapNames = ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Livik', 'Karakin', 'Nusa', 'Warehouse'];
     final bool isMapValue = mapNames.any((m) => m.toLowerCase() == rawHostName.toLowerCase()) ||
@@ -56,7 +52,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> {
         if (room.hostId.isNotEmpty) {
           _ensureHostNameLoaded(room.hostId);
         }
-        hostDisplay = rawHostName.isNotEmpty && !isMapValue ? rawHostName : 'Host';
+        hostDisplay = rawHostName.isNotEmpty && !isMapValue ? rawHostName : 'fallback_host'.tr();
       }
     }
 
@@ -95,7 +91,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Host: $hostDisplay',
+                  'host_label'.tr(args: [hostDisplay]),
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
