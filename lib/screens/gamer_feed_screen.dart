@@ -211,7 +211,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   void _openUserProfile(String userId, String username) {
     if (userId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('user_not_found'.tr())),
+        SnackBar(content: Text('user_not_found'.tr())),
       );
       return;
     }
@@ -228,7 +228,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
     if (currentUserId.isEmpty || !_uuidRegex.hasMatch(currentUserId)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('err_login_to_like'.tr())),
+        SnackBar(content: Text('err_login_to_like'.tr())),
       );
       return;
     }
@@ -358,7 +358,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
   Future<void> _reportPost(String postId, String postContent, String postOwnerId) async {
     if (postOwnerId == currentUserId) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('err_cannot_report_own_post'.tr())),
+        SnackBar(content: Text('err_cannot_report_own_post'.tr())),
       );
       return;
     }
@@ -493,7 +493,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                           posts.removeWhere((p) => p['id'].toString() == postId);
                         });
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('msg_post_deleted'.tr()), backgroundColor: Colors.green),
+                          SnackBar(content: Text('msg_post_deleted'.tr()), backgroundColor: Colors.green),
                         );
                       }
                     } catch (e) {
@@ -615,9 +615,9 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
 
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text('msg_post_created'.tr()),
-                                      backgroundColor: Color(0xFF1877F2),
+                                      backgroundColor: const Color(0xFF1877F2),
                                     ),
                                   );
                                   _loadFeed();
@@ -1090,7 +1090,7 @@ class _CommentSheetState extends State<CommentSheet> {
 
     if (widget.currentUserId.isEmpty || !_uuidRegex.hasMatch(widget.currentUserId)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('err_login_to_comment'.tr())),
+        SnackBar(content: Text('err_login_to_comment'.tr())),
       );
       return;
     }
@@ -1133,10 +1133,10 @@ class _CommentSheetState extends State<CommentSheet> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('msg_comment_posted'.tr()),
-            duration: Duration(seconds: 2),
-            backgroundColor: Color(0xFF1877F2),
+            duration: const Duration(seconds: 2),
+            backgroundColor: const Color(0xFF1877F2),
           ),
         );
       }
@@ -1260,7 +1260,7 @@ class _CommentSheetState extends State<CommentSheet> {
                     await _loadComments();
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('msg_comment_deleted'.tr()), backgroundColor: Colors.green),
+                        SnackBar(content: Text('msg_comment_deleted'.tr()), backgroundColor: Colors.green),
                       );
                     }
                   } catch (e) {
