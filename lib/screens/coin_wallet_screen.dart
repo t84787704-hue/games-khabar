@@ -1,11 +1,11 @@
 // ===============================================================================
-// COIN WALLET SCREEN — 100% Urdu Localization
+// COIN WALLET SCREEN — Full Multi-Language Live Translation via easy_localization
 // File: lib/screens/coin_wallet_screen.dart
 // ===============================================================================
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_transaction_model.dart';
 import '../models/coin_wallet_model.dart';
@@ -16,7 +16,7 @@ import 'coin_store_screen.dart';
 import 'earn_coins_screen.dart';
 
 class CoinWalletScreen extends StatefulWidget {
-  const CoinWalletScreen({Key? key}) : super(key: key);
+  const CoinWalletScreen({super.key});
 
   @override
   State<CoinWalletScreen> createState() => _CoinWalletScreenState();
@@ -35,7 +35,6 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     if (_userId.isNotEmpty) {
       _walletService.getOrCreateWallet(_userId);
     }
-    // Update countdown every second for daily bonus
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -56,8 +55,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(ok
-                ? 'ڈیلی بونس کامیابی سے کلیم کر لیا گیا!'
-                : 'آپ آج کا بونس پہلے ہی لے چکے ہیں!'),
+                ? 'daily_bonus_claimed_success'.tr()
+                : 'daily_bonus_already_claimed'.tr()),
             backgroundColor: ok ? GamerTheme.neonGreen : GamerTheme.accentOrange,
             behavior: SnackBarBehavior.floating,
           ),
@@ -67,7 +66,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('خرابی: $e'),
+            content: Text('${'err_prefix'.tr()}: $e'),
             backgroundColor: GamerTheme.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -96,14 +95,14 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'میرا والٹ',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          'my_wallet_title'.tr(),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen),
-            tooltip: 'کوائن اسٹور',
+            tooltip: 'tooltip_coin_store'.tr(),
             onPressed: () {
               Navigator.push(
                 context,
@@ -170,9 +169,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'موجودہ بیلنس',
-            style: TextStyle(
+          Text(
+            'current_balance_label'.tr(),
+            style: const TextStyle(
               color: GamerTheme.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -194,11 +193,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              const Padding(
-                padding: EdgeInsets.only(top: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
                 child: Text(
-                  'جی-کوائنز',
-                  style: TextStyle(
+                  'g_coins_label'.tr(),
+                  style: const TextStyle(
                     color: GamerTheme.textMuted,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -217,7 +216,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'اسکرو میں: ${NumberFormat('#,###').format(wallet.escrowCoins)}',
+                  'escrow_coins_tag'.tr(args: [NumberFormat('#,###').format(wallet.escrowCoins)]),
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 11,
@@ -227,7 +226,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'کل مالیت: ${NumberFormat('#,###').format(wallet.totalNetWorth)}',
+                'total_net_worth_label'.tr(args: [NumberFormat('#,###').format(wallet.totalNetWorth)]),
                 style: const TextStyle(
                   color: GamerTheme.textMuted,
                   fontSize: 11,
@@ -246,7 +245,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Expanded(
           child: _actionButton(
             icon: Icons.play_circle_fill_rounded,
-            label: 'کوائنز کمائیں',
+            label: 'earn_coins_btn'.tr(),
             color: GamerTheme.neonGreen,
             onTap: () {
               Navigator.push(
@@ -260,7 +259,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Expanded(
           child: _actionButton(
             icon: Icons.history_rounded,
-            label: 'ہسٹری',
+            label: 'history_btn'.tr(),
             color: GamerTheme.accentBlue,
             onTap: () {
               CoinHistorySheet.show(context, userId: _userId);
@@ -341,9 +340,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'ڈیلی لاگ ان بونس',
-                  style: TextStyle(
+                Text(
+                  'daily_login_bonus_title'.tr(),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -352,8 +351,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 const SizedBox(height: 4),
                 Text(
                   canClaim
-                      ? 'ابھی 50 جی-کوائنز کلیم کریں!'
-                      : 'اگلا کلیم: ${_formatDuration(wallet.nextDailyBonusDuration)}',
+                      ? 'claim_bonus_now_desc'.tr()
+                      : 'next_claim_time_desc'.tr(args: [_formatDuration(wallet.nextDailyBonusDuration)]),
                   style: const TextStyle(
                     color: GamerTheme.textMuted,
                     fontSize: 12,
@@ -381,9 +380,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.black),
                   )
-                : const Text(
-                    'کلیم کریں (+50)',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                : Text(
+                    'claim_bonus_50_btn'.tr(),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
           ),
         ],
@@ -393,9 +392,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
   String _formatDuration(Duration d) {
     if (d.inHours > 0) {
-      return '${d.inHours} گھنٹے ${d.inMinutes % 60} منٹ';
+      return 'duration_hours_mins'.tr(args: ['${d.inHours}', '${d.inMinutes % 60}']);
     }
-    return '${d.inMinutes} منٹ ${d.inSeconds % 60} سیکنڈ';
+    return 'duration_mins_secs'.tr(args: ['${d.inMinutes}', '${d.inSeconds % 60}']);
   }
 
   Widget _buildStatsRow(CoinWallet wallet) {
@@ -403,7 +402,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       children: [
         Expanded(
           child: _statCard(
-            label: 'کل کمائے گئے',
+            label: 'total_earned_label'.tr(),
             value: '+${NumberFormat('#,###').format(wallet.lifetimeEarned)}',
             color: GamerTheme.neonGreen,
             icon: Icons.trending_up_rounded,
@@ -412,7 +411,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: _statCard(
-            label: 'ٹرسٹ اسکور',
+            label: 'trust_score_label'.tr(),
             value: '${wallet.trustScore}/100',
             color: GamerTheme.accentBlue,
             icon: Icons.verified_user_rounded,
@@ -465,9 +464,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'حالیہ سرگرمیاں',
-              style: TextStyle(
+            Text(
+              'recent_activities_title'.tr(),
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -477,9 +476,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               onPressed: () {
                 CoinHistorySheet.show(context, userId: _userId);
               },
-              child: const Text(
-                'سب دیکھیں',
-                style: TextStyle(
+              child: Text(
+                'view_all_btn'.tr(),
+                style: const TextStyle(
                   color: GamerTheme.neonGreen,
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -510,11 +509,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: GamerTheme.borderDark),
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'ابھی تک کوئی ٹرانزیکشن نہیں ہوئی',
+                    'no_transactions_yet'.tr(),
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                   ),
                 ),
               );
@@ -580,7 +579,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             ),
           ),
           Text(
-            '${isCredit ? '+' : ''}${tx.amount} کوائنز',
+            '${isCredit ? '+' : ''}${tx.amount} ${'coins_amount_tag'.tr()}',
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w900,
