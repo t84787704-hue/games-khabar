@@ -89,7 +89,7 @@ class CoinWalletService extends ChangeNotifier {
             await _sendDetailedNotification(
               userId: userId,
               type: 'team_frozen',
-              title: '⚠️ Team Frozen: Low Balance Alert!',
+              title: 'wallet_team_frozen_title'.tr(),
               message:
                   'wallet_team_frozen_notification'.tr(args: [newCoins.toString(), teamName]),
             );
@@ -106,7 +106,7 @@ class CoinWalletService extends ChangeNotifier {
             await _sendDetailedNotification(
               userId: userId,
               type: 'team_reactivated',
-              title: '🎉 Team Reactivated!',
+              title: 'wallet_team_reactivated_title'.tr(),
               message:
                   'wallet_team_reactivated_notification'.tr(args: [newCoins.toString(), teamName]),
             );
@@ -157,7 +157,7 @@ class CoinWalletService extends ChangeNotifier {
               await _sendDetailedNotification(
                 userId: userId,
                 type: 'team_removed',
-                title: '🚨 Removed from Team: Low Balance',
+                title: 'wallet_team_removed_title'.tr(),
                 message:
                     'wallet_team_removed_low_balance_notification'.tr(args: [newCoins.toString(), teamName]),
               );
@@ -598,14 +598,14 @@ class CoinWalletService extends ChangeNotifier {
         userId: userId,
         amount: 50,
         type: 'daily_bonus',
-        title: 'Daily Bonus Claimed! 🎁',
-        description: '+50 G-Coins collected',
+        title: 'wallet_daily_bonus_claimed_title'.tr(),
+        description: 'wallet_daily_bonus_claimed_desc'.tr(),
       );
       try {
         NotificationService().sendCoinRewardNotification(
           targetUserId: userId,
           amount: 50,
-          reason: 'Daily Login Streak Bonus (+50 G-Coins)',
+          reason: 'wallet_daily_bonus_reason'.tr(),
           type: 'daily_bonus',
         );
       } catch (_) {}
@@ -638,14 +638,14 @@ class CoinWalletService extends ChangeNotifier {
         userId: userId,
         amount: 100,
         type: 'ad_reward',
-        title: 'Ad Reward Earned! 📺',
-        description: '+100 G-Coins for watching rewarded video',
+        title: 'wallet_ad_reward_title'.tr(),
+        description: 'wallet_ad_reward_desc'.tr(),
       );
       try {
         NotificationService().sendCoinRewardNotification(
           targetUserId: userId,
           amount: 100,
-          reason: 'Watched Rewarded Video (+100 G-Coins)',
+          reason: 'wallet_ad_reward_reason'.tr(),
           type: 'ad_reward',
         );
       } catch (_) {}
@@ -677,14 +677,14 @@ class CoinWalletService extends ChangeNotifier {
         userId: userId,
         amount: 100,
         type: 'referral',
-        title: 'Referral Bonus! 👥',
-        description: '+100 G-Coins for inviting $inviteeName',
+        title: 'wallet_referral_bonus_title'.tr(),
+        description: 'wallet_referral_bonus_desc'.tr(args: [inviteeName]),
       );
       try {
         NotificationService().sendCoinRewardNotification(
           targetUserId: userId,
           amount: 100,
-          reason: 'Referral Bonus: Invited $inviteeName (+100 G-Coins)',
+          reason: 'wallet_referral_bonus_reason'.tr(args: [inviteeName]),
           type: 'referral',
         );
       } catch (_) {}
@@ -734,8 +734,8 @@ class CoinWalletService extends ChangeNotifier {
         amount: -prizePoolCoins,
         type: 'room_host_hold',
         inEscrowChange: prizePoolCoins,
-        title: 'Host Prize Escrow 🔒',
-        description: 'Held in escrow for tournament "$roomTitle"',
+        title: 'wallet_host_escrow_title'.tr(),
+        description: 'wallet_host_escrow_desc'.tr(args: [roomTitle]),
         roomId: roomId,
       );
       return true;
@@ -786,8 +786,8 @@ class CoinWalletService extends ChangeNotifier {
         amount: -entryFeeCoins,
         type: 'tournament_entry',
         inEscrowChange: entryFeeCoins,
-        title: 'Entry Fee Escrow 🎮',
-        description: 'Slot registration for "$roomTitle"',
+        title: 'wallet_entry_fee_escrow_title'.tr(),
+        description: 'wallet_entry_fee_escrow_desc'.tr(args: [roomTitle]),
         roomId: roomId,
       );
       return true;
@@ -827,8 +827,8 @@ class CoinWalletService extends ChangeNotifier {
         amount: entryFeeCoins,
         type: 'escrow_refund',
         inEscrowChange: -entryFeeCoins,
-        title: 'Entry Fee Refunded ↩️',
-        description: 'Left slot for "$roomTitle"',
+        title: 'wallet_entry_fee_refund_title'.tr(),
+        description: 'wallet_entry_fee_refund_desc'.tr(args: [roomTitle]),
         roomId: roomId,
       );
     } catch (e) {
@@ -873,9 +873,9 @@ class CoinWalletService extends ChangeNotifier {
             amount: 0,
             type: 'escrow_release',
             inEscrowChange: -prizePoolCoins,
-            title: 'Escrow Released to Winner(s) 🏆',
+            title: 'wallet_escrow_released_title'.tr(),
             description:
-                'Transferred $prizePoolCoins escrow prize to winning team of "$roomTitle"',
+                'wallet_escrow_released_desc'.tr(args: [prizePoolCoins.toString(), roomTitle]),
             roomId: roomId,
           );
         } catch (_) {}
@@ -891,7 +891,7 @@ class CoinWalletService extends ChangeNotifier {
                 amount: 0,
                 type: 'escrow_cleared',
                 inEscrowChange: -entryFeeCoinsPerJoiner,
-                description: 'Entry fee escrow cleared for "$roomTitle"',
+                description: 'wallet_escrow_cleared_desc'.tr(args: [roomTitle]),
                 roomId: roomId,
               );
             } catch (_) {}
@@ -909,11 +909,11 @@ class CoinWalletService extends ChangeNotifier {
           amount: prizePerWinner,
           type: winnerCount > 1 ? 'team_prize' : 'win_prize',
           title: winnerCount > 1
-              ? 'Team Victory Prize! 🏆'
-              : 'Tournament Victory Prize! 🏆',
+              ? 'wallet_team_victory_prize_title'.tr()
+              : 'wallet_tournament_victory_prize_title'.tr(),
           description: winnerCount > 1
-              ? 'Won tournament "$roomTitle" with team! Equal share: $prizePerWinner G-Coins'
-              : 'Won tournament "$roomTitle" and claimed $prizePerWinner G-Coins from Admin Escrow!',
+              ? 'wallet_team_victory_prize_desc'.tr(args: [roomTitle, prizePerWinner.toString()])
+              : 'wallet_tournament_victory_prize_desc'.tr(args: [roomTitle, prizePerWinner.toString()]),
           roomId: roomId,
         );
       }
@@ -953,9 +953,9 @@ class CoinWalletService extends ChangeNotifier {
           amount: prizePoolCoins,
           type: 'refund',
           inEscrowChange: -prizePoolCoins,
-          title: 'Host Prize Refunded ↩️',
+          title: 'wallet_host_refund_title'.tr(),
           description:
-              'Tournament "$roomTitle" expired/cancelled. Escrow refunded.',
+              'wallet_host_refund_desc'.tr(args: [roomTitle]),
           roomId: roomId,
         );
       }
@@ -970,9 +970,9 @@ class CoinWalletService extends ChangeNotifier {
                 amount: entryFeeCoins,
                 type: 'refund',
                 inEscrowChange: -entryFeeCoins,
-                title: 'Entry Fee Refunded ↩️',
+                title: 'wallet_entry_fee_refund_title'.tr(),
                 description:
-                    'Tournament "$roomTitle" cancelled. $entryFeeCoins Coins returned.',
+                    'wallet_entry_fee_refund_returned_desc'.tr(args: [roomTitle, entryFeeCoins.toString()]),
                 roomId: roomId,
               );
             } catch (_) {}
@@ -1077,7 +1077,7 @@ class CoinWalletService extends ChangeNotifier {
       return {
         'success': false,
         'error':
-            'Insufficient G-Coins. You have ${wallet.coins}, but need $costCoins.',
+            'wallet_insufficient_coins_error'.tr(args: [wallet.coins.toString(), costCoins.toString()]),
       };
     }
 
@@ -1098,8 +1098,8 @@ class CoinWalletService extends ChangeNotifier {
         userId: userId,
         amount: -costCoins,
         type: 'store_purchase',
-        title: '$itemName Unlocked! ✨',
-        description: 'Purchased in Coin Store ($category)',
+        title: 'wallet_store_purchase_title'.tr(args: [itemName]),
+        description: 'wallet_store_purchase_desc'.tr(args: [category]),
       );
 
       // 2. Update user profile perks based on category in Supabase (100% snake_case)
@@ -1213,9 +1213,9 @@ class CoinWalletService extends ChangeNotifier {
           !alreadyRewarded) {
         await prefs.setBool('user_referral_rewarded_$userId', true);
         await rewardReferralCoins(referrerUid,
-            inviteeName: 'Friend (5 Tournaments Milestone)');
+            inviteeName: 'wallet_friend_milestone'.tr());
         await rewardReferralCoins(userId,
-            inviteeName: 'Referral Welcome (5 Tournaments Milestone)');
+            inviteeName: 'wallet_referral_welcome_milestone'.tr());
       }
     } catch (e) {
       debugPrint('recordTournamentJoinedAndCheckReferral error: $e');
