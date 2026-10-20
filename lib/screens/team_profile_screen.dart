@@ -187,8 +187,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('match_started_live'.tr()),
-            backgroundColor: Color(0xFF00FF88),
-            duration: Duration(seconds: 3),
+            backgroundColor: const Color(0xFF00FF88),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -244,7 +244,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('challenge_cancelled'.tr()),
-            backgroundColor: Color(0xFF1877F2),
+            backgroundColor: const Color(0xFF1877F2),
           ),
         );
       }
@@ -315,9 +315,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
     if (myLeaderTeams.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('leader_required_to_challenge'.tr()),
-          backgroundColor: Color(0xFFFF6B00),
+          backgroundColor: const Color(0xFFFF6B00),
         ),
       );
       return;
@@ -341,7 +341,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('challenge_already_sent'.tr()),
-              backgroundColor: Color(0xFFFF4655),
+              backgroundColor: const Color(0xFFFF4655),
             ),
           );
         }
@@ -1020,11 +1020,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                   if (ended == true && mounted) {
                                                     ScaffoldMessenger.of(context)
                                                         .showSnackBar(
-                                                      const SnackBar(
+                                                      SnackBar(
                                                         content: Text(
                                                             'proof_submitted_under_review'.tr()),
                                                         backgroundColor:
-                                                            Color(0xFFFFB800),
+                                                            const Color(0xFFFFB800),
                                                       ),
                                                     );
                                                   }
@@ -1059,14 +1059,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       ),
                                     ],
                                   ),
-                                  child: Row(
+                                  child: const Row(
                                     children: [
-                                      const Icon(
+                                      Icon(
                                           Icons.hourglass_top_rounded,
                                           color: Color(0xFFFFB800),
                                           size: 22),
-                                      const SizedBox(width: 10),
-                                      const Expanded(
+                                      SizedBox(width: 10),
+                                      Expanded(
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -1090,14 +1090,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         ),
                                       ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(
+                                        padding: EdgeInsets.symmetric(
                                             horizontal: 8, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFFFB800),
+                                          color: Color(0xFFFFB800),
                                           borderRadius:
                                               BorderRadius.circular(10),
                                         ),
-                                        child: const Text('REVIEW',
+                                        child: Text('REVIEW',
                                             style: TextStyle(
                                                 color: Colors.black,
                                                 fontWeight: FontWeight.w900,
@@ -1264,8 +1264,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               if (ended == true) {
                                                 if (mounted) {
                                                   setState(() {
-                                                    _completedMatchIds.add(
-                                                        activeMatchId);
+                                                    _completedMatchIds
+                                                        .add(
+                                                            activeMatchId);
                                                     _optimisticActiveMatches
                                                         .clear();
                                                   });
@@ -1528,16 +1529,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                         ? null
                                                         : () =>
                                                             _handleAcceptChallenge(
-                                                              challengeId:
-                                                                  challengeId
-                                                                      .toString(),
-                                                              fromTeamId:
-                                                                  fromTeamId,
-                                                              toTeamId:
-                                                                  toTeamId,
-                                                              fromTeamName:
-                                                                  fromTeamName,
-                                                              challengeData: doc,
+                                                                challengeId:
+                                                                    challengeId
+                                                                        .toString(),
+                                                                fromTeamId:
+                                                                    fromTeamId,
+                                                                toTeamId:
+                                                                    toTeamId,
+                                                                fromTeamName:
+                                                                    fromTeamName,
+                                                                challengeData: doc,
                                                             ),
                                                     style: ElevatedButton
                                                         .styleFrom(
@@ -2011,16 +2012,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               border: Border.all(
                                   color: const Color(0xFF1877F2), width: 1.2),
                             ),
-                            child: const Center(
+                            child: Center(
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.shield_rounded,
+                                  const Icon(Icons.shield_rounded,
                                       color: Color(0xFF1877F2), size: 18),
-                                  SizedBox(width: 8),
+                                  const SizedBox(width: 8),
                                   Text(
                                     'your_own_team'.tr(),
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       color: Color(0xFF1877F2),
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
