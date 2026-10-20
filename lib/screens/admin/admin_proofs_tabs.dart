@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../models/team_model.dart';
 import '../../services/supabase_service.dart';
 import '../../services/team_service.dart';
@@ -29,7 +30,7 @@ class AdminUnderReviewTab extends StatelessWidget {
           builder: (context, roomSnap) {
             if (matchSnap.hasError && roomSnap.hasError) {
               return _buildErrorState(
-                'Could not load under-review proofs',
+                'could_not_load_under_review'.tr(),
                 matchSnap.error ?? roomSnap.error,
               );
             }
@@ -81,8 +82,8 @@ class AdminUnderReviewTab extends StatelessWidget {
             if (underReview.isEmpty) {
               return _buildEmptyState(
                 icon: Icons.fact_check_rounded,
-                title: 'No Proofs Under Review',
-                subtitle: 'All match proofs have been reviewed.',
+                title: 'no_proofs_under_review_title'.tr(),
+                subtitle: 'all_proofs_reviewed_desc'.tr(),
                 color: const Color(0xFF00FF88),
               );
             }
@@ -127,11 +128,11 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
             children: [
-              _buildFilterChip('All', Icons.list_alt_rounded, const Color(0xFF8B949E)),
+              _buildFilterChip('All', 'filter_all'.tr(), Icons.list_alt_rounded, const Color(0xFF8B949E)),
               const SizedBox(width: 8),
-              _buildFilterChip('Accepted', Icons.check_circle_rounded, const Color(0xFF00FF88)),
+              _buildFilterChip('Accepted', 'status_accepted'.tr(), Icons.check_circle_rounded, const Color(0xFF00FF88)),
               const SizedBox(width: 8),
-              _buildFilterChip('Rejected', Icons.cancel_rounded, const Color(0xFFFF4655)),
+              _buildFilterChip('Rejected', 'status_rejected'.tr(), Icons.cancel_rounded, const Color(0xFFFF4655)),
             ],
           ),
         ),
@@ -148,7 +149,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                 builder: (context, roomSnap) {
                   if (matchSnap.hasError && roomSnap.hasError) {
                     return _buildErrorState(
-                      'Could not load proof history',
+                      'could_not_load_history'.tr(),
                       matchSnap.error ?? roomSnap.error,
                     );
                   }
@@ -207,10 +208,10 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                   if (history.isEmpty) {
                     return _buildEmptyState(
                       icon: Icons.history_rounded,
-                      title: _filter == 'All' ? 'No Proof History' : 'No $_filter Proofs',
+                      title: _filter == 'All' ? 'no_proof_history_title'.tr() : 'No $_filter Proofs',
                       subtitle: _filter == 'All'
-                          ? 'Accepted and rejected proofs will appear here.'
-                          : 'No proofs match this filter.',
+                          ? 'proof_history_empty_desc'.tr()
+                          : 'proof_history_empty_desc'.tr(),
                       color: const Color(0xFF38BDF8),
                     );
                   }
@@ -237,8 +238,8 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
     );
   }
 
-  Widget _buildFilterChip(String label, IconData icon, Color color) {
-    final isSelected = _filter == label;
+  Widget _buildFilterChip(String key, String label, IconData icon, Color color) {
+    final isSelected = _filter == key;
     return ChoiceChip(
       label: Row(
         mainAxisSize: MainAxisSize.min,
@@ -263,7 +264,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
         side: BorderSide(color: isSelected ? color : const Color(0xFF1F2B3E)),
       ),
       onSelected: (val) {
-        if (val) setState(() => _filter = label);
+        if (val) setState(() => _filter = key);
       },
     );
   }
@@ -274,22 +275,22 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
-            SizedBox(width: 8),
-            Text('Delete Proof?',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
+            const SizedBox(width: 8),
+            Text('delete_proof_title'.tr(),
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
-        content: const Text(
-          'This will permanently delete this proof from history. This action cannot be undone.',
-          style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+        content: Text(
+          'delete_proof_confirm_desc'.tr(),
+          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -297,7 +298,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
               backgroundColor: const Color(0xFFFF4655),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('btn_delete'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -318,9 +319,9 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Proof deleted from history'),
-            backgroundColor: Color(0xFFFF4655),
+          SnackBar(
+            content: Text('proof_deleted_from_history'.tr()),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
@@ -328,7 +329,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error deleting proof: $e'),
+            content: Text('${'error_deleting_proof'.tr()}: $e'),
             backgroundColor: const Color(0xFFFF4655),
           ),
         );
@@ -483,7 +484,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
           'room_id': roomId,
           'sender_id': 'system',
           'sender_name': 'ADMIN BOT',
-          'message': '🏆 Proof APPROVED by Admin! $winnerName won +$prize coins! Room will close in 5 minutes.',
+          'message': 'admin_bot_approved_room_msg'.tr(args: [winnerName, prize.toString()]),
           'type': 'system_reward',
           'created_at': DateTime.now().toUtc().toIso8601String(),
         });
@@ -494,8 +495,11 @@ class _AdminProofCardState extends State<AdminProofCard> {
           await NotificationService().sendNotification(
             userId: winnerId,
             type: 'match_result',
-            title: '🏆 Proof Approved! +$prize coins',
-            body: 'Admin approved your win proof for ${widget.match['game']}! +$prize coins added.',
+            title: 'proof_approved_notif_title'.tr(args: [prize.toString()]),
+            body: 'proof_approved_notif_body'.tr(args: [
+              (widget.match['game'] ?? 'Game').toString(),
+              prize.toString(),
+            ]),
             data: {'room_id': roomId, 'prize': prize},
             priority: 'high',
           );
@@ -505,7 +509,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ $winnerName verified as Winner! 5-min countdown started.'),
+            content: Text('winner_verified_snackbar'.tr(args: [winnerName])),
             backgroundColor: const Color(0xFF00FF88),
           ),
         );
@@ -562,7 +566,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok ? '✅ Proof accepted! Moved to History.' : 'Error accepting proof'),
+            content: Text(ok ? 'proof_accepted_snackbar'.tr() : 'Error accepting proof'),
             backgroundColor: ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
           ),
         );
@@ -599,7 +603,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
             'room_id': roomId,
             'sender_id': 'system',
             'sender_name': 'ADMIN BOT',
-            'message': '❌ Proof REJECTED by Admin. Reason: $finalReason',
+            'message': 'admin_bot_rejected_room_msg'.tr(args: [finalReason]),
             'type': 'system',
             'created_at': DateTime.now().toUtc().toIso8601String(),
           });
@@ -611,8 +615,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
             await NotificationService().sendNotification(
               userId: winnerId,
               type: 'match_result',
-              title: '❌ Proof Rejected',
-              body: 'Your win proof was rejected by Admin. Reason: $finalReason',
+              title: 'proof_rejected_notif_title'.tr(),
+              body: 'proof_rejected_notif_body'.tr(args: [finalReason]),
               data: {'room_id': roomId},
             );
           } catch (_) {}
@@ -620,9 +624,9 @@ class _AdminProofCardState extends State<AdminProofCard> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Room Proof rejected. Moved to History.'),
-              backgroundColor: Color(0xFFFF4655),
+            SnackBar(
+              content: Text('room_proof_rejected_snackbar'.tr()),
+              backgroundColor: const Color(0xFFFF4655),
             ),
           );
         }
@@ -656,7 +660,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok ? '❌ Proof rejected. Moved to History.' : 'Error rejecting proof'),
+            content: Text(ok ? 'proof_rejected_snackbar'.tr() : 'Error rejecting proof'),
             backgroundColor: const Color(0xFFFF4655),
           ),
         );
@@ -679,19 +683,19 @@ class _AdminProofCardState extends State<AdminProofCard> {
 
     if (proofStatus == 'accepted' || status == 'completed') {
       color = const Color(0xFF00FF88);
-      label = 'ACCEPTED';
+      label = 'status_accepted'.tr().toUpperCase();
       icon = Icons.check_circle_rounded;
     } else if (proofStatus == 'rejected' || status == 'rejected' || status == 'proof_rejected') {
       color = const Color(0xFFFF4655);
-      label = 'REJECTED';
+      label = 'status_rejected'.tr().toUpperCase();
       icon = Icons.cancel_rounded;
     } else if (status == 'disputed') {
       color = Colors.orange;
-      label = 'DISPUTED';
+      label = 'status_disputed'.tr().toUpperCase();
       icon = Icons.warning_amber_rounded;
     } else {
       color = const Color(0xFFFFB800);
-      label = 'UNDER REVIEW';
+      label = 'status_under_review'.tr().toUpperCase();
       icon = Icons.hourglass_top_rounded;
     }
 
@@ -874,7 +878,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
               Expanded(
                 child: isRoom
                     ? Text(
-                        '🎮 ${(widget.match['game'] ?? 'Game')} ${(widget.match['mode'] ?? '')} (Room)',
+                        '🎮 ${(widget.match['game'] ?? 'Game')} ${(widget.match['mode'] ?? '')} (${'room_label'.tr()})',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -921,8 +925,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
                   ),
                   child: Text(
                     isDualProof
-                        ? '⚠️ 2 Players Uploaded Proofs (${widget.match['prize_pool'] ?? 0} Coins)'
-                        : 'Winner: ${widget.match['winner_name'] ?? "Gamer"} (${widget.match['prize_pool'] ?? 0} Coins)',
+                        ? 'players_uploaded_proofs_label'.tr(args: [(widget.match['prize_pool'] ?? 0).toString()])
+                        : '${'winner_label'.tr()}: ${widget.match['winner_name'] ?? "Gamer"} (${widget.match['prize_pool'] ?? 0} ${'coins_label'.tr()})',
                     style: TextStyle(
                       color: isDualProof ? Colors.orange : Colors.amber,
                       fontWeight: FontWeight.bold,
@@ -932,7 +936,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                 ),
                 if (formattedDate.isNotEmpty)
                   Text(
-                    'Date: $formattedDate',
+                    '${'date_label'.tr()}: $formattedDate',
                     style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                   ),
               ],
@@ -949,13 +953,13 @@ class _AdminProofCardState extends State<AdminProofCard> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    'Claim: $result',
+                    '${'claim_label'.tr()}: $result',
                     style: const TextStyle(
                         color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 10.5),
                   ),
                 ),
                 Text(
-                  'Date: $formattedDate',
+                  '${'date_label'.tr()}: $formattedDate',
                   style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                 ),
               ],
@@ -977,7 +981,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Reason: $adminNote',
+                      '${'reason_prefix_label'.tr()}: $adminNote',
                       style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11),
                     ),
                   ),
@@ -1008,7 +1012,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                     IconButton(
                       onPressed: widget.onDelete,
                       icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655), size: 22),
-                      tooltip: 'Delete from history',
+                      tooltip: 'btn_delete'.tr(),
                     ),
                 ],
               ),
@@ -1067,13 +1071,13 @@ class _AdminProofCardState extends State<AdminProofCard> {
                             proofEntries.first['proof_url'],
                             proofEntries.first['user_name'] ?? 'Proof Screenshot',
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.zoom_in_rounded, color: Color(0xFF38BDF8), size: 14),
-                              SizedBox(width: 4),
-                              Text('Tap to View Full',
-                                  style: TextStyle(
+                              const Icon(Icons.zoom_in_rounded, color: Color(0xFF38BDF8), size: 14),
+                              const SizedBox(width: 4),
+                              Text('tap_to_view_full'.tr(),
+                                  style: const TextStyle(
                                       color: Color(0xFF38BDF8),
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold)),
@@ -1087,7 +1091,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                     IconButton(
                       onPressed: widget.onDelete,
                       icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655), size: 22),
-                      tooltip: 'Delete from history',
+                      tooltip: 'btn_delete'.tr(),
                     ),
                 ],
               ),
@@ -1099,9 +1103,9 @@ class _AdminProofCardState extends State<AdminProofCard> {
                 color: const Color(0xFF10141D),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Center(
-                child: Text('No screenshot attached',
-                    style: TextStyle(color: Colors.white38, fontSize: 12)),
+              child: Center(
+                child: Text('no_screenshot_attached'.tr(),
+                    style: const TextStyle(color: Colors.white38, fontSize: 12)),
               ),
             ),
           ],
@@ -1113,7 +1117,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
               controller: _reasonController,
               style: const TextStyle(color: Colors.white, fontSize: 12.5),
               decoration: InputDecoration(
-                hintText: 'Reject reason (zaruri agar Reject karna ho)...',
+                hintText: 'reject_reason_hint'.tr(),
                 hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
                 filled: true,
                 fillColor: const Color(0xFF10141D),
@@ -1163,7 +1167,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                               winnerName: proofEntries[0]['user_name'].toString(),
                             ),
                             child: Text(
-                              '✅ Win: ${proofEntries[0]['user_name']}',
+                              'win_player_btn'.tr(args: [proofEntries[0]['user_name'].toString()]),
                               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1187,7 +1191,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                               winnerName: proofEntries[1]['user_name'].toString(),
                             ),
                             child: Text(
-                              '✅ Win: ${proofEntries[1]['user_name']}',
+                              'win_player_btn'.tr(args: [proofEntries[1]['user_name'].toString()]),
                               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1207,8 +1211,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       icon: const Icon(Icons.close_rounded, size: 16),
-                      label: const Text('Reject Both ❌',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      label: Text('reject_both_btn'.tr(),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                       onPressed: _handleReject,
                     ),
                   ),
@@ -1229,9 +1233,9 @@ class _AdminProofCardState extends State<AdminProofCard> {
                           elevation: 0,
                         ),
                         icon: const Icon(Icons.close_rounded, size: 16),
-                        label: const Text(
-                          'Reject ❌',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        label: Text(
+                          'reject_btn'.tr(),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                         onPressed: _handleReject,
                       ),
@@ -1249,9 +1253,9 @@ class _AdminProofCardState extends State<AdminProofCard> {
                           elevation: 0,
                         ),
                         icon: const Icon(Icons.check_rounded, size: 16, color: Colors.black),
-                        label: const Text(
-                          'Accept ✅',
-                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                        label: Text(
+                          'accept_btn'.tr(),
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                         ),
                         onPressed: _handleAcceptDefault,
                       ),
