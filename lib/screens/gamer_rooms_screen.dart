@@ -398,7 +398,7 @@ class GamerRoomsScreen extends StatefulWidget {
               final uid = uidController.text.trim();
               if (ign.isEmpty || uid.isEmpty) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('fill_ign_and_uid'.tr())),
+                  SnackBar(content: Text('fill_ign_and_uid'.tr())),
                 );
                 return;
               }
@@ -538,7 +538,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   Future<void> _handleCreateRoomTap() async {
     if (currentUserId == 'guest') {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('please_login_create_room'.tr())),
+        SnackBar(content: Text('please_login_create_room'.tr())),
       );
       return;
     }
@@ -972,7 +972,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       final pass = passCtrl.text.trim();
                       if (rId.isEmpty || pass.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content: Text('err_enter_room_id_pwd'.tr()),
                             backgroundColor: Colors.red,
                           ),
@@ -993,7 +993,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text('max_rooms_allowed'.tr()),
                                 backgroundColor: Colors.red,
                               ),
@@ -1053,9 +1053,9 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
 
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
+                            SnackBar(
                               content: Text('msg_room_created_success'.tr()),
-                              backgroundColor: Color(0xFF00FF88),
+                              backgroundColor: const Color(0xFF00FF88),
                             ),
                           );
                         }
@@ -1161,7 +1161,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         if (mounted) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('match_finished_auto_deleted'.tr())),
+            SnackBar(content: Text('match_finished_auto_deleted'.tr())),
           );
         }
       });
@@ -1182,7 +1182,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         if (mounted) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('match_finished_auto_deleted'.tr())),
+            SnackBar(content: Text('match_finished_auto_deleted'.tr())),
           );
         }
       } else {
@@ -1195,7 +1195,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     if (_isJoining) return;
     if (room.isFull) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('room_already_full'.tr())),
+        SnackBar(content: Text('room_already_full'.tr())),
       );
       return;
     }
@@ -1246,7 +1246,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('msg_joined_room_success'.tr()),
             backgroundColor: Colors.green,
           ),
@@ -1305,7 +1305,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('screenshot_submitted_admin'.tr()),
             backgroundColor: Colors.green,
           ),
@@ -1577,14 +1577,14 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.red),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
-                      SizedBox(width: 8),
+                      const Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'proof_rejected_retry'.tr(),
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: Colors.red,
                             fontWeight: FontWeight.bold,
                             fontSize: 12.5,
@@ -1696,7 +1696,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: room.roomId));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('room_id_copied'.tr())),
+                              SnackBar(content: Text('room_id_copied'.tr())),
                             );
                           },
                         ),
@@ -1719,7 +1719,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: room.roomPassword));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('password_copied'.tr())),
+                              SnackBar(content: Text('password_copied'.tr())),
                             );
                           },
                         ),
