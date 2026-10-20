@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/supabase_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../constants/gamer_theme.dart';
@@ -81,7 +82,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
       backgroundColor: GamerTheme.bgDark,
       appBar: AppBar(
         backgroundColor: GamerTheme.cardDark,
-        title: const Text('Host Custom Room', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text('title_host_custom_room'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -89,7 +90,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Game selection
-            const Text('SELECT GAME', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+            Text('label_select_game'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
               value: selectedGame,
@@ -108,7 +109,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
             const SizedBox(height: 12),
 
             // Room Title
-            const Text('ROOM TITLE', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+            Text('label_room_title'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             TextField(
               controller: titleController,
@@ -116,7 +117,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: GamerTheme.bgDark,
-                hintText: 'Enter room title',
+                hintText: 'hint_enter_room_title'.tr(),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
@@ -129,7 +130,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('MAP', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text('label_map'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
                         value: selectedMap,
@@ -159,7 +160,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('SLOTS', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text('label_slots'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<int>(
                         value: maxSlots,
@@ -197,7 +198,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
             const SizedBox(height: 12),
 
             // Prize
-            const Text('PRIZE POOL', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+            Text('label_prize_pool'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             DropdownButtonFormField<int>(
               value: prizeCoins,
@@ -234,9 +235,9 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        children: const [
-                          Text('IN-GAME ROOM ID', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
-                          Text(' *', style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                        children: [
+                          Text('label_in_game_room_id'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                          const Text(' *', style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -247,8 +248,8 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: GamerTheme.bgDark,
-                          hintText: 'e.g. 88453219',
-                          errorText: isRoomIdEmpty ? 'Room ID is required' : null,
+                          hintText: 'hint_room_id'.tr(),
+                          errorText: isRoomIdEmpty ? 'err_room_id_required'.tr() : null,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
@@ -261,9 +262,9 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        children: const [
-                          Text('PASSWORD', style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
-                          Text(' *', style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                        children: [
+                          Text('label_password'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                          const Text(' *', style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -274,8 +275,8 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: GamerTheme.bgDark,
-                          hintText: 'e.g. pubg123',
-                          errorText: isPassEmpty ? 'Password is required' : null,
+                          hintText: 'hint_password'.tr(),
+                          errorText: isPassEmpty ? 'err_password_required'.tr() : null,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
@@ -356,16 +357,16 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                         if (mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('🎉 Room published successfully!'),
-                              backgroundColor: Color(0xFF00FF88),
+                            SnackBar(
+                              content: Text('msg_room_published_success'.tr()),
+                              backgroundColor: const Color(0xFF00FF88),
                             ),
                           );
                         }
                       }
                     : null,
                 child: Text(
-                  'PUBLISH ROOM',
+                  'btn_publish_room'.tr(),
                   style: TextStyle(
                     color: isPublishEnabled ? Colors.white : Colors.white38,
                     fontWeight: FontWeight.bold,
