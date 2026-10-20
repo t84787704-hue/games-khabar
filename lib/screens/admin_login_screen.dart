@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/supabase_service.dart';
 import '../utils/admin_security.dart';
 
@@ -50,7 +51,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         }
       } else {
         setState(() {
-          _errorMessage = 'Authentication failed. Please check credentials.';
+          _errorMessage = 'auth_failed_check_credentials'.tr();
         });
       }
     } catch (e) {
@@ -64,11 +65,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       final errStr = e.toString();
       setState(() {
         if (errStr.contains('Invalid login credentials')) {
-          _errorMessage = 'Email ya Password galat hai.';
+          _errorMessage = 'invalid_email_or_password'.tr();
         } else if (errStr.contains('network') || errStr.contains('SocketException')) {
-          _errorMessage = 'Network error. Please check your internet.';
+          _errorMessage = 'network_error_check_internet'.tr();
         } else {
-          _errorMessage = 'Login error: ${errStr.replaceAll('Exception:', '').trim()}';
+          _errorMessage = '${'login_error_prefix'.tr()}: ${errStr.replaceAll('Exception:', '').trim()}';
         }
       });
     } finally {
@@ -96,12 +97,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               side: const BorderSide(color: borderColor),
             ),
             title: Row(
-              children: const [
-                Icon(Icons.lock_reset_rounded, color: neonGreen, size: 22),
-                SizedBox(width: 8),
+              children: [
+                const Icon(Icons.lock_reset_rounded, color: neonGreen, size: 22),
+                const SizedBox(width: 8),
                 Text(
-                  'Reset Password',
-                  style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16),
+                  'reset_password_title'.tr(),
+                  style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ],
             ),
@@ -110,20 +111,20 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Enter your Admin email to receive a password reset link:',
-                  style: TextStyle(color: textGray, fontSize: 13),
+                  'reset_password_instruction'.tr(),
+                  style: const TextStyle(color: textGray, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: resetEmailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: TextStyle(color: textWhite, fontSize: 14),
+                  style: const TextStyle(color: textWhite, fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'admin@example.com',
-                    hintStyle: TextStyle(color: textGray, fontSize: 13),
+                    hintStyle: const TextStyle(color: textGray, fontSize: 13),
                     filled: true,
                     fillColor: cardBg2,
-                    prefixIcon: Icon(Icons.email_outlined, color: textGray, size: 18),
+                    prefixIcon: const Icon(Icons.email_outlined, color: textGray, size: 18),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: borderColor),
@@ -132,7 +133,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: borderColor),
                     ),
-                    focusedBorder: OutlineInputBorder(
+                    focusedBorder: const OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide(color: neonGreen, width: 1.5),
                     ),
@@ -143,7 +144,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   const SizedBox(height: 8),
                   Text(
                     resetError!,
-                    style: TextStyle(color: alertRed, fontSize: 12),
+                    style: const TextStyle(color: alertRed, fontSize: 12),
                   ),
                 ],
               ],
@@ -151,7 +152,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: Text('Cancel', style: TextStyle(color: textGray)),
+                child: Text('btn_cancel'.tr(), style: const TextStyle(color: textGray)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -165,7 +166,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         final email = resetEmailController.text.trim();
                         if (email.isEmpty || !email.contains('@')) {
                           setDialogState(() {
-                            resetError = 'Please enter a valid email';
+                            resetError = 'enter_valid_email_error'.tr();
                           });
                           return;
                         }
@@ -182,8 +183,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                                 backgroundColor: cardBg,
                                 behavior: SnackBarBehavior.floating,
                                 content: Text(
-                                  'Password reset link sent to your email!',
-                                  style: TextStyle(color: neonGreen, fontWeight: FontWeight.bold),
+                                  'reset_link_sent_success'.tr(),
+                                  style: const TextStyle(color: neonGreen, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             );
@@ -191,7 +192,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         } catch (e) {
                           setDialogState(() {
                             isSending = false;
-                            resetError = 'Failed to send reset email. Check email address.';
+                            resetError = 'failed_send_reset_email'.tr();
                           });
                         }
                       },
@@ -201,7 +202,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF05080D)),
                       )
-                    : const Text('Send Link', style: TextStyle(fontWeight: FontWeight.bold)),
+                    : Text('send_link_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -225,12 +226,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         backgroundColor: cardBg,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: textWhite, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Admin Access',
-          style: TextStyle(
+          'admin_access_title'.tr(),
+          style: const TextStyle(
             color: textWhite,
             fontWeight: FontWeight.w900,
             fontSize: 18,
@@ -271,7 +272,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         shape: BoxShape.circle,
                         border: Border.all(color: neonGreen, width: 2),
                       ),
-                      child: Center(
+                      child: const Center(
                         child: Icon(
                           Icons.admin_panel_settings_rounded,
                           color: neonGreen,
@@ -283,8 +284,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   const SizedBox(height: 16),
                   Center(
                     child: Text(
-                      'Admin Login',
-                      style: TextStyle(
+                      'admin_login_title'.tr(),
+                      style: const TextStyle(
                         color: textWhite,
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
@@ -294,8 +295,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   const SizedBox(height: 6),
                   Center(
                     child: Text(
-                      'Games Khabar Content Management',
-                      style: TextStyle(
+                      'admin_login_subtitle'.tr(),
+                      style: const TextStyle(
                         color: textGray,
                         fontSize: 12,
                       ),
@@ -313,12 +314,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline, color: alertRed, size: 18),
+                          const Icon(Icons.error_outline, color: alertRed, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               _errorMessage!,
-                              style: TextStyle(color: alertRed, fontSize: 12),
+                              style: const TextStyle(color: alertRed, fontSize: 12),
                             ),
                           ),
                         ],
@@ -329,8 +330,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
                   // Email
                   Text(
-                    'Admin Email',
-                    style: TextStyle(
+                    'admin_email_label'.tr(),
+                    style: const TextStyle(
                       color: textWhite,
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -340,13 +341,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: TextStyle(color: textWhite, fontSize: 14),
+                    style: const TextStyle(color: textWhite, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'admin@yourdomain.com',
-                      hintStyle: TextStyle(color: textGray, fontSize: 13),
+                      hintStyle: const TextStyle(color: textGray, fontSize: 13),
                       filled: true,
                       fillColor: cardBg2,
-                      prefixIcon: Icon(Icons.email_outlined, color: textGray, size: 20),
+                      prefixIcon: const Icon(Icons.email_outlined, color: textGray, size: 20),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: borderColor),
@@ -355,7 +356,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: borderColor),
                       ),
-                      focusedBorder: OutlineInputBorder(
+                      focusedBorder: const OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: neonGreen, width: 1.5),
                       ),
@@ -363,10 +364,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     ),
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) {
-                        return 'Email is required';
+                        return 'email_is_required'.tr();
                       }
                       if (!val.contains('@')) {
-                        return 'Enter a valid email';
+                        return 'enter_valid_email_error'.tr();
                       }
                       return null;
                     },
@@ -378,8 +379,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Password',
-                        style: TextStyle(
+                        'password_label'.tr(),
+                        style: const TextStyle(
                           color: textWhite,
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -388,8 +389,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       GestureDetector(
                         onTap: _showForgotPasswordDialog,
                         child: Text(
-                          'Forgot Password?',
-                          style: TextStyle(
+                          'forgot_password_btn'.tr(),
+                          style: const TextStyle(
                             color: neonGreen,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -402,13 +403,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    style: TextStyle(color: textWhite, fontSize: 14),
+                    style: const TextStyle(color: textWhite, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: '••••••••',
-                      hintStyle: TextStyle(color: textGray, fontSize: 13),
+                      hintStyle: const TextStyle(color: textGray, fontSize: 13),
                       filled: true,
                       fillColor: cardBg2,
-                      prefixIcon: Icon(Icons.lock_outline, color: textGray, size: 20),
+                      prefixIcon: const Icon(Icons.lock_outline, color: textGray, size: 20),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword ? Icons.visibility_off : Icons.visibility,
@@ -429,7 +430,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: borderColor),
                       ),
-                      focusedBorder: OutlineInputBorder(
+                      focusedBorder: const OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: neonGreen, width: 1.5),
                       ),
@@ -437,7 +438,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     ),
                     validator: (val) {
                       if (val == null || val.trim().length < 6) {
-                        return 'Password must be at least 6 characters';
+                        return 'password_min_6_characters'.tr();
                       }
                       return null;
                     },
@@ -467,9 +468,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF05080D)),
                               ),
                             )
-                          : const Text(
-                              'Login to Admin',
-                              style: TextStyle(
+                          : Text(
+                              'login_to_admin_btn'.tr(),
+                              style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w900,
                               ),
