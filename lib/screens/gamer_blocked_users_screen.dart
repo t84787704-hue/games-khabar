@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_block_service.dart';
 
@@ -44,6 +45,7 @@ class _GamerBlockedUsersScreenState extends State<GamerBlockedUsersScreen> {
   }
 
   Future<void> _handleUnblock(Map<String, dynamic> blocked) async {
+    final username = (blocked['username'] ?? '').toString();
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -51,16 +53,16 @@ class _GamerBlockedUsersScreenState extends State<GamerBlockedUsersScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Text(
-          'Unblock User?',
-          style: TextStyle(
+        title: Text(
+          'dialog_unblock_user_title'.tr(),
+          style: const TextStyle(
             color: Color(0xFF050505),
             fontWeight: FontWeight.bold,
             fontSize: 17,
           ),
         ),
         content: Text(
-          '@${blocked['username']} ko unblock karna chahte hain? Woh aapko dobara posts, comments aur messages bhej sakega.',
+          'unblock_user_confirm_msg'.tr(args: [username]),
           style: const TextStyle(
             color: Color(0xFF65676B),
             fontSize: 13.5,
@@ -70,9 +72,9 @@ class _GamerBlockedUsersScreenState extends State<GamerBlockedUsersScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Color(0xFF65676B)),
+            child: Text(
+              'cancel'.tr(),
+              style: const TextStyle(color: Color(0xFF65676B)),
             ),
           ),
           ElevatedButton(
@@ -85,9 +87,9 @@ class _GamerBlockedUsersScreenState extends State<GamerBlockedUsersScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Unblock',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            child: Text(
+              'btn_unblock'.tr(),
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -111,16 +113,16 @@ class _GamerBlockedUsersScreenState extends State<GamerBlockedUsersScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('@${blocked['username']} unblocked'),
+            content: Text('msg_user_unblocked'.tr(args: [username])),
             backgroundColor: const Color(0xFF34A853),
             duration: const Duration(seconds: 2),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to unblock. Try again.'),
-            backgroundColor: Color(0xFFFF4655),
+          SnackBar(
+            content: Text('err_unblock_failed'.tr()),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
@@ -134,9 +136,9 @@ class _GamerBlockedUsersScreenState extends State<GamerBlockedUsersScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text(
-          'Blocked Users',
-          style: TextStyle(
+        title: Text(
+          'title_blocked_users'.tr(),
+          style: const TextStyle(
             color: Color(0xFF1877F2),
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -178,15 +180,15 @@ class _GamerBlockedUsersScreenState extends State<GamerBlockedUsersScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline_rounded, color: Color(0xFF1877F2), size: 22),
-          SizedBox(width: 12),
+          const Icon(Icons.info_outline_rounded, color: Color(0xFF1877F2), size: 22),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Blocked users cannot see your posts, comment on them, send you messages, or challenge you to 1v1 battles. You can unblock them anytime.',
-              style: TextStyle(
+              'blocked_users_info_text'.tr(),
+              style: const TextStyle(
                 color: Color(0xFF050505),
                 fontSize: 13,
                 height: 1.45,
@@ -218,19 +220,19 @@ class _GamerBlockedUsersScreenState extends State<GamerBlockedUsersScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'No Blocked Users',
-              style: TextStyle(
+            Text(
+              'no_blocked_users_title'.tr(),
+              style: const TextStyle(
                 color: Color(0xFF050505),
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Jab aap kisi user ko block karenge, woh yahan show hoga.',
+            Text(
+              'no_blocked_users_desc'.tr(),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Color(0xFF65676B),
                 fontSize: 13.5,
                 height: 1.4,
@@ -319,9 +321,9 @@ class _GamerBlockedUsersScreenState extends State<GamerBlockedUsersScreen> {
               ),
             ),
             icon: const Icon(Icons.lock_open_rounded, size: 14),
-            label: const Text(
-              'Unblock',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            label: Text(
+              'btn_unblock'.tr(),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
             ),
           ),
         ],
