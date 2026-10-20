@@ -1,23 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// EXACT DIFF — Fix 5 compile errors in post_card.dart
-// -------------------------------------------------------------------------------
 // File: lib/widgets/post_card.dart
-// Widget: PostCard -> _PostCardState -> build()
-//
-// PROBLEM:
-// Line 340 had `ValueListenableBuilder<GamerUser?>`.
-// 1. 'GamerUser' was not imported or defined in this file.
-// 2. Dart treated `currentGamer` as generic `Object`, failing `.uid`, `.username`,
-//    and `.photoUrl`.
-//
-// FIX:
-// Removed invalid `<GamerUser?>` annotation and used the existing `userPhoto`
-// getter inside `ValueListenableBuilder` which already safely reads
-// `_authService.currentGamer.photoUrl` reactively.
-//
-// NO OTHER CODE CHANGED — byte-by-byte same
+// Fully Localized & Production Ready Post Card Widget
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -254,12 +240,12 @@ class _PostCardState extends State<PostCard> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardElevated,
-        title: const Text('Delete Post', style: TextStyle(color: GamerTheme.textWhite)),
-        content: const Text('Are you sure you want to delete this post?', style: TextStyle(color: GamerTheme.textGray)),
+        title: Text('delete_post_q'.tr(), style: const TextStyle(color: GamerTheme.textWhite)),
+        content: Text('confirm_delete_post_desc'.tr(), style: const TextStyle(color: GamerTheme.textGray)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            child: Text('cancel'.tr(), style: const TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.redAccent),
@@ -280,11 +266,11 @@ class _PostCardState extends State<PostCard> {
 
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Post deleted'), backgroundColor: GamerTheme.cardHover),
+                  SnackBar(content: Text('msg_post_deleted'.tr()), backgroundColor: GamerTheme.cardHover),
                 );
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text('delete'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -450,13 +436,13 @@ class _PostCardState extends State<PostCard> {
                       if (val == 'delete') _confirmDelete();
                     },
                     itemBuilder: (ctx) => [
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete_outline_rounded, color: GamerTheme.redAccent, size: 18),
-                            SizedBox(width: 8),
-                            Text('Delete Post', style: TextStyle(color: GamerTheme.redAccent, fontSize: 13)),
+                            const Icon(Icons.delete_outline_rounded, color: GamerTheme.redAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text('delete_post_q'.tr(), style: const TextStyle(color: GamerTheme.redAccent, fontSize: 13)),
                           ],
                         ),
                       ),
@@ -589,19 +575,19 @@ class _PostCardState extends State<PostCard> {
                 InkWell(
                   onTap: _sharePost,
                   borderRadius: BorderRadius.circular(8),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.share_outlined,
                           color: GamerTheme.textGray,
                           size: 18,
                         ),
-                        SizedBox(width: 6),
+                        const SizedBox(width: 6),
                         Text(
-                          'Share',
-                          style: TextStyle(
+                          'share'.tr(),
+                          style: const TextStyle(
                             color: GamerTheme.textGray,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
@@ -653,7 +639,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     final uid = _authService.currentUid;
     if (uid == null || gamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in and create your Gamer ID to comment')),
+        SnackBar(content: Text('login_create_gamer_id_to_comment'.tr())),
       );
       return;
     }
@@ -704,9 +690,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Gamer Discussion',
-              style: TextStyle(
+            Text(
+              'gamer_discussion'.tr(),
+              style: const TextStyle(
                 color: GamerTheme.textWhite,
                 fontWeight: FontWeight.w900,
                 fontSize: 16,
@@ -725,14 +711,15 @@ class _CommentsSheetState extends State<_CommentsSheet> {
 
                   final comments = snapshot.data ?? [];
                   if (comments.isEmpty) {
-                    return const Center(
+                    return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.chat_bubble_outline_rounded, color: GamerTheme.textMuted, size: 36),
-                          SizedBox(height: 8),
-                          Text('No comments yet.', style: TextStyle(color: GamerTheme.textMuted, fontSize: 13)),
-                          Text('Drop your gamer tip or GG below!', style: TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
+                          const Icon(Icons.chat_bubble_outline_rounded, color: GamerTheme.textMuted, size: 36),
+                          const SizedBox(height: 8),
+                          Text('no_comments_be_first'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13)),
+                          const SizedBox(height: 4),
+                          Text('drop_gamer_tip'.tr(), style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
                         ],
                       ),
                     );
@@ -825,7 +812,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                     controller: _commentController,
                     style: const TextStyle(color: GamerTheme.textWhite, fontSize: 13.5),
                     decoration: InputDecoration(
-                      hintText: 'Add a gaming comment...',
+                      hintText: 'add_gaming_comment'.tr(),
                       filled: true,
                       fillColor: GamerTheme.cardElevated,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
