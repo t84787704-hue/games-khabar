@@ -121,7 +121,7 @@ class _TeamCardState extends State<TeamCard> {
 
     await CoinOrAdPopup.show(
       context: context,
-      actionName: 'Team Join',
+      actionName: 'action_team_join'.tr(),
       onConfirm: () async {
         final currentGamer = GamerAuthService().currentGamer;
         final userName =
@@ -163,7 +163,6 @@ class _TeamCardState extends State<TeamCard> {
   }
 
   Future<void> _handleChallenge(String currentUid) async {
-    // 🛑 CHECK 1: Agar meri apni team Frozen hai
     if (widget.isMyTeamFrozen) {
       if (mounted) {
         showDialog(
@@ -197,7 +196,6 @@ class _TeamCardState extends State<TeamCard> {
       return;
     }
 
-    // 🛑 CHECK 2: Agar target team Frozen hai
     if (widget.team.leaderId.isNotEmpty) {
       try {
         final targetWallet = await CoinWalletService().getOrCreateWallet(widget.team.leaderId);
@@ -371,8 +369,8 @@ class _TeamCardState extends State<TeamCard> {
                 await NotificationService().sendNotification(
                   userId: widget.team.leaderId,
                   type: 'team_challenge',
-                  title: 'New Challenge! ⚡',
-                  body: '$effectiveMyTeamName challenged your team!',
+                  title: 'notif_new_challenge_title'.tr(),
+                  body: 'notif_new_challenge_body'.tr(args: [effectiveMyTeamName]),
                   data: {
                     'challenge_id': insertedChallenge?['id']?.toString() ?? '',
                     'from_team_id': effectiveMyTeamId,
@@ -1402,7 +1400,7 @@ class _TeamCardState extends State<TeamCard> {
                     Row(
                       children: [
                         Text(
-                          'W: ${team.wins} | L: ${team.losses} | Pts: ${team.points}',
+                          'team_stats_w_l_pts'.tr(args: [team.wins.toString(), team.losses.toString(), team.points.toString()]),
                           style: TextStyle(
                               color: ThemeService.textSecondary,
                               fontSize: 11.5,
@@ -1501,18 +1499,18 @@ class _TeamCardState extends State<TeamCard> {
                                                 borderRadius:
                                                     BorderRadius.circular(8),
                                               ),
-                                              child: const Row(
+                                              child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Icon(
+                                                  const Icon(
                                                       Icons
                                                           .local_fire_department_rounded,
                                                       size: 14,
                                                       color: Colors.black),
-                                                  SizedBox(width: 4),
+                                                  const SizedBox(width: 4),
                                                   Text(
-                                                    'LIVE',
-                                                    style: TextStyle(
+                                                    'status_live'.tr(),
+                                                    style: const TextStyle(
                                                       color: Colors.black,
                                                       fontWeight: FontWeight.w900,
                                                       fontSize: 11,
