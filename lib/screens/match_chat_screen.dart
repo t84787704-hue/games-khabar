@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/supabase_service.dart';
 import '../services/team_service.dart';
 import '../models/team_model.dart';
@@ -90,7 +91,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
     final myUuid = _resolvedMyTeamId.isNotEmpty ? SupabaseService.toUuid(_resolvedMyTeamId) : null;
 
     try {
-      // 1. Try insert into match_messages
       try {
         await SupabaseService.client.from('match_messages').insert({
           'match_id': widget.matchId,
@@ -100,7 +100,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
         });
       } catch (e) {
         debugPrint('[MatchChat] insert into match_messages error: $e, trying match_chat fallback');
-        // Fallback to match_chat if match_messages table does not exist
         await SupabaseService.client.from('match_chat').insert({
           'match_id': widget.matchId,
           'sender_id': myUuid ?? 'team',
@@ -116,7 +115,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Message bhejne me masla hua: $e'),
+            content: Text('err_message_send_failed'.tr(args: [e.toString()])),
             backgroundColor: const Color(0xFFFF4655),
           ),
         );
@@ -149,14 +148,14 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF131A29),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          title: Row(
             children: [
-              Text('🔑', style: TextStyle(fontSize: 22)),
-              SizedBox(width: 8),
+              const Text('🔑', style: TextStyle(fontSize: 22)),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Share Room UID / Pass',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  'dialog_share_room_uid_title'.tr(),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             ],
@@ -166,9 +165,9 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Opponent team ko game room details bhejen:',
-                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                Text(
+                  'label_send_room_details'.tr(),
+                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                 ),
                 const SizedBox(height: 14),
                 TextField(
@@ -176,7 +175,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                   keyboardType: TextInputType.number,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
-                    labelText: 'Room ID',
+                    labelText: 'label_room_id'.tr(),
                     labelStyle: const TextStyle(color: Color(0xFF8B949E)),
                     hintText: 'e.g. 1234567',
                     hintStyle: const TextStyle(color: Colors.white24),
@@ -193,7 +192,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                   controller: passController,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
-                    labelText: 'Password',
+                    labelText: 'label_password'.tr(),
                     labelStyle: const TextStyle(color: Color(0xFF8B949E)),
                     hintText: 'e.g. 1234',
                     hintStyle: const TextStyle(color: Colors.white24),
@@ -206,7 +205,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text('Game Mode:', style: TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
+                Text('label_game_mode'.tr(), style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12)),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
@@ -227,7 +226,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF8B949E))),
+              child: Text('cancel'.tr(), style: const TextStyle(color: Color(0xFF8B949E))),
             ),
             ElevatedButton.icon(
               onPressed: () {
@@ -235,7 +234,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                 final pass = passController.text.trim();
                 if (rId.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Room ID daalna lazmi hai!'), backgroundColor: Color(0xFFFF4655)),
+                    SnackBar(content: Text('err_room_id_mandatory'.tr()), backgroundColor: const Color(0xFFFF4655)),
                   );
                   return;
                 }
@@ -249,7 +248,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               icon: const Icon(Icons.send_rounded, size: 16),
-              label: const Text('Share Karo', style: TextStyle(fontWeight: FontWeight.bold)),
+              label: Text('btn_share_kara'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -283,9 +282,9 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            const Text(
-              '🔒 Personal Room • UID / Password Share',
-              style: TextStyle(
+            Text(
+              'match_private_room_subtitle'.tr(),
+              style: const TextStyle(
                 color: Color(0xFF00FF88),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -301,14 +300,14 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: const Color(0xFF10141D),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.lock_rounded, color: Color(0xFFFFD700), size: 14),
-                SizedBox(width: 8),
+                const Icon(Icons.lock_rounded, color: Color(0xFFFFD700), size: 14),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Ye chat bilkul private hai. Yahan room ID aur password share karen.',
-                    style: TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
+                    'match_private_room_info'.tr(),
+                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
                   ),
                 ),
               ],
@@ -324,7 +323,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                   .eq('match_id', widget.matchId),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  // Fallback to match_chat stream if match_messages table isn't created yet
                   return _buildFallbackChatStream();
                 }
 
@@ -333,7 +331,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                 }
 
                 final messages = snapshot.data ?? [];
-                // Sort ascending by created_at
                 messages.sort((a, b) {
                   final aD = a['created_at']?.toString() ?? '';
                   final bD = b['created_at']?.toString() ?? '';
@@ -357,7 +354,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
             ),
           ),
 
-          // Bottom Bar: UID Share Button + Chat Input
           _buildBottomInputArea(),
         ],
       ),
@@ -413,10 +409,10 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Neeche "UID / Password Share Karo" button se credentials share karen ya baat cheet karen.',
+              Text(
+                'match_empty_chat_desc'.tr(),
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+                style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
               ),
             ],
           ),
@@ -446,7 +442,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Sender team label
           FutureBuilder<TeamModel?>(
             future: senderTeamId.isNotEmpty ? _teamService.getTeam(senderTeamId) : Future.value(null),
             builder: (context, snap) {
@@ -465,9 +460,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
             },
           ),
 
-          // Message Card
           if (isUidShare) ...[
-            // Highlighted UID / Pass container
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
@@ -489,13 +482,13 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD700), size: 18),
-                          SizedBox(width: 6),
+                          const Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD700), size: 18),
+                          const SizedBox(width: 6),
                           Text(
-                            'MATCH CREDENTIALS 🔑',
-                            style: TextStyle(
+                            'match_credentials_title'.tr(),
+                            style: const TextStyle(
                               color: Color(0xFFFFD700),
                               fontWeight: FontWeight.w900,
                               fontSize: 12,
@@ -508,9 +501,9 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                         onTap: () {
                           Clipboard.setData(ClipboardData(text: text));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Room info copy ho gayi!'),
-                              backgroundColor: Color(0xFF00FF88),
+                            SnackBar(
+                              content: Text('msg_room_info_copied'.tr()),
+                              backgroundColor: const Color(0xFF00FF88),
                             ),
                           );
                         },
@@ -520,11 +513,11 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                             color: const Color(0xFFFFD700),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Row(
+                          child: Row(
                             children: [
-                              Icon(Icons.copy_rounded, size: 12, color: Colors.black),
-                              SizedBox(width: 3),
-                              Text('Copy', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10.5)),
+                              const Icon(Icons.copy_rounded, size: 12, color: Colors.black),
+                              const SizedBox(width: 3),
+                              Text('btn_copy'.tr(), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10.5)),
                             ],
                           ),
                         ),
@@ -552,7 +545,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
               ),
             ),
           ] else ...[
-            // Normal message bubble
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
@@ -595,7 +587,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Button: 🔑 UID / Password Share Karo
           SizedBox(
             width: double.infinity,
             height: 38,
@@ -608,15 +599,14 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               icon: const Icon(Icons.key_rounded, size: 16, color: Colors.black),
-              label: const Text(
-                '🔑 UID / Password Share Karo',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+              label: Text(
+                'btn_share_room_uid_pass'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
               ),
             ),
           ),
           const SizedBox(height: 8),
 
-          // Normal text chat row
           Row(
             children: [
               Expanded(
@@ -626,7 +616,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                   textInputAction: TextInputAction.send,
                   onSubmitted: (val) => _sendMessage(message: val),
                   decoration: InputDecoration(
-                    hintText: 'Message likhein (e.g. Room ready hai? Aa jao)...',
+                    hintText: 'hint_type_message'.tr(),
                     hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
                     filled: true,
                     fillColor: const Color(0xFF0F141E),
