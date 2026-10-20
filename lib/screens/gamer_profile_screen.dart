@@ -1,4 +1,3 @@
-import 'package:easy_localization/easy_localization.dart';
 // ===============================================================================
 // GAMER PROFILE SCREEN — With eSports 500/1000 Coins Team Eligibility Badges
 // + Multi-Language Live Translation Sync via LanguageService
@@ -7,8 +6,8 @@ import 'package:easy_localization/easy_localization.dart';
 // File: lib/screens/gamer_profile_screen.dart
 // ===============================================================================
 
-import 'dart:async';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -333,7 +332,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                 ),
                 body: Center(
                   child: Text(
-                    'This profile isn\'t available right now.',
+                    'profile_not_available'.tr(),
                     style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                   ),
                 ),
@@ -353,7 +352,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                 appBar: AppBar(
                   backgroundColor: ThemeService.appBarBg,
                   elevation: 1,
-                  title: Text(LanguageService.t('Profile')),
+                  title: Text('nav_profile'.tr()),
                 ),
                 body: Center(
                   child: isOwnProfile
@@ -363,7 +362,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                               MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
                             );
                           },
-                          child: const Text('create_your_gamer_id'.tr()),
+                          child: Text('btn_create_gamer_id'.tr()),
                         )
                       : Text('gamer_id_not_found'.tr(), style: TextStyle(color: ThemeService.textPrimary)),
                 ),
@@ -497,11 +496,11 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                                 children: [
-                                  _buildStatColumn('${user.postsCount}', LanguageService.t('Post'), () {
+                                  _buildStatColumn('${user.postsCount}', 'posts'.tr(), () {
                                     _tabController.animateTo(0);
                                   }),
                                   Container(height: 24, width: 1, color: ThemeService.border),
-                                  _buildStatColumn('${user.followersCount}', 'Followers', () {
+                                  _buildStatColumn('${user.followersCount}', 'followers'.tr(), () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
                                         builder: (_) => FollowersFollowingScreen(
@@ -513,7 +512,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                     );
                                   }),
                                   Container(height: 24, width: 1, color: ThemeService.border),
-                                  _buildStatColumn('${user.followingCount}', 'Following', () {
+                                  _buildStatColumn('${user.followingCount}', 'following'.tr(), () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
                                         builder: (_) => FollowersFollowingScreen(
@@ -540,7 +539,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                       ),
                                       icon: const Icon(Icons.edit_rounded, size: 18),
-                                      label: Text('edit_profile'.tr(), style: TextStyle(fontWeight: FontWeight.bold)),
+                                      label: Text('btn_edit_profile'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                       onPressed: () async {
                                         await Navigator.of(context).push(
                                           MaterialPageRoute(
@@ -564,7 +563,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
                                     ),
                                     icon: Icon(Icons.share_rounded, size: 18, color: ThemeService.textSecondary),
-                                    label: Text(LanguageService.t('Share'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    label: Text('share'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                     onPressed: () => _shareProfile(user),
                                   ),
                                 ] else ...[
@@ -577,7 +576,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                       ),
                                       icon: const Icon(Icons.share_rounded, size: 16),
-                                      label: Text('share_profile'.tr(), style: TextStyle(fontWeight: FontWeight.bold)),
+                                      label: Text('btn_share_profile'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                       onPressed: () => _shareProfile(user),
                                     ),
                                   ),
@@ -597,9 +596,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                           indicatorWeight: 3,
                           labelColor: const Color(0xFF1877F2),
                           unselectedLabelColor: ThemeService.textSecondary,
-                          tabs: const [
-                            Tab(icon: Icon(Icons.grid_view_rounded, size: 18), text: 'Posts'),
-                            Tab(icon: Icon(Icons.info_outline_rounded, size: 18), text: 'About'),
+                          tabs: [
+                            Tab(icon: const Icon(Icons.grid_view_rounded, size: 18), text: 'tab_posts'.tr()),
+                            Tab(icon: const Icon(Icons.info_outline_rounded, size: 18), text: 'tab_about'.tr()),
                           ],
                         ),
                       ),
@@ -616,19 +615,19 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         children: [
                           ListTile(
                             leading: const Icon(Icons.sports_esports, color: Color(0xFF1877F2)),
-                            title: const Text('main_game'.tr()),
+                            title: Text('main_game_label'.tr()),
                             subtitle: Text('$gameEmoji ${user.favoriteGame}'),
                           ),
                           if (user.gameId.isNotEmpty)
                             ListTile(
                               leading: const Icon(Icons.tag, color: Color(0xFF1877F2)),
-                              title: const Text('game_uid'.tr()),
+                              title: Text('game_uid_label'.tr()),
                               subtitle: Text(user.gameId),
                             ),
                           ListTile(
                             leading: const Icon(Icons.monetization_on, color: Color(0xFFFFD700)),
-                            title: const Text('g_coins'.tr()),
-                            subtitle: Text('coins_count_label'.tr(args: ['${user.coins}'])),
+                            title: Text('g_coins_label'.tr()),
+                            subtitle: Text('coins_count'.tr(args: ['${user.coins}'])),
                             trailing: const Icon(Icons.history_rounded, size: 20),
                             onTap: () {
                               showModalBottomSheet(
@@ -655,10 +654,10 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             title: Text('esports_team_status'.tr()),
                             subtitle: Text(
                               user.coins >= 1000
-                                  ? 'esports_leader_eligible'.tr()
+                                  ? 'esports_status_leader'.tr()
                                   : user.coins >= 500
-                                      ? 'esports_member_eligible'.tr()
-                                      : 'esports_ineligible'.tr(),
+                                      ? 'esports_status_member'.tr()
+                                      : 'esports_status_ineligible'.tr(),
                             ),
                           ),
                         ],
