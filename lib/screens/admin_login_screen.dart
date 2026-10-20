@@ -133,9 +133,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: borderColor),
                     ),
-                    focusedBorder: const OutlineInputBorder(
+                    focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: neonGreen, width: 1.5),
+                      borderSide: const BorderSide(color: neonGreen, width: 1.5),
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
@@ -356,9 +356,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: borderColor),
                       ),
-                      focusedBorder: const OutlineInputBorder(
+                      focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: neonGreen, width: 1.5),
+                        borderSide: const BorderSide(color: neonGreen, width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     ),
@@ -430,9 +430,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: borderColor),
                       ),
-                      focusedBorder: const OutlineInputBorder(
+                      focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: neonGreen, width: 1.5),
+                        borderSide: const BorderSide(color: neonGreen, width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     ),
