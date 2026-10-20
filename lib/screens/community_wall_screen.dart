@@ -771,21 +771,21 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
                             label: 'template_squad'.tr(),
                             onTap: () {
                               final game = _selectedFilter == 'All' ? _selectedGameForPost : _selectedFilter;
-                              _applyTemplate('$game Squad - ID: , Rank: , Mic: ');
+                              _applyTemplate('template_squad_text'.tr(args: [game]));
                             },
                           ),
                           const SizedBox(width: 8),
                           _buildTemplateChip(
                             label: 'template_tip'.tr(),
                             onTap: () {
-                              _applyTemplate('💡 Pro Tip: ');
+                              _applyTemplate('template_tip_text'.tr());
                             },
                           ),
                           const SizedBox(width: 8),
                           _buildTemplateChip(
                             label: 'template_meme'.tr(),
                             onTap: () {
-                              _applyTemplate('😂 Gamers be like: ');
+                              _applyTemplate('template_meme_text'.tr());
                             },
                           ),
                         ],
