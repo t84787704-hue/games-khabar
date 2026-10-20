@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../constants/gamer_theme.dart';
 import '../../models/team_match_model.dart';
 import '../../services/team_match_service.dart';
@@ -102,8 +103,8 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
             children: [
               const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 22),
               const SizedBox(width: 8),
-              const Expanded(
-                child: Text('Verify Match Winner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              Expanded(
+                child: Text('verify_match_winner_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ],
           ),
@@ -112,9 +113,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'اسکرین شاٹ کی جانچ کے بعد فاتح ٹیم کا انتخاب کریں:',
-                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+                Text(
+                  'select_winner_after_proof_instruction'.tr(),
+                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
                 ),
                 const SizedBox(height: 14),
 
@@ -128,7 +129,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
-                    'Claim: ${match.team1Claim ?? "None"}',
+                    '${'claim_label'.tr()}:${match.team1Claim ?? "none_label".tr()}',
                     style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                   ),
                   onChanged: (val) => setDialogState(() => selectedWinner = val),
@@ -144,7 +145,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
-                    'Claim: ${match.team2Claim ?? "None"}',
+                    '${'claim_label'.tr()}:${match.team2Claim ?? "none_label".tr()}',
                     style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                   ),
                   onChanged: (val) => setDialogState(() => selectedWinner = val),
@@ -155,7 +156,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   value: 'DRAW',
                   groupValue: selectedWinner,
                   activeColor: const Color(0xFFFFB020),
-                  title: const Text('Draw (میچ برابر)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  title: Text('draw_option_label'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   onChanged: (val) => setDialogState(() => selectedWinner = val),
                 ),
 
@@ -163,11 +164,11 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                 TextField(
                   controller: notesController,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: const InputDecoration(
-                    labelText: 'Admin Notes (Optional)',
-                    labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                  decoration: InputDecoration(
+                    labelText: 'admin_notes_optional_label'.tr(),
+                    labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
-                    fillColor: Color(0xFF10141D),
+                    fillColor: const Color(0xFF10141D),
                   ),
                 ),
               ],
@@ -176,7 +177,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -218,37 +219,37 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   } else {
                     // Winner team: wins + 1
                     final winnerRes = await SupabaseService.client
-                        .from('teams')
-                        .select('wins')
-                        .eq('id', winner)
-                        .maybeSingle();
+                            .from('teams')
+                            .select('wins')
+                            .eq('id', winner)
+                            .maybeSingle();
                     final int curWins = (winnerRes?['wins'] as num?)?.toInt() ?? 0;
                     await SupabaseService.client
-                        .from('teams')
-                        .update({'wins': curWins + 1})
-                        .eq('id', winner);
+                            .from('teams')
+                            .update({'wins': curWins + 1})
+                            .eq('id', winner);
 
                     // Loser team: losses + 1
                     final loserId = (winner == match.team1Id) ? match.team2Id : match.team1Id;
                     if (loserId.isNotEmpty) {
                       final loserRes = await SupabaseService.client
-                          .from('teams')
-                          .select('losses')
-                          .eq('id', loserId)
-                          .maybeSingle();
+                            .from('teams')
+                            .select('losses')
+                            .eq('id', loserId)
+                            .maybeSingle();
                       final int curLosses = (loserRes?['losses'] as num?)?.toInt() ?? 0;
                       await SupabaseService.client
-                          .from('teams')
-                          .update({'losses': curLosses + 1})
-                          .eq('id', loserId);
+                            .from('teams')
+                            .update({'losses': curLosses + 1})
+                            .eq('id', loserId);
                     }
                   }
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ Match verified & winner recorded to leaderboard!'),
-                        backgroundColor: Color(0xFF00FF88),
+                      SnackBar(
+                        content: Text('match_verified_leaderboard_success'.tr()),
+                        backgroundColor: const Color(0xFF00FF88),
                       ),
                     );
                     setState(() {});
@@ -258,14 +259,14 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Error updating leaderboard: $e'),
+                        content: Text('${'error_updating_leaderboard'.tr()}:$e'),
                         backgroundColor: const Color(0xFFFF4655),
                       ),
                     );
                   }
                 }
               },
-              child: const Text('Confirm Winner 🏆', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: Text('confirm_winner_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -282,10 +283,10 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
         backgroundColor: const Color(0xFF161F2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
-          children: const [
-            Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 22),
-            SizedBox(width: 8),
-            Text('Reject Match / Proof', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          children: [
+            const Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 22),
+            const SizedBox(width: 8),
+            Text('reject_match_proof_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         content: Column(
@@ -294,8 +295,8 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
           children: [
             Text(
               match.proofAttempts >= 1
-                  ? 'یہ اس میچ کا ${match.proofAttempts + 1}واں ثبوت مسترد ہو گا۔ اگر یہ دوسرا مسترد ہوا تو میچ مستقل طور پر Rejected ہو جائے گا۔'
-                  : 'کیا آپ واقعی اس ثبوت کو مسترد کرنا چاہتے ہیں؟ ٹیم کے تمام ممبران کو وجہ کے ساتھ نوٹیفکیشن جائے گا۔',
+                  ? 'reject_proof_second_attempt_warning'.tr(args: [(match.proofAttempts + 1).toString()])
+                  : 'reject_proof_first_attempt_warning'.tr(),
               style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
             ),
             const SizedBox(height: 12),
@@ -303,13 +304,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               controller: reasonController,
               maxLines: 2,
               style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: const InputDecoration(
-                labelText: 'نیا Admin Note لکھیں (Reason)',
-                hintText: 'مثلاً: اسکرین شاٹ میں ID یا نتیجہ واضح نہیں ہے',
-                hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
-                labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+              decoration: InputDecoration(
+                labelText: 'write_admin_reason_label'.tr(),
+                hintText: 'admin_reason_hint_example'.tr(),
+                hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                 filled: true,
-                fillColor: Color(0xFF10141D),
+                fillColor: const Color(0xFF10141D),
               ),
             ),
           ],
@@ -317,7 +318,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -326,7 +327,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
             ),
             onPressed: () async {
               final reason = reasonController.text.trim().isEmpty
-                  ? 'اسکرین شاٹ میں ID یا نتیجہ صاف نہیں ہے'
+                  ? 'admin_default_reject_reason'.tr()
                   : reasonController.text.trim();
               Navigator.pop(ctx);
               await _matchService.adminRejectMatch(
@@ -336,14 +337,14 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               );
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('⚠️ میچ ثبوت مسترد کر دیا گیا اور ٹیم ممبران کو اطلاع بھیج دی گئی!'),
-                    backgroundColor: Color(0xFFFF4655),
+                  SnackBar(
+                    content: Text('match_proof_rejected_snackbar'.tr()),
+                    backgroundColor: const Color(0xFFFF4655),
                   ),
                 );
               }
             },
-            child: const Text('Reject Proof', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('reject_proof_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -359,32 +360,32 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
         backgroundColor: const Color(0xFF161F2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
-          children: const [
-            Icon(Icons.replay_rounded, color: Color(0xFFFF6B00), size: 22),
-            SizedBox(width: 8),
-            Text('Request New Proof', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          children: [
+            const Icon(Icons.replay_rounded, color: Color(0xFFFF6B00), size: 22),
+            const SizedBox(width: 8),
+            Text('request_new_proof_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'ٹیم کو اطلاع جائے گی: "ایڈمن نے نیا ثبوت مانگا ہے، براہ کرم دوبارہ اپلوڈ کریں"۔ میچ دوبارہ Disputed/Active ہو جائے گا اور ٹیم نیا اسکرین شاٹ اپلوڈ کر سکے گی۔',
-              style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+            Text(
+              'request_new_proof_desc'.tr(),
+              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: reasonController,
               maxLines: 2,
               style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: const InputDecoration(
-                labelText: 'نیا Admin Note لکھیں (Reason)',
-                hintText: 'مثلاً: اسکرین شاٹ میں ID اور نتیجہ صاف نہیں ہے، براہ کرم نیا ثبوت اپلوڈ کریں۔',
-                hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
-                labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+              decoration: InputDecoration(
+                labelText: 'write_admin_reason_label'.tr(),
+                hintText: 'request_proof_hint_example'.tr(),
+                hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                 filled: true,
-                fillColor: Color(0xFF10141D),
+                fillColor: const Color(0xFF10141D),
               ),
             ),
           ],
@@ -392,7 +393,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -409,14 +410,14 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               );
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('📸 ٹیم کو نیا ثبوت اپلوڈ کرنے کی درخواست بھیج دی گئی!'),
-                    backgroundColor: Color(0xFFFF6B00),
+                  SnackBar(
+                    content: Text('request_new_proof_sent_snackbar'.tr()),
+                    backgroundColor: const Color(0xFFFF6B00),
                   ),
                 );
               }
             },
-            child: const Text('Send Request 📸', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('send_request_proof_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -505,9 +506,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Dispute report marked as resolved!'),
-            backgroundColor: Color(0xFF00FF88),
+          SnackBar(
+            content: Text('dispute_report_resolved_snackbar'.tr()),
+            backgroundColor: const Color(0xFF00FF88),
           ),
         );
         setState(() {});
@@ -516,7 +517,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error resolving dispute: $e'),
+            content: Text('${'error_resolving_dispute'.tr()}:$e'),
             backgroundColor: const Color(0xFFFF4655),
           ),
         );
@@ -542,7 +543,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
     }
     final formattedTime = dt != null
         ? DateFormat('dd MMM yyyy, hh:mm a').format(dt)
-        : 'Recently';
+        : 'recently_label'.tr();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -563,14 +564,14 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   color: const Color(0xFFFF4655).withOpacity(0.18),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFFF4655)),
-                    SizedBox(width: 4),
+                    const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFFF4655)),
+                    const SizedBox(width: 4),
                     Text(
-                      'MATCH DISPUTE REPORT',
-                      style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 11),
+                      'match_dispute_report_badge'.tr(),
+                      style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 11),
                     ),
                   ],
                 ),
@@ -583,9 +584,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFFFF4655)),
                 ),
-                child: const Text(
-                  'DISPUTED (PRIORITY)',
-                  style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 10),
+                child: Text(
+                  'disputed_priority_badge'.tr(),
+                  style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 10),
                 ),
               ),
             ],
@@ -594,547 +595,4 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
           Row(
             children: [
               const Icon(Icons.person_rounded, size: 16, color: Color(0xFF8B949E)),
-              const SizedBox(width: 6),
-              Text(
-                'Reporter: $reporterName',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              if (targetId.isNotEmpty) ...[
-                const Spacer(),
-                Text(
-                  'Match ID: ${targetId.length > 8 ? targetId.substring(0, 8) : targetId}',
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF4655).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.3)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.info_outline, color: Color(0xFFFF4655), size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Reason: $reason',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Reported: $formattedTime',
-            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: Color(0xFF2A3447), height: 1),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (proofUrl.isNotEmpty) ...[
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF38BDF8),
-                    side: const BorderSide(color: Color(0xFF38BDF8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: const Size(0, 30),
-                  ),
-                  icon: const Icon(Icons.image_outlined, size: 14),
-                  label: const Text('View Proof', style: TextStyle(fontSize: 11)),
-                  onPressed: () => _showImageDialog(context, proofUrl, 'Dispute Proof Screenshot'),
-                ),
-                const SizedBox(width: 8),
-              ],
-              if (targetId.isNotEmpty) ...[
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white70,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: const Size(0, 30),
-                  ),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 14),
-                  label: const Text('Match Room', style: TextStyle(fontSize: 11)),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TeamMatchRoomScreen(matchId: targetId),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-              ],
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00FF88),
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  minimumSize: const Size(0, 30),
-                  elevation: 0,
-                ),
-                onPressed: () => _resolveDisputeReport(report),
-                child: const Text('Resolve Dispute', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Filter Chips Row
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          color: const Color(0xFF131A29),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _filterOptions.map((f) {
-                final isSel = _selectedFilter == f;
-                final isDisputed = f == 'Disputed';
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(
-                      isDisputed ? '⚠️ Disputed (Priority)' : f,
-                      style: TextStyle(
-                        color: isSel ? Colors.black : (isDisputed ? const Color(0xFFFF4655) : Colors.white),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    selected: isSel,
-                    selectedColor: isDisputed ? const Color(0xFFFF4655) : const Color(0xFF00FF88),
-                    backgroundColor: const Color(0xFF1A2234),
-                    onSelected: (val) {
-                      setState(() => _selectedFilter = f);
-                    },
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ),
-
-        // Stream List of Matches & Reports
-        Expanded(
-          child: StreamBuilder<_AdminMatchUnifiedData>(
-            stream: _getUnifiedMatchesStream(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B00)));
-              }
-
-              final unifiedData = snapshot.data ?? _AdminMatchUnifiedData(matches: [], disputeReports: []);
-              final allMatches = unifiedData.matches;
-              final showDisputes = _selectedFilter == 'All' || _selectedFilter == 'Disputed';
-              final visibleReports = showDisputes ? unifiedData.disputeReports : <Map<String, dynamic>>[];
-              final visibleMatches = _selectedFilter == 'Disputed'
-                  ? allMatches.where((m) => m.isDisputed).toList()
-                  : allMatches;
-
-              if (visibleReports.isEmpty && visibleMatches.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.sports_esports_rounded, size: 48, color: Color(0xFF8B949E)),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No matches found in "$_selectedFilter"',
-                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(14),
-                itemCount: visibleReports.length + visibleMatches.length,
-                itemBuilder: (context, index) {
-                  if (index < visibleReports.length) {
-                    return _buildDisputeReportCard(visibleReports[index]);
-                  }
-
-                  final match = visibleMatches[index - visibleReports.length];
-                  final statusColor = _getStatusColor(match.status);
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 14),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: match.isDisputed ? const Color(0xFF1F1522) : const Color(0xFF131A29),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: match.isDisputed ? const Color(0xFFFF4655) : const Color(0xFF2A3447),
-                        width: match.isDisputed ? 1.5 : 1.0,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Top Header: Game, Mode, Status
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFF6B00).withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                '${match.game} •${match.mode}',
-                                style: const TextStyle(color: Color(0xFFFF6B00), fontWeight: FontWeight.w900, fontSize: 11),
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: statusColor.withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: statusColor),
-                              ),
-                              child: Text(
-                                match.status.toUpperCase(),
-                                style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 10),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Match Teams
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    match.team1Name,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text('Leader: ${match.team1LeaderName}', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                                ],
-                              ),
-                            ),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8),
-                              child: Text('VS', style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 14)),
-                            ),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    match.team2Name,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.end,
-                                  ),
-                                  Text('Leader: ${match.team2LeaderName}', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-
-                        // Match Time & Dispute Banner
-                        Text(
-                          'Time: ${DateFormat('dd MMM yyyy, hh:mm a').format(match.matchTime)}',
-                          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
-                        ),
-
-                        if (match.proofAttempts > 0) ...[
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: (match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020)).withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.camera_alt_outlined,
-                                      size: 13,
-                                      color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Attempt ${match.proofAttempts}/2',
-                                      style: TextStyle(
-                                        color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (match.lastProofAt != null) ...[
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Submitted: ${DateFormat('dd MMM, hh:mm a').format(match.lastProofAt!)}',
-                                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
-                                ),
-                              ] else if (match.rejectedAt != null && !match.isProofSubmitted) ...[
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Rejected on: ${DateFormat('dd MMM, hh:mm a').format(match.rejectedAt!)}',
-                                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-
-                        if (match.isProofSubmitted) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF38BDF8).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.mark_email_unread_rounded, color: Color(0xFF38BDF8), size: 16),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    match.proofAttempts >= 2
-                                        ? 'نیا ثبوت موصول ہو چکا ہے (Attempt 2/2) - جائزہ لے کر Verify یا Reject کریں'
-                                        : 'ثبوت موصول ہو چکا ہے (Proof Submitted) - جائزہ لے کر Verify یا Reject کریں',
-                                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ] else if (match.adminNote != null && match.adminNote!.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF4655).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.4)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 16),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'Admin Note: ${match.adminNote}',
-                                    style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ] else if (match.disputeReason.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF4655).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.info_outline, color: Color(0xFFFF4655), size: 16),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    match.disputeReason,
-                                    style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-
-                        if (match.isVerified && match.winnerName != null) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            '🏆 Winner: ${match.winnerName} (Verified by${match.verifiedBy})',
-                            style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 12),
-                          ),
-                        ],
-
-                        const SizedBox(height: 12),
-                        const Divider(color: Color(0xFF2A3447), height: 1),
-                        const SizedBox(height: 10),
-
-                        // Screenshots buttons + Admin Verify/Reject Actions
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          alignment: WrapAlignment.spaceBetween,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (match.team1Proof != null && match.team1Proof!.isNotEmpty) ...[
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF38BDF8),
-                                  side: const BorderSide(color: Color(0xFF38BDF8)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  minimumSize: const Size(0, 30),
-                                ),
-                                icon: const Icon(Icons.image_outlined, size: 14),
-                                label: Text(
-                                  match.proofAttempts > 0
-                                      ? '${match.team1Name} Proof (Attempt ${match.proofAttempts}/2)' : '${match.team1Name} Proof',
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                                onPressed: () => _showImageDialog(
-                                  context,
-                                  match.team1Proof!,
-                                  '${match.team1Name} Proof (Attempt${match.proofAttempts}/2)',
-                                ),
-                              ),
-                            ],
-
-                            if (match.team2Proof != null && match.team2Proof!.isNotEmpty) ...[
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF38BDF8),
-                                  side: const BorderSide(color: Color(0xFF38BDF8)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  minimumSize: const Size(0, 30),
-                                ),
-                                icon: const Icon(Icons.image_outlined, size: 14),
-                                label: Text(
-                                  match.proofAttempts > 0
-                                      ? '${match.team2Name} Proof (Attempt ${match.proofAttempts}/2)' : '${match.team2Name} Proof',
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                                onPressed: () => _showImageDialog(
-                                  context,
-                                  match.team2Proof!,
-                                  '${match.team2Name} Proof (Attempt${match.proofAttempts}/2)',
-                                ),
-                              ),
-                            ],
-
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white70,
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                minimumSize: const Size(0, 30),
-                              ),
-                              icon: const Icon(Icons.open_in_new_rounded, size: 14),
-                              label: const Text('Room & Chat', style: TextStyle(fontSize: 11)),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TeamMatchRoomScreen(matchId: match.matchId),
-                                  ),
-                                );
-                              },
-                            ),
-
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (!match.isRejected) ...[
-                                  OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFFFF4655),
-                                      side: const BorderSide(color: Color(0xFFFF4655)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      minimumSize: const Size(0, 30),
-                                    ),
-                                    onPressed: () => _showRejectDialog(context, match),
-                                    child: const Text('Reject', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ),
-                                  const SizedBox(width: 6),
-                                ],
-
-                                if (!match.isVerified && match.proofAttempts < 2) ...[
-                                  OutlinedButton.icon(
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFFFF6B00),
-                                      side: const BorderSide(color: Color(0xFFFF6B00)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      minimumSize: const Size(0, 30),
-                                    ),
-                                    icon: const Icon(Icons.replay_rounded, size: 13),
-                                    label: const Text('Request New Proof', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                                    onPressed: () => _showRequestNewProofDialog(context, match),
-                                  ),
-                                  const SizedBox(width: 6),
-                                ],
-
-                                if (!match.isVerified) ...[
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF00FF88),
-                                      foregroundColor: Colors.black,
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      minimumSize: const Size(0, 30),
-                                      elevation: 0,
-                                    ),
-                                    onPressed: () => _showVerifyDecisionDialog(context, match),
-                                    child: const Text('Verify Winner', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AdminMatchUnifiedData {
-  final List<TeamMatch> matches;
-  final List<Map<String, dynamic>> disputeReports;
-
-  const _AdminMatchUnifiedData({
-    this.matches = const [],
-    this.disputeReports = const [],
-  });
-}
+              const SizedBox(width: 
