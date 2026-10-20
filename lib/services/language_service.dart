@@ -31,71 +31,17 @@ class LanguageService {
   static String get selectedLang => currentLanguage.value;
   static bool get isUrdu => currentLanguage.value == 'ur';
 
-  /// ✅ Global Translation Helper Function
-  /// Kisi bhi screen par Text(LanguageService.t('Teams')) likhein
-  static String t(String key) {
-    if (!isUrdu) return key;
-    return _urduDictionary[key] ?? key;
+  /// ✅ Global Translation Helper (Ab yeh direct easy_localization ki keys use karega)
+  static String t(String key, {BuildContext? context, List<String>? args}) {
+    try {
+      if (context != null) {
+        return key.tr(context: context, args: args);
+      }
+      return key.tr(args: args);
+    } catch (_) {
+      return key;
+    }
   }
-
-  /// App ke saare alfaz ki Dictionary
-  static final Map<String, String> _urduDictionary = {
-    // Bottom Nav & Titles
-    'Feed': 'فیڈ',
-    'Teams': 'ٹیمز',
-    'Messages': 'پیغامات',
-    'Rooms': 'رومز',
-    'Profile': 'پروفائل',
-    'Admin': 'ایڈمن',
-    'Gamers ID': 'گیمرز آئی ڈی',
-
-    // Feed Screen
-    "What's on your mind?": 'آپ کے ذہن میں کیا ہے؟',
-    'Post': 'پوسٹ',
-    'Like': 'پسند',
-    'Comment': 'تبصرہ',
-    'Share': 'شیئر',
-    'Search Gamers': 'گیمرز تلاش کریں',
-    'comments': 'تبصرے',
-    'Comments': 'تبصرے',
-    'Write a comment...': 'ایک تبصرہ لکھیں...',
-    'Just now': 'ابھی',
-    'Report Post': 'پوسٹ رپورٹ کریں',
-    'Delete Post': 'پوسٹ ڈیلیٹ کریں',
-
-    // Teams Screen
-    'Create Team': 'ٹیم بنائیں',
-    'Incoming Challenges': 'موصولہ چیلنجز',
-    'Live': 'لائیو',
-    'No live matches': 'کوئی لائیو میچ نہیں',
-    'Search teams by name or tag...': 'نام یا ٹیگ سے تلاش کریں...',
-    'Accept': 'قبول کریں',
-    'Reject': 'مسترد',
-    'CHALLENGE': 'چیلنج',
-    'Challenge': 'چیلنج',
-    'Team DM': 'ٹیم چیٹ',
-    'END MATCH': 'میچ ختم کریں',
-    'Join': 'شامل ہوں',
-    'Requested': 'درخواست بھیجی',
-    'Members': 'ارکان',
-    'Leader': 'لیڈر',
-
-    // Rooms Screen
-    'Create Game Room': 'گیم روم بنائیں',
-    'JOIN MATCH': 'میچ میں شامل ہوں',
-    'ROOM CREDENTIALS': 'روم کی تفصیلات',
-    'ROOM ID': 'روم آئی ڈی',
-    'PASSWORD': 'پاس ورڈ',
-    'Rules': 'قوانین',
-    'PLAYERS': 'کھلاڑی',
-    'Prize Pool': 'انعام',
-    'WINNER': 'فاتح',
-    'DEFEATED': 'شکست',
-    'Type a message...': 'پیغام لکھیں...',
-    'End Match (I Won)': 'میچ ختم (میں جیت گیا)',
-    'Proof Submitted ⏳ (Tap to Change)': 'ثبوت جمع ہوگیا ⏳ (تبدیل کریں)',
-    'Re-upload Proof 🔄': 'دوبارہ ثبوت اپلوڈ کریں 🔄',
-  };
 
   /// Initialize and load saved language preference
   static Future<void> init() async {
