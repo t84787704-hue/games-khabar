@@ -847,9 +847,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   child: GamerAvatar(
                                     photoUrl: _photoUrl,
                                     imageFile: _pickedImageFile,
-                                    displayName: _displayNameController.text.isNotEmpty
-                                        ? _displayNameController.text
-                                        : 'F',
+                                    displayName: _displayNameController.text.trim().isNotEmpty
+                                        ? _displayNameController.text.trim()
+                                        : (_usernameController.text.trim().isNotEmpty
+                                            ? _usernameController.text.trim()
+                                            : 'G'),
                                     radius: 48,
                                     hasGlow: true,
                                     borderColor: GamerTheme.accentOrange,
