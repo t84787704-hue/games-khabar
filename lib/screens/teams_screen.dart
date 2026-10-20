@@ -142,7 +142,7 @@ class _TeamsScreenState extends State<TeamsScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text('match_proof_title'.tr(), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              title: Text('match_proof_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               trailing: IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(ctx)),
             ),
             InteractiveViewer(
@@ -247,7 +247,7 @@ class _TeamsScreenState extends State<TeamsScreen>
       if (mounted) {
         setState(() => _acceptedChallengeIds.add(cId));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('match_started_live'.tr()), backgroundColor: Color(0xFF2E7D32), duration: Duration(seconds: 3)),
+          const SnackBar(content: Text('match_started_live'), backgroundColor: Color(0xFF2E7D32), duration: Duration(seconds: 3)),
         );
       }
     } catch (e) {
@@ -263,7 +263,7 @@ class _TeamsScreenState extends State<TeamsScreen>
     setState(() => _acceptedChallengeIds.add(cId));
     try {
       await SupabaseService.client.from("challenges").update({"status": "rejected"}).eq("id", cId);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('challenge_rejected'.tr())));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('challenge_rejected'.tr())));
     } catch (e) {
       debugPrint("[TeamsScreen] Error rejecting challenge: $e");
     }
@@ -276,7 +276,7 @@ class _TeamsScreenState extends State<TeamsScreen>
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) setState(() {});
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('challenge_cancelled'.tr()), backgroundColor: Color(0xFF1877F2)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('challenge_cancelled'.tr()), backgroundColor: const Color(0xFF1877F2)));
       }
     } catch (e) {
       debugPrint("[TeamsScreen] Error cancelling challenge: $e");
@@ -862,7 +862,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                     ),
                                     icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                                    label: Text('retry'.tr(), style: TextStyle(fontWeight: FontWeight.bold)),
+                                    label: Text('retry'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
@@ -1418,8 +1418,8 @@ class _ActiveMatchBothTeamsBannerState
               decoration: BoxDecoration(
                   color: const Color(0xFF2E7D32),
                   borderRadius: BorderRadius.circular(10)),
-              child: const Text('won_trophy'.tr(),
-                  style: TextStyle(
+              child: Text('won_trophy'.tr(),
+                  style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
                       fontSize: 10)),
@@ -1704,9 +1704,9 @@ class _ActiveMatchBothTeamsBannerState
                 onPressed: () {
                   if (matchId.trim().isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text('match_not_found'.tr()),
-                        backgroundColor: Color(0xFFFF4655),
+                        backgroundColor: const Color(0xFFFF4655),
                       ),
                     );
                     return;
@@ -1753,9 +1753,9 @@ class _ActiveMatchBothTeamsBannerState
                           );
                           if (ended == true && mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text('new_proof_sent'.tr()),
-                                backgroundColor: Color(0xFFFFB800),
+                                backgroundColor: const Color(0xFFFFB800),
                               ),
                             );
                           }
