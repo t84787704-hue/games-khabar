@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import '../models/news_model.dart';
 import '../models/notification_model.dart';
 import 'supabase_store_service.dart';
@@ -425,8 +426,8 @@ class NotificationService {
       senderName: followerName,
       senderAvatar: followerAvatar,
       type: 'follow',
-      title: 'New Follower! 👤',
-      body: '$followerName started following your Gamer ID.',
+      title: 'notif_new_follower_title'.tr(),
+      body: 'notif_new_follower_body'.tr(args: [followerName]),
       data: {'follower_id': followerId},
     );
   }
@@ -439,14 +440,15 @@ class NotificationService {
     String? postTitle,
     String? likerAvatar,
   }) async {
+    final titleSuffix = (postTitle != null && postTitle.isNotEmpty) ? ' "$postTitle"' : '';
     await sendNotification(
       userId: targetUserId,
       senderId: likerId,
       senderName: likerName,
       senderAvatar: likerAvatar,
       type: 'post_like',
-      title: 'New Post Like! ❤️',
-      body: '$likerName liked your post${postTitle != null && postTitle.isNotEmpty ? ' "$postTitle"' : ''}.',
+      title: 'notif_post_like_title'.tr(),
+      body: 'notif_post_like_body'.tr(args: [likerName, titleSuffix]),
       data: {'post_id': postId},
     );
   }
@@ -466,8 +468,8 @@ class NotificationService {
       senderName: commenterName,
       senderAvatar: commenterAvatar,
       type: 'post_comment',
-      title: 'New Comment! 💬',
-      body: '$commenterName commented: "$preview"',
+      title: 'notif_comment_title'.tr(),
+      body: 'notif_comment_body'.tr(args: [commenterName, preview]),
       data: {'post_id': postId, 'comment': commentText},
     );
   }
@@ -483,16 +485,17 @@ class NotificationService {
     String type;
     if (status == 'accepted') {
       type = 'proof_accepted';
-      title = '🏆 Win Proof Accepted!';
-      body = 'Your match proof for "$roomTitle" was approved! Reward is in your wallet.';
+      title = 'notif_proof_accepted_title'.tr();
+      body = 'notif_proof_accepted_body'.tr(args: [roomTitle]);
     } else if (status == 'rejected') {
       type = 'proof_rejected';
-      title = '❌ Win Proof Rejected';
-      body = 'Your proof for "$roomTitle" was rejected${reason != null && reason.isNotEmpty ? ': $reason' : '.'}';
+      title = 'notif_proof_rejected_title'.tr();
+      final reasonPart = (reason != null && reason.isNotEmpty) ? ': $reason' : '.';
+      body = 'notif_proof_rejected_body'.tr(args: [roomTitle, reasonPart]);
     } else {
       type = 'proof_uploaded';
-      title = '📸 Proof Uploaded';
-      body = 'New win proof uploaded for "$roomTitle". Pending verification.';
+      title = 'notif_proof_uploaded_title'.tr();
+      body = 'notif_proof_uploaded_body'.tr(args: [roomTitle]);
     }
 
     await sendNotification(
@@ -518,16 +521,16 @@ class NotificationService {
     String type;
     if (status == 'accepted') {
       type = 'challenge_accepted';
-      title = '⚔️ Challenge Accepted!';
-      body = '$challengerName accepted your challenge! Match room is ready.';
+      title = 'notif_challenge_accepted_title'.tr();
+      body = 'notif_challenge_accepted_body'.tr(args: [challengerName]);
     } else if (status == 'rejected') {
       type = 'challenge_rejected';
-      title = 'Challenge Declined';
-      body = '$challengerName declined your challenge.';
+      title = 'notif_challenge_rejected_title'.tr();
+      body = 'notif_challenge_rejected_body'.tr(args: [challengerName]);
     } else {
       type = 'challenge_received';
-      title = '⚔️ 1v1 Challenge Received!';
-      body = '$challengerName challenged you in ${gameName ?? 'a match'}!';
+      title = 'notif_challenge_received_title'.tr();
+      body = 'notif_challenge_received_body'.tr(args: [challengerName, gameName ?? 'notif_gaming_fallback'.tr()]);
     }
 
     await sendNotification(
@@ -557,10 +560,10 @@ class NotificationService {
       senderId: senderId,
       senderName: senderName,
       type: type,
-      title: isApproval ? 'Team Request Approved! 🛡️' : 'Team Join Request 👥',
+      title: isApproval ? 'notif_team_approved_title'.tr() : 'notif_team_join_title'.tr(),
       body: isApproval
-          ? 'You are now an official member of team "$teamName"!'
-          : '${senderName ?? 'A gamer'} requested to join your team "$teamName".',
+          ? 'notif_team_approved_body'.tr(args: [teamName])
+          : 'notif_team_join_body'.tr(args: [senderName ?? 'notif_gamer'.tr(), teamName]),
       data: {'team_id': teamId, 'team_name': teamName},
     );
   }
@@ -574,7 +577,7 @@ class NotificationService {
     await sendNotification(
       userId: targetUserId,
       type: type ?? 'coin_reward',
-      title: '🪙 Coins Earned: +$amount!',
+      title: 'notif_coins_earned_title'.tr(args: [amount.toString()]),
       body: reason,
       data: {'amount': amount},
     );
@@ -589,8 +592,8 @@ class NotificationService {
     await sendNotification(
       userId: targetUserId,
       type: 'store_purchase',
-      title: 'Store Purchase Complete! ✨',
-      body: 'Successfully unlocked "$itemName" for $costCoins G-Coins ($category).',
+      title: 'notif_store_purchase_title'.tr(),
+      body: 'notif_store_purchase_body'.tr(args: [itemName, costCoins.toString(), category]),
       data: {'item_name': itemName, 'cost': costCoins, 'category': category},
     );
   }
@@ -603,8 +606,8 @@ class NotificationService {
     await sendNotification(
       userId: targetUserId,
       type: 'perk_expiry',
-      title: '⏰ Perk Expiry Alert',
-      body: 'Your "$perkName" will expire in $daysRemaining day(s). Renew in Coin Store!',
+      title: 'notif_perk_expiry_title'.tr(),
+      body: 'notif_perk_expiry_body'.tr(args: [perkName, daysRemaining.toString()]),
       data: {'perk_name': perkName, 'days_remaining': daysRemaining},
     );
   }
@@ -618,7 +621,7 @@ class NotificationService {
     await sendNotification(
       userId: targetUserId,
       type: 'tournament_update',
-      title: 'Tournament Update: $roomTitle 🎮',
+      title: 'notif_tournament_update_title'.tr(args: [roomTitle]),
       body: updateMessage,
       data: {'room_id': roomId, 'roomId': roomId},
     );
@@ -673,8 +676,8 @@ class NotificationService {
             for (final map in rows) {
               final type = map['type'] as String? ?? '';
               if (type.startsWith('squad_')) {
-                final title = map['title'] as String? ?? 'Squad Update 🎮';
-                final message = map['message'] as String? ?? map['body'] as String? ?? 'New update in your squad!';
+                final title = map['title'] as String? ?? 'notif_squad_update_title'.tr();
+                final message = map['message'] as String? ?? map['body'] as String? ?? 'notif_squad_update_body'.tr();
                 final postId = map['postId'] as String? ?? map['post_id'] as String? ?? '';
                 showSquadNotification(
                   title: title,
@@ -763,14 +766,14 @@ class NotificationService {
               ? (data['gameName'] ?? data['game_name'] as String).trim()
               : ((data['category'] as String?)?.trim().isNotEmpty == true
                   ? (data['category'] as String).trim()
-                  : 'Gaming News');
-          final title = data['title']?.toString() ?? 'Check out the latest gaming update!';
+                  : 'notif_gaming_news_fallback'.tr());
+          final title = data['title']?.toString() ?? 'notif_new_news_fallback_title'.tr();
           final newsId = data['id']?.toString() ?? '';
           final imageUrl = data['imageUrl'] ?? data['image_url'] as String?;
-          final category = data['category'] as String? ?? 'Gaming';
+          final category = data['category'] as String? ?? 'notif_gaming_fallback'.tr();
 
           _showLocalNotification(
-            title: 'New: $gameName',
+            title: 'notif_new_news_title'.tr(args: [gameName]),
             body: title,
             newsId: newsId,
             imageUrl: imageUrl,
@@ -792,7 +795,7 @@ class NotificationService {
       'newsId': newsId,
       'title': title,
       'body': body,
-      'category': category ?? 'Gaming News',
+      'category': category ?? 'notif_gaming_news_fallback'.tr(),
       if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
       'click_action': 'FLUTTER_NOTIFICATION_CLICK',
     };
@@ -810,7 +813,7 @@ class NotificationService {
       styleInformation: BigTextStyleInformation(
         body,
         contentTitle: title,
-        summaryText: category ?? 'Games Khabar',
+        summaryText: category ?? 'notif_gaming_fallback'.tr(),
       ),
     );
 
@@ -910,12 +913,12 @@ class NotificationService {
     NewsModel? news = await SupabaseStoreService().getNewsById(newsId);
     news ??= NewsModel(
       id: newsId,
-      title: fallbackTitle ?? 'Latest Gaming News',
-      description: fallbackDesc ?? 'Read the full story on Games Khabar app.',
-      category: fallbackCategory ?? 'Gaming News',
+      title: fallbackTitle ?? 'notif_latest_news_fallback'.tr(),
+      description: fallbackDesc ?? 'notif_read_full_story'.tr(),
+      category: fallbackCategory ?? 'notif_gaming_news_fallback'.tr(),
       imageUrl: fallbackImage ??
           'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
-      timeAgo: 'Just now',
+      timeAgo: 'notif_just_now'.tr(),
       views: 1,
     );
 
@@ -933,7 +936,7 @@ class NotificationService {
     final effectiveGame = (gameName != null && gameName.trim().isNotEmpty)
         ? gameName.trim()
         : category;
-    final notifTitle = 'New: $effectiveGame';
+    final notifTitle = 'notif_new_news_title'.tr(args: [effectiveGame]);
     final notifBody = title;
 
     final payloadData = {
