@@ -125,7 +125,7 @@ class _TeamCardState extends State<TeamCard> {
       onConfirm: () async {
         final currentGamer = GamerAuthService().currentGamer;
         final userName =
-            currentGamer?.displayName ?? currentGamer?.username ?? 'Gamer';
+            currentGamer?.displayName ?? currentGamer?.username ?? 'user_gamer'.tr();
 
         setState(() => _isRequesting = true);
         final success = await _teamService.requestToJoinTeam(
@@ -184,7 +184,7 @@ class _TeamCardState extends State<TeamCard> {
             content: Text(
               LanguageService.isUrdu
                   ? 'team_frozen_leader_alert'.tr()
-                  : 'Your team is frozen because your balance is below 1,000 coins. Top up to 1,000 coins to send challenges.',
+                  : 'team_frozen_leader_alert_en'.tr(),
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
             ),
             actions: [
@@ -223,13 +223,13 @@ class _TeamCardState extends State<TeamCard> {
                 content: Text(
                   LanguageService.isUrdu
                       ? 'opponent_team_frozen_alert'.tr()
-                      : 'This team is frozen because their leader balance fell below 1,000 coins. You cannot challenge this team.',
+                      : 'opponent_team_frozen_alert_en'.tr(),
                   style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('OK', style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
+                    child: Text('ok'.tr(), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -771,7 +771,7 @@ class _TeamCardState extends State<TeamCard> {
                   controller: nameCtrl,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Team Name',
+                    labelText: 'team_name'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -790,7 +790,7 @@ class _TeamCardState extends State<TeamCard> {
                   controller: tagCtrl,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Team Tag',
+                    labelText: 'team_tag'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -829,7 +829,7 @@ class _TeamCardState extends State<TeamCard> {
                   maxLines: 2,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Description',
+                    labelText: 'description'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -849,7 +849,7 @@ class _TeamCardState extends State<TeamCard> {
                   maxLines: 2,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Requirements',
+                    labelText: 'requirements'.tr(),
                     labelStyle:
                         const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
@@ -905,7 +905,7 @@ class _TeamCardState extends State<TeamCard> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(ok
-                                ? '✅ Team updated successfully!'
+                                ? 'msg_team_updated_success'.tr()
                                 : 'team_update_failed'.tr()),
                             backgroundColor: ok
                                 ? const Color(0xFF00FF88)
@@ -1002,8 +1002,8 @@ class _TeamCardState extends State<TeamCard> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text('cancel'.tr(),
+                style: const TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -1047,7 +1047,7 @@ class _TeamCardState extends State<TeamCard> {
     Color bg;
     switch (result) {
       case 'ok':
-        msg = '✅ Team deleted successfully';
+        msg = 'msg_team_deleted_success'.tr();
         bg = const Color(0xFF00FF88);
         break;
       case 'not_owner':
@@ -1223,7 +1223,7 @@ class _TeamCardState extends State<TeamCard> {
 
                               const SizedBox(height: 3),
                               Text(
-                                'Leader: ${team.leaderName}',
+                                LanguageService.t("Leader:") + " ${team.leaderName}",
                                 style: TextStyle(
                                     color: ThemeService.textSecondary, fontSize: 12),
                               ),
@@ -1255,7 +1255,7 @@ class _TeamCardState extends State<TeamCard> {
                                           size: 14, color: ThemeService.textSecondary),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '${team.memberCount} Members',
+                                        '${team.memberCount} ' + LanguageService.t("Members"),
                                         style: TextStyle(
                                             color: ThemeService.textSecondary,
                                             fontSize: 11.5,
@@ -1470,18 +1470,18 @@ class _TeamCardState extends State<TeamCard> {
                                                 borderRadius:
                                                     BorderRadius.circular(8),
                                               ),
-                                              child: const Row(
+                                              child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Icon(
+                                                  const Icon(
                                                       Icons
                                                           .local_fire_department_rounded,
                                                       size: 14,
                                                       color: Colors.black),
-                                                  SizedBox(width: 4),
+                                                  const SizedBox(width: 4),
                                                   Text(
-                                                    'LIVE',
-                                                    style: TextStyle(
+                                                    'status_live_caps'.tr(),
+                                                    style: const TextStyle(
                                                       color: Colors.black,
                                                       fontWeight: FontWeight.w900,
                                                       fontSize: 11,
@@ -1568,7 +1568,7 @@ class _TeamCardState extends State<TeamCard> {
                                             : Colors.white,
                                       ),
                                       label: Text(
-                                        isRequested ? 'Requested ⏳' : 'Join',
+                                        isRequested ? 'btn_requested_wait'.tr() : 'btn_join_team'.tr(),
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 11.5,
