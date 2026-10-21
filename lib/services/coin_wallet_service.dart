@@ -21,13 +21,11 @@ class CoinWalletService extends ChangeNotifier {
   factory CoinWalletService() => _instance;
   CoinWalletService._internal();
 
-  // Cached active user wallet
   CoinWallet? _currentWallet;
   CoinWallet? get currentWallet => _currentWallet;
 
   StreamSubscription? _walletSub;
 
-  /// Helper to synchronize coins to Supabase 'users' table and in-memory notifiers
   Future<void> _syncToUserDocAndNotifiers(String userId, int coins) async {
     if (userId.isEmpty) return;
     try {
@@ -52,20 +50,11 @@ class CoinWalletService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// =========================================================================
-  /// AUTO TEAM MODERATION & DETAILED NOTIFICATIONS LOGIC
-  /// 1. Leader < 1,000 Coins: Freeze Team + Detailed Notification
-  /// 2. Leader >= 1,000 Coins: Unfreeze Team + Reactivation Notification
-  /// 3. Member < 500 Coins: Auto-Remove from Team + Detailed Notification
-  /// =========================================================================
   static Future<void> _checkTeamEligibility(String userId, int newCoins) async {
     if (userId.isEmpty) return;
     try {
       final nowStr = DateTime.now().toIso8601String();
 
-      // ───────────────────────────────────────────────────────────────────────
-      // 1. CHECK IF USER IS A TEAM LEADER (Rule: 1,000 Coins)
-      // ───────────────────────────────────────────────────────────────────────
       final leaderTeams = await SupabaseService.client
           .from('teams')
           .select('id, name, status')
@@ -74,27 +63,23 @@ class CoinWalletService extends ChangeNotifier {
       if (leaderTeams != null && leaderTeams is List && leaderTeams.isNotEmpty) {
         for (final team in leaderTeams) {
           final teamId = team['id']?.toString() ?? '';
-          final teamName = team['name']?.toString() ?? 'Team';
+          final teamName = team['name']?.toString() ?? 'wallet_team_default_name'.tr();
           final currentStatus = (team['status'] ?? 'active').toString().toLowerCase();
 
-          // A: Leader balance drops below 1000 -> FREEZE
           if (newCoins < 1000 && currentStatus != 'frozen') {
             await SupabaseService.client.from('teams').update({
               'status': 'frozen',
-              'frozen_reason': 'Leader balance fell below 1000 coins ($newCoins coins)',
+              'frozen_reason': 'wallet_team_frozen_reason'.tr(args: [newCoins.toString()]),
               'updated_at': nowStr,
             }).or('id.eq.$teamId,team_id.eq.$teamId');
 
-            // 📩 Detailed Freeze Notification to Leader
             await _sendDetailedNotification(
               userId: userId,
               type: 'team_frozen',
               title: 'wallet_team_frozen_title'.tr(),
-              message:
-                  'wallet_team_frozen_notification'.tr(args: [newCoins.toString(), teamName]),
+              message: 'wallet_team_frozen_notification'.tr(args: [newCoins.toString(), teamName]),
             );
           }
-          // B: Leader balance restored to 1000+ -> UNFREEZE / REACTIVATE
           else if (newCoins >= 1000 && currentStatus == 'frozen') {
             await SupabaseService.client.from('teams').update({
               'status': 'active',
@@ -102,21 +87,16 @@ class CoinWalletService extends ChangeNotifier {
               'updated_at': nowStr,
             }).or('id.eq.$teamId,team_id.eq.$teamId');
 
-            // 📩 Reactivation Notification to Leader
             await _sendDetailedNotification(
               userId: userId,
               type: 'team_reactivated',
               title: 'wallet_team_reactivated_title'.tr(),
-              message:
-                  'wallet_team_reactivated_notification'.tr(args: [newCoins.toString(), teamName]),
+              message: 'wallet_team_reactivated_notification'.tr(args: [newCoins.toString(), teamName]),
             );
           }
         }
       }
 
-      // ───────────────────────────────────────────────────────────────────────
-      // 2. CHECK IF USER IS A TEAM MEMBER (Rule: 500 Coins Auto-Remove)
-      // ───────────────────────────────────────────────────────────────────────
       if (newCoins < 500) {
         final memberRows = await SupabaseService.client
             .from('team_members')
@@ -129,16 +109,14 @@ class CoinWalletService extends ChangeNotifier {
             final teamId = row['team_id']?.toString() ?? '';
             final teamMap = row['teams'] as Map<String, dynamic>?;
             final leaderId = teamMap?['leader_id'] ?? teamMap?['leaderId'];
-            final teamName = teamMap?['name']?.toString() ?? 'Team';
+            final teamName = teamMap?['name']?.toString() ?? 'wallet_team_default_name'.tr();
 
-            // Agar user leader nahi hai (sirf member hai), to remove karein
             if (leaderId != userId) {
               await SupabaseService.client
                   .from('team_members')
                   .delete()
                   .eq('id', rowId);
 
-              // Update team members count
               try {
                 final tDoc = await SupabaseService.client
                     .from('teams')
@@ -153,13 +131,11 @@ class CoinWalletService extends ChangeNotifier {
                 }
               } catch (_) {}
 
-              // 📩 Detailed Removal Notification to Member
               await _sendDetailedNotification(
                 userId: userId,
                 type: 'team_removed',
                 title: 'wallet_team_removed_title'.tr(),
-                message:
-                    'wallet_team_removed_low_balance_notification'.tr(args: [newCoins.toString(), teamName]),
+                message: 'wallet_team_removed_low_balance_notification'.tr(args: [newCoins.toString(), teamName]),
               );
             }
           }
@@ -170,7 +146,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Helper to send persistent notification & push alert
   static Future<void> _sendDetailedNotification({
     required String userId,
     required String type,
@@ -205,9 +180,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// =========================================================================
-  /// UNIFIED COIN UPDATE FUNCTION (100% Supabase & 100% snake_case)
-  /// =========================================================================
   static Future<void> updateCoins({
     required String userId,
     required int amount,
@@ -222,7 +194,6 @@ class CoinWalletService extends ChangeNotifier {
     try {
       final now = DateTime.now();
 
-      // 1. Fetch current balances from users table (PRIMARY SOURCE)
       int currentCoins = 1000;
       int currentEscrow = 0;
       int currentWinnings = 0;
@@ -250,7 +221,6 @@ class CoinWalletService extends ChangeNotifier {
       final newCoins = (currentCoins + amount).clamp(0, 9999999);
       final newEscrow = (currentEscrow + (inEscrowChange ?? 0)).clamp(0, 9999999);
 
-      // 2. Update users table (SINGLE SOURCE OF TRUTH - strict snake_case)
       final Map<String, dynamic> userUpdate = {
         'coins': newCoins,
         'g_coins': newCoins,
@@ -276,7 +246,6 @@ class CoinWalletService extends ChangeNotifier {
         debugPrint('updateCoins: users update error: $e');
       }
 
-      // 3. Update coin_wallets table (strict snake_case)
       int lifetimeEarned = currentCoins;
       int lifetimeSpent = 0;
       int trustScore = 100;
@@ -320,7 +289,6 @@ class CoinWalletService extends ChangeNotifier {
         debugPrint('updateCoins: coin_wallets upsert error: $e');
       }
 
-      // 4. Transaction log (both coin_transactions & transactions tables)
       final String targetUuid = RegExp(
         r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
       ).hasMatch(userId)
@@ -374,7 +342,6 @@ class CoinWalletService extends ChangeNotifier {
             .insert(txData);
       } catch (_) {}
 
-      // 5. Update in-memory state & notifiers
       _instance._syncToUserDocAndNotifiers(userId, newCoins);
 
       if (_instance._currentWallet != null &&
@@ -392,7 +359,6 @@ class CoinWalletService extends ChangeNotifier {
         _instance._saveToLocal(_instance._currentWallet!);
       }
 
-      // ✅ 6. AUTOMATIC TEAM MODERATION CHECK (Runs in background)
       _checkTeamEligibility(userId, newCoins);
 
     } catch (e) {
@@ -400,7 +366,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Recalculate true coin balance from transactions
   static Future<int> recalculateCoins(String userId) async {
     if (userId.isEmpty) return 1000;
     try {
@@ -430,8 +395,6 @@ class CoinWalletService extends ChangeNotifier {
       });
 
       _instance._syncToUserDocAndNotifiers(userId, computed);
-
-      // Check eligibility after recalculation
       _checkTeamEligibility(userId, computed);
 
       return computed;
@@ -441,7 +404,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Load or initialize wallet for user
   Future<CoinWallet> getOrCreateWallet(String userId) async {
     if (userId.isEmpty) {
       return const CoinWallet(userId: 'guest', coins: 1000);
@@ -451,14 +413,12 @@ class CoinWalletService extends ChangeNotifier {
       return _currentWallet!;
     }
 
-    // 1. Try local cache
     final local = await _loadFromLocal(userId);
     if (local != null) {
       _currentWallet = local;
       notifyListeners();
     }
 
-    // 2. Fetch from Supabase
     try {
       final row = await SupabaseService.client
           .from('coin_wallets')
@@ -475,7 +435,6 @@ class CoinWalletService extends ChangeNotifier {
         return w;
       }
 
-      // Check users table for existing coins (PRIMARY SOURCE OF TRUTH)
       final userRow = await SupabaseService.client
           .from('users')
           .select('coins, g_coins')
@@ -571,7 +530,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Claim Daily 50 G-Coins bonus every 24h
   Future<bool> claimDailyBonus(String userId) async {
     final wallet = await getOrCreateWallet(userId);
     if (!wallet.canClaimDailyBonus) {
@@ -616,7 +574,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Reward 100 G-Coins for watching an Ad (Unlimited)
   Future<void> rewardAdCoins(String userId) async {
     final wallet = await getOrCreateWallet(userId);
     final newCoins = wallet.coins + 100;
@@ -654,9 +611,9 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Reward Referral Coins (100 G-Coins)
   Future<void> rewardReferralCoins(String userId,
-      {String inviteeName = 'Friend'}) async {
+      {String? inviteeName}) async {
+    final name = inviteeName ?? 'wallet_friend'.tr();
     final wallet = await getOrCreateWallet(userId);
     final newCoins = wallet.coins + 100;
     final newLifetime = wallet.lifetimeEarned + 100;
@@ -678,13 +635,13 @@ class CoinWalletService extends ChangeNotifier {
         amount: 100,
         type: 'referral',
         title: 'wallet_referral_bonus_title'.tr(),
-        description: 'wallet_referral_bonus_desc'.tr(args: [inviteeName]),
+        description: 'wallet_referral_bonus_desc'.tr(args: [name]),
       );
       try {
         NotificationService().sendCoinRewardNotification(
           targetUserId: userId,
           amount: 100,
-          reason: 'wallet_referral_bonus_reason'.tr(args: [inviteeName]),
+          reason: 'wallet_referral_bonus_reason'.tr(args: [name]),
           type: 'referral',
         );
       } catch (_) {}
@@ -693,7 +650,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Host Room Escrow Hold
   Future<bool> holdRoomHostCoins({
     required String userId,
     required int prizePoolCoins,
@@ -745,7 +701,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Join Room Entry Fee Escrow Hold
   Future<bool> holdEntryFeeCoins({
     required String userId,
     required int entryFeeCoins,
@@ -797,7 +752,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Leave Room: Refund Entry Fee if user leaves before match start
   Future<void> refundEntryFeeOnLeave({
     required String userId,
     required int entryFeeCoins,
@@ -836,8 +790,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Finalize Match Winner:
-  /// Transfer all escrowCoins to winner(s) coins
   Future<void> awardWinnerPrize({
     required String hostId,
     String? winnerId,
@@ -865,7 +817,6 @@ class CoinWalletService extends ChangeNotifier {
     final now = DateTime.now();
 
     try {
-      // 1. Release host's escrow hold if applicable
       if (prizePoolCoins > 0 && hostId.isNotEmpty) {
         try {
           await updateCoins(
@@ -881,7 +832,6 @@ class CoinWalletService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // 2. Clear escrow for joiners
       if (entryFeeCoinsPerJoiner > 0) {
         for (final joinerId in joiners) {
           if (joinerId != hostId) {
@@ -899,7 +849,6 @@ class CoinWalletService extends ChangeNotifier {
         }
       }
 
-      // 3. Distribute prize to all winners
       for (int i = 0; i < allWinnerIds.length; i++) {
         final wId = allWinnerIds[i].trim();
         if (wId.isEmpty) continue;
@@ -918,13 +867,12 @@ class CoinWalletService extends ChangeNotifier {
         );
       }
 
-      // Update room status in Supabase
       if (roomId.isNotEmpty) {
         final combinedWName = (winnerNames != null && winnerNames.isNotEmpty)
             ? winnerNames.join(', ')
-            : 'Winner';
+            : 'winner_default_label'.tr();
         await SupabaseService.client.from('tournament_rooms').update({
-          'status': 'COMPLETED',
+          'status': 'completed',
           'winnerUid': allWinnerIds.join(','),
           'winnerName': combinedWName,
           'isLive': false,
@@ -936,7 +884,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Refund room if expired or cancelled
   Future<void> refundRoom({
     required String hostId,
     required int prizePoolCoins,
@@ -946,7 +893,6 @@ class CoinWalletService extends ChangeNotifier {
     required String roomTitle,
   }) async {
     try {
-      // 1. Refund host
       if (prizePoolCoins > 0 && hostId.isNotEmpty) {
         await updateCoins(
           userId: hostId,
@@ -960,7 +906,6 @@ class CoinWalletService extends ChangeNotifier {
         );
       }
 
-      // 2. Refund joiners
       if (entryFeeCoins > 0) {
         for (final jId in joiners) {
           if (jId != hostId) {
@@ -984,7 +929,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Deducts trustScore by penalty points
   Future<void> penalizeTrustScore(
       String userId, int penaltyPoints, String reason) async {
     try {
@@ -1063,7 +1007,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Purchase In-App Store Items
   Future<Map<String, dynamic>> purchaseStoreItem({
     required String userId,
     required String itemId,
@@ -1093,7 +1036,6 @@ class CoinWalletService extends ChangeNotifier {
     _saveToLocal(updated);
 
     try {
-      // 1. Deduct coins from wallet & user profile
       await updateCoins(
         userId: userId,
         amount: -costCoins,
@@ -1102,7 +1044,6 @@ class CoinWalletService extends ChangeNotifier {
         description: 'wallet_store_purchase_desc'.tr(args: [category]),
       );
 
-      // 2. Update user profile perks based on category in Supabase (100% snake_case)
       final Map<String, dynamic> userPerks = {
         'updated_at': now.toIso8601String(),
       };
@@ -1190,7 +1131,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Track tournament participation
   Future<void> recordTournamentJoinedAndCheckReferral(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1222,7 +1162,6 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  /// Link friend referral code
   Future<bool> registerReferralCode(String userId, String referrerCode) async {
     try {
       final trimmed = referrerCode.trim();
