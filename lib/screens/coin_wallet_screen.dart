@@ -1,5 +1,5 @@
 // ===============================================================================
-// COIN WALLET SCREEN — Full Multi-Language Live Translation via easy_localization
+// COIN WALLET SCREEN — Full Multi-Language Live Translation & Adaptive Day/Night Theme
 // File: lib/screens/coin_wallet_screen.dart
 // ===============================================================================
 
@@ -11,6 +11,7 @@ import '../models/coin_transaction_model.dart';
 import '../models/coin_wallet_model.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/coin_history_sheet.dart';
 import 'coin_store_screen.dart';
 import 'earn_coins_screen.dart';
@@ -86,81 +87,93 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B101B),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0B101B),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'my_wallet_title'.tr(),
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen),
-            tooltip: 'tooltip_coin_store'.tr(),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
-              );
-            },
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        color: GamerTheme.neonGreen,
-        backgroundColor: GamerTheme.cardDark,
-        onRefresh: _refreshWallet,
-        child: StreamBuilder<CoinWallet>(
-          stream: _walletService.walletStream(_userId),
-          builder: (context, walletSnap) {
-            final wallet = walletSnap.data ?? _walletService.currentWallet ?? CoinWallet.empty(_userId);
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        final isDark = ThemeService.isDarkMode;
 
-            return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildBalanceCard(wallet),
-                  const SizedBox(height: 16),
-                  _buildActionButtons(),
-                  const SizedBox(height: 20),
-                  _buildDailyBonusCard(wallet),
-                  const SizedBox(height: 20),
-                  _buildStatsRow(wallet),
-                  const SizedBox(height: 20),
-                  _buildRecentTransactions(),
-                  const SizedBox(height: 100),
-                ],
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_rounded, color: ThemeService.textPrimary),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'my_wallet_title'.tr(),
+              style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen),
+                tooltip: 'tooltip_coin_store'.tr(),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
+                  );
+                },
               ),
-            );
-          },
-        ),
-      ),
+            ],
+          ),
+          body: RefreshIndicator(
+            color: GamerTheme.neonGreen,
+            backgroundColor: ThemeService.card,
+            onRefresh: _refreshWallet,
+            child: StreamBuilder<CoinWallet>(
+              stream: _walletService.walletStream(_userId),
+              builder: (context, walletSnap) {
+                final wallet = walletSnap.data ?? _walletService.currentWallet ?? CoinWallet.empty(_userId);
+
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildBalanceCard(wallet, isDark),
+                      const SizedBox(height: 16),
+                      _buildActionButtons(),
+                      const SizedBox(height: 20),
+                      _buildDailyBonusCard(wallet),
+                      const SizedBox(height: 20),
+                      _buildStatsRow(wallet),
+                      const SizedBox(height: 20),
+                      _buildRecentTransactions(),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildBalanceCard(CoinWallet wallet) {
+  Widget _buildBalanceCard(CoinWallet wallet, bool isDark) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF141D2E), Color(0xFF0F1523)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: isDark ? null : ThemeService.card,
+        gradient: isDark
+            ? const LinearGradient(
+                colors: [Color(0xFF141D2E), Color(0xFF0F1523)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: GamerTheme.borderDark),
+        border: Border.all(color: ThemeService.border),
         boxShadow: [
           BoxShadow(
-            color: GamerTheme.neonGreen.withOpacity(0.08),
+            color: isDark
+                ? GamerTheme.neonGreen.withOpacity(0.08)
+                : Colors.black.withOpacity(0.04),
             blurRadius: 20,
             spreadRadius: 2,
           ),
@@ -171,8 +184,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         children: [
           Text(
             'current_balance_label'.tr(),
-            style: const TextStyle(
-              color: GamerTheme.textMuted,
+            style: TextStyle(
+              color: ThemeService.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.5,
@@ -197,8 +210,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
                   'g_coins_label'.tr(),
-                  style: const TextStyle(
-                    color: GamerTheme.textMuted,
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -212,13 +225,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: GamerTheme.cardElevated,
+                  color: ThemeService.cardSecondary,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   'escrow_coins_tag'.tr(args: [NumberFormat('#,###').format(wallet.escrowCoins)]),
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -227,8 +240,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               const SizedBox(width: 8),
               Text(
                 'total_net_worth_label'.tr(args: [NumberFormat('#,###').format(wallet.totalNetWorth)]),
-                style: const TextStyle(
-                  color: GamerTheme.textMuted,
+                style: TextStyle(
+                  color: ThemeService.textSecondary,
                   fontSize: 11,
                 ),
               ),
@@ -284,7 +297,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
           decoration: BoxDecoration(
-            color: GamerTheme.cardDark,
+            color: ThemeService.card,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: color.withOpacity(0.4)),
           ),
@@ -312,12 +325,12 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: canClaim
               ? GamerTheme.neonGreen.withOpacity(0.5)
-              : GamerTheme.borderDark,
+              : ThemeService.border,
         ),
       ),
       child: Row(
@@ -325,13 +338,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: (canClaim ? GamerTheme.neonGreen : GamerTheme.textMuted)
+              color: (canClaim ? GamerTheme.neonGreen : ThemeService.textSecondary)
                   .withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               Icons.calendar_today_rounded,
-              color: canClaim ? GamerTheme.neonGreen : GamerTheme.textMuted,
+              color: canClaim ? GamerTheme.neonGreen : ThemeService.textSecondary,
               size: 24,
             ),
           ),
@@ -342,8 +355,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               children: [
                 Text(
                   'daily_login_bonus_title'.tr(),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
@@ -353,8 +366,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   canClaim
                       ? 'claim_bonus_now_desc'.tr()
                       : 'next_claim_time_desc'.tr(args: [_formatDuration(wallet.nextDailyBonusDuration)]),
-                  style: const TextStyle(
-                    color: GamerTheme.textMuted,
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
                     fontSize: 12,
                   ),
                 ),
@@ -364,13 +377,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor:
-                  canClaim ? GamerTheme.neonGreen : GamerTheme.cardElevated,
-              foregroundColor: canClaim ? Colors.black : GamerTheme.textMuted,
+                  canClaim ? GamerTheme.neonGreen : ThemeService.cardSecondary,
+              foregroundColor: canClaim ? Colors.black : ThemeService.textSecondary,
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
-              disabledBackgroundColor: GamerTheme.cardElevated,
+              disabledBackgroundColor: ThemeService.cardSecondary,
             ),
             onPressed: canClaim && !_isClaimingDaily ? _claimDailyBonus : null,
             child: _isClaimingDaily
@@ -430,9 +443,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: GamerTheme.borderDark),
+        border: Border.all(color: ThemeService.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,7 +454,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           const SizedBox(height: 8),
           Text(
             label,
-            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10),
+            style: TextStyle(color: ThemeService.textSecondary, fontSize: 10),
           ),
           const SizedBox(height: 2),
           Text(
@@ -466,8 +479,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           children: [
             Text(
               'recent_activities_title'.tr(),
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: ThemeService.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -505,15 +518,15 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: GamerTheme.cardDark,
+                  color: ThemeService.card,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: GamerTheme.borderDark),
+                  border: Border.all(color: ThemeService.border),
                 ),
                 child: Center(
                   child: Text(
                     'no_transactions_yet'.tr(),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                   ),
                 ),
               );
@@ -534,9 +547,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: GamerTheme.borderDark),
+        border: Border.all(color: ThemeService.border),
       ),
       child: Row(
         children: [
@@ -559,8 +572,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               children: [
                 Text(
                   tx.title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
                   ),
@@ -570,8 +583,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 const SizedBox(height: 2),
                 Text(
                   DateFormat('dd MMM • hh:mm a').format(tx.timestamp),
-                  style: const TextStyle(
-                    color: GamerTheme.textMuted,
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
                     fontSize: 11,
                   ),
                 ),
