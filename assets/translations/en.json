@@ -1579,5 +1579,20 @@
 "privacy_sec7_title": "7. Data Retention",
 "privacy_sec7_content": "Your data is kept as long as your account is active.\nAfter account deletion, data is permanently removed within 30 days.\nSome data may be kept longer if required by law.",
 "privacy_sec8_title": "8. Children's Privacy (COPPA)",
-"privacy_sec8_content": "This app is NOT intended for children under 13 years.\nWe do not knowingly collect data from children under 13.\nIf you are under 13, please do not use this app.\nParents can contact us to remove any accidental data."
+"privacy_sec8_content": "This app is NOT intended for children under 13 years.\nWe do not knowingly collect data from children under 13.\nIf you are under 13, please do not use this app.\nParents can contact us to remove any accidental data.","about_us_title": "About Us",
+"about_us_tagline": "Pakistan's #1 Gaming Community",
+"about_us_mission_desc": "Our mission is to connect gamers across Pakistan and provide a safe, competitive platform to showcase your skills, join teams, and win rewards.",
+"about_us_coverage_title": "Games We Cover",
+"about_cat_bgmi_title": "BGMI",
+"about_cat_bgmi_desc": "Battlegrounds Mobile India - Intense battle royale action.",
+"about_cat_ff_title": "Free Fire",
+"about_cat_ff_desc": "Fast-paced survival shooter with short matches.",
+"about_cat_cod_title": "Call of Duty Mobile",
+"about_cat_cod_desc": "Console-quality HD FPS action on your phone.",
+"about_cat_val_title": "Valorant",
+"about_cat_val_desc": "Tactical 5v5 character-based tactical shooter.",
+"about_cat_coins_title": "Earn Coins & Rewards",
+"about_cat_coins_desc": "Play tournaments, win matches, and earn G-Coins.",
+"about_footer_built_by": "Built with ❤️ by Gamers ID Team",
+"about_footer_network_info": "Connect with us on social media for updates and giveaways."
 }
