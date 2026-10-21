@@ -336,59 +336,35 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                // Avatar with Theme-aware Container + Real Online Dot
-                Stack(
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: ThemeService.cardSecondary,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: ThemeService.border, width: 1.5),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: c.otherUserPhoto.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: c.otherUserPhoto,
-                                fit: BoxFit.cover,
-                                placeholder: (_, __) => const Center(
-                                  child: SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: neonCyan,
-                                    ),
-                                  ),
+                // Avatar with Theme-aware Container
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: ThemeService.cardSecondary,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: ThemeService.border, width: 1.5),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: c.otherUserPhoto.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: c.otherUserPhoto,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => const Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: neonCyan,
                                 ),
-                                errorWidget: (_, __, ___) => _buildInitials(c.otherUserName, 50),
-                              )
-                            : _buildInitials(c.otherUserName, 50),
-                      ),
-                    ),
-                    if (c.isOnline == true)
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 11,
-                          height: 11,
-                          decoration: BoxDecoration(
-                            color: neonGreen,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: ThemeService.card, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: neonGreen.withOpacity(0.6),
-                                blurRadius: 4,
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
+                            ),
+                            errorWidget: (_, __, ___) => _buildInitials(c.otherUserName, 50),
+                          )
+                        : _buildInitials(c.otherUserName, 50),
+                  ),
                 ),
                 const SizedBox(width: 12),
 
