@@ -1494,5 +1494,13 @@
   "your_request_sent": "آپ کی درخواست بھیج دی گئی",
   "your_room": "آپ کا روم",
   "your_squad": "آپ کا اسکواڈ",
-  "your_team": "آپ کی ٹیم"
+  "your_team": "آپ کی ٹیم",
+  "btn_challenge_caps": "چیلنج کریں ⚡",
+  "badge_owner_caps": "بانی 👑",
+  "open_team": "ٹیم کھولیں 🚪",
+  "view_team": "ٹیم دیکھیں",
+  "leader_label": "لیڈر:",
+  "members_label": "ممبرز:",
+  "create_team": "ٹیم بنائیں",
+  "search_teams_placeholder": "ٹیم کا نام یا آئی ڈی تلاش کریں..."
 }
