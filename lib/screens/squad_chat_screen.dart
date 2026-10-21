@@ -108,8 +108,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       final currentEmail = GamerAuthService().currentUser?.email ?? '';
 
       List<String> members = [];
-      String title = 'Squad Chat';
-      String mode = 'Classic Squad';
+      String title = 'squad_chat_title'.tr();
+      String mode = 'mode_classic_squad'.tr();
       String inGameUid = '';
       String leaderUid = '';
 
@@ -120,8 +120,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         if (leaderUid.isNotEmpty && !members.contains(leaderUid)) {
           members.insert(0, leaderUid);
         }
-        title = postData['ownerBgmiName'] ?? postData['displayName'] ?? postData['title'] ?? 'Squad Chat';
-        mode = postData['mode'] ?? 'Classic Squad';
+        title = postData['ownerBgmiName'] ?? postData['displayName'] ?? postData['title'] ?? 'squad_chat_title'.tr();
+        mode = postData['mode'] ?? 'mode_classic_squad'.tr();
         inGameUid = (postData['gameUid'] ?? postData['inGameUid'] ?? postData['bgmiUid'] ?? '').toString();
       } else if (widget.squad != null) {
         leaderUid = widget.squad!.userId;
@@ -199,7 +199,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$label copied to clipboard!'),
+        content: Text('squad_copied_to_clipboard'.tr(args: [label])),
         backgroundColor: GamerTheme.neonGreen,
         duration: const Duration(seconds: 2),
       ),
@@ -215,20 +215,20 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Leave Squad?', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
-        content: const Text(
-          'Are you sure you want to leave this squad? You will be removed from the squad and chat.',
-          style: TextStyle(color: GamerTheme.textMuted),
+        title: Text('squad_leave_title'.tr(), style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
+        content: Text(
+          'squad_leave_desc'.tr(),
+          style: const TextStyle(color: GamerTheme.textMuted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
+            child: Text('btn_cancel_caps'.tr(), style: const TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('LEAVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text('squad_leave_btn'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -239,7 +239,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     setState(() => _isLeaving = true);
     try {
       final user = await GamerAuthService().getUserProfile(currentUid);
-      final memberName = user?.displayName ?? 'Teammate';
+      final memberName = user?.displayName ?? 'squad_teammate'.tr();
       await LfgService().leaveSquad(
         postId: widget.postId,
         memberUid: currentUid,
@@ -249,8 +249,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       if (mounted) {
         Navigator.pop(context); // Close chat
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('You left the squad'),
+          SnackBar(
+            content: Text('squad_you_left'.tr()),
             backgroundColor: GamerTheme.accentOrange,
           ),
         );
@@ -258,7 +258,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to leave: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('squad_leave_failed'.tr(args: ['$e'])), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -272,20 +272,20 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('End Squad?', style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
-        content: const Text(
-          'Are you sure you want to end this squad? The squad will be closed and permanently removed.',
-          style: TextStyle(color: GamerTheme.textMuted),
+        title: Text('squad_end_title'.tr(), style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold)),
+        content: Text(
+          'squad_end_desc'.tr(),
+          style: const TextStyle(color: GamerTheme.textMuted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL', style: TextStyle(color: GamerTheme.textMuted)),
+            child: Text('btn_cancel_caps'.tr(), style: const TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('END SQUAD', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text('squad_end_btn'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -299,8 +299,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Squad ended'),
+          SnackBar(
+            content: Text('squad_ended_msg'.tr()),
             backgroundColor: GamerTheme.accentOrange,
           ),
         );
@@ -308,7 +308,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to end squad: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('squad_end_failed'.tr(args: ['$e'])), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -330,7 +330,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       final user = await GamerAuthService().getUserProfile(currentUid);
       final senderName = user?.displayName.isNotEmpty == true
           ? user!.displayName
-          : "Gamer";
+          : "user_gamer".tr();
       final senderUsername = user?.username.isNotEmpty == true
           ? user!.username
           : senderName.toLowerCase().replaceAll(' ', '');
@@ -367,7 +367,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('squad_send_failed'.tr(args: ['$e'])), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -389,8 +389,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     final currentUid = GamerAuthService().currentUid ?? '';
     if (currentUid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please log in first to submit win proof.'),
+        SnackBar(
+          content: Text('err_login_first_win_proof'.tr()),
           backgroundColor: GamerTheme.redAccent,
         ),
       );
@@ -412,19 +412,19 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(color: GamerTheme.redAccent.withOpacity(0.5)),
           ),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: GamerTheme.accentOrange, size: 24),
-              SizedBox(width: 8),
+              const Icon(Icons.warning_amber_rounded, color: GamerTheme.accentOrange, size: 24),
+              const SizedBox(width: 8),
               Text(
-                'Character UID Missing',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                'dialog_character_uid_missing_title'.tr(),
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           content: Text(
             'add_game_uid_first_proof'.tr(),
-            style: TextStyle(color: GamerTheme.textMuted, fontSize: 13.5, height: 1.4),
+            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13.5, height: 1.4),
           ),
           actions: [
             TextButton(
@@ -441,7 +441,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
     File? proofImage;
     bool isSubmitting = false;
-    final noteController = TextEditingController(text: 'Match Won! Victory proof submitted.');
+    final noteController = TextEditingController(text: 'default_victory_note'.tr());
 
     showModalBottomSheet(
       context: context,
@@ -475,17 +475,17 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                         child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 24),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Submit Win Proof 🏆',
-                              style: TextStyle(color: GamerTheme.textWhite, fontSize: 17, fontWeight: FontWeight.bold),
+                              'title_submit_win_proof'.tr(),
+                              style: const TextStyle(color: GamerTheme.textWhite, fontSize: 17, fontWeight: FontWeight.bold),
                             ),
                             Text(
-                              'Host approval required • 100 Coins reward',
-                              style: TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                              'sub_submit_win_proof'.tr(),
+                              style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
                             ),
                           ],
                         ),
@@ -495,18 +495,18 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   const SizedBox(height: 18),
 
                   // Character UID (Read-only, auto-filled from user profile)
-                  const Row(
+                  Row(
                     children: [
                       Text(
-                        'CHARACTER UID',
-                        style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                        'label_character_uid'.tr(),
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
-                      SizedBox(width: 6),
-                      Icon(Icons.lock_rounded, size: 12, color: GamerTheme.neonGreen),
-                      SizedBox(width: 4),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.lock_rounded, size: 12, color: GamerTheme.neonGreen),
+                      const SizedBox(width: 4),
                       Text(
-                        '(Verified from Profile)',
-                        style: TextStyle(color: GamerTheme.neonGreen, fontSize: 10.5, fontWeight: FontWeight.w600),
+                        'label_verified_from_profile'.tr(),
+                        style: const TextStyle(color: GamerTheme.neonGreen, fontSize: 10.5, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -534,9 +534,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                             ),
                           ),
                         ),
-                        const Text(
-                          'READ-ONLY',
-                          style: TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                        Text(
+                          'label_read_only'.tr(),
+                          style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -547,9 +547,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   // Required Screenshot Upload
                   Row(
                     children: [
-                      const Text(
-                        'VICTORY SCREENSHOT',
-                        style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                      Text(
+                        'label_victory_screenshot'.tr(),
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(width: 6),
                       Container(
@@ -558,9 +558,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                           color: GamerTheme.redAccent.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
-                          'REQUIRED',
-                          style: TextStyle(color: GamerTheme.redAccent, fontSize: 9.5, fontWeight: FontWeight.w900),
+                        child: Text(
+                          'label_required'.tr(),
+                          style: const TextStyle(color: GamerTheme.redAccent, fontSize: 9.5, fontWeight: FontWeight.w900),
                         ),
                       ),
                     ],
@@ -591,19 +591,19 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                 width: 1.5,
                               ),
                             ),
-                            child: const Column(
+                            child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.add_photo_alternate_rounded, color: Color(0xFFFFD700), size: 36),
-                                SizedBox(height: 8),
+                                const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFFFFD700), size: 36),
+                                const SizedBox(height: 8),
                                 Text(
-                                  'Tap to Upload Victory Screenshot',
-                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  'tap_upload_victory_screenshot'.tr(),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
-                                SizedBox(height: 4),
+                                const SizedBox(height: 4),
                                 Text(
-                                  'Chicken Dinner / Results Screen (Required)',
-                                  style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                                  'sub_victory_screenshot_hint'.tr(),
+                                  style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                                 ),
                               ],
                             ),
@@ -643,14 +643,14 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                     color: Colors.black.withOpacity(0.7),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 12),
-                                      SizedBox(width: 4),
+                                      const Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 12),
+                                      const SizedBox(width: 4),
                                       Text(
-                                        'Screenshot Attached',
-                                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                        'screenshot_attached'.tr(),
+                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                                       ),
                                     ],
                                   ),
@@ -661,9 +661,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                   ),
 
                   const SizedBox(height: 16),
-                  const Text(
-                    'VICTORY NOTE / DETAILS',
-                    style: TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                  Text(
+                    'label_victory_note_details'.tr(),
+                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
                   TextField(
@@ -671,7 +671,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                     enabled: !isSubmitting,
                     style: const TextStyle(color: GamerTheme.textWhite, fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: 'Chicken Dinner / Match Won',
+                      hintText: 'hint_victory_note'.tr(),
                       hintStyle: const TextStyle(color: GamerTheme.textMuted),
                       filled: true,
                       fillColor: GamerTheme.bgDark,
@@ -701,8 +701,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                           : const Icon(Icons.send_rounded, size: 18),
                       label: Text(
                         isSubmitting
-                            ? 'SUBMITTING PROOF...'
-                            : (proofImage == null ? 'ATTACH SCREENSHOT TO SUBMIT' : 'SUBMIT WIN PROOF'),
+                            ? 'btn_submitting_proof'.tr()
+                            : (proofImage == null ? 'btn_attach_screenshot_submit'.tr() : 'btn_submit_win_proof'.tr()),
                         style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                       ),
                       onPressed: (isSubmitting || proofImage == null)
@@ -713,8 +713,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
                               try {
                                 final user = await GamerAuthService().getUserProfile(currentUid);
-                                final senderName = user?.displayName ?? 'Teammate';
-                                final senderUsername = user?.username ?? 'gamer';
+                                final senderName = user?.displayName ?? 'squad_teammate'.tr();
+                                final senderUsername = user?.username ?? 'user_gamer'.tr();
                                 final senderAvatar = user?.photoUrl ?? '';
                                 final note = noteController.text.trim();
 
@@ -729,8 +729,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   if (mounted) {
                                     setModalState(() => isSubmitting = false);
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Screenshot upload failed. Please try again.'),
+                                      SnackBar(
+                                        content: Text('err_screenshot_upload_failed'.tr()),
                                         backgroundColor: GamerTheme.redAccent,
                                       ),
                                     );
@@ -751,7 +751,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   'proofImageUrl': url,
                                   'proofUrl': url,
                                   'imageUrl': url,
-                                  'note': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
+                                  'note': note.isNotEmpty ? note : 'default_victory_note'.tr(),
                                   'status': 'pending',
                                   'createdAt': nowIso,
                                   'senderName': senderName,
@@ -780,14 +780,14 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   'proofImageUrl': url,
                                   'proofUrl': url,
                                   'imageUrl': url,
-                                  'text': note.isNotEmpty ? note : 'Match Won! Victory proof submitted.',
+                                  'text': note.isNotEmpty ? note : 'default_victory_note'.tr(),
                                   'createdAt': nowIso,
                                 }).catchError((_) => null);
 
                                 await SupabaseService.client.from('chats').upsert({
                                   'id': widget.postId,
                                   'postId': widget.postId,
-                                  'lastMessage': '$senderName submitted Win Proof 🏆',
+                                  'lastMessage': 'msg_win_proof_submitted_short'.tr(args: [senderName]),
                                   'lastMessageTime': nowIso,
                                   'updatedAt': nowIso,
                                 }).catchError((_) => null);
@@ -796,7 +796,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   Navigator.pop(ctx);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('win_proof_submitted_wait'.tr()),
+                                      content: Text('msg_win_proof_submitted'.tr()),
                                       backgroundColor: GamerTheme.accentBlue,
                                       duration: Duration(seconds: 3),
                                     ),
@@ -809,7 +809,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                   setModalState(() => isSubmitting = false);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Submission failed: $e'),
+                                      content: Text('err_submission_failed'.tr(args: ['$e'])),
                                       backgroundColor: GamerTheme.redAccent,
                                     ),
                                   );
@@ -846,13 +846,13 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
           borderRadius: BorderRadius.circular(18),
           side: BorderSide(color: GamerTheme.redAccent.withOpacity(0.5)),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.cancel_outlined, color: GamerTheme.redAccent, size: 22),
-            SizedBox(width: 8),
+            const Icon(Icons.cancel_outlined, color: GamerTheme.redAccent, size: 22),
+            const SizedBox(width: 8),
             Text(
-              'Reject Win Proof',
-              style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
+              'title_reject_win_proof'.tr(),
+              style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
             ),
           ],
         ),
@@ -863,7 +863,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -872,7 +872,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('HAAN, REJECT', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: Text('btn_yes_reject'.tr(), style: const TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -903,7 +903,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         'senderId': 'system',
         'senderUid': 'system',
         'senderName': 'System',
-        'text': 'Host rejected win proof submitted by @$cleanTag',
+        'text': 'msg_host_rejected_win_proof'.tr(args: ['@$cleanTag']),
         'type': 'system',
         'createdAt': nowIso,
       }).catchError((_) => null);
@@ -911,7 +911,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Win proof from @$cleanTag was rejected.'),
+            content: Text('msg_win_proof_rejected'.tr(args: ['@$cleanTag'])),
             backgroundColor: GamerTheme.redAccent,
             duration: const Duration(seconds: 2),
           ),
@@ -922,7 +922,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Action failed: $e'),
+            content: Text('err_action_failed'.tr(args: ['$e'])),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -952,13 +952,13 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
           borderRadius: BorderRadius.circular(18),
           side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.5)),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Text('🪙', style: TextStyle(fontSize: 22)),
-            SizedBox(width: 8),
+            const Text('🪙', style: TextStyle(fontSize: 22)),
+            const SizedBox(width: 8),
             Text(
-              'Reward Winner',
-              style: TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
+              'title_reward_winner'.tr(),
+              style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17),
             ),
           ],
         ),
@@ -969,7 +969,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -978,7 +978,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('HAAN, REWARD', style: TextStyle(fontWeight: FontWeight.w900)),
+            child: Text('btn_yes_reward'.tr(), style: const TextStyle(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -993,7 +993,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       final int hostCoins = (hostData?['coins'] as num?)?.toInt() ?? 100;
 
       if (hostCoins < 100) {
-        throw 'Not enough coins';
+        throw 'err_not_enough_coins'.tr();
       }
 
       await SupabaseService.client.from('users').update({
@@ -1012,13 +1012,13 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         userId: hostId,
         amount: -100,
         type: 'squad_reward_given',
-        description: 'Rewarded squad match winner 100 coins',
+        description: 'db_desc_rewarded_squad_winner'.tr(),
       );
       await SupabaseService.recordCoinTransaction(
         userId: winnerId,
         amount: 100,
         type: 'squad_reward_won',
-        description: 'Won squad match reward 100 coins',
+        description: 'db_desc_won_squad_reward'.tr(),
       );
 
       await SupabaseService.client.from('messages').update({
@@ -1040,7 +1040,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         'senderId': 'system',
         'senderUid': 'system',
         'senderName': 'System',
-        'text': 'Host rewarded 100 coins to @$cleanTag 🏆',
+        'text': 'msg_host_rewarded_100_coins'.tr(args: ['@$cleanTag']),
         'type': 'system',
         'createdAt': nowIso,
       }).catchError((_) => null);
@@ -1048,7 +1048,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🎉 Successfully rewarded 100 coins to @$cleanTag!'),
+            content: Text('msg_rewarded_100_coins'.tr(args: ['@$cleanTag'])),
             backgroundColor: GamerTheme.neonGreen,
             duration: const Duration(seconds: 3),
           ),
@@ -1060,7 +1060,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         final isInsufficient = e.toString().contains('Not enough coins');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isInsufficient ? 'Not enough coins' : 'Transaction failed: $e'),
+            content: Text(isInsufficient ? 'err_not_enough_coins'.tr() : 'err_transaction_failed'.tr(args: ['$e'])),
             backgroundColor: Colors.redAccent,
             duration: const Duration(seconds: 3),
           ),
@@ -1134,7 +1134,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
     required String currentUid,
   }) {
     final senderUid = (data['senderId'] ?? data['senderUid'] ?? data['submittedBy']) as String? ?? '';
-    final senderName = data['senderName'] as String? ?? 'Gamer';
+    final senderName = data['senderName'] as String? ?? 'user_gamer'.tr();
     final senderUsername = (data['senderUsername'] ?? data['username'] ?? data['senderTag'] ?? data['tag'] ?? senderName).toString().trim();
     final senderAvatar = data['senderAvatar'] as String? ?? '';
     final status = (data['status'] as String? ?? 'pending').toLowerCase();
@@ -1152,16 +1152,16 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
         : (isRejected ? GamerTheme.redAccent : const Color(0xFFFFD700));
 
     final String statusLabel = isRewarded
-        ? 'REWARDED'
-        : (isRejected ? 'REJECTED' : 'PENDING APPROVAL');
+        ? 'status_rewarded_caps'.tr()
+        : (isRejected ? 'status_rejected_caps'.tr() : 'status_pending_approval_caps'.tr());
 
     final IconData statusIcon = isRewarded
         ? Icons.check_circle_rounded
         : (isRejected ? Icons.cancel_rounded : Icons.hourglass_top_rounded);
 
     final String statusSubtitle = isRewarded
-        ? 'REWARDED • 100 G-Coins Paid'
-        : (isRejected ? 'REJECTED • Proof Not Approved' : 'PENDING APPROVAL • Awaiting Host');
+        ? 'sub_status_rewarded'.tr()
+        : (isRejected ? 'sub_status_rejected'.tr() : 'sub_status_pending'.tr());
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -1204,9 +1204,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'MATCH WIN PROOF',
-                      style: TextStyle(
+                    Text(
+                      'label_match_win_proof'.tr(),
+                      style: const TextStyle(
                         color: GamerTheme.textWhite,
                         fontWeight: FontWeight.w900,
                         fontSize: 13,
@@ -1305,7 +1305,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Character UID: ${inGameUid.isNotEmpty ? inGameUid : (senderUid.isNotEmpty ? senderUid : "Verified Profile UID")}',
+                        'label_character_uid_prefix'.tr(args: [inGameUid.isNotEmpty ? inGameUid : (senderUid.isNotEmpty ? senderUid : 'verified_profile_uid_fallback'.tr())]),
                         style: const TextStyle(
                           color: GamerTheme.textMuted,
                           fontSize: 11,
@@ -1372,13 +1372,13 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     icon: const Icon(Icons.copy_rounded, size: 13),
-                    label: const Text(
-                      'COPY UID',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    label: Text(
+                      'btn_copy_uid_caps'.tr(),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     onPressed: () {
                       final uidToCopy = inGameUid.isNotEmpty ? inGameUid : senderUid;
-                      _copyToClipboard(uidToCopy, 'Winner UID');
+                      _copyToClipboard(uidToCopy, 'winner_uid'.tr());
                     },
                   ),
                 ),
@@ -1394,9 +1394,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     icon: const Icon(Icons.close_rounded, size: 14),
-                    label: const Text(
-                      'REJECT',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    label: Text(
+                      'btn_reject_caps'.tr(),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     onPressed: () => _handleRejectWinProof(
                       context: context,
@@ -1419,9 +1419,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     icon: const Text('🪙', style: TextStyle(fontSize: 13)),
-                    label: const Text(
-                      'APPROVE',
-                      style: TextStyle(
+                    label: Text(
+                      'btn_approve_caps'.tr(),
+                      style: const TextStyle(
                         color: Colors.black,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w900,
@@ -1470,8 +1470,8 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
             widget.squad?.title ??
             (widget.squad?.displayName.isNotEmpty == true
                 ? "${widget.squad!.displayName}'s Squad"
-                : 'Squad Chat');
-        final mode = chatData['mode'] as String? ?? widget.squad?.mode ?? 'Classic Squad';
+                : 'squad_chat_title'.tr());
+        final mode = chatData['mode'] as String? ?? widget.squad?.mode ?? 'mode_classic_squad'.tr();
         final inGameUid = chatData['inGameUid'] as String? ?? widget.squad?.inGameUid ?? '';
         final memberCount = members.length;
 
@@ -1525,18 +1525,18 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                 Row(
                   children: [
                     Text(
-                      '$memberCount/4 members',
+                      'squad_members_count_short'.tr(args: ['$memberCount', '4']),
                       style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
                     ),
                     if (inGameUid.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       InkWell(
-                        onTap: () => _copyToClipboard(inGameUid, 'Leader BGMI UID'),
+                        onTap: () => _copyToClipboard(inGameUid, 'leader_bgmi_uid'.tr()),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'UID: $inGameUid',
+                              'squad_uid_label'.tr(args: [inGameUid]),
                               style: const TextStyle(color: GamerTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(width: 3),
@@ -1570,9 +1570,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                 visualDensity: VisualDensity.compact,
                               ),
                               icon: const Icon(Icons.power_settings_new_rounded, size: 16),
-                              label: const Text(
-                                'END SQUAD',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              label: Text(
+                                'squad_end_btn_caps'.tr(),
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                               ),
                               onPressed: () => _handleEndSquad(leaderUid),
                             ),
@@ -1593,9 +1593,9 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                                 visualDensity: VisualDensity.compact,
                               ),
                               icon: const Icon(Icons.exit_to_app_rounded, size: 16),
-                              label: const Text(
-                                'LEAVE',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                              label: Text(
+                                'squad_leave_btn_caps'.tr(),
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
                               ),
                               onPressed: () => _handleLeaveSquad(leaderUid, members),
                             ),
@@ -1603,7 +1603,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
 
                   // Squad Members bottom sheet button
                   IconButton(
-                    tooltip: 'Squad Members',
+                    tooltip: 'tooltip_squad_members'.tr(),
                     icon: const Icon(Icons.people_alt_rounded, color: GamerTheme.accentCyan),
                     onPressed: () async {
                       SquadPost? currentSquad = widget.squad;
@@ -1648,10 +1648,10 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                             children: [
                               Icon(Icons.forum_outlined, size: 48, color: GamerTheme.textMuted.withOpacity(0.5)),
                               const SizedBox(height: 12),
-                              const Text(
-                                'Squad chat is ready!\nSay hello to your teammates.',
+                              Text(
+                                'squad_chat_ready_hint'.tr(),
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                                style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
                               ),
                             ],
                           ),
@@ -1668,7 +1668,7 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                           final data = docs[index];
                           final messageDocId = (data['id'] ?? '').toString();
                           final senderUid = (data['senderId'] ?? data['senderUid']) as String? ?? '';
-                          final senderName = data['senderName'] as String? ?? 'Gamer';
+                          final senderName = data['senderName'] as String? ?? 'user_gamer'.tr();
                           final senderAvatar = data['senderAvatar'] as String? ?? '';
                           final senderFrame = data['senderFrame'] as String? ?? '';
                           final senderBadge = data['senderBadge'] as String? ?? '';
@@ -1835,11 +1835,11 @@ class _SquadChatScreenState extends State<SquadChatScreen> {
                             style: const TextStyle(color: GamerTheme.textWhite, fontSize: 13.5),
                             textInputAction: TextInputAction.send,
                             onSubmitted: (_) => _sendMessage(),
-                            decoration: const InputDecoration(
-                              hintText: 'Message squad teammates...',
-                              hintStyle: TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: 'hint_message_squad_teammates'.tr(),
+                              hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
                               border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             ),
                           ),
                         ),
