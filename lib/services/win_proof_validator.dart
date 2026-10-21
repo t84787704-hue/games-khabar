@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import '../services/supabase_service.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
@@ -156,8 +157,8 @@ class WinProofValidator {
           final slotName = u['name']?.toString().trim();
           if (slotName != null &&
               slotName.isNotEmpty &&
-              slotName != 'Player' &&
-              slotName != 'Gamer') {
+              slotName != 'user_gamer'.tr() &&
+              slotName != 'user_gamer'.tr()) {
             return slotName;
           }
         }
@@ -169,8 +170,8 @@ class WinProofValidator {
       final pName = joinedPlayerNames[userId]?.toString().trim();
       if (pName != null &&
           pName.isNotEmpty &&
-          pName != 'Player' &&
-          pName != 'Gamer') {
+          pName != 'user_gamer'.tr() &&
+          pName != 'user_gamer'.tr()) {
         return pName;
       }
     }
@@ -187,8 +188,8 @@ class WinProofValidator {
                 final sName = item['name']?.toString().trim();
                 if (sName != null &&
                     sName.isNotEmpty &&
-                    sName != 'Player' &&
-                    sName != 'Gamer') {
+                    sName != 'user_gamer'.tr() &&
+                    sName != 'user_gamer'.tr()) {
                   return sName;
                 }
               }
@@ -197,7 +198,7 @@ class WinProofValidator {
           final pNames = (rData['joinedPlayerNames'] ?? rData['joined_player_names']) as Map?;
           if (pNames != null && pNames[userId] != null) {
             final sName = pNames[userId].toString().trim();
-            if (sName.isNotEmpty && sName != 'Player' && sName != 'Gamer') {
+            if (sName.isNotEmpty && sName != 'user_gamer'.tr() && sName != 'user_gamer'.tr()) {
               return sName;
             }
           }
@@ -223,8 +224,8 @@ class WinProofValidator {
         final displayName = uData['displayName']?.toString().trim();
         if (displayName != null &&
             displayName.isNotEmpty &&
-            displayName != 'Player' &&
-            displayName != 'Gamer') {
+            displayName != 'user_gamer'.tr() &&
+            displayName != 'user_gamer'.tr()) {
           return displayName;
         }
       }
@@ -234,7 +235,7 @@ class WinProofValidator {
 
     // 3. Fallback
     final cleanFallback = fallbackName.trim();
-    return cleanFallback.isNotEmpty ? cleanFallback : 'Player';
+    return cleanFallback.isNotEmpty ? cleanFallback : 'user_gamer'.tr();
   }
 
   /// Run OCR using Google ML Kit on win proof screenshot and validate name match against account ID name.
@@ -544,7 +545,7 @@ class WinProofValidator {
       } else if (middleCandidates.isNotEmpty) {
         detectedScreenshotName = middleCandidates.first['name'] as String;
       } else {
-        detectedScreenshotName = 'Unknown';
+        detectedScreenshotName = 'ocr_unknown'.tr();
       }
 
       // 6. Final Decision & Message formatting
@@ -554,7 +555,7 @@ class WinProofValidator {
       if (!isNameMatched || sName != aName) {
         // Mismatch warning: NEVER block, provide warning message
         final String mismatchMsg =
-            "App AI Check: ⚠️ Mismatch: Detected '$detectedScreenshotName' vs '$targetAccountName'";
+            'ocr_mismatch_msg'.tr(args: [detectedScreenshotName, targetAccountName]);
 
         return WinProofValidationResult(
           isVerified: false,
@@ -571,7 +572,7 @@ class WinProofValidator {
 
       // Verified: Name matched
       final String approveMsg =
-          "App AI Check: 🔍 Detected: '$detectedScreenshotName' | Expected: '$targetAccountName' -> ✅ Verified (4/4)";
+          'ocr_verified_msg'.tr(args: [detectedScreenshotName, targetAccountName]);
 
       return WinProofValidationResult(
         isVerified: true,
@@ -590,12 +591,12 @@ class WinProofValidator {
       } catch (_) {}
       debugPrint('WinProofValidator error: $e');
 
-      final String errMsg = '❌ App AI Check: Error reading screenshot: $e';
+      final String errMsg = 'ocr_error_msg'.tr(args: ['$e']);
       return WinProofValidationResult(
         isVerified: false,
         score: 0,
         status: 'doubt',
-        detectedScreenshotName: 'Unknown',
+        detectedScreenshotName: 'ocr_unknown'.tr(),
         accountIdName: accountIdName,
         message: errMsg,
         fullOcrText: '',
