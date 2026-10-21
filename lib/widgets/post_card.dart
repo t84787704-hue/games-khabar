@@ -654,7 +654,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     final uid = _authService.currentUid;
     if (uid == null || gamer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('login_create_gamer_id_to_comment'.tr())),
+        SnackBar(content: Text('login_create_gamer_id_to_comment'.tr())),
       );
       return;
     }
