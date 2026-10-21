@@ -2700,7 +2700,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('enter_valid_coin_amount'.tr()),
-          backgroundColor: Color(0xFFFF4655),
+          backgroundColor: const Color(0xFFFF4655),
         ),
       );
       return;
@@ -2869,7 +2869,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           const SizedBox(height: 4),
           Text(
             'search_user_to_send_coins_desc'.tr(),
-            style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
           ),
           const SizedBox(height: 12),
           Row(
@@ -2944,12 +2944,12 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                           child: CircularProgressIndicator(
                               color: Color(0xFF38BDF8), strokeWidth: 2),
                         )
-                      : const Column(
+                      : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.search_rounded, size: 20),
+                            const Icon(Icons.search_rounded, size: 20),
                             Text('search'.tr(),
-                                style: TextStyle(
+                                style: const TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold)),
                           ],
@@ -3013,15 +3013,15 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                                     .withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.check_circle_rounded,
+                                  const Icon(Icons.check_circle_rounded,
                                       color: Color(0xFF00FF88), size: 12),
-                                  SizedBox(width: 3),
+                                  const SizedBox(width: 3),
                                   Text(
                                     'user_found'.tr(),
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                         color: Color(0xFF00FF88),
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold),
@@ -3043,7 +3043,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                           children: [
                             Text(
                               'current_balance_prefix'.tr(),
-                              style: TextStyle(
+                              style: const TextStyle(
                                   color: Colors.white70, fontSize: 11),
                             ),
                             Text(
@@ -3262,7 +3262,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                     child: Text(
                       'no_recent_transactions_found'.tr(),
                       style:
-                          TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                          const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     ),
                   ),
                 );
