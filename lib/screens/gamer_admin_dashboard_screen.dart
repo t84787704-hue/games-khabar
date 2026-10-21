@@ -207,7 +207,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         tabs: [
                           const Tab(text: 'Users'),
                           _buildRankVerifyTabTitle(),
-                          _buildBlueTickTabTitle(), // ✅ FIXED: DYNAMIC REALTIME COUNTER
+                          _buildBlueTickTabTitle(),
                           const Tab(text: 'Posts Moderation'),
                           const Tab(text: 'Team Matches ⚔️'),
                           const Tab(text: 'Reports'),
@@ -287,7 +287,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // ✅ DYNAMIC REALTIME BLUE TICK TAB TITLE
   Widget _buildBlueTickTabTitle() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeUsers(),
@@ -1786,7 +1785,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 3: BLUE TICK (ACCURATE PARSING & DISPLAY) =====================
+  // ===================== TAB 3: BLUE TICK =====================
   Widget _buildBlueTickRequestsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeUsers(),
@@ -1825,13 +1824,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
         final docs = snapshot.data ?? [];
         
-        // Accurate identification of users who have requested Blue Tick
         final List<GamerUser> requests = [];
         for (final d in docs) {
           final isVerified = d['is_verified'] == true || d['has_blue_tick'] == true;
           final vStatus = (d['verification_status'] ?? d['blue_tick_status'] ?? '').toString().toLowerCase();
 
-          // Catch pending requests even if stored in various format variations
           if (!isVerified && (vStatus == 'pending' || vStatus == 'under_review' || vStatus == 'submitted')) {
             requests.add(GamerUser.fromMap(d));
           }
@@ -3522,9 +3519,9 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
                             color: ThemeService.card,
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text(
+                          child: Text(
                             reason,
-                            style: TextStyle(
+                            style: const TextStyle(
                                 color: Color(0xFF38BDF8), fontSize: 10),
                           ),
                         ),
