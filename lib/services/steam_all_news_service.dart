@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import '../constants/steam_app_ids.dart';
 import 'supabase_service.dart';
 
@@ -37,26 +38,26 @@ class SteamAllNewsService {
               final nowStr = DateTime.now().toIso8601String();
               try {
                 await SupabaseService.client.from('posts').insert({
-                  'title': item['title'] ?? 'No Title',
+                  'title': item['title'] ?? 'steam_no_title'.tr(),
                   'content': item['contents'] ?? '',
                   'source_url': item['url'] ?? '',
                   'sourceUrl': item['url'] ?? '',
                   'game_name': entry.key,
                   'gameName': entry.key,
-                  'category': 'Open World',
+                  'category': 'steam_category_open_world'.tr(),
                   'created_at': nowStr,
                   'timestamp': nowStr,
-                  'source': 'Steam',
+                  'source': 'steam_source_name'.tr(),
                 });
               } catch (_) {
                 await SupabaseService.client.from('news').insert({
-                  'title': item['title'] ?? 'No Title',
+                  'title': item['title'] ?? 'steam_no_title'.tr(),
                   'content': item['contents'] ?? '',
                   'source_url': item['url'] ?? '',
                   'game_name': entry.key,
-                  'category': 'Open World',
+                  'category': 'steam_category_open_world'.tr(),
                   'created_at': nowStr,
-                  'source': 'Steam',
+                  'source': 'steam_source_name'.tr(),
                 });
               }
               total++;
