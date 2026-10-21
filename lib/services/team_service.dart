@@ -1,6 +1,7 @@
 import "dart:io";
 import "dart:async";
 import "package:flutter/foundation.dart";
+import "package:easy_localization/easy_localization.dart"; // Added for localization
 import "../models/team_model.dart";
 import "supabase_service.dart";
 
@@ -107,15 +108,15 @@ class TeamService {
     enrichedMap["pending_join_requests"] = pendingRequests;
     enrichedMap["pendingJoinRequests"] = pendingRequests;
     enrichedMap["join_requests"] = pendingRequests;
-    enrichedMap["leader_name"] = leaderName.isNotEmpty ? leaderName : "Leader";
-    enrichedMap["leaderName"] = leaderName.isNotEmpty ? leaderName : "Leader";
+    enrichedMap["leader_name"] = leaderName.isNotEmpty ? leaderName : "team_leader_fallback".tr();
+    enrichedMap["leaderName"] = leaderName.isNotEmpty ? leaderName : "team_leader_fallback".tr();
     enrichedMap["leader_avatar"] = leaderAvatar;
     enrichedMap["leaderAvatar"] = leaderAvatar;
 
     final team = TeamModel.fromSupabase(enrichedMap);
     return team.copyWith(
       members: members,
-      leaderName: leaderName.isNotEmpty ? leaderName : "Leader",
+      leaderName: leaderName.isNotEmpty ? leaderName : "team_leader_fallback".tr(),
       leaderAvatar: leaderAvatar,
     );
   }
@@ -294,7 +295,7 @@ class TeamService {
           final un = (u["username"] ?? "").toString().trim();
           final name = (d.isNotEmpty && d.toLowerCase() != "null")
               ? d
-              : ((un.isNotEmpty && un.toLowerCase() != "null") ? un : "Leader");
+              : ((un.isNotEmpty && un.toLowerCase() != "null") ? un : "team_leader_fallback".tr());
           final avatar = (u["avatar_url"] ?? "").toString();
           if (id.isNotEmpty) {
             leaderNameById[id] = name;
@@ -332,7 +333,7 @@ class TeamService {
       final fallbackLeaderName =
           (rawRow["leader_name"] ?? rawRow["leaderName"] ?? "").toString().trim();
       final leaderName = leaderNameById[leaderId] ??
-          (fallbackLeaderName.isNotEmpty ? fallbackLeaderName : "Leader");
+          (fallbackLeaderName.isNotEmpty ? fallbackLeaderName : "team_leader_fallback".tr());
       final leaderAvatar = leaderAvatarById[leaderId] ??
           (rawRow["leader_avatar"] ?? rawRow["leaderAvatar"] ?? "").toString();
 
@@ -357,7 +358,8 @@ class TeamService {
     var filtered = enriched;
     if (gameFilter != null &&
         gameFilter.isNotEmpty &&
-        gameFilter != "All") {
+        gameFilter != "All" &&
+        gameFilter != "all_games".tr()) {
       filtered = filtered
           .where((t) => t.game.toLowerCase() == gameFilter.toLowerCase())
           .toList();
@@ -408,7 +410,7 @@ class TeamService {
       final authUserId = SupabaseService.client.auth.currentUser?.id;
 
       if (authUserId == null || authUserId.isEmpty) {
-        throw Exception('User not authenticated. Please log in again.');
+        throw Exception('err_user_not_authenticated'.tr());
       }
 
       final effectiveLeaderId = authUserId;
@@ -618,7 +620,7 @@ class TeamService {
 
       // 2. Sync pending_join_requests column on teams table (if column exists)
       String leaderId = "";
-      String resolvedTeamName = teamName ?? "Team";
+      String resolvedTeamName = teamName ?? 'team_default_name'.tr();
       try {
         final teamRow = await SupabaseService.client
             .from("teams")
@@ -629,7 +631,7 @@ class TeamService {
         if (teamRow != null) {
           leaderId = (teamRow["leader_id"] ?? teamRow["leaderId"] ?? "").toString();
           if (teamName == null || teamName.isEmpty) {
-            resolvedTeamName = (teamRow["name"] ?? "Team").toString();
+            resolvedTeamName = (teamRow["name"] ?? 'team_default_name'.tr()).toString();
           }
 
           if (teamRow.containsKey("pending_join_requests")) {
@@ -654,14 +656,14 @@ class TeamService {
         try {
           final senderDisplay = (userName != null && userName.trim().isNotEmpty)
               ? userName.trim()
-              : "A gamer";
+              : 'notif_a_gamer'.tr();
           await SupabaseService.client.from("notifications").insert({
             "user_id": SupabaseService.toUuid(leaderId),
             "sender_id": userUuid,
             "sender_name": senderDisplay,
             "type": "team_join_request",
-            "title": "New Team Join Request 🛡️",
-            "body": "$senderDisplay requested to join $resolvedTeamName.",
+            "title": 'notif_team_join_request_title'.tr(),
+            "body": 'notif_team_join_request_body'.tr(args: [senderDisplay, resolvedTeamName]),
             "is_read": false,
             "data": {
               "team_id": teamUuid,
@@ -718,7 +720,7 @@ class TeamService {
           .or("user_id.eq.$userUuid,user_id.eq.$userId");
 
       // 3. Sync teams table columns if present
-      String teamName = "Team";
+      String teamName = 'team_default_name'.tr();
       try {
         final teamRow = await SupabaseService.client
             .from("teams")
@@ -726,7 +728,7 @@ class TeamService {
             .or("id.eq.$teamUuid,id.eq.$teamId")
             .maybeSingle();
         if (teamRow != null) {
-          teamName = (teamRow["name"] ?? "Team").toString();
+          teamName = (teamRow["name"] ?? 'team_default_name'.tr()).toString();
           final updates = <String, dynamic>{};
 
           if (teamRow.containsKey("pending_join_requests")) {
@@ -760,8 +762,8 @@ class TeamService {
         await SupabaseService.client.from("notifications").insert({
           "user_id": userUuid,
           "type": "team_join_accepted",
-          "title": "Team Request Accepted! 🎉",
-          "body": "You are now a member of $teamName.",
+          "title": 'notif_team_approved_title'.tr(),
+          "body": 'notif_team_approved_body'.tr(args: [teamName]),
           "is_read": false,
           "data": {"team_id": teamUuid},
           "created_at": nowIso,
