@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import '../models/gamer_post_model.dart';
 import 'supabase_service.dart';
 
@@ -47,11 +48,11 @@ class ProfileFeedItem {
     return ProfileFeedItem(
       id: id ?? data['post_id']?.toString() ?? data['id']?.toString() ?? '',
       userId: data['user_id']?.toString() ?? data['userId']?.toString() ?? '',
-      username: data['username']?.toString() ?? 'gamer',
+      username: data['username']?.toString() ?? 'user_gamer'.tr(),
       displayName: data['display_name']?.toString() ??
           data['displayName']?.toString() ??
           data['username']?.toString() ??
-          'Gamer',
+          'user_gamer'.tr(),
       userPhoto: data['user_avatar']?.toString() ??
           data['userPhoto']?.toString() ??
           data['avatar_url']?.toString() ??
