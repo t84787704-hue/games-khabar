@@ -1814,5 +1814,10 @@
   "eligible_leader_and_member": "Leader & Member Eligible",
   "can_create_team_desc": "You can create or join an eSports team",
   "can_join_team_need_coins_desc": "You can join a team (1,000 coins required to create)",
-  "coins_count_label": "{} Coins"
+  "coins_count_label": "{} Coins",
+  "delete_post_q": "Delete Post?",
+  "confirm_delete_post_desc": "Are you sure you want to delete this post?",
+  "tab_posts": "Posts",
+  "tab_about": "About"
 }
+
