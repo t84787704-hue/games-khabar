@@ -300,23 +300,28 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final userProfile = userProfiles[postUserId];
     final username = userProfile?['username'] ?? post['username'] ?? 'user_gamer'.tr();
 
+    final headerText = 'share_post_header'.tr(args: [username]);
+    final postedByText = 'label_posted_by'.tr();
+    final ctaText = 'share_post_cta'.tr();
+    final downloadAppText = 'share_download_app'.tr();
+
     final shareText = '''
-share_post_header'.tr(args: ['$username'])
+$headerText
 
 "$content"
 
-label_posted_by'.tr(): $username
+$postedByText: $username
 
-share_post_cta'.tr()
+$ctaText
 
-share_download_app'.tr():
+$downloadAppText:
 https://play.google.com/store/apps/details?id=com.gamersid.app
 
 #GamersID #PUBG #BGMI #FreeFire #Esports
 ''';
 
     try {
-      await Share.share(shareText.trim(), subject: 'share_subject'.tr(args: ['$username']));
+      await Share.share(shareText.trim(), subject: 'share_subject'.tr(args: [username]));
     } catch (e) {
       debugPrint('Share error: $e');
     }
