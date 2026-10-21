@@ -1,3 +1,8 @@
+// ===============================================================================
+// ADMIN PROOFS TABS — Dual-Proof Display & Adaptive Day/Night Theme
+// File: lib/screens/admin/admin_proofs_tabs.dart
+// ===============================================================================
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -8,10 +13,10 @@ import '../../services/supabase_service.dart';
 import '../../services/team_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/coin_wallet_service.dart';
+import '../../services/theme_service.dart';
 
 // ============================================================
 // TAB 1: UNDER REVIEW
-// Jo proofs abhi review mein hain (Team Matches + Custom Rooms)
 // ============================================================
 class AdminUnderReviewTab extends StatelessWidget {
   const AdminUnderReviewTab({super.key});
@@ -187,15 +192,15 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                     history = history.where((m) {
                       final st = (m['status'] ?? '').toString().toLowerCase();
                       final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                      final rst = (m['reward_status'] ?? '').toString().toLowerCase();
-                      return pst == 'accepted' || st == 'completed' || rst == 'sent';
+                      final rst = (r) => (r['reward_status'] ?? '').toString().toLowerCase();
+                      return pst == 'accepted' || st == 'completed' || rst(m) == 'sent';
                     }).toList();
                   } else if (_filter == 'Rejected') {
                     history = history.where((m) {
                       final st = (m['status'] ?? '').toString().toLowerCase();
                       final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                      final rst = (m['reward_status'] ?? '').toString().toLowerCase();
-                      return pst == 'rejected' || st == 'rejected' || st == 'proof_rejected' || rst == 'rejected';
+                      final rst = (r) => (r['reward_status'] ?? '').toString().toLowerCase();
+                      return pst == 'rejected' || st == 'rejected' || st == 'proof_rejected' || rst(m) == 'rejected';
                     }).toList();
                   }
 
@@ -258,10 +263,10 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
       ),
       selected: isSelected,
       selectedColor: color,
-      backgroundColor: const Color(0xFF161B26),
+      backgroundColor: ThemeService.cardSecondary,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: isSelected ? color : const Color(0xFF1F2B3E)),
+        side: BorderSide(color: isSelected ? color : ThemeService.border),
       ),
       onSelected: (val) {
         if (val) setState(() => _filter = key);
@@ -273,24 +278,24 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
             const SizedBox(width: 8),
             Text('delete_proof_title'.tr(),
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
           'delete_proof_confirm_desc'.tr(),
-          style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.white70)),
+            child: Text('btn_cancel'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -339,7 +344,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
 }
 
 // ============================================================
-// REUSABLE CARD: AdminProofCard (Auto Single/Dual Proof Support)
+// REUSABLE CARD: AdminProofCard (Auto Multi-Proof Resolver)
 // ============================================================
 class AdminProofCard extends StatefulWidget {
   final Map<String, dynamic> match;
@@ -363,6 +368,110 @@ class _AdminProofCardState extends State<AdminProofCard> {
   final TextEditingController _reasonController = TextEditingController();
   final TeamService _teamService = TeamService();
   bool _isProcessing = false;
+  List<Map<String, dynamic>> _fetchedProofs = [];
+  bool _isLoadingProofs = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllProofs();
+  }
+
+  Future<void> _loadAllProofs() async {
+    final isRoom = widget.match['is_room'] == true;
+    final targetId = widget.match['id']?.toString() ?? '';
+    if (targetId.isEmpty) return;
+
+    setState(() => _isLoadingProofs = true);
+
+    try {
+      // 1. Try querying 'match_proofs' table
+      final proofRows = await SupabaseService.client
+          .from('match_proofs')
+          .select()
+          .or('room_id.eq.$targetId,match_id.eq.$targetId')
+          .order('created_at', ascending: true);
+
+      if (proofRows.isNotEmpty) {
+        final List<Map<String, dynamic>> entries = [];
+        for (final r in proofRows) {
+          final url = (r['proof_url'] ?? r['image_url'] ?? '').toString();
+          if (url.isNotEmpty) {
+            entries.add({
+              'user_id': r['user_id'] ?? '',
+              'user_name': r['user_name'] ?? r['uploader_name'] ?? 'Player',
+              'is_host': r['is_host'] == true,
+              'proof_url': url,
+            });
+          }
+        }
+        if (mounted && entries.isNotEmpty) {
+          setState(() {
+            _fetchedProofs = entries;
+            _isLoadingProofs = false;
+          });
+          return;
+        }
+      }
+
+      // 2. Fallback: Search messages for win proofs
+      if (isRoom) {
+        final msgProofs = await SupabaseService.client
+            .from('messages')
+            .select()
+            .eq('room_id', targetId)
+            .ilike('message', '%uploaded win proof%');
+
+        if (msgProofs.isNotEmpty) {
+          // If messages contain multiple uploads, check room's host_proof_url and opponent_proof_url
+          final rData = await SupabaseService.client
+              .from('rooms')
+              .select('proofs, host_proof_url, opponent_proof_url, win_proof_url, host_name, winner_name, host_id, winner_id')
+              .eq('id', targetId)
+              .maybeSingle();
+
+          if (rData != null && mounted) {
+            final List<Map<String, dynamic>> entries = [];
+            final rawProofs = rData['proofs'];
+            if (rawProofs is List) {
+              for (final p in rawProofs) {
+                if (p is Map && (p['proof_url'] ?? '').toString().isNotEmpty) {
+                  entries.add(Map<String, dynamic>.from(p));
+                }
+              }
+            }
+            if (entries.isEmpty) {
+              if ((rData['host_proof_url'] ?? '').toString().isNotEmpty) {
+                entries.add({
+                  'user_id': rData['host_id'] ?? '',
+                  'user_name': rData['host_name'] ?? 'Host',
+                  'is_host': true,
+                  'proof_url': rData['host_proof_url'],
+                });
+              }
+              if ((rData['opponent_proof_url'] ?? '').toString().isNotEmpty) {
+                entries.add({
+                  'user_id': rData['winner_id'] ?? '',
+                  'user_name': rData['winner_name'] ?? 'Opponent',
+                  'is_host': false,
+                  'proof_url': rData['opponent_proof_url'],
+                });
+              }
+            }
+            if (entries.isNotEmpty) {
+              setState(() {
+                _fetchedProofs = entries;
+                _isLoadingProofs = false;
+              });
+              return;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) setState(() => _isLoadingProofs = false);
+  }
 
   @override
   void dispose() {
@@ -374,7 +483,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF131A29),
+        backgroundColor: ThemeService.card,
         insetPadding: const EdgeInsets.all(12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
@@ -387,12 +496,12 @@ class _AdminProofCardState extends State<AdminProofCard> {
                   Expanded(
                     child: Text(
                       '$title 📸',
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(
+                          color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                    icon: Icon(Icons.close, color: ThemeService.textSecondary, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -427,7 +536,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
     );
   }
 
-  // Accept specific winner for room
   Future<void> _handleAcceptSpecificWinner({
     required String winnerId,
     required String winnerName,
@@ -720,7 +828,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
     );
   }
 
-  // Single thumbnail component
   Widget _buildSingleThumbnail(String url, String label) {
     return Expanded(
       child: Column(
@@ -728,7 +835,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
         children: [
           Text(
             label,
-            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+            style: TextStyle(color: ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -746,7 +853,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                     fit: BoxFit.cover,
                     placeholder: (_, __) => Container(
                       height: 70,
-                      color: const Color(0xFF10141D),
+                      color: ThemeService.cardSecondary,
                       child: const Center(
                         child: SizedBox(
                           width: 16,
@@ -757,8 +864,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
                     ),
                     errorWidget: (_, __, ___) => Container(
                       height: 70,
-                      color: const Color(0xFF10141D),
-                      child: const Icon(Icons.broken_image, color: Colors.white30, size: 24),
+                      color: ThemeService.cardSecondary,
+                      child: Icon(Icons.broken_image, color: ThemeService.textSecondary, size: 24),
                     ),
                   ),
                   Positioned(
@@ -803,57 +910,60 @@ class _AdminProofCardState extends State<AdminProofCard> {
       }
     }
 
-    // Extract proofs (Single OR Dual)
+    // Combine static proofs + asynchronously fetched proofs
     final List<Map<String, dynamic>> proofEntries = [];
-    final rawProofs = widget.match['proofs'];
-    if (rawProofs is List) {
-      for (final p in rawProofs) {
-        if (p is Map && (p['proof_url'] ?? '').toString().isNotEmpty) {
-          proofEntries.add(Map<String, dynamic>.from(p));
-        }
-      }
-    } else if (rawProofs is String && rawProofs.isNotEmpty) {
-      try {
-        final dec = jsonDecode(rawProofs);
-        if (dec is List) {
-          for (final p in dec) {
-            if (p is Map && (p['proof_url'] ?? '').toString().isNotEmpty) {
-              proofEntries.add(Map<String, dynamic>.from(p));
-            }
+    if (_fetchedProofs.isNotEmpty) {
+      proofEntries.addAll(_fetchedProofs);
+    } else {
+      final rawProofs = widget.match['proofs'];
+      if (rawProofs is List) {
+        for (final p in rawProofs) {
+          if (p is Map && (p['proof_url'] ?? '').toString().isNotEmpty) {
+            proofEntries.add(Map<String, dynamic>.from(p));
           }
         }
-      } catch (_) {}
-    }
-
-    // Fallback on legacy columns if proofs array is empty
-    if (proofEntries.isEmpty) {
-      final hostProof = (widget.match['host_proof_url'] ?? '').toString();
-      final opponentProof = (widget.match['opponent_proof_url'] ?? '').toString();
-      final legacyProof = (widget.match['win_proof_url'] ?? widget.match['proof_url'])?.toString() ?? '';
-
-      if (hostProof.isNotEmpty) {
-        proofEntries.add({
-          'user_id': widget.match['host_id'] ?? '',
-          'user_name': widget.match['host_name'] ?? 'Host',
-          'is_host': true,
-          'proof_url': hostProof,
-        });
+      } else if (rawProofs is String && rawProofs.isNotEmpty) {
+        try {
+          final dec = jsonDecode(rawProofs);
+          if (dec is List) {
+            for (final p in dec) {
+              if (p is Map && (p['proof_url'] ?? '').toString().isNotEmpty) {
+                proofEntries.add(Map<String, dynamic>.from(p));
+              }
+            }
+          }
+        } catch (_) {}
       }
-      if (opponentProof.isNotEmpty) {
-        proofEntries.add({
-          'user_id': widget.match['winner_id'] ?? '',
-          'user_name': widget.match['winner_name'] ?? 'Opponent',
-          'is_host': false,
-          'proof_url': opponentProof,
-        });
-      }
-      if (proofEntries.isEmpty && legacyProof.isNotEmpty) {
-        proofEntries.add({
-          'user_id': widget.match['winner_id'] ?? '',
-          'user_name': widget.match['winner_name'] ?? 'Winner',
-          'is_host': false,
-          'proof_url': legacyProof,
-        });
+
+      if (proofEntries.isEmpty) {
+        final hostProof = (widget.match['host_proof_url'] ?? '').toString();
+        final opponentProof = (widget.match['opponent_proof_url'] ?? '').toString();
+        final legacyProof = (widget.match['win_proof_url'] ?? widget.match['proof_url'])?.toString() ?? '';
+
+        if (hostProof.isNotEmpty) {
+          proofEntries.add({
+            'user_id': widget.match['host_id'] ?? '',
+            'user_name': widget.match['host_name'] ?? 'Host',
+            'is_host': true,
+            'proof_url': hostProof,
+          });
+        }
+        if (opponentProof.isNotEmpty) {
+          proofEntries.add({
+            'user_id': widget.match['winner_id'] ?? '',
+            'user_name': widget.match['winner_name'] ?? 'Opponent',
+            'is_host': false,
+            'proof_url': opponentProof,
+          });
+        }
+        if (proofEntries.isEmpty && legacyProof.isNotEmpty) {
+          proofEntries.add({
+            'user_id': widget.match['winner_id'] ?? '',
+            'user_name': widget.match['winner_name'] ?? 'Winner',
+            'is_host': false,
+            'proof_url': legacyProof,
+          });
+        }
       }
     }
 
@@ -863,11 +973,11 @@ class _AdminProofCardState extends State<AdminProofCard> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1B2436),
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDualProof ? Colors.amber.withOpacity(0.6) : const Color(0xFF2A3447),
-          width: isDualProof ? 1.5 : 1.0,
+          color: isDualProof ? Colors.amber.withOpacity(0.7) : ThemeService.border,
+          width: isDualProof ? 1.6 : 1.0,
         ),
       ),
       child: Column(
@@ -879,8 +989,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
                 child: isRoom
                     ? Text(
                         '🎮 ${(widget.match['game'] ?? 'Game')} ${(widget.match['mode'] ?? '')} (${'room_label'.tr()})',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: ThemeService.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
@@ -897,8 +1007,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
                           final t2Name = snap.data?[1]?.name ?? widget.match['team2_name'] ?? 'Team 2';
                           return Text(
                             '$t1Name  ⚔️  $t2Name',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: ThemeService.textPrimary,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
@@ -937,7 +1047,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                 if (formattedDate.isNotEmpty)
                   Text(
                     '${'date_label'.tr()}: $formattedDate',
-                    style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                   ),
               ],
             ),
@@ -960,7 +1070,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                 ),
                 Text(
                   '${'date_label'.tr()}: $formattedDate',
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                 ),
               ],
             ),
@@ -992,8 +1102,19 @@ class _AdminProofCardState extends State<AdminProofCard> {
 
           const SizedBox(height: 10),
 
-          // 📸 DYNAMIC PROOFS DISPLAY (1 or 2 Screenshots)
-          if (proofEntries.isNotEmpty) ...[
+          // Dynamic Proofs Display
+          if (_isLoadingProofs)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Color(0xFF00FF88), strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (proofEntries.isNotEmpty) ...[
             if (isDualProof) ...[
               // 2 Proofs: Side-by-Side comparison
               Row(
@@ -1036,7 +1157,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
                         placeholder: (c, u) => Container(
                           height: 56,
                           width: 56,
-                          color: const Color(0xFF10141D),
+                          color: ThemeService.cardSecondary,
                           child: const Center(
                             child: SizedBox(
                               width: 16,
@@ -1048,8 +1169,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
                         errorWidget: (c, u, e) => Container(
                           height: 56,
                           width: 56,
-                          color: const Color(0xFF10141D),
-                          child: const Icon(Icons.broken_image, color: Colors.white30, size: 20),
+                          color: ThemeService.cardSecondary,
+                          child: Icon(Icons.broken_image, color: ThemeService.textSecondary, size: 20),
                         ),
                       ),
                     ),
@@ -1061,8 +1182,8 @@ class _AdminProofCardState extends State<AdminProofCard> {
                       children: [
                         Text(
                           '${proofEntries.first['user_name'] ?? "Player"} Proof',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: ThemeService.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 2),
                         InkWell(
@@ -1100,39 +1221,39 @@ class _AdminProofCardState extends State<AdminProofCard> {
             Container(
               height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFF10141D),
+                color: ThemeService.cardSecondary,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Center(
                 child: Text('no_screenshot_attached'.tr(),
-                    style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
               ),
             ),
           ],
 
-          // Actions (Under Review tab)
+          // Action Buttons
           if (widget.showActions) ...[
             const SizedBox(height: 10),
             TextField(
               controller: _reasonController,
-              style: const TextStyle(color: Colors.white, fontSize: 12.5),
+              style: TextStyle(color: ThemeService.textPrimary, fontSize: 12.5),
               decoration: InputDecoration(
                 hintText: 'reject_reason_hint'.tr(),
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 12),
                 filled: true,
-                fillColor: const Color(0xFF10141D),
+                fillColor: ThemeService.cardSecondary,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF2A3447)),
+                  borderSide: BorderSide(color: ThemeService.border),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF2A3447)),
+                  borderSide: BorderSide(color: ThemeService.border),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFFF4655)),
+                focusedBorder: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                  borderSide: BorderSide(color: Color(0xFFFF4655)),
                 ),
               ),
             ),
@@ -1146,7 +1267,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
                 ),
               )
             else if (isDualProof && isRoom) ...[
-              // 2 PLAYERS UPLOADED PROOFS: Action Buttons with player names
               Column(
                 children: [
                   Row(
@@ -1219,7 +1339,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
                 ],
               ),
             ] else ...[
-              // 1 PLAYER PROOF: Standard Single Accept / Reject
               Row(
                 children: [
                   Expanded(
@@ -1272,7 +1391,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
 }
 
 // ============================================================
-// HELPERS: Empty & Error States
+// HELPERS
 // ============================================================
 Widget _buildEmptyState({
   required IconData icon,
@@ -1298,14 +1417,14 @@ Widget _buildEmptyState({
           const SizedBox(height: 14),
           Text(
             title,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
           ),
         ],
       ),
@@ -1324,14 +1443,14 @@ Widget _buildErrorState(String title, Object? error) {
           const SizedBox(height: 14),
           Text(
             title,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
             '${error ?? "Unknown error"}',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
           ),
         ],
       ),
