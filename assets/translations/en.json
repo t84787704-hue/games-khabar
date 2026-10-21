@@ -1677,5 +1677,57 @@
 "delete_checkbox_confirm": "I confirm that I want to delete my account.",
 "delete_type_confirm_label": "Please type 'DELETE' to confirm",
 "hint_delete_word": "Type DELETE here",
-"btn_permanently_delete_account": "Permanently Delete Account"
+"btn_permanently_delete_account": "Permanently Delete Account", "title_blue_tick_verification": "Blue Tick Verification",
+"owner_creator_badge": "Owner / Creator",
+"owner_creator_desc": "You are the owner of this app. All verification requirements are automatically met.",
+"mandatory_requirements_title": "Mandatory Requirements",
+"reqs_met_count": "{} / {} Met",
+"target_label": "Target",
+
+"verif_req_1_title": "Profile & Game UID",
+"verif_req_1_desc": "Complete your bio, display name, and link your in-game UID.",
+"verif_req_owner_verified": "Owner Auto-Verified",
+"verif_req_1_complete_uid": "{} UID: {}",
+"verif_req_1_percent": "Profile {}% Complete",
+"verif_req_1_target": "Complete Profile",
+"verif_req_1_missing": "Please add your bio, display name, and game UID.",
+
+"verif_req_2_title": "Top Tier Rank",
+"verif_req_2_desc": "Reach a high rank in BGMI, Free Fire, or COD.",
+"verif_req_2_desc_game": "Reach a high rank in {}.",
+"verif_req_owner_privileges": "Owner Privileges",
+"verif_rank_unranked": "Unranked",
+"verif_req_2_target": "Reach Top Rank",
+"verif_req_2_missing": "Your current rank is too low.",
+
+"verif_req_3_title": "K/D Ratio",
+"verif_req_3_desc": "Maintain a good K/D ratio in your favorite game.",
+"verif_req_3_kd": "K/D: {}",
+"verif_req_optional": "Optional",
+"verif_req_3_target": "K/D > 2.0",
+
+"verif_req_4_title": "Community Activity",
+"verif_req_4_desc": "Post clips and create squad rooms to engage with the community.",
+"verif_req_4_current": "Posts: {} | Rooms: {}",
+"verif_req_4_target": "3 Posts & 2 Rooms",
+"verif_req_4_missing": "Post more clips and host squad rooms.",
+
+"verif_req_5_title": "Likes Received",
+"verif_req_5_desc": "Get likes on your posts from other players.",
+"verif_req_5_current": "Likes: {}",
+"verif_req_5_target": "500 Likes",
+"verif_req_5_missing": "You need more likes on your posts.",
+
+"verif_req_6_title": "Clean Record",
+"verif_req_6_desc": "Maintain a good standing in the community without reports.",
+"verif_req_6_current": "Age: {} days | Reports: {}",
+"verif_req_6_target": "No Reports",
+"verif_req_6_missing": "Your account has reports or is too new.",
+
+"verif_req_completed": "Completed",
+"verif_req_clean": "Clean Record",
+"verif_req_exempt": "Exempt",
+
+"status_verified_blue_tick": "Verified Blue Tick",
+"verif_game_fallback": "Game"
 }
