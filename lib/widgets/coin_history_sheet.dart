@@ -1,5 +1,5 @@
 // ===============================================================================
-// COIN HISTORY SHEET — Localized with easy_localization
+// COIN HISTORY SHEET — Localized with easy_localization & Adaptive Day/Night Theme
 // File: lib/widgets/coin_history_sheet.dart
 // ===============================================================================
 
@@ -12,6 +12,7 @@ import '../services/coin_wallet_service.dart';
 import '../services/coin_reward_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
+import '../services/theme_service.dart';
 import '../screens/coin_store_screen.dart';
 
 class CoinHistorySheet extends StatefulWidget {
@@ -90,378 +91,381 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
     final mediaQuery = MediaQuery.of(context);
     final sheetHeight = mediaQuery.size.height * 0.88;
 
-    return Container(
-      height: sheetHeight,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0B101B),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black54,
-            blurRadius: 20,
-            offset: Offset(0, -5),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Drag Handle
-          const SizedBox(height: 12),
-          Center(
-            child: Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        final isDark = ThemeService.isDarkMode;
+
+        return Container(
+          height: sheetHeight,
+          decoration: BoxDecoration(
+            color: ThemeService.card,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black54 : Colors.black12,
+                blurRadius: 20,
+                offset: const Offset(0, -5),
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 12),
-
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
+          child: Column(
+            children: [
+              // Drag Handle
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFD700).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
-                  ),
-                  child: const Text('🪙', style: TextStyle(fontSize: 20)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'passbook_sheet_title'.tr(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'passbook_sheet_subtitle'.tr(),
-                        style: const TextStyle(
-                          color: GamerTheme.textGray,
-                          fontSize: 11.5,
-                        ),
-                      ),
-                    ],
+                    color: ThemeService.border,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white70),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
+              ),
+              const SizedBox(height: 12),
 
-          // Wallet Stats & Balance Banner
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client
-                .from('users')
-                .stream(primaryKey: ['id'])
-                .eq('id', widget.userId),
-            builder: (context, userSnap) {
-              int currentCoins = 0;
-              int inEscrow = 0;
-              if (userSnap.hasData && userSnap.data != null && userSnap.data!.isNotEmpty) {
-                final data = userSnap.data!.first;
-                final rawCoins = data['coins'] ?? data['g_coins'] ?? data['gCoins'];
-                if (rawCoins is num) currentCoins = rawCoins.toInt();
-                final rawEscrow = data['in_escrow'] ?? data['inEscrow'];
-                if (rawEscrow is num) inEscrow = rawEscrow.toInt();
-              }
-
-              return StreamBuilder<List<CoinTransaction>>(
-                stream: _walletService.transactionsStream(widget.userId),
-                builder: (context, txSnap) {
-                  final allTxs = txSnap.data ?? [];
-
-                  int totalAdded = 0;
-                  int totalDeducted = 0;
-
-                  for (final tx in allTxs) {
-                    if (tx.amount > 0) {
-                      totalAdded += tx.amount;
-                    } else if (tx.amount < 0) {
-                      totalDeducted += tx.amount.abs();
-                    }
-                  }
-
-                  final int expectedBalance = (totalAdded - totalDeducted).clamp(0, 9999999);
-
-                  final int displayCoins = (currentCoins > 0 && currentCoins == expectedBalance)
-                      ? currentCoins
-                      : (expectedBalance > 0 ? expectedBalance : currentCoins);
-
-                  if (expectedBalance > 0 && currentCoins != expectedBalance && _lastSyncedBalance != expectedBalance) {
-                    _lastSyncedBalance = expectedBalance;
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _safeBackgroundSync(expectedBalance);
-                    });
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF141D2E), Color(0xFF0F1523)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: GamerTheme.borderDark),
+                        color: const Color(0xFFFFD700).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
                       ),
+                      child: const Text('🪙', style: TextStyle(fontSize: 20)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'label_current_balance'.tr(),
-                                    style: const TextStyle(
-                                      color: GamerTheme.textMuted,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      const Text('🪙', style: TextStyle(fontSize: 18)),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'coins_amount_format'.tr(args: [NumberFormat("#,###").format(displayCoins)]),
-                                        style: const TextStyle(
-                                          color: Color(0xFFFFD700),
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              // IN ESCROW badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: GamerTheme.cardElevated,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: GamerTheme.borderDark),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      'label_escrow_hold'.tr(),
-                                      style: const TextStyle(
-                                        color: GamerTheme.accentOrange,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'coins_amount_format'.tr(args: [NumberFormat("#,###").format(inEscrow)]),
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                          Text(
+                            'passbook_sheet_title'.tr(),
+                            style: TextStyle(
+                              color: ThemeService.textPrimary,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                          const SizedBox(height: 12),
-                          const Divider(color: GamerTheme.borderDark, height: 1),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              // Added (Income)
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: GamerTheme.neonGreen.withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.2)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.arrow_downward_rounded, color: GamerTheme.neonGreen, size: 16),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'label_total_credited'.tr(),
-                                              style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10),
-                                            ),
-                                            Text(
-                                              '+${NumberFormat("#,###").format(totalAdded)}',
-                                              style: const TextStyle(
-                                                color: GamerTheme.neonGreen,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              // Deducted (Expense)
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: GamerTheme.redAccent.withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: GamerTheme.redAccent.withOpacity(0.2)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.arrow_upward_rounded, color: GamerTheme.redAccent, size: 16),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'label_total_spent'.tr(),
-                                              style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10),
-                                            ),
-                                            Text(
-                                              '-${NumberFormat("#,###").format(totalDeducted)}',
-                                              style: const TextStyle(
-                                                color: GamerTheme.redAccent,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 38,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: GamerTheme.neonGreen,
-                                foregroundColor: Colors.black,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              icon: const Icon(Icons.storefront_rounded, size: 16),
-                              label: Text(
-                                'btn_open_coin_store_sheet'.tr(),
-                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
-                              ),
-                              onPressed: () {
-                                Navigator.pop(context);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
-                                );
-                              },
+                          const SizedBox(height: 2),
+                          Text(
+                            'passbook_sheet_subtitle'.tr(),
+                            style: TextStyle(
+                              color: ThemeService.textSecondary,
+                              fontSize: 11.5,
                             ),
                           ),
                         ],
                       ),
                     ),
+                    IconButton(
+                      icon: Icon(Icons.close_rounded, color: ThemeService.textPrimary),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Wallet Stats & Balance Banner
+              StreamBuilder<List<Map<String, dynamic>>>(
+                stream: SupabaseService.client
+                    .from('users')
+                    .stream(primaryKey: ['id'])
+                    .eq('id', widget.userId),
+                builder: (context, userSnap) {
+                  int currentCoins = 0;
+                  int inEscrow = 0;
+                  if (userSnap.hasData && userSnap.data != null && userSnap.data!.isNotEmpty) {
+                    final data = userSnap.data!.first;
+                    final rawCoins = data['coins'] ?? data['g_coins'] ?? data['gCoins'];
+                    if (rawCoins is num) currentCoins = rawCoins.toInt();
+                    final rawEscrow = data['in_escrow'] ?? data['inEscrow'];
+                    if (rawEscrow is num) inEscrow = rawEscrow.toInt();
+                  }
+
+                  return StreamBuilder<List<CoinTransaction>>(
+                    stream: _walletService.transactionsStream(widget.userId),
+                    builder: (context, txSnap) {
+                      final allTxs = txSnap.data ?? [];
+
+                      int totalAdded = 0;
+                      int totalDeducted = 0;
+
+                      for (final tx in allTxs) {
+                        if (tx.amount > 0) {
+                          totalAdded += tx.amount;
+                        } else if (tx.amount < 0) {
+                          totalDeducted += tx.amount.abs();
+                        }
+                      }
+
+                      final int expectedBalance = (totalAdded - totalDeducted).clamp(0, 9999999);
+
+                      final int displayCoins = (currentCoins > 0 && currentCoins == expectedBalance)
+                          ? currentCoins
+                          : (expectedBalance > 0 ? expectedBalance : currentCoins);
+
+                      if (expectedBalance > 0 && currentCoins != expectedBalance && _lastSyncedBalance != expectedBalance) {
+                        _lastSyncedBalance = expectedBalance;
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          _safeBackgroundSync(expectedBalance);
+                        });
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: ThemeService.cardSecondary,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: ThemeService.border),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'label_current_balance'.tr(),
+                                        style: TextStyle(
+                                          color: ThemeService.textSecondary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 1,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Text('🪙', style: TextStyle(fontSize: 18)),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'coins_amount_format'.tr(args: [NumberFormat("#,###").format(displayCoins)]),
+                                            style: const TextStyle(
+                                              color: Color(0xFFFFD700),
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  // IN ESCROW badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: ThemeService.card,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: ThemeService.border),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          'label_escrow_hold'.tr(),
+                                          style: const TextStyle(
+                                            color: GamerTheme.accentOrange,
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'coins_amount_format'.tr(args: [NumberFormat("#,###").format(inEscrow)]),
+                                          style: TextStyle(
+                                            color: ThemeService.textPrimary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Divider(color: ThemeService.border, height: 1),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  // Added (Income)
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: GamerTheme.neonGreen.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.2)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.arrow_downward_rounded, color: GamerTheme.neonGreen, size: 16),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'label_total_credited'.tr(),
+                                                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 10),
+                                                ),
+                                                Text(
+                                                  '+${NumberFormat("#,###").format(totalAdded)}',
+                                                  style: const TextStyle(
+                                                    color: GamerTheme.neonGreen,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  // Deducted (Expense)
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: GamerTheme.redAccent.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: GamerTheme.redAccent.withOpacity(0.2)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.arrow_upward_rounded, color: GamerTheme.redAccent, size: 16),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'label_total_spent'.tr(),
+                                                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 10),
+                                                ),
+                                                Text(
+                                                  '-${NumberFormat("#,###").format(totalDeducted)}',
+                                                  style: const TextStyle(
+                                                    color: GamerTheme.redAccent,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 38,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: GamerTheme.neonGreen,
+                                    foregroundColor: Colors.black,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  icon: const Icon(Icons.storefront_rounded, size: 16),
+                                  label: Text(
+                                    'btn_open_coin_store_sheet'.tr(),
+                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
-              );
-            },
-          ),
-          const SizedBox(height: 14),
+              ),
+              const SizedBox(height: 14),
 
-          // Filter Tabs
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                _buildFilterChip('tab_all_activities'.tr(), 0, Icons.list_alt_rounded),
-                const SizedBox(width: 8),
-                _buildFilterChip('tab_earned'.tr(), 1, Icons.add_circle_outline_rounded, activeColor: GamerTheme.neonGreen),
-                const SizedBox(width: 8),
-                _buildFilterChip('tab_spent'.tr(), 2, Icons.remove_circle_outline_rounded, activeColor: GamerTheme.redAccent),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
+              // Filter Tabs
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    _buildFilterChip('tab_all_activities'.tr(), 0, Icons.list_alt_rounded),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('tab_earned'.tr(), 1, Icons.add_circle_outline_rounded, activeColor: GamerTheme.neonGreen),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('tab_spent'.tr(), 2, Icons.remove_circle_outline_rounded, activeColor: GamerTheme.redAccent),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
 
-          // Transactions List
-          Expanded(
-            child: StreamBuilder<List<CoinTransaction>>(
-              stream: _walletService.transactionsStream(widget.userId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: GamerTheme.accentBlue),
-                  );
-                }
+              // Transactions List
+              Expanded(
+                child: StreamBuilder<List<CoinTransaction>>(
+                  stream: _walletService.transactionsStream(widget.userId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: GamerTheme.accentBlue),
+                      );
+                    }
 
-                List<CoinTransaction> transactions = List.from(snapshot.data ?? []);
+                    List<CoinTransaction> transactions = List.from(snapshot.data ?? []);
 
-                if (_selectedFilter == 1) {
-                  transactions = transactions.where((tx) => tx.amount > 0).toList();
-                } else if (_selectedFilter == 2) {
-                  transactions = transactions.where((tx) => tx.amount < 0).toList();
-                }
+                    if (_selectedFilter == 1) {
+                      transactions = transactions.where((tx) => tx.amount > 0).toList();
+                    } else if (_selectedFilter == 2) {
+                      transactions = transactions.where((tx) => tx.amount < 0).toList();
+                    }
 
-                if (transactions.isEmpty) {
-                  return _buildEmptyState();
-                }
+                    if (transactions.isEmpty) {
+                      return _buildEmptyState();
+                    }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                  itemCount: transactions.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final tx = transactions[index];
-                    return _buildTransactionCard(tx);
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      itemCount: transactions.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final tx = transactions[index];
+                        return _buildTransactionCard(tx);
+                      },
+                    );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -474,10 +478,10 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? activeColor.withOpacity(0.18) : GamerTheme.cardDark,
+            color: isSelected ? activeColor.withOpacity(0.18) : ThemeService.cardSecondary,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? activeColor : GamerTheme.borderDark,
+              color: isSelected ? activeColor : ThemeService.border,
               width: isSelected ? 1.4 : 1.0,
             ),
           ),
@@ -487,13 +491,13 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               Icon(
                 icon,
                 size: 14,
-                color: isSelected ? activeColor : GamerTheme.textMuted,
+                color: isSelected ? activeColor : ThemeService.textSecondary,
               ),
               const SizedBox(width: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : GamerTheme.textMuted,
+                  color: isSelected ? activeColor : ThemeService.textSecondary,
                   fontSize: 11,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 ),
@@ -524,9 +528,9 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF131A29),
+        color: ThemeService.cardSecondary,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: GamerTheme.borderDark),
+        border: Border.all(color: ThemeService.border),
       ),
       child: Material(
         color: Colors.transparent,
@@ -558,8 +562,8 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                           Expanded(
                             child: Text(
                               tx.title,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: ThemeService.textPrimary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13.5,
                               ),
@@ -581,8 +585,8 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                       const SizedBox(height: 4),
                       Text(
                         tx.description.isNotEmpty ? tx.description : (isCredit ? 'coins_added_desc'.tr() : 'coins_deducted_desc'.tr()),
-                        style: const TextStyle(
-                          color: GamerTheme.textGray,
+                        style: TextStyle(
+                          color: ThemeService.textSecondary,
                           fontSize: 12,
                         ),
                         maxLines: 2,
@@ -594,8 +598,8 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                         children: [
                           Text(
                             DateFormat('dd MMM yyyy • hh:mm a').format(tx.timestamp),
-                            style: const TextStyle(
-                              color: GamerTheme.textMuted,
+                            style: TextStyle(
+                              color: ThemeService.textSecondary,
                               fontSize: 11,
                             ),
                           ),
@@ -638,9 +642,9 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: GamerTheme.cardDark,
+                color: ThemeService.cardSecondary,
                 shape: BoxShape.circle,
-                border: Border.all(color: GamerTheme.borderDark),
+                border: Border.all(color: ThemeService.border),
               ),
               child: const Text('📜', style: TextStyle(fontSize: 36)),
             ),
@@ -651,8 +655,8 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                   : _selectedFilter == 2
                       ? 'no_coins_spent_yet'.tr()
                       : 'no_coin_history_yet'.tr(),
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: ThemeService.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
               ),
@@ -662,8 +666,8 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             Text(
               'coin_history_empty_hint'.tr(),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: GamerTheme.textMuted,
+              style: TextStyle(
+                color: ThemeService.textSecondary,
                 fontSize: 12,
                 height: 1.4,
               ),
@@ -723,10 +727,10 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF101726),
+          backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: GamerTheme.borderDark),
+            side: BorderSide(color: ThemeService.border),
           ),
           titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -745,7 +749,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               Expanded(
                 child: Text(
                   tx.title,
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -803,7 +807,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('btn_close'.tr(), style: const TextStyle(color: GamerTheme.accentBlue, fontWeight: FontWeight.bold)),
+              child: Text('btn_close'.tr(), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -819,13 +823,13 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
           width: 95,
           child: Text(
             label,
-            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+            style: TextStyle(color: ThemeService.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ),
       ],
