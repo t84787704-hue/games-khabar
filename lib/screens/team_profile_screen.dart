@@ -2367,7 +2367,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
             InteractiveViewer(
               child: ClipRRect(
                 borderRadius:
-                    const BorderRadius.vertical(bottom: Radius.circular(16)),
+                    BorderRadius.vertical(bottom: const Radius.circular(16)),
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
