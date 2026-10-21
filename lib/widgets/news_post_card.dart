@@ -73,9 +73,12 @@ class _NewsPostCardState extends State<NewsPostCard> {
   }
 
   void _onShare(String title, String content, String sourceUrl) {
-    final text = '🎮 $title\n\n'
+    final finalUrl = sourceUrl.isNotEmpty ? sourceUrl : 'fallback_source_url'.tr();
+    
+    final text = '${'share_prefix_emoji'.tr(args: [title])}\n\n'
         '$content\n\n'
-        'Source: ${sourceUrl.isNotEmpty ? sourceUrl : "https://gameskhabar.pk"}';
+        '${'share_source_label'.tr(args: [finalUrl])}';
+        
     Share.share(text);
   }
 
@@ -111,417 +114,416 @@ class _NewsPostCardState extends State<NewsPostCard> {
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _isExpanded ? const Color(0xFF00FF88).withOpacity(0.4) : const Color(0xFF262E3D),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+          decoration: BoxDecoration(
+            color: GamerTheme.cardDark,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _isExpanded ? const Color(0xFF00FF88).withOpacity(0.4) : const Color(0xFF262E3D),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.35),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header: GK Logo Avatar + "GAMES KHABAR • Official" + Verified Tick + Category & Time + Trending News Label
-          // HEADER: Bot Avatar, Bot Name + Grey BOT badge, Category, and Timestamp
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Bot Avatar
-                _buildBotAvatar(news),
-                const SizedBox(width: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // HEADER: Bot Avatar, Bot Name + Grey BOT badge, Category, and Timestamp
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Bot Avatar
+                    _buildBotAvatar(news),
+                    const SizedBox(width: 10),
 
-                // Name & Info Column
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                    // Name & Info Column
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Flexible(
-                            child: Text(
-                              news.effectiveBotName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13.5,
-                                letterSpacing: 0.2,
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  news.effectiveBotName,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13.5,
+                                    letterSpacing: 0.2,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                              const SizedBox(width: 6),
+                              // Grey BOT badge
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF242C38),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: const Color(0xFF475569),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Text(
+                                  news.effectiveBotBadge,
+                                  style: const TextStyle(
+                                    color: Color(0xFFCBD5E1),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 9.5,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(
+                                Icons.smart_toy_rounded,
+                                color: Color(0xFF64748B),
+                                size: 13,
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          // Grey BOT badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF242C38),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: const Color(0xFF475569),
-                                width: 0.8,
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              // Category badge
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00FF88).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: const Color(0xFF00FF88).withOpacity(0.35),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    news.category.toUpperCase(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFF00FF88),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 9.5,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                            child: Text(
-                              news.effectiveBotBadge,
-                              style: const TextStyle(
-                                color: Color(0xFFCBD5E1),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 9.5,
-                                letterSpacing: 0.5,
+                              const SizedBox(width: 6),
+                              const Text(
+                                '•',
+                                style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 10),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.smart_toy_rounded,
-                            color: Color(0xFF64748B),
-                            size: 13,
+                              const SizedBox(width: 6),
+                              Text(
+                                news.timeAgo,
+                                style: const TextStyle(
+                                  color: Color(0xFF8B9BB4),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (news.platform.isNotEmpty && news.platform != 'Multiplatform') ...[
+                                const SizedBox(width: 6),
+                                const Text(
+                                  '•',
+                                  style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 10),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  news.platform,
+                                  style: const TextStyle(
+                                    color: Color(0xFF64748B),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 3),
-                      Row(
+                    ),
+
+                    const SizedBox(width: 6),
+
+                    // Top right label: "Trending"
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB703).withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: const Color(0xFFFFB703).withOpacity(0.4),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Category badge e.g. "GRAND THEFT AUTO" / "EA SPORTS"
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00FF88).withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(
-                                  color: const Color(0xFF00FF88).withOpacity(0.35),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Text(
-                                news.category.toUpperCase(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFF00FF88),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 9.5,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            ),
+                          const Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 12,
+                            color: Color(0xFFFFB703),
                           ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            '•',
-                            style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 10),
-                          ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 3),
                           Text(
-                            news.timeAgo,
+                            'trending_tag'.tr(),
                             style: const TextStyle(
-                              color: Color(0xFF8B9BB4),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
+                              color: Color(0xFFFFB703),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.2,
                             ),
                           ),
-                          if (news.platform.isNotEmpty && news.platform != 'Multiplatform') ...[
-                            const SizedBox(width: 6),
-                            const Text(
-                              '•',
-                              style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 10),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Main Title
+              GestureDetector(
+                onTap: _toggleExpand,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  child: Text(
+                    displayTitle,
+                    textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
+                    textAlign: isUrdu ? TextAlign.right : TextAlign.left,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: isUrdu ? 15.5 : 14.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Body Image
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: GestureDetector(
+                    onTap: _toggleExpand,
+                    child: Image.network(
+                      news.effectiveImageUrl,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          height: 200,
+                          width: double.infinity,
+                          color: const Color(0xFF141923),
+                          child: Center(
+                            child: SizedBox(
+                              width: 26,
+                              height: 26,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                    : null,
+                                color: const Color(0xFF00FF88),
+                              ),
                             ),
-                            const SizedBox(width: 6),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) => Image.network(
+                        GamingNewsModel.getCategoryFallbackImage(
+                          news.category,
+                          title: news.titleEn,
+                          content: news.contentEn,
+                          docId: news.id,
+                        ),
+                        height: 200,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (c, e, s) => Image.network(
+                          gameFallbackImages['DEFAULT']!,
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c2, e2, s2) => _buildHeroFallbackBanner(news),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // INLINE EXPANDED CONTENT
+              AnimatedCrossFade(
+                firstChild: const SizedBox.shrink(),
+                secondChild: _buildExpandedContent(news, displayContent, isUrdu),
+                crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                duration: const Duration(milliseconds: 280),
+              ),
+
+              // Divider before footer
+              const Divider(color: Color(0xFF262E3D), height: 1),
+
+              // Footer: Like + Share + Bookmark + Read More
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    // Like Button
+                    InkWell(
+                      onTap: _toggleLike,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                              size: 18,
+                              color: _isLiked ? const Color(0xFFFF4757) : const Color(0xFF8B9BB4),
+                            ),
+                            const SizedBox(width: 4),
                             Text(
-                              news.platform,
+                              '$_likeCount',
+                              style: TextStyle(
+                                color: _isLiked ? const Color(0xFFFF4757) : const Color(0xFF8B9BB4),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    // Share Button
+                    InkWell(
+                      onTap: () => _onShare(displayTitle, displayContent, news.sourceUrl),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.share_outlined,
+                              size: 17,
+                              color: Color(0xFF8B9BB4),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'share'.tr(),
                               style: const TextStyle(
-                                color: Color(0xFF64748B),
-                                fontSize: 10.5,
+                                color: Color(0xFF8B9BB4),
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(width: 6),
-
-                // Top right label: "Trending" / "ٹرینڈنگ"
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFB703).withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: const Color(0xFFFFB703).withOpacity(0.4),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.local_fire_department_rounded,
-                        size: 12,
-                        color: Color(0xFFFFB703),
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        'trending_tag'.tr(),
-                        style: const TextStyle(
-                          color: Color(0xFFFFB703),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.2,
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Main Title: ONLY single selected language in big white text (NO green Urdu box)
-          GestureDetector(
-            onTap: _toggleExpand,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              child: Text(
-                displayTitle,
-                textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
-                textAlign: isUrdu ? TextAlign.right : TextAlign.left,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: isUrdu ? 15.5 : 14.5,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // Body Image: Always shown with ClipRRect 12, height 200, full width, and fallback
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: GestureDetector(
-                onTap: _toggleExpand,
-                child: Image.network(
-                  news.effectiveImageUrl,
-                  height: 200,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Container(
-                      height: 200,
-                      width: double.infinity,
-                      color: const Color(0xFF141923),
-                      child: Center(
-                        child: SizedBox(
-                          width: 26,
-                          height: 26,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                            color: const Color(0xFF00FF88),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) => Image.network(
-                    GamingNewsModel.getCategoryFallbackImage(
-                      news.category,
-                      title: news.titleEn,
-                      content: news.contentEn,
-                      docId: news.id,
                     ),
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (c, e, s) => Image.network(
-                      gameFallbackImages['DEFAULT']!,
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (c2, e2, s2) => _buildHeroFallbackBanner(news),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
 
-          const SizedBox(height: 8),
+                    const SizedBox(width: 8),
 
-          // INLINE EXPANDED CONTENT
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: _buildExpandedContent(news, displayContent, isUrdu),
-            crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 280),
-          ),
-
-          // Divider before footer
-          const Divider(color: Color(0xFF262E3D), height: 1),
-
-          // Footer: Like (views) + Share + Bookmark + Read More / Show Less
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                // Like Button
-                InkWell(
-                  onTap: _toggleLike,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          size: 18,
-                          color: _isLiked ? const Color(0xFFFF4757) : const Color(0xFF8B9BB4),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$_likeCount',
-                          style: TextStyle(
-                            color: _isLiked ? const Color(0xFFFF4757) : const Color(0xFF8B9BB4),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 8),
-
-                // Share Button
-                InkWell(
-                  onTap: () => _onShare(displayTitle, displayContent, news.sourceUrl),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.share_outlined,
-                          size: 17,
-                          color: Color(0xFF8B9BB4),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'share'.tr(),
-                          style: const TextStyle(
-                            color: Color(0xFF8B9BB4),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 8),
-
-                // Bookmark Button
-                StreamBuilder<bool>(
-                  stream: _newsService.isBookmarkedStream(currentUid, news.id),
-                  builder: (context, snap) {
-                    final isBookmarked = snap.data ?? false;
-                    return InkWell(
-                      onTap: () async {
-                        if (currentUid.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please log in to bookmark news')),
-                          );
-                          return;
-                        }
-                        final saved = await _newsService.toggleBookmark(currentUid, news);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              backgroundColor: const Color(0xFF182234),
-                              content: Text(
-                                saved ? 'Article saved to bookmarks' : 'Article removed from bookmarks',
-                                style: const TextStyle(color: Color(0xFF00FF88)),
-                              ),
-                              duration: const Duration(seconds: 1),
+                    // Bookmark Button
+                    StreamBuilder<bool>(
+                      stream: _newsService.isBookmarkedStream(currentUid, news.id),
+                      builder: (context, snap) {
+                        final isBookmarked = snap.data ?? false;
+                        return InkWell(
+                          onTap: () async {
+                            if (currentUid.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('please_login_bookmark'.tr())),
+                              );
+                              return;
+                            }
+                            final saved = await _newsService.toggleBookmark(currentUid, news);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: const Color(0xFF182234),
+                                  content: Text(
+                                    saved ? 'article_saved'.tr() : 'article_removed'.tr(),
+                                    style: const TextStyle(color: Color(0xFF00FF88)),
+                                  ),
+                                  duration: const Duration(seconds: 1),
+                                ),
+                              );
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            child: Icon(
+                              isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                              size: 19,
+                              color: isBookmarked ? const Color(0xFF00FF88) : const Color(0xFF8B9BB4),
                             ),
-                          );
-                        }
+                          ),
+                        );
                       },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        child: Icon(
-                          isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
-                          size: 19,
-                          color: isBookmarked ? const Color(0xFF00FF88) : const Color(0xFF8B9BB4),
+                    ),
+
+                    const Spacer(),
+
+                    // Expand / Collapse Action Button
+                    ElevatedButton.icon(
+                      onPressed: _toggleExpand,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00FF88),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                      icon: Icon(
+                        _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                        size: 16,
+                      ),
+                      label: Text(
+                        _isExpanded
+                            ? 'show_less'.tr()
+                            : 'read_more'.tr(),
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                    );
-                  },
-                ),
-
-                const Spacer(),
-
-                // Expand / Collapse Action Button
-                ElevatedButton.icon(
-                  onPressed: _toggleExpand,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00FF88),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
                     ),
-                    elevation: 0,
-                  ),
-                  icon: Icon(
-                    _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    size: 16,
-                  ),
-                  label: Text(
-                    _isExpanded
-                        ? 'show_less'.tr()
-                        : 'read_more'.tr(),
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
       },
     );
   }
@@ -582,7 +584,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
             thickness: 1,
           ),
 
-          // Small pill label: "ذریعہ: IGN" - Non-clickable, just text credit
+          // Small pill label: "Source: IGN" - Non-clickable, just text credit
           Align(
             alignment: isUrdu ? Alignment.centerRight : Alignment.centerLeft,
             child: Container(
