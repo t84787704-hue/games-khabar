@@ -226,7 +226,7 @@ class _TeamLeaderboardScreenState extends State<TeamLeaderboardScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Leader: ${team.leaderName}',
+                                LanguageService.t("Leader:") + " ${team.leaderName}",
                                 style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                               ),
                               const SizedBox(height: 4),
@@ -242,7 +242,7 @@ class _TeamLeaderboardScreenState extends State<TeamLeaderboardScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Win Rate: ${team.winRate.toStringAsFixed(0)}%',
+                                    LanguageService.t("Win Rate:") + " ${team.winRate.toStringAsFixed(0)}%",
                                     style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10),
                                   ),
                                 ],
@@ -270,9 +270,9 @@ class _TeamLeaderboardScreenState extends State<TeamLeaderboardScreen> {
                                   fontSize: 16,
                                 ),
                               ),
-                              const Text(
-                                'PTS',
-                                style: TextStyle(
+                              Text(
+                                'pts_short'.tr(),
+                                style: const TextStyle(
                                   color: Color(0xFFFF6B00),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 9,
