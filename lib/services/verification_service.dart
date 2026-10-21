@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import '../models/gamer_user_model.dart';
 import 'supabase_service.dart';
 
@@ -238,63 +239,63 @@ class VerificationService {
     int? accountAgeDays,
   }) {
     if (user.isOwnerUser) {
-      return const [
+      return [
         VerificationRequirementItem(
           id: 1,
-          title: 'Profile 100% Complete & Game UID',
-          description: 'Set avatar, bio, and link Game UID.',
-          currentFormatted: 'Verified Owner',
-          targetFormatted: 'Completed',
+          title: 'verif_req_1_title'.tr(),
+          description: 'verif_req_1_desc'.tr(),
+          currentFormatted: 'verif_req_owner_verified'.tr(),
+          targetFormatted: 'verif_req_completed'.tr(),
           progress: 1.0,
           isMet: true,
           icon: Icons.account_box_rounded,
         ),
         VerificationRequirementItem(
           id: 2,
-          title: 'Top Tier Rank',
-          description: 'Top competitive tier.',
-          currentFormatted: 'Owner Privileges',
-          targetFormatted: 'Completed',
+          title: 'verif_req_2_title'.tr(),
+          description: 'verif_req_2_desc'.tr(),
+          currentFormatted: 'verif_req_owner_privileges'.tr(),
+          targetFormatted: 'verif_req_completed'.tr(),
           progress: 1.0,
           isMet: true,
           icon: Icons.military_tech_rounded,
         ),
         VerificationRequirementItem(
           id: 3,
-          title: 'Game Stats (Optional)',
-          description: 'Competitive performance stats.',
-          currentFormatted: 'Exempt',
-          targetFormatted: 'Optional',
+          title: 'verif_req_3_title'.tr(),
+          description: 'verif_req_3_desc'.tr(),
+          currentFormatted: 'verif_req_exempt'.tr(),
+          targetFormatted: 'verif_req_optional'.tr(),
           progress: 1.0,
           isMet: true,
           icon: Icons.speed_rounded,
         ),
         VerificationRequirementItem(
           id: 4,
-          title: '3 Posts + 2 Squad/Rooms',
-          description: 'Active community creator.',
-          currentFormatted: 'Completed',
-          targetFormatted: 'Completed',
+          title: 'verif_req_4_title'.tr(),
+          description: 'verif_req_4_desc'.tr(),
+          currentFormatted: 'verif_req_completed'.tr(),
+          targetFormatted: 'verif_req_completed'.tr(),
           progress: 1.0,
           isMet: true,
           icon: Icons.dynamic_feed_rounded,
         ),
         VerificationRequirementItem(
           id: 5,
-          title: '500+ Total Likes',
-          description: 'Community appreciation.',
-          currentFormatted: 'Completed',
-          targetFormatted: 'Completed',
+          title: 'verif_req_5_title'.tr(),
+          description: 'verif_req_5_desc'.tr(),
+          currentFormatted: 'verif_req_completed'.tr(),
+          targetFormatted: 'verif_req_completed'.tr(),
           progress: 1.0,
           isMet: true,
           icon: Icons.favorite_rounded,
         ),
         VerificationRequirementItem(
           id: 6,
-          title: 'Account 7+ Days & 0 Reports',
-          description: 'Clean standing.',
-          currentFormatted: 'Clean',
-          targetFormatted: 'Completed',
+          title: 'verif_req_6_title'.tr(),
+          description: 'verif_req_6_desc'.tr(),
+          currentFormatted: 'verif_req_clean'.tr(),
+          targetFormatted: 'verif_req_completed'.tr(),
           progress: 1.0,
           isMet: true,
           icon: Icons.verified_user_rounded,
@@ -319,7 +320,7 @@ class VerificationService {
     final List<VerificationRequirementItem> items = [];
     final activeGame = user.selectedGame.isNotEmpty
         ? user.selectedGame
-        : (user.favoriteGame.isNotEmpty ? user.favoriteGame : 'Game');
+        : (user.favoriteGame.isNotEmpty ? user.favoriteGame : 'verif_game_fallback'.tr());
 
     final bool hasBio = user.bio.trim().isNotEmpty;
     final bool hasName = user.displayName.trim().isNotEmpty;
@@ -335,16 +336,15 @@ class VerificationService {
     items.add(
       VerificationRequirementItem(
         id: 1,
-        title: 'Profile 100% Complete & Game UID',
-        description:
-            'Set your avatar, bio, and link your Game Character UID.',
+        title: 'verif_req_1_title'.tr(),
+        description: 'verif_req_1_desc'.tr(),
         currentFormatted: req1Met
-            ? '100% Complete ($activeGame UID: ${user.gameId})'
-            : '${(req1Progress * 100).toInt()}% Complete',
-        targetFormatted: '100% + Linked Game UID',
+            ? 'verif_req_1_complete_uid'.tr(args: [activeGame, user.gameId])
+            : 'verif_req_1_percent'.tr(args: ['${(req1Progress * 100).toInt()}']),
+        targetFormatted: 'verif_req_1_target'.tr(),
         progress: req1Progress,
         isMet: req1Met,
-        missingReason: req1Met ? null : 'Complete profile & link UID',
+        missingReason: req1Met ? null : 'verif_req_1_missing'.tr(),
         icon: Icons.account_box_rounded,
       ),
     );
@@ -367,16 +367,16 @@ class VerificationService {
     items.add(
       VerificationRequirementItem(
         id: 2,
-        title: 'Top Tier Rank in Selected Game',
-        description: 'Top competitive rank in $activeGame.',
+        title: 'verif_req_2_title'.tr(),
+        description: 'verif_req_2_desc_game'.tr(args: [activeGame]),
         currentFormatted:
             (user.rank.isEmpty || lowerRank == 'none' || lowerRank == 'skip')
-                ? 'Unranked'
+                ? 'verif_rank_unranked'.tr()
                 : '$activeGame: ${user.rank}',
-        targetFormatted: 'Top Tier Rank',
+        targetFormatted: 'verif_req_2_target'.tr(),
         progress: rankProgress,
         isMet: rankMet,
-        missingReason: rankMet ? null : 'Reach top tier rank',
+        missingReason: rankMet ? null : 'verif_req_2_missing'.tr(),
         icon: Icons.military_tech_rounded,
       ),
     );
@@ -385,11 +385,11 @@ class VerificationService {
     items.add(
       VerificationRequirementItem(
         id: 3,
-        title: 'Game Stats (Optional)',
-        description: 'Share performance stats.',
+        title: 'verif_req_3_title'.tr(),
+        description: 'verif_req_3_desc'.tr(),
         currentFormatted:
-            hasKd ? '${user.kdRatio.toStringAsFixed(2)} K/D' : 'Optional',
-        targetFormatted: 'Stats (Optional)',
+            hasKd ? 'verif_req_3_kd'.tr(args: [user.kdRatio.toStringAsFixed(2)]) : 'verif_req_optional'.tr(),
+        targetFormatted: 'verif_req_3_target'.tr(),
         progress: 1.0,
         isMet: true,
         icon: Icons.speed_rounded,
@@ -408,14 +408,13 @@ class VerificationService {
     items.add(
       VerificationRequirementItem(
         id: 4,
-        title: '3 Community Posts + 2 Squad/Room Posts',
-        description: 'Active community creator.',
-        currentFormatted:
-            '$communityPosts/3 Posts • $squadRooms/2 Squad/Rooms',
-        targetFormatted: '3 Posts & 2 Squad/Rooms',
+        title: 'verif_req_4_title'.tr(),
+        description: 'verif_req_4_desc'.tr(),
+        currentFormatted: 'verif_req_4_current'.tr(args: ['$communityPosts', '$squadRooms']),
+        targetFormatted: 'verif_req_4_target'.tr(),
         progress: req4Progress,
         isMet: req4Met,
-        missingReason: req4Met ? null : 'Post more content',
+        missingReason: req4Met ? null : 'verif_req_4_missing'.tr(),
         icon: Icons.dynamic_feed_rounded,
       ),
     );
@@ -426,13 +425,13 @@ class VerificationService {
     items.add(
       VerificationRequirementItem(
         id: 5,
-        title: '500+ Total Likes Received',
-        description: 'Community appreciation.',
-        currentFormatted: '$likes / 500 Likes',
-        targetFormatted: '500+ Likes',
+        title: 'verif_req_5_title'.tr(),
+        description: 'verif_req_5_desc'.tr(),
+        currentFormatted: 'verif_req_5_current'.tr(args: ['$likes']),
+        targetFormatted: 'verif_req_5_target'.tr(),
         progress: likesProgress,
         isMet: likesMet,
-        missingReason: likesMet ? null : 'Need more likes',
+        missingReason: likesMet ? null : 'verif_req_5_missing'.tr(),
         icon: Icons.favorite_rounded,
       ),
     );
@@ -447,13 +446,13 @@ class VerificationService {
     items.add(
       VerificationRequirementItem(
         id: 6,
-        title: 'Account Age 7+ Days & 0 Reports',
-        description: 'Clean community trust.',
-        currentFormatted: '$ageDays Days • $reports Reports',
-        targetFormatted: '7+ Days & 0 Reports',
+        title: 'verif_req_6_title'.tr(),
+        description: 'verif_req_6_desc'.tr(),
+        currentFormatted: 'verif_req_6_current'.tr(args: ['$ageDays', '$reports']),
+        targetFormatted: 'verif_req_6_target'.tr(),
         progress: req6Progress,
         isMet: req6Met,
-        missingReason: req6Met ? null : 'Account age or reports issue',
+        missingReason: req6Met ? null : 'verif_req_6_missing'.tr(),
         icon: Icons.verified_user_rounded,
       ),
     );
@@ -592,11 +591,11 @@ class VerificationService {
       GamerUser user) async {
     final uid = user.uid;
     if (uid.isEmpty) {
-      return const VerificationApplicationResult(
+      return VerificationApplicationResult(
         success: false,
         status: 'none',
         isVerified: false,
-        message: 'Please sign in to apply.',
+        message: 'verif_please_sign_in'.tr(),
       );
     }
 
@@ -612,11 +611,11 @@ class VerificationService {
         }).eq('id', uuid);
 
         _verifiedCache[uid] = true;
-        return const VerificationApplicationResult(
+        return VerificationApplicationResult(
           success: true,
           status: 'verified',
           isVerified: true,
-          message: 'Owner Blue Tick granted.',
+          message: 'verif_owner_granted'.tr(),
         );
       }
 
@@ -636,7 +635,7 @@ class VerificationService {
           success: false,
           status: user.verificationStatus,
           isVerified: user.isVerified,
-          message: 'Cannot apply: ${unmet.length} requirement(s) missing.',
+          message: 'verif_cannot_apply'.tr(args: ['${unmet.length}']),
           missingRequirements: unmet.map((u) => u.title).toList(),
         );
       }
@@ -652,17 +651,17 @@ class VerificationService {
       try {
         await SupabaseService.sendNotification({
           'userId': uuid,
-          'title': '🎉 Blue Tick Verified!',
-          'message': 'Congratulations! Blue Tick is now active on your ID.',
+          'title': 'notif_blue_tick_verified_title'.tr(),
+          'message': 'notif_blue_tick_verified_body'.tr(),
           'type': 'verification',
         });
       } catch (_) {}
 
-      return const VerificationApplicationResult(
+      return VerificationApplicationResult(
         success: true,
         status: 'verified',
         isVerified: true,
-        message: 'Congratulations! Blue Tick granted.',
+        message: 'verif_success_msg'.tr(),
       );
     } catch (e) {
       debugPrint('Error applying for verification: $e');
@@ -670,7 +669,7 @@ class VerificationService {
         success: false,
         status: user.verificationStatus,
         isVerified: user.isVerified,
-        message: 'Verification failed: $e',
+        message: 'verif_failed_msg'.tr(args: ['$e']),
       );
     }
   }
