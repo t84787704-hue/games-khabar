@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import '../services/supabase_service.dart';
 import '../models/tournament_room_model.dart';
 import '../constants/tournament_game_categories.dart';
@@ -115,7 +116,7 @@ class ScreenshotOcrService {
       final List<String> winnerUids = [];
       final List<String> winnerNames = [];
 
-      final submitterName = (userName != null && userName.isNotEmpty) ? userName : 'Player';
+      final submitterName = (userName != null && userName.isNotEmpty) ? userName : 'user_gamer'.tr();
       winnerUids.add(userId);
       winnerNames.add(submitterName);
 
