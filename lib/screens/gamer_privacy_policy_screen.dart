@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 /// Play Store & GDPR compliant Privacy Policy Screen.
 /// 
@@ -27,9 +28,9 @@ class GamerPrivacyPolicyScreen extends StatelessWidget {
       } else {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open link'),
-              backgroundColor: Color(0xFFFF4655),
+            SnackBar(
+              content: Text('could_not_open_link'.tr()),
+              backgroundColor: const Color(0xFFFF4655),
             ),
           );
         }
@@ -46,9 +47,9 @@ class GamerPrivacyPolicyScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text(
-          'Privacy Policy',
-          style: TextStyle(
+        title: Text(
+          'privacy_policy_title'.tr(),
+          style: const TextStyle(
             color: Color(0xFF1877F2),
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -87,10 +88,10 @@ class GamerPrivacyPolicyScreen extends StatelessWidget {
                               color: Color(0xFF1877F2), size: 22),
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'Your Privacy Matters',
-                            style: TextStyle(
+                            'privacy_matters_title'.tr(),
+                            style: const TextStyle(
                               color: Color(0xFF050505),
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -101,7 +102,7 @@ class GamerPrivacyPolicyScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'This policy explains what data $appName collects, how we use it, and your rights as a user.',
+                      'privacy_policy_desc'.tr(args: [appName]),
                       style: const TextStyle(
                         color: Color(0xFF050505),
                         fontSize: 13,
@@ -110,7 +111,7 @@ class GamerPrivacyPolicyScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Last updated: $lastUpdated',
+                      'last_updated_prefix'.tr(args: [lastUpdated]),
                       style: const TextStyle(
                         color: Color(0xFF65676B),
                         fontSize: 11,
@@ -125,120 +126,120 @@ class GamerPrivacyPolicyScreen extends StatelessWidget {
               // Section 1: Information We Collect
               _buildSection(
                 number: '1',
-                title: 'Information We Collect',
+                title: 'sec1_title'.tr(),
                 items: [
-                  'Account Information: Email address, username, display name, and profile photo (via Google Sign In).',
-                  'Profile Data: Bio, favorite game, in-game UID, rank, and gaming stats you choose to share.',
-                  'Content: Posts, comments, likes, teams, and 1v1 challenges you create.',
-                  'Device Data: FCM push notification token, app version, and device type.',
-                  'Usage Data: Login times, feature usage patterns for improving the app.',
+                  'sec1_li1'.tr(),
+                  'sec1_li2'.tr(),
+                  'sec1_li3'.tr(),
+                  'sec1_li4'.tr(),
+                  'sec1_li5'.tr(),
                 ],
               ),
 
               // Section 2: How We Use Your Data
               _buildSection(
                 number: '2',
-                title: 'How We Use Your Data',
+                title: 'sec2_title'.tr(),
                 items: [
-                  'To provide the core features of the app (feed, teams, 1v1 challenges).',
-                  'To send push notifications for likes, comments, and team activities.',
-                  'To verify your in-game rank and award blue ticks.',
-                  'To detect and prevent abuse, spam, and fraud.',
-                  'To improve app performance and fix bugs.',
+                  'sec2_li1'.tr(),
+                  'sec2_li2'.tr(),
+                  'sec2_li3'.tr(),
+                  'sec2_li4'.tr(),
+                  'sec2_li5'.tr(),
                 ],
               ),
 
               // Section 3: Data Storage & Security
               _buildSection(
                 number: '3',
-                title: 'Data Storage & Security',
+                title: 'sec3_title'.tr(),
                 items: [
-                  'Your data is stored securely on Supabase servers with row-level security.',
-                  'All communication uses HTTPS encryption.',
-                  'Passwords are never stored in plain text — Supabase Auth handles this.',
-                  'We use industry-standard security practices to protect your data.',
+                  'sec3_li1'.tr(),
+                  'sec3_li2'.tr(),
+                  'sec3_li3'.tr(),
+                  'sec3_li4'.tr(),
                 ],
               ),
 
               // Section 4: Data Sharing
               _buildSection(
                 number: '4',
-                title: 'Data Sharing',
+                title: 'sec4_title'.tr(),
                 items: [
-                  'We do NOT sell your personal data to anyone.',
-                  'We use Supabase for database and authentication.',
-                  'We use secure cloud messaging for push notifications only.',
-                  'We may share data if required by law.',
+                  'sec4_li1'.tr(),
+                  'sec4_li2'.tr(),
+                  'sec4_li3'.tr(),
+                  'sec4_li4'.tr(),
                 ],
               ),
 
               // Section 5: Your Privacy Controls
               _buildSection(
                 number: '5',
-                title: 'Your Privacy Controls',
+                title: 'sec5_title'.tr(),
                 items: [
-                  'You can hide your rank, UID, coins, bio, and other info from others.',
-                  'Go to Profile → Settings → Privacy Settings to control visibility.',
-                  'You can block other users to prevent them from interacting with you.',
-                  'You can report inappropriate content or users.',
+                  'sec5_li1'.tr(),
+                  'sec5_li2'.tr(),
+                  'sec5_li3'.tr(),
+                  'sec5_li4'.tr(),
                 ],
               ),
 
               // Section 6: Your Rights
               _buildSection(
                 number: '6',
-                title: 'Your Rights (GDPR / DPDP Act)',
+                title: 'sec6_title'.tr(),
                 items: [
-                  'Right to Access: You can download a copy of all your data.',
-                  'Right to Delete: You can permanently delete your account.',
-                  'Right to Correction: You can edit your profile anytime.',
-                  'Right to Portability: You can export your data as JSON.',
-                  'Right to Object: You can contact us to object to data processing.',
+                  'sec6_li1'.tr(),
+                  'sec6_li2'.tr(),
+                  'sec6_li3'.tr(),
+                  'sec6_li4'.tr(),
+                  'sec6_li5'.tr(),
                 ],
               ),
 
               // Section 7: Data Retention
               _buildSection(
                 number: '7',
-                title: 'Data Retention',
+                title: 'sec7_title'.tr(),
                 items: [
-                  'Your data is kept as long as your account is active.',
-                  'After account deletion, data is permanently removed within 30 days.',
-                  'Some data may be kept longer if required by law.',
+                  'sec7_li1'.tr(),
+                  'sec7_li2'.tr(),
+                  'sec7_li3'.tr(),
                 ],
               ),
 
               // Section 8: Children's Privacy
               _buildSection(
                 number: '8',
-                title: 'Children\'s Privacy (COPPA)',
+                title: 'sec8_title'.tr(),
                 items: [
-                  'This app is NOT intended for children under 13 years.',
-                  'We do not knowingly collect data from children under 13.',
-                  'If you are under 13, please do not use this app.',
-                  'Parents can contact us to remove any accidental data.',
+                  'sec8_li1'.tr(),
+                  'sec8_li2'.tr(),
+                  'sec8_li3'.tr(),
+                  'sec8_li4'.tr(),
                 ],
               ),
 
               // Section 9: Changes to This Policy
               _buildSection(
                 number: '9',
-                title: 'Changes to This Policy',
+                title: 'sec9_title'.tr(),
                 items: [
-                  'We may update this policy from time to time.',
-                  'You will be notified of major changes via in-app notification.',
-                  'Continued use of the app means you accept the updated policy.',
+                  'sec9_li1'.tr(),
+                  'sec9_li2'.tr(),
+                  'sec9_li3'.tr(),
                 ],
               ),
 
               // Section 10: Contact Us
               _buildSection(
                 number: '10',
-                title: 'Contact Us',
+                title: 'sec10_title'.tr(),
                 items: [
-                  'For any privacy-related questions, contact us:',
-                  'Email: $contactEmail',
-                  'We respond within 7 business days.',
+                  'sec10_li1'.tr(),
+                  'sec10_li2'.tr(args: [contactEmail]),
+                  'sec10_li3'.tr(),
                 ],
               ),
 
@@ -258,9 +259,9 @@ class GamerPrivacyPolicyScreen extends StatelessWidget {
                     ),
                   ),
                   icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: const Text(
-                    'Open Hosted Version',
-                    style: TextStyle(
+                  label: Text(
+                    'open_hosted_version'.tr(),
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
@@ -284,9 +285,9 @@ class GamerPrivacyPolicyScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'I Understand',
-                    style: TextStyle(
+                  child: Text(
+                    'btn_i_understand'.tr(),
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
