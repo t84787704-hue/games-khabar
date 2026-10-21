@@ -110,9 +110,9 @@ class _TeamCardState extends State<TeamCard> {
     if (effectiveUid.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('please_login_first'.tr()),
-            backgroundColor: Color(0xFFFF4655),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
@@ -144,16 +144,16 @@ class _TeamCardState extends State<TeamCard> {
         if (mounted) {
           if (success) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
+              SnackBar(
                 content: Text('msg_join_request_sent'.tr()),
-                backgroundColor: Color(0xFF1877F2),
+                backgroundColor: const Color(0xFF1877F2),
               ),
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
+              SnackBar(
                 content: Text('err_sending_request_retry'.tr()),
-                backgroundColor: Color(0xFFFF4655),
+                backgroundColor: const Color(0xFFFF4655),
               ),
             );
           }
@@ -401,9 +401,9 @@ class _TeamCardState extends State<TeamCard> {
       if (mounted) setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('challenge_cancelled'.tr()),
-            backgroundColor: Color(0xFF1877F2),
+            backgroundColor: const Color(0xFF1877F2),
           ),
         );
       }
@@ -588,14 +588,14 @@ class _TeamCardState extends State<TeamCard> {
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('👑', style: TextStyle(fontSize: 11)),
-          SizedBox(width: 3),
+          const Text('👑', style: TextStyle(fontSize: 11)),
+          const SizedBox(width: 3),
           Text(
             'badge_owner_caps'.tr(),
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 10,
@@ -621,14 +621,14 @@ class _TeamCardState extends State<TeamCard> {
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('🛡️', style: TextStyle(fontSize: 11)),
-          SizedBox(width: 3),
+          const Text('🛡️', style: TextStyle(fontSize: 11)),
+          const SizedBox(width: 3),
           Text(
             'badge_member_caps'.tr(),
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 10,
@@ -682,14 +682,14 @@ class _TeamCardState extends State<TeamCard> {
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF131A29),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.edit_rounded, color: Color(0xFF00FF88), size: 22),
-              SizedBox(width: 8),
+              const Icon(Icons.edit_rounded, color: Color(0xFF00FF88), size: 22),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'edit_team'.tr(),
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 17),
@@ -878,9 +878,9 @@ class _TeamCardState extends State<TeamCard> {
                       if (nameCtrl.text.trim().isEmpty ||
                           tagCtrl.text.trim().isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content: Text('name_and_tag_required'.tr()),
-                            backgroundColor: Color(0xFFFF4655),
+                            backgroundColor: const Color(0xFFFF4655),
                           ),
                         );
                         return;
@@ -943,15 +943,15 @@ class _TeamCardState extends State<TeamCard> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF131A29),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded,
+            const Icon(Icons.warning_amber_rounded,
                 color: Color(0xFFFF4655), size: 24),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 'delete_team_q'.tr(),
-                style: TextStyle(
+                style: const TextStyle(
                     color: Color(0xFFFF4655),
                     fontWeight: FontWeight.bold,
                     fontSize: 17),
@@ -1027,9 +1027,9 @@ class _TeamCardState extends State<TeamCard> {
     if (currentUid.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('user_not_logged_in'.tr()),
-            backgroundColor: Color(0xFFFF4655),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
