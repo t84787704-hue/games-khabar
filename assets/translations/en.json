@@ -1663,5 +1663,19 @@
 "terms_sec11_item3": "For urgent matters, reach out via social media.",
 
 "btn_open_hosted_version": "Open Hosted Version",
-"btn_i_agree": "I Understand & Agree"
+"btn_i_agree": "I Understand & Agree","title_delete_account": "Delete Account",
+"warning_delete_account_undo": "Warning: This action is permanent and cannot be undone.",
+"delete_account_what_deleted_title": "What will be deleted?",
+"delete_bullet_profile": "Your profile and personal information",
+"delete_bullet_posts": "All your posts, comments, and likes",
+"delete_bullet_teams": "Your teams and squad memberships",
+"delete_bullet_challenges": "Your match history and challenges",
+"delete_bullet_coins": "Your G-Coins and wallet balance",
+"delete_bullet_followers": "Your followers and following lists",
+"delete_grace_period_info": "Your account will be scheduled for deletion. You have a 30-day grace period to log back in and cancel the deletion.",
+"delete_checkbox_understand": "I understand that all my data will be permanently deleted.",
+"delete_checkbox_confirm": "I confirm that I want to delete my account.",
+"delete_type_confirm_label": "Please type 'DELETE' to confirm",
+"hint_delete_word": "Type DELETE here",
+"btn_permanently_delete_account": "Permanently Delete Account"
 }
