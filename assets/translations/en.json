@@ -1814,5 +1814,17 @@
 "download_bullet_notifications": "Notification History",
 "format_info_title": "Data Format",
 "format_info_desc": "Your data will be downloaded as a JSON file.",
-"btn_download_my_data": "Download My Data"
+"btn_download_my_data": "Download My Data",
+"tab_posts": "Posts",
+"tab_about": "About",
+"btn_edit_profile": "Edit Profile",
+"main_game_label": "Main Game",
+"g_coins_label": "G-Coins",
+"coins_count": "Coins",
+"esports_team_status": "Esports Status",
+"esports_status_member": "Team Member",
+"eligible_member_only": "Eligible Member",
+"coins_count_label": "1000 Coins Required",
+"can_join_team_need_coins_desc": "You need coins to join an esports team"
+
 }
