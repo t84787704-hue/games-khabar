@@ -33,13 +33,13 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Text('⚔️', style: TextStyle(fontSize: 20)),
-            SizedBox(width: 8),
+            const Text('⚔️', style: TextStyle(fontSize: 20)),
+            const SizedBox(width: 8),
             Text(
-              'TEAM MATCHES',
-              style: TextStyle(
+              'team_matches_title'.tr(),
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
                 fontSize: 16,
@@ -97,9 +97,9 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
                           child: const Text('⚔️', style: TextStyle(fontSize: 40)),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
-                          'No Active Matches',
-                          style: TextStyle(
+                        Text(
+                          'no_active_matches'.tr(),
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -154,8 +154,8 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
         _teamService.getTeam(t2),
       ]),
       builder: (context, snap) {
-        final t1Name = t1Joined ?? snap.data?[0]?.name ?? match['team1_name'] ?? 'Team 1';
-        final t2Name = t2Joined ?? snap.data?[1]?.name ?? match['team2_name'] ?? 'Team 2';
+        final t1Name = t1Joined ?? snap.data?[0]?.name ?? match['team1_name'] ?? 'team_default_name'.tr();
+        final t2Name = t2Joined ?? snap.data?[1]?.name ?? match['team2_name'] ?? 'team_default_name'.tr();
 
         return InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -208,11 +208,11 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
                     ),
 
                     // VS
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 14),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: Text(
-                        'VS',
-                        style: TextStyle(
+                        'versus_vs'.tr(),
+                        style: const TextStyle(
                           color: Color(0xFFFF4655),
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -237,14 +237,14 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Row(
+                Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.chat_bubble_rounded, size: 12, color: Color(0xFF1877F2)),
-                    SizedBox(width: 5),
+                    const Icon(Icons.chat_bubble_rounded, size: 12, color: Color(0xFF1877F2)),
+                    const SizedBox(width: 5),
                     Text(
-                      'Tap to open Team DM 💬',
-                      style: TextStyle(color: Color(0xFF1877F2), fontSize: 11.5, fontWeight: FontWeight.bold),
+                      'tap_to_open_team_dm'.tr(),
+                      style: const TextStyle(color: Color(0xFF1877F2), fontSize: 11.5, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -252,7 +252,7 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
             ),
           ),
         );
-        },
-      );
+      },
+    );
   }
 }
