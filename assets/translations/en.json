@@ -1,4 +1,6 @@
-{ "view_team": "View Team",
+{"your_wallet_balance_caps": "CURRENT   BALANCE",
+ "coins_formatted_gcoins": "{} G-Coins",
+ "view_team": "View Team",
   "btn_challenge_caps": "CHALLENGE",
   "open_team": "Open Team",
   "aap_apni_post_report_nahi_kar": "You cannot report your own post",
