@@ -158,28 +158,30 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         user.rank.isNotEmpty &&
         user.rank.toLowerCase() != 'none' &&
         user.rank.toLowerCase() != 'skip';
-    final String rankText = hasValidRank ? ' | Rank: ${user.rank}' : '';
+    
+    final String rankText = hasValidRank 
+        ? 'share_msg_rank'.tr(args: [user.rank]) 
+        : '';
 
     final bio = user.bio.trim();
-    final String bioText = bio.isNotEmpty ? '\n💬 "$bio"' : '';
+    final String bioText = bio.isNotEmpty ? 'share_msg_bio'.tr(args: [bio]) : '';
 
     const String appLink = 'https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid';
 
     final String shareMessage = '''
-🔥 Check out $displayName on Gamers ID!
+${'share_msg_header'.tr(args: [displayName])}
 
-🎮 Handle: @${user.username}
-🎯 Game: $game$rankText
-📊 Stats: ${user.followersCount} Followers • ${user.postsCount} Posts$bioText
+${'share_msg_handle'.tr(args: [user.username])}
+${'share_msg_game_stats'.tr(args: [game, rankText])}
+${'share_msg_stats'.tr(args: ['${user.followersCount}', '${user.postsCount}', bioText])}
 
-⚔️ Mujhe custom rooms aur 1v1 matches mein challenge karein!
-📲 Download Gamers ID App:
-👉 $appLink
+${'share_msg_challenge'.tr()}
+${'share_msg_download'.tr(args: [appLink])}
 '''.trim();
 
     Share.share(
       shareMessage,
-      subject: 'Follow $displayName on Gamers ID',
+      subject: 'share_profile_subject'.tr(args: [displayName]),
     );
   }
 
@@ -407,7 +409,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                               child: CachedNetworkImage(
                                 imageUrl: user.coverUrl.isNotEmpty
                                     ? user.coverUrl
-                                    : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
+                                    : 'default_cover_url'.tr(),
                                 fit: BoxFit.cover,
                               ),
                             ),
