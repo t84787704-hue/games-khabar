@@ -1,10 +1,5 @@
-import 'package:easy_localization/easy_localization.dart';
 // ===============================================================================
-// TEAMS SCREEN — Full Adaptive Day & Night Mode
-// + Strict 1,000 Coins Rule for Team Creation & Maintenance
-// + Wallet-based Live Frozen Team Detection & Warning Banner
-// + Multi-Language Translation via LanguageService
-// -------------------------------------------------------------------------------
+// TEAMS SCREEN — Futuristic Dark Neon Gaming Theme (Matched to Reference)
 // File: lib/screens/teams_screen.dart
 // ===============================================================================
 
@@ -50,16 +45,22 @@ class _TeamsScreenState extends State<TeamsScreen>
 
   String _selectedGameFilter = "All";
   String _searchQuery = "";
-  final List<String> _gameFilterOptions = ["All", "BGMI", "Free Fire", "PUBG", "COD"];
+  final List<String> _gameFilterOptions = ["All", "BGMI", "Free Fire", "PUBG", "COD", "Valorant"];
 
   final Set<String> _cancelledChallengeIds = {};
   final Set<String> _acceptingChallengeIds = {};
   final Set<String> _acceptedChallengeIds = {};
   final Set<String> _completedMatchIds = {};
-  final Set<String> _autoCompletingMatchIds = {};
   Map<String, String> _lastReadMatchTimes = {};
   int _teamsRetryKey = 0;
   List<TeamModel>? _cachedTeams;
+
+  // Futuristic Gaming Theme Palette
+  static const Color neonBlue = Color(0xFF00E5FF);
+  static const Color neonCyan = Color(0xFF1877F2);
+  static const Color darkBg = Color(0xFF0A0F1D);
+  static const Color cardBg = Color(0xFF131B2E);
+  static const Color cardBorder = Color(0xFF1E293B);
 
   @override
   void initState() {
@@ -82,17 +83,6 @@ class _TeamsScreenState extends State<TeamsScreen>
     } catch (_) {}
   }
 
-  Future<void> _markMatchAsRead(String matchId) async {
-    final nowStr = DateTime.now().toUtc().toIso8601String();
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("last_read_match_$matchId", nowStr);
-    } catch (_) {}
-    if (mounted) {
-      setState(() => _lastReadMatchTimes[matchId] = nowStr);
-    }
-  }
-
   @override
   void dispose() {
     _tabController.dispose();
@@ -104,8 +94,8 @@ class _TeamsScreenState extends State<TeamsScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: ThemeService.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: cardBorder)),
         title: Row(
           children: [
             const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFB800), size: 26),
@@ -113,19 +103,19 @@ class _TeamsScreenState extends State<TeamsScreen>
             Expanded(
               child: Text(
                 title,
-                style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
           ],
         ),
         content: Text(
           message,
-          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
+          style: const TextStyle(color: Colors.white70, fontSize: 13.5, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('accept'.tr(), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
+            child: const Text('OK', style: TextStyle(color: neonBlue, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -136,8 +126,8 @@ class _TeamsScreenState extends State<TeamsScreen>
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF131A29),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: cardBorder)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -151,7 +141,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
-                  placeholder: (_, __) => const SizedBox(height: 180, child: Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))),
+                  placeholder: (_, __) => const SizedBox(height: 180, child: Center(child: CircularProgressIndicator(color: neonBlue))),
                   errorWidget: (_, __, ___) => const SizedBox(height: 180, child: Center(child: Icon(Icons.broken_image, color: Colors.white30))),
                 ),
               ),
@@ -171,8 +161,8 @@ class _TeamsScreenState extends State<TeamsScreen>
   }) async {
     if (isMyTeamFrozen) {
       _showCoinRequirementDialog(
-        title: 'team_frozen_title'.tr(),
-        message: 'team_frozen_accept_alert'.tr(),
+        title: 'Team Frozen',
+        message: 'Your team balance is below 1,000 coins. Top up to accept challenges.',
       );
       return;
     }
@@ -199,55 +189,24 @@ class _TeamsScreenState extends State<TeamsScreen>
         final t1Uuid = SupabaseService.toUuid(t1);
         final t2Uuid = SupabaseService.toUuid(t2);
 
-        final existingMatches = await SupabaseService.client
-            .from("active_matches")
-            .select()
-            .or('and(team1_id.eq.$t1Uuid,team2_id.eq.$t2Uuid),and(team1_id.eq.$t2Uuid,team2_id.eq.$t1Uuid)')
-            .inFilter("status", ["active", "under_review"]);
-
-        if (existingMatches.isEmpty) {
-          final startTime = DateTime.now().toUtc().toIso8601String();
-          final matchPayload = <String, dynamic>{
+        final startTime = DateTime.now().toUtc().toIso8601String();
+        try {
+          await SupabaseService.client.from("active_matches").insert({
             "team1_id": t1Uuid,
             "team2_id": t2Uuid,
-            "participants": [t1Uuid, t2Uuid],
             "status": "active",
             "start_time": startTime,
             "created_at": startTime,
-          };
-          try {
-            await SupabaseService.client
-                .from("active_matches")
-                .insert(matchPayload)
-                .select()
-                .maybeSingle();
-          } catch (insertErr) {
-            debugPrint("[TeamsScreen] Insert with participants notice: $insertErr");
-            try {
-              await SupabaseService.client.from("active_matches").insert({
-                "team1_id": t1Uuid,
-                "team2_id": t2Uuid,
-                "status": "active",
-                "start_time": startTime,
-                "created_at": startTime,
-              }).select().maybeSingle();
-            } catch (fallbackErr) {
-              debugPrint("[TeamsScreen] Fallback failed: $fallbackErr");
-              await SupabaseService.client.from("active_matches").insert({
-                "team1_id": t1Uuid,
-                "team2_id": t2Uuid,
-                "status": "active",
-                "created_at": startTime,
-              }).select().maybeSingle();
-            }
-          }
+          }).select().maybeSingle();
+        } catch (fallbackErr) {
+          debugPrint("[TeamsScreen] Match insert fallback failed: $fallbackErr");
         }
       }
 
       if (mounted) {
         setState(() => _acceptedChallengeIds.add(cId));
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('match_started_live'.tr()), backgroundColor: const Color(0xFF2E7D32), duration: const Duration(seconds: 3)),
+          const SnackBar(content: Text('Match started live! ⚡'), backgroundColor: Color(0xFF2E7D32), duration: Duration(seconds: 3)),
         );
       }
     } catch (e) {
@@ -263,7 +222,7 @@ class _TeamsScreenState extends State<TeamsScreen>
     setState(() => _acceptedChallengeIds.add(cId));
     try {
       await SupabaseService.client.from("challenges").update({"status": "rejected"}).eq("id", cId);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('challenge_rejected'.tr())));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Challenge rejected')));
     } catch (e) {
       debugPrint("[TeamsScreen] Error rejecting challenge: $e");
     }
@@ -275,9 +234,6 @@ class _TeamsScreenState extends State<TeamsScreen>
       await SupabaseService.client.from("challenges").delete().eq("id", challengeId);
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) setState(() {});
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('challenge_cancelled'.tr()), backgroundColor: const Color(0xFF1877F2)));
-      }
     } catch (e) {
       debugPrint("[TeamsScreen] Error cancelling challenge: $e");
     }
@@ -289,8 +245,8 @@ class _TeamsScreenState extends State<TeamsScreen>
       final wallet = await CoinWalletService().getOrCreateWallet(currentUid);
       if (wallet.coins < 1000) {
         _showCoinRequirementDialog(
-          title: 'insufficient_balance'.tr(),
-          message: 'insufficient_coins_for_team'.tr(args: [wallet.coins.toString()]),
+          title: 'Insufficient Balance',
+          message: 'You need at least 1,000 coins to create or maintain a team. Current: ${wallet.coins} coins',
         );
         return;
       }
@@ -345,94 +301,98 @@ class _TeamsScreenState extends State<TeamsScreen>
   Widget build(BuildContext context) {
     final currentUid = SupabaseService.client.auth.currentUser?.id ?? "";
 
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeService.themeModeNotifier,
-      builder: (context, _, __) {
-        return ValueListenableBuilder<String>(
-          valueListenable: LanguageService.currentLanguage,
-          builder: (context, langCode, _) {
-            return StreamBuilder<List<TeamModel>>(
-              stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
-              builder: (context, userTeamsSnap) {
-                final userTeams = userTeamsSnap.data ?? [];
-                final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
-                final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
-                final String myTeamId = myTeam?.id ?? "";
-                final String myTeamName = myTeam?.name ?? "";
-                final String myTeamUuid = SupabaseService.toUuid(myTeamId);
+    return StreamBuilder<List<TeamModel>>(
+      stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
+      builder: (context, userTeamsSnap) {
+        final userTeams = userTeamsSnap.data ?? [];
+        final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
+        final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
+        final String myTeamId = myTeam?.id ?? "";
+        final String myTeamName = myTeam?.name ?? "";
+        final String myTeamUuid = SupabaseService.toUuid(myTeamId);
 
-                return StreamBuilder<CoinWallet>(
-                  stream: currentUid.isNotEmpty
-                      ? CoinWalletService().walletStream(currentUid)
-                      : Stream.value(const CoinWallet(userId: 'guest', coins: 1000)),
-                  builder: (context, walletSnap) {
-                    final myCoins = walletSnap.data?.coins ??
-                        CoinWalletService().currentWallet?.coins ??
-                        1000;
-                    final bool isMyTeamFrozen = myTeam != null && myCoins < 1000;
+        return StreamBuilder<CoinWallet>(
+          stream: currentUid.isNotEmpty
+              ? CoinWalletService().walletStream(currentUid)
+              : Stream.value(const CoinWallet(userId: 'guest', coins: 1000)),
+          builder: (context, walletSnap) {
+            final myCoins = walletSnap.data?.coins ??
+                CoinWalletService().currentWallet?.coins ??
+                1000;
+            final bool isMyTeamFrozen = myTeam != null && myCoins < 1000;
 
-                    return StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: myTeamId.isNotEmpty
-                          ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
-                          : Stream.value([]),
-                      builder: (context, matchSnap) {
-                        final rawMatches = matchSnap.data ?? [];
-                        final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
-                        final liveCount = myActiveMatches.length;
+            return StreamBuilder<List<Map<String, dynamic>>>(
+              stream: myTeamId.isNotEmpty
+                  ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
+                  : Stream.value([]),
+              builder: (context, matchSnap) {
+                final rawMatches = matchSnap.data ?? [];
+                final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
+                final liveCount = myActiveMatches.length;
 
-                        return Scaffold(
-                          backgroundColor: ThemeService.bg,
-                          appBar: AppBar(
-                            backgroundColor: ThemeService.appBarBg,
-                            elevation: ThemeService.isDarkMode ? 0 : 1,
-                            title: Text(
-                              'teams_tab'.tr(),
-                              style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22),
-                            ),
-                            actions: [
-                              IconButton(
-                                tooltip: "TOP 100 TEAMS Leaderboard",
-                                icon: Icon(Icons.emoji_events_rounded, color: ThemeService.textSecondary),
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
-                                ),
-                              ),
-                            ],
-                            bottom: TabBar(
-                              controller: _tabController,
-                              indicatorColor: const Color(0xFF1877F2),
-                              indicatorWeight: 3,
-                              labelColor: const Color(0xFF1877F2),
-                              unselectedLabelColor: ThemeService.textSecondary,
-                              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                              tabs: [
-                                Tab(text: 'teams_tab'.tr()),
-                                Tab(text: liveCount > 0 ? "${'live_tab'.tr()} 🔴 $liveCount" : 'live_tab'.tr()),
-                              ],
-                            ),
-                          ),
-                          body: TabBarView(
-                            controller: _tabController,
-                            children: [
-                              _buildTeamsTab(
-                                myTeamId: myTeamId,
-                                myTeamUuid: myTeamUuid,
-                                myTeamName: myTeamName,
-                                isMyTeamFrozen: isMyTeamFrozen,
-                              ),
-                              _buildLiveMatchesTab(
-                                myActiveMatches: myActiveMatches,
-                                myTeamId: myTeamId,
-                                myTeamUuid: myTeamUuid,
-                                myTeamName: myTeamName,
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  },
+                return Scaffold(
+                  backgroundColor: darkBg,
+                  appBar: AppBar(
+                    backgroundColor: darkBg,
+                    elevation: 0,
+                    title: const Text(
+                      'Teams',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 26,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    actions: [
+                      IconButton(
+                        tooltip: "Leaderboard",
+                        icon: const Icon(Icons.emoji_events_rounded, color: neonBlue, size: 26),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    bottom: PreferredSize(
+                      preferredSize: const Size.fromHeight(48),
+                      child: Container(
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: TabBar(
+                          controller: _tabController,
+                          isScrollable: true,
+                          indicatorColor: neonBlue,
+                          indicatorWeight: 3,
+                          labelColor: Colors.white,
+                          unselectedLabelColor: Colors.white54,
+                          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          tabs: [
+                            const Tab(text: 'Teams'),
+                            Tab(text: liveCount > 0 ? "Live 🔴 $liveCount" : "Live"),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  body: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildTeamsTab(
+                        myTeamId: myTeamId,
+                        myTeamUuid: myTeamUuid,
+                        myTeamName: myTeamName,
+                        isMyTeamFrozen: isMyTeamFrozen,
+                      ),
+                      _buildLiveMatchesTab(
+                        myActiveMatches: myActiveMatches,
+                        myTeamId: myTeamId,
+                        myTeamUuid: myTeamUuid,
+                        myTeamName: myTeamName,
+                      ),
+                    ],
+                  ),
                 );
               },
             );
@@ -456,26 +416,26 @@ class _TeamsScreenState extends State<TeamsScreen>
             margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFFF4655).withOpacity(0.12),
+              color: const Color(0xFFFF4655).withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFFFF4655), width: 1.5),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
-                const SizedBox(width: 10),
+                Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 24),
+                SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'team_frozen_title'.tr(),
-                        style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
+                        'Team Frozen',
+                        style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 13),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
-                        'team_frozen_balance_low_desc'.tr(),
-                        style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                        'Your balance is below 1000 coins. Team features are frozen.',
+                        style: TextStyle(color: Colors.white70, fontSize: 11),
                       ),
                     ],
                   ),
@@ -484,33 +444,32 @@ class _TeamsScreenState extends State<TeamsScreen>
             ),
           ),
 
+        // Search Bar & Create Team Button (Exact Match to Reference)
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-          decoration: BoxDecoration(
-            color: ThemeService.card,
-            border: Border(bottom: BorderSide(color: ThemeService.border)),
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          color: darkBg,
           child: Column(
             children: [
               Row(
                 children: [
                   Expanded(
                     child: Container(
-                      height: 40,
+                      height: 44,
                       decoration: BoxDecoration(
-                        color: ThemeService.cardSecondary,
-                        borderRadius: BorderRadius.circular(20),
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: cardBorder),
                       ),
                       child: TextField(
                         controller: _searchController,
-                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: 'search_teams_placeholder'.tr(),
-                          hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
-                          prefixIcon: Icon(Icons.search, size: 20, color: ThemeService.textSecondary),
+                          hintText: 'Search teams by name or tag',
+                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                          prefixIcon: const Icon(Icons.search, size: 20, color: Colors.white54),
                           suffixIcon: _searchQuery.isNotEmpty
                               ? IconButton(
-                                  icon: Icon(Icons.clear, size: 18, color: ThemeService.textSecondary),
+                                  icon: const Icon(Icons.clear, size: 18, color: Colors.white54),
                                   onPressed: () {
                                     _searchController.clear();
                                     setState(() => _searchQuery = "");
@@ -518,29 +477,32 @@ class _TeamsScreenState extends State<TeamsScreen>
                                 )
                               : null,
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         onChanged: (val) => setState(() => _searchQuery = val.trim()),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   ElevatedButton.icon(
                     onPressed: _openCreateTeamDialog,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1877F2),
+                      backgroundColor: neonCyan,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      minimumSize: const Size(0, 40),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      minimumSize: const Size(0, 44),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                      elevation: 4,
+                      shadowColor: neonCyan.withOpacity(0.4),
                     ),
                     icon: const Icon(Icons.add_rounded, size: 18),
-                    label: Text('create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    label: const Text('Create Team', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
+              
+              // Filter Chips (Matched to Reference)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -549,19 +511,28 @@ class _TeamsScreenState extends State<TeamsScreen>
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
-                        label: Text(
-                          game,
-                          style: TextStyle(
-                            color: isSel ? Colors.white : ThemeService.textPrimary,
-                            fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
-                            fontSize: 12,
-                          ),
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isSel) ...[
+                              const Icon(Icons.check, size: 14, color: Colors.white),
+                              const SizedBox(width: 4),
+                            ],
+                            Text(
+                              game,
+                              style: TextStyle(
+                                color: isSel ? Colors.white : Colors.white70,
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                         selected: isSel,
-                        selectedColor: const Color(0xFF1877F2),
-                        backgroundColor: ThemeService.cardSecondary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        side: BorderSide(color: isSel ? const Color(0xFF1877F2) : ThemeService.border),
+                        selectedColor: neonCyan,
+                        backgroundColor: cardBg,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        side: BorderSide(color: isSel ? neonCyan : cardBorder),
                         onSelected: (val) {
                           if (val) setState(() => _selectedGameFilter = game);
                         },
@@ -574,369 +545,76 @@ class _TeamsScreenState extends State<TeamsScreen>
           ),
         ),
 
-        if (myTeamId.isNotEmpty)
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client
-                .from("challenges")
-                .stream(primaryKey: ["id"])
-                .eq("to_team_id", myTeamUuid),
-            builder: (context, challengesSnap) {
-              if (!challengesSnap.hasData) return const SizedBox.shrink();
-              final docs = challengesSnap.data!
-                  .where((d) => (d["status"] ?? "").toString().toLowerCase() == "pending")
-                  .where((d) => !_acceptedChallengeIds.contains(d["id"]?.toString()))
-                  .toList();
-              if (docs.isEmpty) return const SizedBox.shrink();
-
-              return Container(
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: ThemeService.card,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.3), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF1877F2).withOpacity(0.08),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE7F3FF),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.flash_on_rounded, color: Color(0xFF1877F2), size: 18),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'incoming_challenges'.tr(),
-                            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: const Color(0xFFFF4655), borderRadius: BorderRadius.circular(12)),
-                          child: Text(
-                            'new_challenges_count'.tr(args: ['${docs.length}']),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    ...docs.map((doc) {
-                      final challengeId = doc["id"];
-                      final fromTeamName = doc["from_team_name"]?.toString() ?? "default_opponent".tr();
-                      final fromTeamId = doc["from_team_id"]?.toString() ?? "";
-                      final toTeamId = doc["to_team_id"]?.toString() ?? myTeamId;
-                      final isAccepting = _acceptingChallengeIds.contains(challengeId.toString());
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: ThemeService.cardSecondary,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: ThemeService.border),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: ThemeService.border,
-                                  child: const Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 20),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    'challenge_from'.tr() + " " + fromTeamName,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                      color: ThemeService.textPrimary,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: isAccepting
-                                        ? null
-                                        : () => _handleRejectChallenge(challengeId.toString()),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFFFF4655),
-                                      side: const BorderSide(color: Color(0xFFFF4655)),
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      minimumSize: const Size(0, 34),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    child: Text('reject'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: isAccepting
-                                        ? null
-                                        : () {
-                                            MatchRulesDialog.show(
-                                              context,
-                                              title: "${'match_rules'.tr()} ($fromTeamName)",
-                                              onProceed: () => _handleAcceptChallenge(
-                                                challengeId: challengeId.toString(),
-                                                fromTeamId: fromTeamId,
-                                                toTeamId: toTeamId,
-                                                isMyTeamFrozen: isMyTeamFrozen,
-                                                challengeData: doc,
-                                              ),
-                                            );
-                                          },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF1877F2),
-                                      foregroundColor: Colors.white,
-                                      disabledBackgroundColor: const Color(0xFF1877F2).withOpacity(0.6),
-                                      disabledForegroundColor: Colors.white70,
-                                      padding: const EdgeInsets.symmetric(vertical: 6),
-                                      minimumSize: const Size(0, 34),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      elevation: 0,
-                                    ),
-                                    child: isAccepting
-                                        ? const SizedBox(
-                                            width: 14,
-                                            height: 14,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                            ),
-                                          )
-                                        : Text('accept'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              );
-            },
-          ),
-
+        // Teams List Stream
         Expanded(
-          child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: myTeamId.isNotEmpty
-                ? SupabaseService.client
-                    .from("challenges")
-                    .stream(primaryKey: ["id"])
-                    .eq("from_team_id", myTeamUuid)
-                : Stream.value([]),
-            builder: (context, sentSnap) {
-              final sentDocs = sentSnap.data ?? [];
-              final activePendingList = sentDocs
-                  .where((d) => (d["status"] ?? "").toString().toLowerCase() == "pending")
-                  .where((d) => !_cancelledChallengeIds.contains(d["id"]?.toString()))
-                  .toList();
+          child: StreamBuilder<List<TeamModel>>(
+            key: ValueKey("teams_stream_${_selectedGameFilter}_${_searchQuery}_$_teamsRetryKey"),
+            stream: _teamService.getTeamsStream(
+              gameFilter: _selectedGameFilter,
+              searchQuery: _searchQuery,
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.hasData && snapshot.data != null) {
+                _cachedTeams = snapshot.data;
+              }
 
-              return Column(
-                children: [
-                  if (activePendingList.isNotEmpty)
-                    ...activePendingList.map((doc) {
-                      final challengeId = doc["id"]?.toString() ?? "";
-                      final toTeamName = doc["to_team_name"]?.toString() ?? "default_opponent".tr();
+              final teams = snapshot.data ?? _cachedTeams;
 
-                      return Container(
-                        margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: ThemeService.isDarkMode ? const Color(0xFF131A29) : const Color(0xFFE8F4FD),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.check_circle_rounded, color: Color(0xFF1877F2), size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'challenge_sent_to_team_waiting'.tr(args: [toTeamName]),
-                                style: const TextStyle(
-                                  color: Color(0xFF1877F2),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton(
-                              onPressed: () => _handleCancelChallenge(challengeId),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFFFF4655),
-                                side: const BorderSide(color: Color(0xFFFF4655)),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                minimumSize: const Size(0, 30),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                backgroundColor: ThemeService.card,
-                              ),
-                              child: Text('btn_cancel_caps'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
+              if (teams == null && (snapshot.connectionState == ConnectionState.waiting || (!snapshot.hasData && !snapshot.hasError))) {
+                return const Center(child: CircularProgressIndicator(color: neonBlue));
+              }
 
-                  Expanded(
-                    child: StreamBuilder<List<TeamModel>>(
-                      key: ValueKey("teams_stream_${_selectedGameFilter}_${_searchQuery}_$_teamsRetryKey"),
-                      stream: _teamService.getTeamsStream(
-                        gameFilter: _selectedGameFilter,
-                        searchQuery: _searchQuery,
+              final displayTeams = teams ?? [];
+              if (displayTeams.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.shield_rounded, size: 48, color: Colors.white24),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'No Teams Found',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-                      builder: (context, snapshot) {
-                        if (snapshot.hasData && snapshot.data != null) {
-                          _cachedTeams = snapshot.data;
-                        }
-
-                        final teams = snapshot.data ?? _cachedTeams;
-
-                        if (teams == null && (snapshot.connectionState == ConnectionState.waiting || (!snapshot.hasData && !snapshot.hasError))) {
-                          return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
-                        }
-
-                        if (teams == null && snapshot.hasError) {
-                          return Center(
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.all(32),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.wifi_off_rounded, size: 44, color: Color(0xFFFF4655)),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'connection_timeout'.tr(),
-                                    style: TextStyle(
-                                      color: ThemeService.textPrimary,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'db_connection_slow_msg'.tr(),
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  ElevatedButton.icon(
-                                    onPressed: () => setState(() => _teamsRetryKey++),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF1877F2),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                    icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                                    label: Text('retry'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-
-                        final displayTeams = teams ?? [];
-                        if (displayTeams.isEmpty) {
-                          return Center(
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.all(32),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.shield_rounded, size: 44, color: ThemeService.textSecondary),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    _selectedGameFilter != "All"
-                                        ? "no_teams_found_for_game".tr(args: [_selectedGameFilter])
-                                        : "no_teams_yet".tr(),
-                                    style: TextStyle(
-                                      color: ThemeService.textPrimary,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'create_team_compete_others'.tr(),
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  ElevatedButton.icon(
-                                    onPressed: _openCreateTeamDialog,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF1877F2),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                    icon: const Icon(Icons.add, color: Colors.white),
-                                    label: Text('create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-
-                        return ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          itemCount: displayTeams.length,
-                          itemBuilder: (context, index) {
-                            final team = displayTeams[index];
-                            final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
-                            final rawTeamId = team.id.toLowerCase();
-                            final matchingPending = activePendingList.firstWhere(
-                              (d) {
-                                final toId = d["to_team_id"]?.toString().toLowerCase();
-                                return toId == targetUuid || toId == rawTeamId;
-                              },
-                              orElse: () => {},
-                            );
-
-                            return TeamCard(
-                              team: team,
-                              myTeamId: myTeamId,
-                              myTeamName: myTeamName,
-                              isMyTeamFrozen: isMyTeamFrozen,
-                              pendingChallenge: matchingPending.isNotEmpty ? matchingPending : null,
-                              onCancelChallenge: _handleCancelChallenge,
-                            );
-                          },
-                        );
-                      },
-                    ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Be the first to create a team and compete!',
+                        style: TextStyle(color: Colors.white54, fontSize: 13),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _openCreateTeamDialog,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: neonCyan,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.add, color: Colors.white),
+                        label: const Text('Create Team', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
                   ),
-                ],
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: displayTeams.length,
+                itemBuilder: (context, index) {
+                  final team = displayTeams[index];
+                  final targetUuid = SupabaseService.toUuid(team.id).toLowerCase();
+                  final rawTeamId = team.id.toLowerCase();
+
+                  return TeamCard(
+                    team: team,
+                    myTeamId: myTeamId,
+                    myTeamName: myTeamName,
+                    isMyTeamFrozen: isMyTeamFrozen,
+                    pendingChallenge: null,
+                    onCancelChallenge: _handleCancelChallenge,
+                  );
+                },
               );
             },
           ),
@@ -961,47 +639,30 @@ class _TeamsScreenState extends State<TeamsScreen>
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: ThemeService.cardSecondary,
+                  color: cardBg,
                   shape: BoxShape.circle,
+                  border: Border.all(color: cardBorder),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.sports_esports_outlined,
                   size: 48,
-                  color: ThemeService.textSecondary,
+                  color: Colors.white54,
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'no_live_matches'.tr(),
+              const Text(
+                'No Live Matches',
                 style: TextStyle(
-                  color: ThemeService.textPrimary,
+                  color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                "no_live_matches_desc".tr(),
+              const Text(
+                "Challenge other teams from the Teams tab to start live matches and win rewards.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () {
-                  _tabController.animateTo(0);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1877F2),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.shield_outlined, size: 18),
-                label: Text(
-                  'teams_tab'.tr(),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
+                style: TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
               ),
             ],
           ),
@@ -1010,37 +671,21 @@ class _TeamsScreenState extends State<TeamsScreen>
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       itemCount: myActiveMatches.length,
       itemBuilder: (context, index) {
         final match = myActiveMatches[index];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
-              child: Text(
-                'match_hash'.tr() + " #${index + 1}",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  color: ThemeService.textSecondary,
-                ),
-              ),
-            ),
-            _ActiveMatchBothTeamsBanner(
-              key: ValueKey(match["id"]?.toString() ?? UniqueKey().toString()),
-              match: match,
-              myTeamId: myTeamId,
-              myTeamUuid: myTeamUuid,
-              myTeamName: myTeamName,
-              teamService: _teamService,
-              onShowProofImage: (url) => _showProofImageDialog(context, url),
-              onAutoCompleted: (mId) {
-                if (mounted) setState(() => _completedMatchIds.add(mId));
-              },
-            ),
-          ],
+        return _ActiveMatchBothTeamsBanner(
+          key: ValueKey(match["id"]?.toString() ?? UniqueKey().toString()),
+          match: match,
+          myTeamId: myTeamId,
+          myTeamUuid: myTeamUuid,
+          myTeamName: myTeamName,
+          teamService: _teamService,
+          onShowProofImage: (url) => _showProofImageDialog(context, url),
+          onAutoCompleted: (mId) {
+            if (mounted) setState(() => _completedMatchIds.add(mId));
+          },
         );
       },
     );
@@ -1078,12 +723,11 @@ class _ActiveMatchBothTeamsBannerState
   DateTime? _bannerMountedTime;
   TeamModel? _myTeam;
   TeamModel? _oppTeam;
-  String _myLeaderName = "team_leader_fallback".tr();
-  String _oppLeaderName = "team_leader_fallback".tr();
+  String _myLeaderName = "Leader";
+  String _oppLeaderName = "Leader";
   int _myMemberCount = 1;
   int _oppMemberCount = 1;
   bool _isLoading = true;
-  bool _autoCompletedTriggered = false;
   bool _isDismissed = false;
 
   @override
@@ -1115,242 +759,22 @@ class _ActiveMatchBothTeamsBannerState
       final myT = await widget.teamService.getTeam(myTId);
       final oppT = await widget.teamService.getTeam(oppTId);
 
-      String myLeader = "team_leader_fallback".tr();
-      String oppLeader = "team_leader_fallback".tr();
-
-      if (myT?.leaderId != null && myT!.leaderId.isNotEmpty) {
-        try {
-          final u = await SupabaseService.client
-              .from('users')
-              .select('display_name, username')
-              .eq('id', myT.leaderId)
-              .maybeSingle();
-          myLeader = u?['display_name'] ?? u?['username'] ?? 'team_leader_fallback'.tr();
-        } catch (_) {}
-      }
-
-      if (oppT?.leaderId != null && oppT!.leaderId.isNotEmpty) {
-        try {
-          final u = await SupabaseService.client
-              .from('users')
-              .select('display_name, username')
-              .eq('id', oppT.leaderId)
-              .maybeSingle();
-          oppLeader = u?['display_name'] ?? u?['username'] ?? 'team_leader_fallback'.tr();
-        } catch (_) {}
-      }
-
-      int myCount = 1;
-      int oppCount = 1;
-      try {
-        final res = await SupabaseService.client
-            .from('team_members')
-            .select('id')
-            .eq('team_id', myTId);
-        myCount = (res as List).length;
-      } catch (_) {}
-
-      try {
-        final res = await SupabaseService.client
-            .from('team_members')
-            .select('id')
-            .eq('team_id', oppTId);
-        oppCount = (res as List).length;
-      } catch (_) {}
-
       if (mounted) {
         setState(() {
           _myTeam = myT;
           _oppTeam = oppT;
-          _myLeaderName = myLeader;
-          _oppLeaderName = oppLeader;
-          _myMemberCount = myCount;
-          _oppMemberCount = oppCount;
           _isLoading = false;
         });
       }
-      _checkProofLimitCancellation();
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  bool _hasCancelledDueToProofLimit = false;
-
-  Future<void> _checkProofLimitCancellation() async {
-    final status = (widget.match["status"] ?? "").toString().toLowerCase();
-    final proofStatus =
-        (widget.match["proof_status"] ?? "").toString().toLowerCase();
-    final proofCount =
-        (widget.match["proof_upload_count"] as num?)?.toInt() ?? 0;
-    final isRejected = status == "rejected" ||
-        (status == "under_review" && proofStatus == "rejected");
-
-    if (isRejected &&
-        proofCount >= 3 &&
-        status != 'cancelled' &&
-        !_hasCancelledDueToProofLimit) {
-      _hasCancelledDueToProofLimit = true;
-      final matchId = widget.match["id"]?.toString() ?? "";
-      if (matchId.isEmpty) return;
-
-      try {
-        await SupabaseService.client.from('active_matches').update({
-          'status': 'cancelled',
-          'admin_note': 'Proof limit reached - no valid winner',
-        }).eq('id', matchId);
-
-        Map<String, dynamic>? roomRow;
-        try {
-          final res = await SupabaseService.client
-              .from('rooms')
-              .select()
-              .or('id.eq.$matchId,room_id.eq.$matchId')
-              .maybeSingle();
-          roomRow = res;
-        } catch (_) {}
-
-        final hostId = roomRow?['host_id']?.toString() ?? '';
-        final prizePool = (roomRow?['prize_pool'] as num?)?.toInt() ?? 0;
-        final entryFee =
-            (roomRow?['entry_fee_coins'] as num?)?.toInt() ?? 0;
-        final joinedUserIds = (roomRow?['joined_user_ids'] as List?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            [];
-
-        if (hostId.isNotEmpty && prizePool > 0) {
-          await CoinWalletService.updateCoins(
-            userId: hostId,
-            amount: prizePool,
-            type: 'refund',
-            description:
-                'Match cancelled - proof limit reached (Prize refunded)',
-            inEscrowChange: -prizePool,
-            roomId: matchId,
-          );
-        }
-
-        for (final joinerId in joinedUserIds) {
-          if (joinerId.isEmpty || joinerId == hostId) continue;
-          if (entryFee > 0) {
-            await CoinWalletService.updateCoins(
-              userId: joinerId,
-              amount: entryFee,
-              type: 'refund',
-              description: 'Match cancelled - entry fee refunded',
-              inEscrowChange: -entryFee,
-              roomId: matchId,
-            );
-          }
-        }
-
-        if (roomRow != null) {
-          final rId = roomRow['id']?.toString() ?? matchId;
-          await SupabaseService.client.from('rooms').update({
-            'status': 'cancelled',
-            'dispute_reason': 'Proof limit reached - no valid winner',
-            'completed_at': DateTime.now().toIso8601String(),
-          }).eq('id', rId);
-
-          try {
-            await SupabaseService.client.from('messages').insert({
-              'room_id': rId,
-              'sender_id': 'system',
-              'sender_name': 'ROOM BOT',
-              'message':
-                  '❌ Proof limit reached. Match cancelled. Prize refunded to teams.',
-              'type': 'system',
-              'created_at': DateTime.now().toIso8601String(),
-            });
-          } catch (_) {}
-        }
-
-        final t1LeaderId = _myTeam?.leaderId ?? '';
-        final t2LeaderId = _oppTeam?.leaderId ?? '';
-        final submittedBy =
-            widget.match['submitted_by_team_id']?.toString() ?? '';
-        final isMyTeamSubmitter = submittedBy.isNotEmpty &&
-            (submittedBy.toLowerCase() == widget.myTeamUuid.toLowerCase() ||
-                submittedBy.toLowerCase() == widget.myTeamId.toLowerCase());
-
-        final winnerTeamLeader =
-            isMyTeamSubmitter ? t1LeaderId : t2LeaderId;
-        final loserTeamLeader =
-            isMyTeamSubmitter ? t2LeaderId : t1LeaderId;
-
-        if (winnerTeamLeader.isNotEmpty) {
-          await NotificationService().sendNotification(
-            userId: winnerTeamLeader,
-            type: 'match_cancelled',
-            title: 'Match Cancelled',
-            body:
-                'proof_attempts_exhausted'.tr(),
-            data: {'match_id': matchId},
-          );
-        }
-        if (loserTeamLeader.isNotEmpty &&
-            loserTeamLeader != winnerTeamLeader) {
-          await NotificationService().sendNotification(
-            userId: loserTeamLeader,
-            type: 'match_cancelled',
-            title: 'Match Cancelled',
-            body:
-                '❌ Match ended without result. Proof limit reached. Prize refunded.',
-            data: {'match_id': matchId},
-          );
-        }
-        if (hostId.isNotEmpty &&
-            hostId != winnerTeamLeader &&
-            hostId != loserTeamLeader) {
-          final shortId =
-              matchId.length > 6 ? matchId.substring(0, 6) : matchId;
-          await NotificationService().sendNotification(
-            userId: hostId,
-            type: 'match_cancelled',
-            title: 'Match Cancelled',
-            body:
-                '❌ Match #$shortId cancelled — proof limit reached. Prize refunded.',
-            data: {'match_id': matchId},
-          );
-        }
-      } catch (e) {
-        debugPrint(
-            '[TeamsScreen] Proof limit cancellation error: $e');
-      }
-    }
-  }
-
-  DateTime _getStartTime() {
-    final raw = widget.match["start_time"] ?? widget.match["startTime"];
-    if (raw is String && raw.isNotEmpty) {
-      final dt = DateTime.tryParse(raw)?.toLocal();
-      if (dt != null) {
-        if (dt.isAfter(DateTime.now())) {
-          return _bannerMountedTime ?? DateTime.now();
-        }
-        return dt;
-      }
-    }
-    final rawCreated = widget.match["created_at"];
-    if (rawCreated is String && rawCreated.isNotEmpty) {
-      final dt = DateTime.tryParse(rawCreated)?.toLocal();
-      if (dt != null) {
-        if (dt.isAfter(DateTime.now())) {
-          return _bannerMountedTime ?? DateTime.now();
-        }
-        return dt;
-      }
-    }
-    return _bannerMountedTime ?? DateTime.now();
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isDismissed) return const SizedBox.shrink();
 
-    _checkProofLimitCancellation();
-    final isDark = ThemeService.isDarkMode;
     final match = widget.match;
     final matchId = match["id"]?.toString() ?? "";
     final t1 = match["team1_id"]?.toString() ?? "";
@@ -1359,352 +783,36 @@ class _ActiveMatchBothTeamsBannerState
             t1.toLowerCase() == widget.myTeamId.toLowerCase())
         ? t2
         : t1;
-    final status = (match["status"] ?? "").toString().toLowerCase();
-    final proofStatus = (match["proof_status"] ?? "").toString().toLowerCase();
-    final adminNote =
-        match["admin_note"]?.toString() ?? "Invalid proof screenshot";
-
-    final submittedBy = (match["submitted_by_team_id"] ??
-            match["winner_team_id"] ??
-            "")
-        .toString()
-        .toLowerCase();
-    final myIdLower = widget.myTeamId.toLowerCase();
-    final myUuidLower = widget.myTeamUuid.toLowerCase();
-    final isSubmitter =
-        submittedBy == myIdLower || submittedBy == myUuidLower;
-
-    if (status == "under_review" && proofStatus == "accepted") {
-      if (!isSubmitter) return const SizedBox.shrink();
-      if (!_autoCompletedTriggered) {
-        _autoCompletedTriggered = true;
-        Future.delayed(const Duration(seconds: 3), () async {
-          try {
-            await SupabaseService.client
-                .from("active_matches")
-                .update({"status": "completed"}).eq("id", matchId);
-          } catch (_) {}
-          widget.onAutoCompleted(matchId);
-        });
-      }
-      return Container(
-        margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1B5E20).withOpacity(0.35) : const Color(0xFFE8F5E9),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF2E7D32), width: 1.5),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.emoji_events_rounded,
-                color: Color(0xFF2E7D32), size: 22),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text("proof_accepted_you_won".tr(),
-                  style: const TextStyle(
-                      color: Color(0xFF2E7D32),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13.5)),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32),
-                  borderRadius: BorderRadius.circular(10)),
-              child: Text('match_won_badge'.tr(),
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 10)),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final startTime = _getStartTime();
-    final now = DateTime.now();
-    final bool isRunning = status == "active" || status == "in_progress";
-    if (!isRunning) {
-      _timer?.cancel();
-    }
-    final elapsed = now.isAfter(startTime) ? now.difference(startTime) : Duration.zero;
-    final mins = elapsed.inMinutes;
-    final secs = elapsed.inSeconds % 60;
-    final timerLabel = "running_label".tr(args: ['$mins', '$secs']);
 
     final myTeamDisplay = _myTeam?.name ?? widget.myTeamName;
-    final oppTeamDisplay =
-        _oppTeam?.name ?? match["opponent_name"]?.toString() ?? 'default_opponent'.tr();
-
-    final proofCount =
-        (match["proof_upload_count"] as num?)?.toInt() ?? 0;
-    final canAddMore = proofCount < 3;
-    final isRejected =
-        status == "rejected" || (status == "under_review" && proofStatus == "rejected");
-    final isUnderReview = status == "under_review" && !isRejected;
-
-    final bannerBg = isRejected
-        ? (isDark ? const Color(0xFF3B151A) : const Color(0xFFFFEBEE))
-        : isUnderReview
-            ? (isDark ? const Color(0xFF332A00) : const Color(0xFFFFF8E1))
-            : (isDark ? const Color(0xFF1B5E20).withOpacity(0.35) : const Color(0xFFE8F5E9));
+    final oppTeamDisplay = _oppTeam?.name ?? match["opponent_name"]?.toString() ?? 'Opponent Team';
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: bannerBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isRejected
-              ? const Color(0xFFFF4655)
-              : isUnderReview
-                  ? const Color(0xFFFFB300)
-                  : const Color(0xFF2E7D32),
-          width: 1.5,
-        ),
+        color: const Color(0xFF131B2E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1E293B), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.local_fire_department_rounded,
-                color: isRejected
-                    ? const Color(0xFFFF4655)
-                    : isUnderReview
-                        ? const Color(0xFFFF8F00)
-                        : const Color(0xFF2E7D32),
-                size: 20,
-              ),
+              const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF4655), size: 20),
               const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  isRejected
-                      ? "heading_proof_rejected".tr()
-                      : isUnderReview
-                          ? "heading_under_review".tr()
-                          : "heading_live_match".tr(),
-                  style: TextStyle(
-                    color: isRejected
-                        ? const Color(0xFFFF4655)
-                        : isUnderReview
-                            ? const Color(0xFFB78103)
-                            : const Color(0xFF2E7D32),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              if (isRejected && isSubmitter)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: InkWell(
-                    onTap: () {
-                      setState(() => _isDismissed = true);
-                    },
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF4655).withOpacity(0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        size: 16,
-                        color: Color(0xFFFF4655),
-                      ),
-                    ),
-                  ),
-                ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isRejected
-                      ? const Color(0xFFFF4655)
-                      : isUnderReview
-                          ? const Color(0xFFFFB300)
-                          : const Color(0xFF2E7D32),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  isRejected
-                      ? "status_rejected_caps".tr()
-                      : isUnderReview
-                          ? "status_review".tr()
-                          : isRunning
-                              ? "$mins:$secs"
-                              : "status_live".tr(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 10,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: isDark ? ThemeService.cardSecondary : Colors.white.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        myTeamDisplay,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13,
-                          color: ThemeService.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'leader_label'.tr() + " $_myLeaderName",
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: ThemeService.textSecondary,
-                        ),
-                      ),
-                      Text(
-                        "$_myMemberCount " + 'members_label'.tr(),
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          color: Color(0xFF1877F2),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF4655).withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    "versus_vs".tr(),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFFFF4655),
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        oppTeamDisplay,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13,
-                          color: ThemeService.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'leader_label'.tr() + " $_oppLeaderName",
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: ThemeService.textSecondary,
-                        ),
-                      ),
-                      Text(
-                        "$_oppMemberCount " + 'members_label'.tr(),
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          color: Color(0xFFFF8F00),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Row(
-            children: [
-              Icon(Icons.timer_outlined,
-                  size: 13, color: ThemeService.textSecondary),
-              const SizedBox(width: 4),
-              Text(
-                timerLabel,
+              const Text(
+                "LIVE BATTLE",
                 style: TextStyle(
-                  fontSize: 11,
-                  color: ThemeService.textSecondary,
-                  fontWeight: FontWeight.w500,
+                  color: Color(0xFFFF4655),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
                 ),
               ),
               const Spacer(),
-              if (isRejected)
-                Text(
-                  "attempts_label".tr(args: ['$proofCount', '3']),
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    color: Color(0xFFFF4655),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-            ],
-          ),
-
-          if (isRejected && adminNote.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              "note_label".tr() + ": $adminNote",
-              style: const TextStyle(fontSize: 11, color: Color(0xFFFF4655)),
-            ),
-          ],
-
-          const SizedBox(height: 10),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              OutlinedButton.icon(
+              ElevatedButton.icon(
                 onPressed: () {
-                  if (matchId.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('match_not_found'.tr()),
-                        backgroundColor: const Color(0xFFFF4655),
-                      ),
-                    );
-                    return;
-                  }
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -1718,124 +826,17 @@ class _ActiveMatchBothTeamsBannerState
                     ),
                   );
                 },
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF1877F2)),
-                  foregroundColor: const Color(0xFF1877F2),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1877F2),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   minimumSize: const Size(0, 32),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
                 ),
-                icon: const Icon(Icons.forum_rounded, size: 13),
-                label: Text(
-                  'team_dm'.tr(),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                ),
+                icon: const Icon(Icons.forum_rounded, size: 14),
+                label: const Text('Match Room', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
               ),
-              const SizedBox(width: 8),
-              if (isRejected && isSubmitter)
-                ElevatedButton.icon(
-                  onPressed: canAddMore
-                      ? () async {
-                          final ended = await EndMatchBottomSheet.show(
-                            context,
-                            activeMatchId: matchId,
-                            myTeamId: widget.myTeamId,
-                            opponentId: opponentId,
-                            myTeamName: widget.myTeamName,
-                          );
-                          if (ended == true && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('new_proof_sent'.tr()),
-                                backgroundColor: const Color(0xFFFFB800),
-                              ),
-                            );
-                          }
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: canAddMore
-                        ? const Color(0xFFFF4655)
-                        : const Color(0xFFBDBDBD),
-                    foregroundColor: Colors.white,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    minimumSize: const Size(0, 32),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.upload_file_rounded, size: 14),
-                  label: Text(
-                    canAddMore
-                        ? "btn_add_proof_again".tr(args: ['$proofCount'])
-                        : "btn_proof_limit_reached".tr(),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
-                )
-              else if (isUnderReview && isSubmitter)
-                OutlinedButton.icon(
-                  onPressed: () {
-                    final proofUrl = match["proof_url"]?.toString();
-                    if (proofUrl != null && proofUrl.isNotEmpty) {
-                      widget.onShowProofImage(proofUrl);
-                    }
-                  },
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFFFB300)),
-                    foregroundColor: const Color(0xFFB78103),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    minimumSize: const Size(0, 32),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.visibility_rounded, size: 13),
-                  label: Text(
-                    "view_proof".tr(),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
-                )
-              else
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    final ended = await EndMatchBottomSheet.show(
-                      context,
-                      activeMatchId: matchId,
-                      myTeamId: widget.myTeamId,
-                      opponentId: opponentId,
-                      myTeamName: widget.myTeamName,
-                    );
-                    if (ended == true && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              "end_match_request_sent".tr()),
-                          backgroundColor: const Color(0xFFFFB800),
-                          duration: const Duration(seconds: 4),
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E7D32),
-                    foregroundColor: Colors.white,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    minimumSize: const Size(0, 32),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
-                  icon: const Icon(Icons.check_circle_rounded, size: 14),
-                  label: Text(
-                    'end_match'.tr(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
-                ),
             ],
           ),
         ],
