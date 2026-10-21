@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// CLEAN COIN STORE SCREEN — Localized with easy_localization
+// CLEAN COIN STORE SCREEN — Localized with easy_localization & Adaptive Theme
 // - Retained: Live Balance, Daily Check-in, Rewarded Ads, Referral & Activity History
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
@@ -14,6 +14,7 @@ import '../models/coin_transaction_model.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
+import '../services/theme_service.dart';
 
 class CoinStoreScreen extends StatefulWidget {
   const CoinStoreScreen({super.key});
@@ -124,7 +125,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
           });
 
           return AlertDialog(
-            backgroundColor: GamerTheme.bgDark,
+            backgroundColor: ThemeService.card,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: const BorderSide(color: GamerTheme.accentOrange, width: 2),
@@ -154,12 +155,12 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white10,
+                    color: ThemeService.border,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${remainingSeconds}s',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
               ],
@@ -171,13 +172,9 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   height: 130,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: ThemeService.cardSecondary,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: GamerTheme.borderLight),
+                    border: Border.all(color: ThemeService.border),
                   ),
                   child: Center(
                     child: Column(
@@ -187,12 +184,12 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                         const SizedBox(height: 8),
                         Text(
                           'sponsor_gaming_network'.tr(),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'watch_5s_ad_desc'.tr(),
-                          style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                          style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                         ),
                       ],
                     ),
@@ -201,7 +198,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
                   value: (5 - remainingSeconds) / 5.0,
-                  backgroundColor: GamerTheme.borderDark,
+                  backgroundColor: ThemeService.border,
                   color: GamerTheme.accentOrange,
                   minHeight: 6,
                   borderRadius: BorderRadius.circular(3),
@@ -260,7 +257,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
           });
 
           return AlertDialog(
-            backgroundColor: GamerTheme.bgDark,
+            backgroundColor: ThemeService.card,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: const BorderSide(color: GamerTheme.accentBlue, width: 2),
@@ -290,12 +287,12 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white10,
+                    color: ThemeService.border,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${remainingSeconds}s',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
               ],
@@ -307,13 +304,9 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   height: 130,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: ThemeService.cardSecondary,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: GamerTheme.borderLight),
+                    border: Border.all(color: ThemeService.border),
                   ),
                   child: Center(
                     child: Column(
@@ -323,12 +316,12 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                         const SizedBox(height: 8),
                         Text(
                           'streaming_gaming_sponsor'.tr(),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'watch_5s_earn_100_desc'.tr(),
-                          style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                          style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                         ),
                       ],
                     ),
@@ -337,7 +330,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
                   value: (5 - remainingSeconds) / 5.0,
-                  backgroundColor: GamerTheme.borderDark,
+                  backgroundColor: ThemeService.border,
                   color: GamerTheme.accentBlue,
                   minHeight: 6,
                   borderRadius: BorderRadius.circular(3),
@@ -357,56 +350,61 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
   Widget build(BuildContext context) {
     final uid = _authService.currentUid ?? 'guest';
 
-    return Scaffold(
-      backgroundColor: GamerTheme.bgDark,
-      appBar: AppBar(
-        backgroundColor: GamerTheme.bgDark,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen, size: 22),
-            const SizedBox(width: 8),
-            Text(
-              'title_coin_store'.tr(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                letterSpacing: 1,
-              ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_rounded, color: ThemeService.textPrimary),
+              onPressed: () => Navigator.pop(context),
             ),
-          ],
-        ),
-      ),
-      body: StreamBuilder<CoinWallet>(
-        stream: _walletService.walletStream(uid),
-        builder: (context, snapshot) {
-          final wallet = snapshot.data ?? _walletService.currentWallet ?? CoinWallet.empty(uid);
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  'title_coin_store'.tr(),
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          body: StreamBuilder<CoinWallet>(
+            stream: _walletService.walletStream(uid),
+            builder: (context, snapshot) {
+              final wallet = snapshot.data ?? _walletService.currentWallet ?? CoinWallet.empty(uid);
 
-          return Column(
-            children: [
-              _buildStoreHeader(wallet, uid),
-              Expanded(
-                child: _buildStoreContent(uid, wallet),
-              ),
-            ],
-          );
-        },
-      ),
+              return Column(
+                children: [
+                  _buildStoreHeader(wallet, uid),
+                  Expanded(
+                    child: _buildStoreContent(uid, wallet),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
   Widget _buildStoreHeader(CoinWallet wallet, String uid) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: GamerTheme.cardDark,
-        border: Border(bottom: BorderSide(color: GamerTheme.borderDark)),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        border: Border(bottom: BorderSide(color: ThemeService.border)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -427,12 +425,12 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 children: [
                   Text(
                     'balance_caps'.tr(),
-                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                   Text(
                     'coins_formatted_gcoins'.tr(args: [NumberFormat('#,###').format(wallet.coins)]),
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: ThemeService.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
                     ),
@@ -486,8 +484,8 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
           buttonText: _isClaimingDaily
               ? 'btn_watching'.tr()
               : (canClaimDaily ? 'btn_claim_50_coins'.tr() : _formatDuration(_timeUntilNextClaim)),
-          buttonColor: canClaimDaily ? GamerTheme.neonGreen : GamerTheme.cardElevated,
-          textColor: canClaimDaily ? Colors.black : GamerTheme.textMuted,
+          buttonColor: canClaimDaily ? GamerTheme.neonGreen : ThemeService.cardSecondary,
+          textColor: canClaimDaily ? Colors.black : ThemeService.textSecondary,
           onTap: canClaimDaily ? () => _handleClaimDaily(uid) : null,
         ),
         const SizedBox(height: 12),
@@ -539,14 +537,14 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
               return Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: GamerTheme.cardDark,
+                  color: ThemeService.card,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: GamerTheme.borderDark),
+                  border: Border.all(color: ThemeService.border),
                 ),
                 child: Center(
                   child: Text(
                     'no_store_transactions'.tr(),
-                    style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                   ),
                 ),
               );
@@ -563,9 +561,9 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: GamerTheme.cardDark,
+                    color: ThemeService.card,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: GamerTheme.borderDark),
+                    border: Border.all(color: ThemeService.border),
                   ),
                   child: Row(
                     children: [
@@ -590,8 +588,8 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                           children: [
                             Text(
                               tx.title,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: ThemeService.textPrimary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
@@ -599,7 +597,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                             const SizedBox(height: 2),
                             Text(
                               DateFormat('dd MMM, hh:mm a').format(tx.timestamp),
-                              style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10),
+                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 10),
                             ),
                           ],
                         ),
@@ -638,9 +636,9 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GamerTheme.borderDark),
+        border: Border.all(color: ThemeService.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -661,7 +659,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   const SizedBox(width: 10),
                   Text(
                     title,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ],
               ),
@@ -680,7 +678,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(subtitle, style: const TextStyle(color: GamerTheme.textMuted, fontSize: 12)),
+          Text(subtitle, style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
