@@ -630,15 +630,19 @@ ${'share_msg_download'.tr(args: [appLink])}
                             leading: const Icon(Icons.monetization_on, color: Color(0xFFFFD700)),
                             title: Text('g_coins_label'.tr()),
                             subtitle: Text('coins_count'.tr(args: ['${user.coins}'])),
-                            trailing: const Icon(Icons.history_rounded, size: 20),
-                            onTap: () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (_) => CoinHistorySheet(userId: user.uid),
-                              );
-                            },
+                            trailing: isOwnProfile
+                                ? const Icon(Icons.history_rounded, size: 20)
+                                : null,
+                            onTap: isOwnProfile
+                                ? () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (_) => CoinHistorySheet(userId: user.uid),
+                                    );
+                                  }
+                                : null,
                           ),
                           ListTile(
                             leading: Icon(
