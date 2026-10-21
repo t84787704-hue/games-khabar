@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:crypto/crypto.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 
 class SupabaseService {
   static const String supabaseUrl = 'https://dxdkitnroypbblazblja.supabase.co';
@@ -138,7 +139,7 @@ static Future<String?> uploadFile({
         await _saveAuthToken(data);
         return data;
       } else {
-        return {'error': data['error_description'] ?? data['msg'] ?? 'Sign up failed'};
+        return {'error': data['error_description'] ?? data['msg'] ?? 'sign_up_failed'.tr()};
       }
     } catch (e) {
       return {'error': e.toString()};
@@ -162,7 +163,7 @@ static Future<String?> uploadFile({
         await _saveAuthToken(data);
         return data;
       } else {
-        return {'error': data['error_description'] ?? data['msg'] ?? 'Login failed'};
+        return {'error': data['error_description'] ?? data['msg'] ?? 'login_failed'.tr()};
       }
     } catch (e) {
       return {'error': e.toString()};
@@ -345,7 +346,7 @@ static Future<String?> uploadFile({
         'content': postData['content'],
         'image_url': postData['image_url'],
         'video_url': postData['video_url'],
-        'game': postData['game'] ?? 'All Games',
+        'game': postData['game'] ?? 'all_games'.tr(),
         'media_url': postData['media_url'] ?? postData['image_url'] ?? postData['video_url'],
         'likes_count': 0,
         'comments_count': 0,
@@ -358,7 +359,7 @@ static Future<String?> uploadFile({
 
   static Future<List<Map<String, dynamic>>> getPosts({int limit = 50, String? gameFilter}) async {
     final Map<String, String> filters = {};
-    if (gameFilter != null && gameFilter != 'All' && gameFilter != 'All Games') {
+    if (gameFilter != null && gameFilter != 'All' && gameFilter != 'all_games'.tr()) {
       filters['game'] = 'eq.$gameFilter';
     }
     return await query('posts', filters: filters.isNotEmpty ? filters : null, order: 'created_at.desc', limit: limit);
@@ -447,7 +448,7 @@ static Future<String?> uploadFile({
     required String teamId,
     required String userId,
     required String username,
-    String role = 'Member',
+    String role = 'member'.tr(),
   }) async {
     return await insert('team_members', {
       'team_id': teamId,
@@ -773,7 +774,7 @@ static Future<String?> uploadFile({
       'is_banned': true,
       'banned_at': DateTime.now().toIso8601String(),
       'banned_by': adminId,
-      'banned_reason': reason ?? 'Violating community guidelines',
+      'banned_reason': reason ?? 'admin_default_ban_reason'.tr(),
       'updated_at': DateTime.now().toIso8601String(),
     }, 'id', userId);
   }
@@ -880,7 +881,7 @@ static Future<String?> uploadFile({
           userId: userId,
           amount: amount,
           type: 'admin_grant',
-          description: 'Admin ne $amount coins diye',
+          description: 'admin_awarded_coins_desc'.tr(args: ['$amount']),
           balanceAfter: newTotal,
         );
       }
