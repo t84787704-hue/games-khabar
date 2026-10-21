@@ -1,4 +1,6 @@
-{
+{ "view_team": "View Team",
+  "btn_challenge_caps": "CHALLENGE",
+  "open_team": "Open Team",
   "aap_apni_post_report_nahi_kar": "You cannot report your own post",
   "aap_baar_proof_upload_kar_chuke": "You have already uploaded proof multiple times",
   "aap_ek_waqt_mein_sirf_rooms": "You can only create a maximum of 2 rooms at a time",
