@@ -641,7 +641,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                     const SizedBox(height: 10),
                     ...docs.map((doc) {
                       final challengeId = doc["id"];
-                      final fromTeamName = doc["from_team_name"]?.toString() ?? "Opponent Team";
+                      final fromTeamName = doc["from_team_name"]?.toString() ?? "default_opponent".tr();
                       final fromTeamId = doc["from_team_id"]?.toString() ?? "";
                       final toTeamId = doc["to_team_id"]?.toString() ?? myTeamId;
                       final isAccepting = _acceptingChallengeIds.contains(challengeId.toString());
@@ -667,7 +667,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    "Challenge from $fromTeamName",
+                                    LanguageService.t("Challenge from") + " " + fromTeamName,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
@@ -768,7 +768,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                   if (activePendingList.isNotEmpty)
                     ...activePendingList.map((doc) {
                       final challengeId = doc["id"]?.toString() ?? "";
-                      final toTeamName = doc["to_team_name"]?.toString() ?? "Opponent Team";
+                      final toTeamName = doc["to_team_name"]?.toString() ?? "default_opponent".tr();
 
                       return Container(
                         margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -803,7 +803,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 backgroundColor: ThemeService.card,
                               ),
-                              child: const Text("CANCEL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              child: Text('btn_cancel_caps'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                             ),
                           ],
                         ),
@@ -882,8 +882,8 @@ class _TeamsScreenState extends State<TeamsScreen>
                                   const SizedBox(height: 12),
                                   Text(
                                     _selectedGameFilter != "All"
-                                        ? "No teams found for $_selectedGameFilter"
-                                        : "No Teams Yet",
+                                        ? "no_teams_found_for_game".tr(args: [_selectedGameFilter])
+                                        : "no_teams_yet".tr(),
                                     style: TextStyle(
                                       color: ThemeService.textPrimary,
                                       fontSize: 16,
@@ -987,7 +987,7 @@ class _TeamsScreenState extends State<TeamsScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                "You don't have any ongoing matches right now.\nChallenge a team to start a live match!",
+                "no_live_matches_desc".tr(),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
               ),
@@ -1026,7 +1026,7 @@ class _TeamsScreenState extends State<TeamsScreen>
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
               child: Text(
-                "Match #${index + 1}",
+                "match_hash".tr() + " #${index + 1}",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
@@ -1084,8 +1084,8 @@ class _ActiveMatchBothTeamsBannerState
   DateTime? _bannerMountedTime;
   TeamModel? _myTeam;
   TeamModel? _oppTeam;
-  String _myLeaderName = "Leader";
-  String _oppLeaderName = "Leader";
+  String _myLeaderName = "team_leader_fallback".tr();
+  String _oppLeaderName = "team_leader_fallback".tr();
   int _myMemberCount = 1;
   int _oppMemberCount = 1;
   bool _isLoading = true;
@@ -1121,8 +1121,8 @@ class _ActiveMatchBothTeamsBannerState
       final myT = await widget.teamService.getTeam(myTId);
       final oppT = await widget.teamService.getTeam(oppTId);
 
-      String myLeader = "Leader";
-      String oppLeader = "Leader";
+      String myLeader = "team_leader_fallback".tr();
+      String oppLeader = "team_leader_fallback".tr();
 
       if (myT?.leaderId != null && myT!.leaderId.isNotEmpty) {
         try {
@@ -1131,7 +1131,7 @@ class _ActiveMatchBothTeamsBannerState
               .select('display_name, username')
               .eq('id', myT.leaderId)
               .maybeSingle();
-          myLeader = u?['display_name'] ?? u?['username'] ?? 'Leader';
+          myLeader = u?['display_name'] ?? u?['username'] ?? 'team_leader_fallback'.tr();
         } catch (_) {}
       }
 
@@ -1142,7 +1142,7 @@ class _ActiveMatchBothTeamsBannerState
               .select('display_name, username')
               .eq('id', oppT.leaderId)
               .maybeSingle();
-          oppLeader = u?['display_name'] ?? u?['username'] ?? 'Leader';
+          oppLeader = u?['display_name'] ?? u?['username'] ?? 'team_leader_fallback'.tr();
         } catch (_) {}
       }
 
@@ -1406,9 +1406,9 @@ class _ActiveMatchBothTeamsBannerState
             const Icon(Icons.emoji_events_rounded,
                 color: Color(0xFF2E7D32), size: 22),
             const SizedBox(width: 8),
-            const Expanded(
-              child: Text("✅ Your Proof Accepted - You Won! 🏆",
-                  style: TextStyle(
+            Expanded(
+              child: Text("proof_accepted_you_won".tr(),
+                  style: const TextStyle(
                       color: Color(0xFF2E7D32),
                       fontWeight: FontWeight.bold,
                       fontSize: 13.5)),
@@ -1418,7 +1418,7 @@ class _ActiveMatchBothTeamsBannerState
               decoration: BoxDecoration(
                   color: const Color(0xFF2E7D32),
                   borderRadius: BorderRadius.circular(10)),
-              child: Text('won_trophy'.tr(),
+              child: Text('match_won_badge'.tr(),
                   style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -1438,11 +1438,11 @@ class _ActiveMatchBothTeamsBannerState
     final elapsed = now.isAfter(startTime) ? now.difference(startTime) : Duration.zero;
     final mins = elapsed.inMinutes;
     final secs = elapsed.inSeconds % 60;
-    final timerLabel = "Running: ${mins}m ${secs}s";
+    final timerLabel = "running_label".tr(args: ['$mins', '$secs']);
 
     final myTeamDisplay = _myTeam?.name ?? widget.myTeamName;
     final oppTeamDisplay =
-        _oppTeam?.name ?? match["opponent_name"]?.toString() ?? "Opponent";
+        _oppTeam?.name ?? match["opponent_name"]?.toString() ?? 'default_opponent'.tr();
 
     final proofCount =
         (match["proof_upload_count"] as num?)?.toInt() ?? 0;
@@ -1490,10 +1490,10 @@ class _ActiveMatchBothTeamsBannerState
               Expanded(
                 child: Text(
                   isRejected
-                      ? "❌ PROOF REJECTED"
+                      ? "heading_proof_rejected".tr()
                       : isUnderReview
-                          ? "⏳ UNDER REVIEW"
-                          : "🔥 LIVE MATCH",
+                          ? "heading_under_review".tr()
+                          : "heading_live_match".tr(),
                   style: TextStyle(
                     color: isRejected
                         ? const Color(0xFFFF4655)
@@ -1539,12 +1539,12 @@ class _ActiveMatchBothTeamsBannerState
                 ),
                 child: Text(
                   isRejected
-                      ? "REJECTED"
+                      ? "status_rejected_caps".tr()
                       : isUnderReview
-                          ? "REVIEW"
+                          ? "status_review".tr()
                           : isRunning
-                              ? "${mins}m ${secs}s"
-                              : "LIVE",
+                              ? "$mins:$secs"
+                              : "status_live".tr(),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -1581,7 +1581,7 @@ class _ActiveMatchBothTeamsBannerState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        "Leader: $_myLeaderName",
+                        LanguageService.t("Leader:") + " $_myLeaderName",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1590,7 +1590,7 @@ class _ActiveMatchBothTeamsBannerState
                         ),
                       ),
                       Text(
-                        "$_myMemberCount Members",
+                        "$_myMemberCount " + LanguageService.t("Members"),
                         style: const TextStyle(
                           fontSize: 10.5,
                           color: Color(0xFF1877F2),
@@ -1608,9 +1608,9 @@ class _ActiveMatchBothTeamsBannerState
                     color: const Color(0xFFFF4655).withOpacity(0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text(
-                    "VS",
-                    style: TextStyle(
+                  child: Text(
+                    "versus_vs".tr(),
+                    style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       color: Color(0xFFFF4655),
                       fontSize: 11,
@@ -1634,7 +1634,7 @@ class _ActiveMatchBothTeamsBannerState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        "Leader: $_oppLeaderName",
+                        LanguageService.t("Leader:") + " $_oppLeaderName",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.right,
@@ -1644,7 +1644,7 @@ class _ActiveMatchBothTeamsBannerState
                         ),
                       ),
                       Text(
-                        "$_oppMemberCount Members",
+                        "$_oppMemberCount " + LanguageService.t("Members"),
                         textAlign: TextAlign.right,
                         style: const TextStyle(
                           fontSize: 10.5,
@@ -1677,7 +1677,7 @@ class _ActiveMatchBothTeamsBannerState
               const Spacer(),
               if (isRejected)
                 Text(
-                  "Attempts: $proofCount/3",
+                  "attempts_label".tr(args: ['$proofCount', '3']),
                   style: const TextStyle(
                     fontSize: 10.5,
                     color: Color(0xFFFF4655),
@@ -1690,7 +1690,7 @@ class _ActiveMatchBothTeamsBannerState
           if (isRejected && adminNote.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              "Note: $adminNote",
+              "note_label".tr() + ": $adminNote",
               style: const TextStyle(fontSize: 11, color: Color(0xFFFF4655)),
             ),
           ],
@@ -1775,8 +1775,8 @@ class _ActiveMatchBothTeamsBannerState
                   icon: const Icon(Icons.upload_file_rounded, size: 14),
                   label: Text(
                     canAddMore
-                        ? "Add Proof ($proofCount/3)"
-                        : "❌ Proof Limit Reached (3/3)",
+                        ? "btn_add_proof_again".tr(args: ['$proofCount'])
+                        : "btn_proof_limit_reached".tr(),
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 11),
                   ),
@@ -1799,9 +1799,9 @@ class _ActiveMatchBothTeamsBannerState
                         borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.visibility_rounded, size: 13),
-                  label: const Text(
-                    "View Proof",
-                    style: TextStyle(
+                  label: Text(
+                    "view_proof".tr(),
+                    style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 )
@@ -1817,9 +1817,9 @@ class _ActiveMatchBothTeamsBannerState
                     );
                     if (ended == true && mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
-                              "Match End Request Submit! Status Under Review."),
+                              "end_match_request_sent".tr()),
                           backgroundColor: Color(0xFFFFB800),
                           duration: Duration(seconds: 4),
                         ),
