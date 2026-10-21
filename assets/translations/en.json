@@ -1829,5 +1829,8 @@
 "filter_tab_all": "All",
 "filter_tab_unread": "Unread",
 "filter_tab_social": "Social",
-"filter_tab_system": "System"
+"filter_tab_system": "System",
+"btn_like": "Like",
+"btn_comment": "Comment",
+"hint_whats_on_your_mind": "What's on your mind?"
 }
