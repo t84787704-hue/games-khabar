@@ -125,7 +125,7 @@ class _TeamsScreenState extends State<TeamsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(LanguageService.t('Accept'), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
+            child: Text('accept'.tr(), style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -247,7 +247,7 @@ class _TeamsScreenState extends State<TeamsScreen>
       if (mounted) {
         setState(() => _acceptedChallengeIds.add(cId));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('match_started_live'), backgroundColor: Color(0xFF2E7D32), duration: Duration(seconds: 3)),
+          SnackBar(content: Text('match_started_live'.tr()), backgroundColor: const Color(0xFF2E7D32), duration: const Duration(seconds: 3)),
         );
       }
     } catch (e) {
@@ -361,7 +361,6 @@ class _TeamsScreenState extends State<TeamsScreen>
                 final String myTeamName = myTeam?.name ?? "";
                 final String myTeamUuid = SupabaseService.toUuid(myTeamId);
 
-                // ✅ Realtime wallet balance listener for Frozen status check
                 return StreamBuilder<CoinWallet>(
                   stream: currentUid.isNotEmpty
                       ? CoinWalletService().walletStream(currentUid)
@@ -387,7 +386,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                             backgroundColor: ThemeService.appBarBg,
                             elevation: ThemeService.isDarkMode ? 0 : 1,
                             title: Text(
-                              LanguageService.t("Teams"),
+                              'teams_tab'.tr(),
                               style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 22),
                             ),
                             actions: [
@@ -408,8 +407,8 @@ class _TeamsScreenState extends State<TeamsScreen>
                               unselectedLabelColor: ThemeService.textSecondary,
                               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                               tabs: [
-                                Tab(text: LanguageService.t("Teams")),
-                                Tab(text: liveCount > 0 ? "${LanguageService.t('Live')} 🔴 $liveCount" : LanguageService.t("Live")),
+                                Tab(text: 'teams_tab'.tr()),
+                                Tab(text: liveCount > 0 ? "${'live_tab'.tr()} 🔴 $liveCount" : 'live_tab'.tr()),
                               ],
                             ),
                           ),
@@ -451,7 +450,6 @@ class _TeamsScreenState extends State<TeamsScreen>
   }) {
     return Column(
       children: [
-        // ⚠️ FROZEN TEAM ALERT BANNER (If Leader Balance < 1,000 Coins)
         if (isMyTeamFrozen)
           Container(
             width: double.infinity,
@@ -486,7 +484,6 @@ class _TeamsScreenState extends State<TeamsScreen>
             ),
           ),
 
-        // Top Bar: Search, Create Team, Game Filter
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
           decoration: BoxDecoration(
@@ -508,7 +505,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                         controller: _searchController,
                         style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: LanguageService.t("Search teams by name or tag..."),
+                          hintText: 'search_teams_placeholder'.tr(),
                           hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                           prefixIcon: Icon(Icons.search, size: 20, color: ThemeService.textSecondary),
                           suffixIcon: _searchQuery.isNotEmpty
@@ -539,7 +536,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                       elevation: 0,
                     ),
                     icon: const Icon(Icons.add_rounded, size: 18),
-                    label: Text(LanguageService.t("Create Team"), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    label: Text('create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                 ],
               ),
@@ -577,7 +574,6 @@ class _TeamsScreenState extends State<TeamsScreen>
           ),
         ),
 
-        // Incoming Challenges
         if (myTeamId.isNotEmpty)
           StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.client
@@ -624,7 +620,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            LanguageService.t("Incoming Challenges"),
+                            'incoming_challenges'.tr(),
                             style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                         ),
@@ -632,7 +628,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(color: const Color(0xFFFF4655), borderRadius: BorderRadius.circular(12)),
                           child: Text(
-                            "${docs.length} New",
+                            'new_challenges_count'.tr(args: ['${docs.length}']),
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                           ),
                         ),
@@ -667,7 +663,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    LanguageService.t("Challenge from") + " " + fromTeamName,
+                                    'challenge_from'.tr() + " " + fromTeamName,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
@@ -692,7 +688,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                       minimumSize: const Size(0, 34),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
-                                    child: Text(LanguageService.t("Reject"), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                    child: Text('reject'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
@@ -703,7 +699,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                         : () {
                                             MatchRulesDialog.show(
                                               context,
-                                              title: "Match Rules ($fromTeamName)",
+                                              title: "${'match_rules'.tr()} ($fromTeamName)",
                                               onProceed: () => _handleAcceptChallenge(
                                                 challengeId: challengeId.toString(),
                                                 fromTeamId: fromTeamId,
@@ -732,7 +728,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                               valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                             ),
                                           )
-                                        : Text(LanguageService.t("Accept"), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                        : Text('accept'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                   ),
                                 ),
                               ],
@@ -747,7 +743,6 @@ class _TeamsScreenState extends State<TeamsScreen>
             },
           ),
 
-        // Sender Side: Pending challenge banner & All Teams List
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: myTeamId.isNotEmpty
@@ -810,7 +805,6 @@ class _TeamsScreenState extends State<TeamsScreen>
                       );
                     }),
 
-                  // All Teams List
                   Expanded(
                     child: StreamBuilder<List<TeamModel>>(
                       key: ValueKey("teams_stream_${_selectedGameFilter}_${_searchQuery}_$_teamsRetryKey"),
@@ -906,7 +900,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                     ),
                                     icon: const Icon(Icons.add, color: Colors.white),
-                                    label: Text(LanguageService.t("Create Team"), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    label: Text('create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),
@@ -933,7 +927,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                               team: team,
                               myTeamId: myTeamId,
                               myTeamName: myTeamName,
-                              isMyTeamFrozen: isMyTeamFrozen, // 👈 Exact connection added here
+                              isMyTeamFrozen: isMyTeamFrozen,
                               pendingChallenge: matchingPending.isNotEmpty ? matchingPending : null,
                               onCancelChallenge: _handleCancelChallenge,
                             );
@@ -978,7 +972,7 @@ class _TeamsScreenState extends State<TeamsScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                LanguageService.t("No live matches"),
+                'no_live_matches'.tr(),
                 style: TextStyle(
                   color: ThemeService.textPrimary,
                   fontSize: 18,
@@ -1005,7 +999,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                 ),
                 icon: const Icon(Icons.shield_outlined, size: 18),
                 label: Text(
-                  LanguageService.t("Teams"),
+                  'teams_tab'.tr(),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
@@ -1026,7 +1020,7 @@ class _TeamsScreenState extends State<TeamsScreen>
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
               child: Text(
-                "match_hash".tr() + " #${index + 1}",
+                'match_hash'.tr() + " #${index + 1}",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
@@ -1581,7 +1575,7 @@ class _ActiveMatchBothTeamsBannerState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        LanguageService.t("Leader:") + " $_myLeaderName",
+                        'leader_label'.tr() + " $_myLeaderName",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1590,7 +1584,7 @@ class _ActiveMatchBothTeamsBannerState
                         ),
                       ),
                       Text(
-                        "$_myMemberCount " + LanguageService.t("Members"),
+                        "$_myMemberCount " + 'members_label'.tr(),
                         style: const TextStyle(
                           fontSize: 10.5,
                           color: Color(0xFF1877F2),
@@ -1634,7 +1628,7 @@ class _ActiveMatchBothTeamsBannerState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        LanguageService.t("Leader:") + " $_oppLeaderName",
+                        'leader_label'.tr() + " $_oppLeaderName",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.right,
@@ -1644,7 +1638,7 @@ class _ActiveMatchBothTeamsBannerState
                         ),
                       ),
                       Text(
-                        "$_oppMemberCount " + LanguageService.t("Members"),
+                        "$_oppMemberCount " + 'members_label'.tr(),
                         textAlign: TextAlign.right,
                         style: const TextStyle(
                           fontSize: 10.5,
@@ -1735,7 +1729,7 @@ class _ActiveMatchBothTeamsBannerState
                 ),
                 icon: const Icon(Icons.forum_rounded, size: 13),
                 label: Text(
-                  LanguageService.t("Team DM"),
+                  'team_dm'.tr(),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                 ),
               ),
@@ -1820,8 +1814,8 @@ class _ActiveMatchBothTeamsBannerState
                         SnackBar(
                           content: Text(
                               "end_match_request_sent".tr()),
-                          backgroundColor: Color(0xFFFFB800),
-                          duration: Duration(seconds: 4),
+                          backgroundColor: const Color(0xFFFFB800),
+                          duration: const Duration(seconds: 4),
                         ),
                       );
                     }
@@ -1838,7 +1832,7 @@ class _ActiveMatchBothTeamsBannerState
                   ),
                   icon: const Icon(Icons.check_circle_rounded, size: 14),
                   label: Text(
-                    LanguageService.t("END MATCH"),
+                    'end_match'.tr(),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 ),
