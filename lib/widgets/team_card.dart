@@ -174,38 +174,6 @@ class _TeamCardState extends State<TeamCard> {
     );
   }
 
-  Future<void> _handleJoin(String currentUid) async {
-    await CoinOrAdPopup.show(
-      context: context,
-      actionName: 'Team Join',
-      onConfirm: () async {
-        final currentGamer = GamerAuthService().currentGamer;
-        final userName = currentGamer?.displayName ?? currentGamer?.username ?? 'Gamer';
-
-        setState(() => _isRequesting = true);
-        final success = await _teamService.requestToJoinTeam(
-          teamId: widget.team.id,
-          userId: currentUid,
-          userName: userName,
-          teamName: widget.team.name,
-        );
-        setState(() {
-          _isRequesting = false;
-          if (success) _localRequested = true;
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(success ? 'Join request sent!' : 'Failed to send request'),
-              backgroundColor: success ? neonBlue : alertRed,
-            ),
-          );
-        }
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final team = widget.team;
@@ -351,7 +319,7 @@ class _TeamCardState extends State<TeamCard> {
 
             const SizedBox(height: 14),
 
-            // Bottom Buttons Row (Exact match to Reference)
+            // Bottom Buttons Row
             Row(
               children: [
                 // View Team Button
