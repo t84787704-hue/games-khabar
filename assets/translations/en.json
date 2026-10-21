@@ -1562,5 +1562,22 @@
   "proof_submitted_tap_to_change": "Proof Submitted (Tap to Change)",
   "end_match_claim_win": "End Match & Claim Win",
   "raise_dispute_button": "Raise Dispute",
-  "err_failed_with_msg": "Failed: {}"
+  "err_failed_with_msg": "Failed: {}","privacy_header_title": "Your Privacy Matters",
+"privacy_last_updated": "Last updated: January 2025",
+"privacy_sec1_title": "1. Information We Collect",
+"privacy_sec1_content": "Account Information: Email address, username, display name, and profile photo.\nProfile Data: Bio, favorite game, in-game UID, rank, and gaming stats you choose to share.\nContent: Posts, comments, likes, teams, and 1v1 challenges you create.\nDevice Data: Push notification token, app version, and device type.\nUsage Data: Login times and feature usage patterns.",
+"privacy_sec2_title": "2. How We Use Your Data",
+"privacy_sec2_content": "To provide the core features of the app (feed, teams, 1v1 challenges).\nTo send push notifications for likes, comments, and team activities.\nTo verify your in-game rank and award blue ticks.\nTo detect and prevent abuse, spam, and fraud.\nTo improve app performance and fix bugs.",
+"privacy_sec3_title": "3. Data Storage & Security",
+"privacy_sec3_content": "Your data is stored securely on Supabase servers with row-level security.\nAll communication uses HTTPS encryption.\nPasswords are never stored in plain text.\nWe use industry-standard security practices to protect your data.",
+"privacy_sec4_title": "4. Data Sharing",
+"privacy_sec4_content": "We do NOT sell your personal data to anyone.\nWe use Supabase for database and authentication.\nWe use secure cloud messaging for push notifications only.\nWe may share data if required by law.",
+"privacy_sec5_title": "5. Your Privacy Controls",
+"privacy_sec5_content": "You can hide your rank, UID, coins, bio, and other info from others.\nGo to Profile → Settings → Privacy Settings to control visibility.\nYou can block other users to prevent them from interacting with you.\nYou can report inappropriate content or users.",
+"privacy_sec6_title": "6. Your Rights (GDPR / DPDP Act)",
+"privacy_sec6_content": "Right to Access: You can download a copy of all your data.\nRight to Delete: You can permanently delete your account.\nRight to Correction: You can edit your profile anytime.\nRight to Portability: You can export your data as JSON.\nRight to Object: You can contact us to object to data processing.",
+"privacy_sec7_title": "7. Data Retention",
+"privacy_sec7_content": "Your data is kept as long as your account is active.\nAfter account deletion, data is permanently removed within 30 days.\nSome data may be kept longer if required by law.",
+"privacy_sec8_title": "8. Children's Privacy (COPPA)",
+"privacy_sec8_content": "This app is NOT intended for children under 13 years.\nWe do not knowingly collect data from children under 13.\nIf you are under 13, please do not use this app.\nParents can contact us to remove any accidental data."
 }
