@@ -296,7 +296,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           for (final doc in snapshot.data!) {
             final isVerified = doc['is_verified'] == true || doc['has_blue_tick'] == true;
             final vStatus = (doc['verification_status'] ?? doc['blue_tick_status'] ?? '').toString().toLowerCase();
-            if (!isVerified && (vStatus == 'pending' || vStatus == 'under_review')) {
+            if (!isVerified && (vStatus == 'pending' || vStatus == 'under_review' || vStatus == 'submitted')) {
               pendingCount++;
             }
           }
@@ -1785,7 +1785,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 3: BLUE TICK =====================
+  // ===================== TAB 3: BLUE TICK (ACCURATE PARSING & DISPLAY) =====================
   Widget _buildBlueTickRequestsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeUsers(),
