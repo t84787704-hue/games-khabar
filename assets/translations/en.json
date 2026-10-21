@@ -1832,7 +1832,22 @@
   "view_all_btn": "View All",
   "wallet_daily_bonus": "Daily Bonus Claimed!",
   "wallet_daily_bonus_title": "Daily Bonus Claimed!",
-  "coins_amount_tag": "Coins"
-
+  "coins_amount_tag": "Coins",
+  "title_earn_g_coins": "Earn G-Coins",
+  "ways_to_earn_title": "Ways to Earn",
+  "watch_sponsored_ad_title": "Watch Sponsored Ads",
+  "badge_plus_100_coins": "+100 Coins",
+  "watch_sponsored_ad_sub": "Watch short video ads to earn free coins instantly.",
+  "daily_login_bonus_gift_title": "Daily Login Gift",
+  "daily_bonus_next_in": "Next reward available tomorrow",
+  "btn_locked_wait": "Claimed",
+  "refer_and_earn_title": "Refer & Earn",
+  "invite_earn_together_title": "Invite Friends, Earn Together",
+  "invite_earn_together_sub": "Share your referral code with squad mates to earn bonus rewards.",
+  "your_code_caps": "YOUR CODE",
+  "btn_share_invite_code": "Share Invite Code",
+  "have_friend_referral_title": "Have a Referral Code?",
+  "have_friend_referral_sub": "Enter your friend's code to get instant starter coins.",
+  "hint_enter_referral_code": "Enter referral code"
 }
 
