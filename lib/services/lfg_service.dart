@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import 'squad_service.dart';
 import 'notification_service.dart';
 import 'supabase_service.dart';
@@ -90,14 +91,17 @@ class LfgService {
       if (effectiveLeader.isNotEmpty && effectiveLeader != currentUserId) {
         final applicantName = (applicantData?['displayName'] ?? applicantData?['name'] ?? 'A Gamer').toString();
         
+        final notifTitle = 'new_squad_request_title'.tr(); // Needs key
+        final notifBody = 'new_squad_request_body'.tr(args: [applicantName]); // Needs key
+
         try {
           await SupabaseService.client.from('notifications').insert({
             'recipientUid': effectiveLeader,
             'user_id': effectiveLeader,
             'senderUid': currentUserId,
             'type': 'squad_request',
-            'title': 'New Squad Request 🎮',
-            'message': '$applicantName requested to join your squad',
+            'title': notifTitle,
+            'message': notifBody,
             'postId': postId,
             'post_id': postId,
             'read': false,
@@ -107,8 +111,8 @@ class LfgService {
         } catch (_) {}
 
         NotificationService().showSquadNotification(
-          title: 'New Squad Request 🎮',
-          body: '$applicantName requested to join your squad',
+          title: notifTitle,
+          body: notifBody,
           postId: postId,
           recipientUid: effectiveLeader,
         );
@@ -193,24 +197,27 @@ class LfgService {
 
       // Add system message to chat
       try {
+        final sysMsg = 'sys_welcome_squad'.tr(args: [requesterName]); // Needs key
         await SupabaseService.sendMatchChatMessage(
           matchId: postId,
           senderId: 'system',
           senderName: 'Squad Bot',
-          message: 'Welcome @$requesterName to the squad!',
+          message: sysMsg,
           messageType: 'system',
         );
       } catch (_) {}
 
       // Send accepted notification
       try {
-        final notifMessage = "Your request to join the squad was accepted! Tap to chat.";
+        final notifTitle = 'squad_req_accepted_title'.tr(); // Needs key
+        final notifMessage = 'squad_req_accepted_body'.tr(); // Needs key
+
         await SupabaseService.client.from('notifications').insert({
           'recipientUid': requesterId,
           'user_id': requesterId,
           'senderUid': leaderUid.isNotEmpty ? leaderUid : (currentUid ?? ''),
           'type': 'squad_accepted',
-          'title': 'Squad Request Accepted! 🎮',
+          'title': notifTitle,
           'message': notifMessage,
           'postId': postId,
           'post_id': postId,
@@ -221,13 +228,13 @@ class LfgService {
         });
 
         NotificationService().showSquadNotification(
-          title: 'Squad Request Accepted! 🎮',
+          title: notifTitle,
           body: notifMessage,
           postId: postId,
           recipientUid: requesterId,
         );
       } catch (ne) {
-        debugPrint("[LfgService] Notification send error: ne");
+        debugPrint("[LfgService] Notification send error: $ne");
       }
     } catch (e, stack) {
       debugPrint("ACCEPT FAILED: $e");
@@ -323,24 +330,28 @@ class LfgService {
 
       // System message in chat
       try {
+        final sysMsg = 'sys_kick_squad'.tr(args: [memberName]); // Needs key
         await SupabaseService.sendMatchChatMessage(
           matchId: postId,
           senderId: 'system',
           senderName: 'Squad Bot',
-          message: '$memberName was removed from the squad.',
+          message: sysMsg,
           messageType: 'system',
         );
       } catch (_) {}
 
       // Notify kicked player
       try {
+        final notifTitle = 'squad_update_title'.tr(); // Needs key
+        final notifMsg = 'squad_kicked_body'.tr(); // Needs key
+
         await SupabaseService.client.from('notifications').insert({
           'recipientUid': memberUid,
           'user_id': memberUid,
           'senderUid': leaderUid,
           'type': 'squad_kick',
-          'title': 'Squad Update',
-          'message': 'You were removed from the squad.',
+          'title': notifTitle,
+          'message': notifMsg,
           'postId': postId,
           'post_id': postId,
           'read': false,
@@ -349,8 +360,8 @@ class LfgService {
         });
 
         NotificationService().showSquadNotification(
-          title: 'Squad Update',
-          body: 'You were removed from the squad.',
+          title: notifTitle,
+          body: notifMsg,
           postId: postId,
           recipientUid: memberUid,
         );
@@ -399,11 +410,12 @@ class LfgService {
 
       // System message in chat
       try {
+        final sysMsg = 'sys_leave_squad'.tr(args: [memberName]); // Needs key
         await SupabaseService.sendMatchChatMessage(
           matchId: postId,
           senderId: 'system',
           senderName: 'Squad Bot',
-          message: '$memberName left the squad.',
+          message: sysMsg,
           messageType: 'system',
         );
       } catch (_) {}
@@ -411,13 +423,16 @@ class LfgService {
       // Notify leader
       if (leaderUid.isNotEmpty && leaderUid != memberUid) {
         try {
+          final notifTitle = 'squad_update_title'.tr(); // Needs key
+          final notifMsg = 'squad_left_body'.tr(args: [memberName]); // Needs key
+
           await SupabaseService.client.from('notifications').insert({
             'recipientUid': leaderUid,
             'user_id': leaderUid,
             'senderUid': memberUid,
             'type': 'squad_leave',
-            'title': 'Squad Update',
-            'message': '$memberName left your squad.',
+            'title': notifTitle,
+            'message': notifMsg,
             'postId': postId,
             'post_id': postId,
             'read': false,
@@ -426,8 +441,8 @@ class LfgService {
           });
 
           NotificationService().showSquadNotification(
-            title: 'Squad Update',
-            body: '$memberName left your squad.',
+            title: notifTitle,
+            body: notifMsg,
             postId: postId,
             recipientUid: leaderUid,
           );
