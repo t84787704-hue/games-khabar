@@ -1,5 +1,5 @@
 // ===============================================================================
-// GAMER CHAT SCREEN — Dark Futuristic Neon Gaming Theme (Matched to Reference)
+// GAMER CHAT SCREEN — Adaptive Day/Night Theme with Dynamic Online Status
 // File: lib/screens/gamer_chat_screen.dart
 // ===============================================================================
 
@@ -11,6 +11,7 @@ import '../models/chat_model.dart';
 import '../services/direct_message_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
+import '../services/theme_service.dart';
 
 class GamerChatScreen extends StatefulWidget {
   final String otherUserId;
@@ -38,15 +39,13 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
 
   bool _isSending = false;
   bool _initialLoad = true;
+  bool _isOtherUserOnline = false;
+  String _otherUserGame = '';
   Set<String> _myAliases = {};
   String _effectiveMyId = '';
   String _effectiveOtherId = '';
   Stream<List<ChatMessage>>? _chatStream;
 
-  // Futuristic Palette
-  static const Color darkBg = Color(0xFF0A0F1D);
-  static const Color cardBg = Color(0xFF131B2E);
-  static const Color cardBorder = Color(0xFF1E293B);
   static const Color neonBlue = Color(0xFF1877F2);
   static const Color neonCyan = Color(0xFF00E5FF);
   static const Color neonGreen = Color(0xFF00FF88);
@@ -63,7 +62,25 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
       userId2: _effectiveOtherId,
     );
     _initIds();
+    _fetchOtherUserStatus();
     _markAsRead();
+  }
+
+  Future<void> _fetchOtherUserStatus() async {
+    try {
+      final res = await SupabaseService.client
+          .from('gamers')
+          .select('is_online, primary_game, last_seen')
+          .or('id.eq.${widget.otherUserId},uid.eq.${widget.otherUserId}')
+          .maybeSingle();
+
+      if (res != null && mounted) {
+        setState(() {
+          _isOtherUserOnline = res['is_online'] == true;
+          _otherUserGame = (res['primary_game'] ?? '').toString();
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _initIds() async {
@@ -193,24 +210,24 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
     return Center(
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 14),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
         decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: neonBlue.withOpacity(0.4), width: 1),
+          color: ThemeService.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ThemeService.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withOpacity(ThemeService.isDarkMode ? 0.3 : 0.05),
               blurRadius: 4,
             ),
           ],
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: ThemeService.textSecondary,
             fontWeight: FontWeight.bold,
-            fontSize: 12,
+            fontSize: 11.5,
           ),
         ),
       ),
@@ -224,169 +241,177 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
     final sourceUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
     final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : sourceUid;
 
-    return Scaffold(
-      backgroundColor: darkBg,
-      appBar: AppBar(
-        backgroundColor: darkBg,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: neonCyan, size: 24),
-          onPressed: () => Navigator.pop(context),
-        ),
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            Stack(
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back, color: ThemeService.textPrimary, size: 22),
+              onPressed: () => Navigator.pop(context),
+            ),
+            titleSpacing: 0,
+            title: Row(
               children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: neonBlue.withOpacity(0.6), width: 1.5),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: widget.otherUserPhoto.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: widget.otherUserPhoto,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => const Center(
-                              child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: neonCyan),
-                              ),
-                            ),
-                            errorWidget: (_, __, ___) => _buildInitials(widget.otherUserName, 42),
-                          )
-                        : _buildInitials(widget.otherUserName, 42),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 11,
-                    height: 11,
-                    decoration: BoxDecoration(
-                      color: neonGreen,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: darkBg, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: neonGreen.withOpacity(0.6),
-                          blurRadius: 4,
-                        ),
-                      ],
+                Stack(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: ThemeService.cardSecondary,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: ThemeService.border, width: 1.2),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: widget.otherUserPhoto.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: widget.otherUserPhoto,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => const Center(
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: neonCyan),
+                                  ),
+                                ),
+                                errorWidget: (_, __, ___) => _buildInitials(widget.otherUserName, 40),
+                              )
+                            : _buildInitials(widget.otherUserName, 40),
+                      ),
                     ),
+                    if (_isOtherUserOnline)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            color: neonGreen,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: ThemeService.card, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: neonGreen.withOpacity(0.6),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.otherUserName,
+                              style: TextStyle(
+                                color: ThemeService.textPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (widget.otherUserVerified) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.verified, color: neonCyan, size: 14),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _isOtherUserOnline
+                            ? (_otherUserGame.isNotEmpty ? '$_otherUserGame • Online' : 'Online')
+                            : (_otherUserGame.isNotEmpty ? '$_otherUserGame • Offline' : 'Offline'),
+                        style: TextStyle(
+                          color: _isOtherUserOnline ? neonGreen : ThemeService.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          widget.otherUserName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (widget.otherUserVerified) ...[
-                        const SizedBox(width: 4),
-                        const Icon(Icons.verified, color: neonCyan, size: 15),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'PUBG • Online',
-                    style: TextStyle(
-                      color: neonGreen,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<List<ChatMessage>>(
-              stream: _chatStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    _initialLoad) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: neonCyan),
-                  );
-                }
-
-                final messages = snapshot.data ?? [];
-                if (_initialLoad) {
-                  _initialLoad = false;
-                  _scrollToBottom(animate: false);
-                }
-
-                if (messages.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  itemCount: messages.length,
-                  itemBuilder: (context, i) {
-                    final m = messages[i];
-                    final sLower = m.senderId.toLowerCase();
-                    final isMyMsg = _myAliases.any((a) => a.toLowerCase() == sLower) ||
-                        sLower == _effectiveMyId.toLowerCase() ||
-                        sLower == myUid.toLowerCase() ||
-                        sLower == SupabaseService.toUuid(myUid).toLowerCase();
-
-                    bool showDate = false;
-                    if (i == 0) {
-                      showDate = true;
-                    } else {
-                      final prev = messages[i - 1];
-                      final prevDay = DateTime(prev.createdAt.year,
-                          prev.createdAt.month, prev.createdAt.day);
-                      final curDay = DateTime(m.createdAt.year,
-                          m.createdAt.month, m.createdAt.day);
-                      if (prevDay != curDay) showDate = true;
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: StreamBuilder<List<ChatMessage>>(
+                  stream: _chatStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        _initialLoad) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: neonCyan),
+                      );
                     }
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (showDate) _buildDatePill(_formatDateDivider(m.createdAt)),
-                        _buildMessageBubble(m, isMyMsg),
-                      ],
+                    final messages = snapshot.data ?? [];
+                    if (_initialLoad) {
+                      _initialLoad = false;
+                      _scrollToBottom(animate: false);
+                    }
+
+                    if (messages.isEmpty) {
+                      return _buildEmptyState();
+                    }
+
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      itemCount: messages.length,
+                      itemBuilder: (context, i) {
+                        final m = messages[i];
+                        final sLower = m.senderId.toLowerCase();
+                        final isMyMsg = _myAliases.any((a) => a.toLowerCase() == sLower) ||
+                            sLower == _effectiveMyId.toLowerCase() ||
+                            sLower == myUid.toLowerCase() ||
+                            sLower == SupabaseService.toUuid(myUid).toLowerCase();
+
+                        bool showDate = false;
+                        if (i == 0) {
+                          showDate = true;
+                        } else {
+                          final prev = messages[i - 1];
+                          final prevDay = DateTime(prev.createdAt.year,
+                              prev.createdAt.month, prev.createdAt.day);
+                          final curDay = DateTime(m.createdAt.year,
+                              m.createdAt.month, m.createdAt.day);
+                          if (prevDay != curDay) showDate = true;
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (showDate) _buildDatePill(_formatDateDivider(m.createdAt)),
+                            _buildMessageBubble(m, isMyMsg),
+                          ],
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+              _buildInputBar(),
+            ],
           ),
-          _buildInputBar(),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -400,29 +425,29 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: cardBg,
+                color: ThemeService.card,
                 shape: BoxShape.circle,
-                border: Border.all(color: cardBorder),
+                border: Border.all(color: ThemeService.border),
               ),
               child: const Icon(
                 Icons.chat_bubble_outline_rounded,
-                size: 48,
+                size: 46,
                 color: neonCyan,
               ),
             ),
             const SizedBox(height: 16),
             Text(
               widget.otherUserName,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
+              style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontSize: 17,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               'say_hi_start_chat'.tr(),
-              style: const TextStyle(color: Colors.white54, fontSize: 13),
+              style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
             ),
           ],
         ),
@@ -434,13 +459,13 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
     return Align(
       alignment: isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
+        margin: const EdgeInsets.symmetric(vertical: 5),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isMyMsg ? null : cardBg,
+          color: isMyMsg ? null : ThemeService.card,
           gradient: isMyMsg
               ? const LinearGradient(
                   colors: [Color(0xFF1877F2), Color(0xFF00A3FF)],
@@ -450,16 +475,17 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
               : null,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isMyMsg ? neonCyan.withOpacity(0.5) : cardBorder,
-            width: 1.2,
+            color: isMyMsg ? neonCyan.withOpacity(0.5) : ThemeService.border,
+            width: 1,
           ),
           boxShadow: [
-            if (isMyMsg)
-              BoxShadow(
-                color: neonCyan.withOpacity(0.2),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
+            BoxShadow(
+              color: isMyMsg
+                  ? neonCyan.withOpacity(0.18)
+                  : Colors.black.withOpacity(ThemeService.isDarkMode ? 0.2 : 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
           ],
         ),
         child: Column(
@@ -467,20 +493,20 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
           children: [
             Text(
               m.message,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: isMyMsg ? Colors.white : ThemeService.textPrimary,
                 fontSize: 13.5,
                 height: 1.3,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Align(
               alignment: isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
               child: Text(
                 _formatTime(m.createdAt),
                 style: TextStyle(
-                  color: isMyMsg ? Colors.white70 : Colors.white38,
-                  fontSize: 10.5,
+                  color: isMyMsg ? Colors.white70 : ThemeService.textSecondary.withOpacity(0.8),
+                  fontSize: 10,
                 ),
               ),
             ),
@@ -498,9 +524,9 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
         top: 10,
         bottom: MediaQuery.of(context).padding.bottom + 10,
       ),
-      decoration: const BoxDecoration(
-        color: darkBg,
-        border: Border(top: BorderSide(color: cardBorder, width: 0.8)),
+      decoration: BoxDecoration(
+        color: ThemeService.bg,
+        border: Border(top: BorderSide(color: ThemeService.border, width: 0.8)),
       ),
       child: Row(
         children: [
@@ -508,18 +534,18 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
             child: Container(
               height: 44,
               decoration: BoxDecoration(
-                color: cardBg,
+                color: ThemeService.card,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: cardBorder),
+                border: Border.all(color: ThemeService.border),
               ),
               child: TextField(
                 controller: _messageController,
-                style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                style: TextStyle(color: ThemeService.textPrimary, fontSize: 13.5),
                 textCapitalization: TextCapitalization.sentences,
                 onSubmitted: (_) => _sendMessage(),
                 decoration: InputDecoration(
                   hintText: 'Type message...',
-                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                  hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
@@ -568,7 +594,7 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
     return Container(
       width: size,
       height: size,
-      color: const Color(0xFF1A263D),
+      color: ThemeService.cardSecondary,
       child: Center(
         child: Text(
           initials,
