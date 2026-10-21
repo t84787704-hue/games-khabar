@@ -392,7 +392,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
         'target_content': postContent.length > 200
             ? postContent.substring(0, 200)
             : postContent,
-        'reason': 'Reported by user',
+        'reason': 'reported_by_user'.tr(),
         'status': 'pending',
         'created_at': DateTime.now().toIso8601String(),
       });
@@ -1182,7 +1182,7 @@ class _CommentSheetState extends State<CommentSheet> {
         'target_content': commentContent.length > 200
             ? commentContent.substring(0, 200)
             : commentContent,
-        'reason': 'Reported by user',
+        'reason': 'reported_by_user'.tr(),
         'status': 'pending',
         'created_at': DateTime.now().toIso8601String(),
       });
