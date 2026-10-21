@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import '../models/squad_post_model.dart';
 import '../models/squad_request_model.dart';
 import 'gamer_auth_service.dart';
@@ -59,6 +60,8 @@ class SquadService {
       // 2. Ab PARENT document banao - Use currentUid as default doc ID
       final String sId = (squadId != null && squadId.isNotEmpty) ? squadId : currentUid;
       final cleanMembers = [currentUid];
+      
+      final defaultTitle = title ?? post?.displayName ?? 'squad_default_title'.tr(args: [post?.username ?? 'user_gamer'.tr()]);
 
       final Map<String, dynamic> docData = {
         'id': sId,
@@ -77,10 +80,10 @@ class SquadService {
         'memberCount': 1,
         'membersCount': 1,
         'isActive': true,
-        'title': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
-        'displayName': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
-        'username': post?.username ?? 'gamer',
-        'ownerTag': post?.username ?? 'gamer',
+        'title': defaultTitle,
+        'displayName': defaultTitle,
+        'username': post?.username ?? 'user_gamer'.tr(),
+        'ownerTag': post?.username ?? 'user_gamer'.tr(),
         'userAvatar': post?.userAvatar ?? '',
         'avatar': post?.userAvatar ?? '',
         'userRank': tier ?? post?.userRank ?? 'Ace',
@@ -92,14 +95,14 @@ class SquadService {
         'micOn': micOn ?? post?.micOn ?? true,
         'lang': language ?? post?.language ?? 'Hindi',
         'language': language ?? post?.language ?? 'Hindi',
-        'mode': mode ?? post?.mode ?? 'Classic Squad',
-        'description': description ?? post?.description ?? 'Looking for active teammates!',
+        'mode': mode ?? post?.mode ?? 'mode_classic_squad'.tr(),
+        'description': description ?? post?.description ?? 'squad_default_desc'.tr(),
         'bgmiUid': inGameUid ?? post?.inGameUid ?? '',
         'inGameUid': inGameUid ?? post?.inGameUid ?? '',
         'bgmiUidToCopy': inGameUid ?? post?.inGameUid ?? '',
         'joinRequests': <String>[],
         'requestedCount': 0,
-        'lastMessage': 'Squad created!',
+        'lastMessage': 'squad_created_msg'.tr(),
         'lastMessageTime': now.toIso8601String(),
         'updatedAt': now.toIso8601String(),
         'updated_at': now.toIso8601String(),
@@ -121,11 +124,11 @@ class SquadService {
       try {
         await SupabaseService.saveRoom({
           'room_id': sId,
-          'title': title ?? post?.displayName ?? "${post?.username ?? 'Gamer'}'s Squad",
+          'title': defaultTitle,
           'game': 'PUBG Mobile',
-          'mode': mode ?? post?.mode ?? 'Classic Squad',
+          'mode': mode ?? post?.mode ?? 'mode_classic_squad'.tr(),
           'host_id': currentUid,
-          'host_name': post?.username ?? 'gamer',
+          'host_name': post?.username ?? 'user_gamer'.tr(),
           'max_players': 4,
           'current_players': 1,
           'status': 'Open',
@@ -134,7 +137,7 @@ class SquadService {
         await SupabaseService.addRoomMember({
           'room_id': sId,
           'user_id': currentUid,
-          'username': post?.username ?? 'gamer',
+          'username': post?.username ?? 'user_gamer'.tr(),
           'joined_at': now.toIso8601String(),
         });
       } catch (_) {}
@@ -145,7 +148,7 @@ class SquadService {
           'squad_id': sId,
           'chat_id': sId,
           'room_id': sId,
-          'text': 'Squad created!',
+          'text': 'squad_created_msg'.tr(),
           'senderId': currentUid,
           'senderUid': currentUid,
           'timestamp': now.toIso8601String(),
@@ -292,7 +295,7 @@ class SquadService {
       final gamer = GamerAuthService().currentGamer;
       final effectiveName = applicantName.isNotEmpty
           ? applicantName
-          : (gamer?.displayName.isNotEmpty == true ? gamer!.displayName : 'Gamer');
+          : (gamer?.displayName.isNotEmpty == true ? gamer!.displayName : 'user_gamer'.tr());
       final effectiveUsername = applicantUsername.isNotEmpty
           ? applicantUsername
           : (gamer?.username ?? '');
@@ -380,15 +383,18 @@ class SquadService {
       // 3. Send notification to squad leader
       if (leaderUid != applicantUid && leaderUid.isNotEmpty) {
         try {
+          final notifTitle = 'notif_new_squad_request_title'.tr();
+          final notifBody = 'notif_new_squad_request_body'.tr(args: [effectiveName]);
+          
           await SupabaseService.sendNotification({
             'recipientUid': leaderUid,
             'recipient_id': leaderUid,
             'senderUid': applicantUid,
             'sender_id': applicantUid,
             'type': 'squad_request',
-            'title': 'New Squad Request! 🎮',
-            'message': '$effectiveName requested to join your Squad!',
-            'body': '$effectiveName requested to join your Squad!',
+            'title': notifTitle,
+            'message': notifBody,
+            'body': notifBody,
             'postId': postId,
             'post_id': postId,
             'read': false,
@@ -517,15 +523,18 @@ class SquadService {
 
       // Send notification to applicant
       try {
+        final notifTitle = 'notif_squad_accepted_title'.tr();
+        final notifBody = 'notif_squad_accepted_body'.tr(args: [squad.mode, squad.inGameUid]);
+        
         await SupabaseService.sendNotification({
           'recipientUid': request.userId,
           'recipient_id': request.userId,
           'senderUid': squad.userId,
           'sender_id': squad.userId,
           'type': 'squad_accepted',
-          'title': 'Squad Request Accepted! 🎮',
-          'message': 'accepted your request to join squad (${squad.mode})! Leader BGMI UID: ${squad.inGameUid}',
-          'body': 'accepted your request to join squad (${squad.mode})! Leader BGMI UID: ${squad.inGameUid}',
+          'title': notifTitle,
+          'message': notifBody,
+          'body': notifBody,
           'postId': postId,
           'post_id': postId,
           'read': false,
@@ -617,7 +626,7 @@ class SquadService {
     final currentUid = GamerAuthService().currentUid ??
         SupabaseService.client.auth.currentUser?.id;
     if (currentUid == null || (currentUid != ownerId && ownerId.isNotEmpty)) {
-      throw 'Only the squad leader can permanently delete this squad.';
+      throw 'err_only_leader_can_delete'.tr();
     }
 
     try {
