@@ -98,7 +98,7 @@ class TeamMatchService {
           'user_id': team2LeaderId,
           'senderUid': team1LeaderId,
           'type': 'team_challenge',
-          'title': '⚔️ Team Match Challenge!',
+          'title': 'notif_team_challenge_title'.tr(),
           'message': 'challenge_received_notif'.tr(args: [team1Name, game, mode]),
           'matchId': matchId,
           'match_id': matchId,
@@ -153,7 +153,7 @@ class TeamMatchService {
             'user_id': match.team1LeaderId,
             'senderUid': match.team2LeaderId,
             'type': 'team_challenge_accepted',
-            'title': '✅ Challenge Accepted!',
+            'title': 'notif_team_challenge_accepted_title'.tr(),
             'message': 'challenge_accepted_notif'.tr(args: [match.team2Name]),
             'matchId': matchId,
             'match_id': matchId,
@@ -175,12 +175,13 @@ class TeamMatchService {
   Future<bool> rejectChallenge(String matchId, {String reason = ''}) async {
     try {
       final nowStr = DateTime.now().toIso8601String();
+      final reasonText = reason.isNotEmpty ? reason : 'challenge_rejected_by_opponent'.tr();
       await SupabaseService.client
           .from('team_matches')
           .update({
             'status': 'Rejected',
-            'disputeReason': reason.isNotEmpty ? reason : 'Challenge rejected by opponent team leader',
-            'dispute_reason': reason.isNotEmpty ? reason : 'Challenge rejected by opponent team leader',
+            'disputeReason': reasonText,
+            'dispute_reason': reasonText,
             'rejectedAt': nowStr,
             'rejected_at': nowStr,
           })
@@ -195,7 +196,7 @@ class TeamMatchService {
             'user_id': match.team1LeaderId,
             'senderUid': match.team2LeaderId,
             'type': 'team_challenge_rejected',
-            'title': '❌ Challenge Declined',
+            'title': 'notif_team_challenge_declined_title'.tr(),
             'message': 'challenge_rejected_notif'.tr(args: [match.team2Name]),
             'matchId': matchId,
             'match_id': matchId,
@@ -217,6 +218,7 @@ class TeamMatchService {
   Future<bool> cancelChallenge(String matchId, {String cancelledByUid = ''}) async {
     try {
       final nowStr = DateTime.now().toIso8601String();
+      final reasonText = 'challenge_cancelled_by_leader'.tr();
       await SupabaseService.client
           .from('team_matches')
           .update({
@@ -225,8 +227,8 @@ class TeamMatchService {
             'cancelled_at': nowStr,
             'cancelledBy': cancelledByUid,
             'cancelled_by': cancelledByUid,
-            'disputeReason': 'Challenge cancelled by team leader',
-            'dispute_reason': 'Challenge cancelled by team leader',
+            'disputeReason': reasonText,
+            'dispute_reason': reasonText,
           })
           .or('matchId.eq.$matchId,match_id.eq.$matchId,id.eq.$matchId');
 
@@ -243,7 +245,7 @@ class TeamMatchService {
               'user_id': notifyUid,
               'senderUid': cancelledByUid,
               'type': 'team_challenge_cancelled',
-              'title': '🚫 Challenge Cancelled',
+              'title': 'notif_team_challenge_cancelled_title'.tr(),
               'message': 'challenge_cancelled_notif'.tr(),
               'matchId': matchId,
               'match_id': matchId,
@@ -381,8 +383,8 @@ class TeamMatchService {
         final otherClaim = resolvedIsTeam1 ? match.team2Claim : match.team1Claim;
         if (claim == 'win' && otherClaim == 'win') {
           updateData['status'] = 'Disputed';
-          updateData['disputeReason'] = 'Both teams claimed victory';
-          updateData['dispute_reason'] = 'Both teams claimed victory';
+          updateData['disputeReason'] = 'both_teams_claimed_victory'.tr();
+          updateData['dispute_reason'] = 'both_teams_claimed_victory'.tr();
         }
       }
 
@@ -435,7 +437,7 @@ class TeamMatchService {
         senderId: senderId,
         senderName: senderName,
         senderAvatar: senderAvatar,
-        message: text.trim().isNotEmpty ? text.trim() : (imageUrl.isNotEmpty ? '📷 Image' : ''),
+        message: text.trim().isNotEmpty ? text.trim() : (imageUrl.isNotEmpty ? 'chat_image_placeholder'.tr() : ''),
         imageUrl: imageUrl,
         messageType: isSystem ? 'system' : (imageUrl.isNotEmpty ? 'image' : 'text'),
       );
@@ -461,7 +463,7 @@ class TeamMatchService {
     String? notes,
   }) async {
     try {
-      final effectiveAdminId = adminId ?? adminIdentifier ?? 'Admin';
+      final effectiveAdminId = adminId ?? adminIdentifier ?? 'admin_default_name'.tr();
       final effectiveNote = (notes != null && notes.isNotEmpty) ? notes : note;
       final matchData = await SupabaseService.getTeamMatch(matchId);
       if (matchData == null) return false;
@@ -470,7 +472,7 @@ class TeamMatchService {
       final isTeam1Winner = match.team1Id == winnerTeamId;
       final isDraw = winnerTeamId == 'draw';
       final winnerName = isDraw
-          ? 'Draw'
+          ? 'match_draw_label'.tr()
           : (isTeam1Winner ? match.team1Name : match.team2Name);
 
       final nowStr = DateTime.now().toIso8601String();
