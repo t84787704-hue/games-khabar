@@ -273,7 +273,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
     final currentGamer = GamerAuthService().currentGamer;
     final userName =
-        currentGamer?.displayName ?? currentGamer?.username ?? 'Gamer';
+        currentGamer?.displayName ?? currentGamer?.username ?? 'user_gamer'.tr();
 
     setState(() => _isActionLoading = true);
     final success = await _teamService.requestToJoinTeam(
@@ -1753,7 +1753,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         ? 'loading'.tr()
                                         : 'gamer_id_display'.tr(args: [gamerId != null && gamerId.isNotEmpty ? gamerId : 'id_not_set'.tr()]);
                                     final displayUsername =
-                                        userData?['username'] ?? 'Player';
+                                        userData?['username'] ?? 'user_gamer'.tr();
 
                                     return Padding(
                                       padding: const EdgeInsets.symmetric(
