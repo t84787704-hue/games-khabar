@@ -1825,6 +1825,9 @@
 "esports_status_member": "Team Member",
 "eligible_member_only": "Eligible Member",
 "coins_count_label": "1000 Coins Required",
-"can_join_team_need_coins_desc": "You need coins to join an esports team"
-
+"can_join_team_need_coins_desc": "You need coins to join an esports team",
+"filter_tab_all": "All",
+"filter_tab_unread": "Unread",
+"filter_tab_social": "Social",
+"filter_tab_system": "System"
 }
