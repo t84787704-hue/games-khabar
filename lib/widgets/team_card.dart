@@ -1,5 +1,5 @@
 // ===============================================================================
-// TEAM CARD — Compact Dark Neon Gaming Theme (Exact Match to Design)
+// TEAM CARD — Compact Gaming Design (Using Existing ThemeService)
 // File: lib/widgets/team_card.dart
 // ===============================================================================
 
@@ -13,6 +13,7 @@ import '../services/supabase_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../screens/team_profile_screen.dart';
 import '../screens/private_match_room_screen.dart';
+import '../services/theme_service.dart';
 import '../services/coin_wallet_service.dart';
 import 'coin_or_ad_popup.dart';
 import 'match_rules_dialog.dart';
@@ -47,12 +48,6 @@ class _TeamCardState extends State<TeamCard> {
   bool _isOwnerFromDb = false;
 
   final Set<String> _localCancelledIds = {};
-
-  static const Color darkCardBg = Color(0xFF131B2E);
-  static const Color darkCardBorder = Color(0xFF1E293B);
-  static const Color neonBlue = Color(0xFF1877F2);
-  static const Color neonGradientEnd = Color(0xFF00E5FF);
-  static const Color alertRed = Color(0xFFFF4655);
 
   @override
   void initState() {
@@ -91,7 +86,7 @@ class _TeamCardState extends State<TeamCard> {
     } catch (_) {}
   }
 
-  Color _getGameTagColor(String game) {
+  Color _getGameBadgeColor(String game) {
     switch (game.toUpperCase()) {
       case 'PUBG':
         return const Color(0xFF1877F2);
@@ -111,7 +106,7 @@ class _TeamCardState extends State<TeamCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Your team balance is below 1,000 coins!'),
-          backgroundColor: alertRed,
+          backgroundColor: Color(0xFFFF4655),
         ),
       );
       return;
@@ -159,14 +154,14 @@ class _TeamCardState extends State<TeamCard> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Challenge sent to ${widget.team.name}! ⚡'),
-                backgroundColor: neonBlue,
+                backgroundColor: const Color(0xFF1877F2),
               ),
             );
           }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: $e'), backgroundColor: alertRed),
+              SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
             );
           }
         }
@@ -186,249 +181,251 @@ class _TeamCardState extends State<TeamCard> {
     final bool isOwnerFinal = isLeader || _isOwnerFromDb;
     final bool isMemberFinal = isMember || _isMemberFromDb || isOwnerFinal;
 
-    final gameColor = _getGameTagColor(team.game.isNotEmpty ? team.game : 'PUBG');
+    final gameColor = _getGameBadgeColor(team.game.isNotEmpty ? team.game : 'PUBG');
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: darkCardBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isOwnerFinal
-              ? const Color(0xFFFFD700).withOpacity(0.5)
-              : darkCardBorder,
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Row: Logo + Info
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Team Badge / Logo
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0A0F1D),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: gameColor.withOpacity(0.5), width: 1.5),
-                    image: team.logo.isNotEmpty
-                        ? DecorationImage(
-                            image: NetworkImage(team.logo),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                  ),
-                  child: team.logo.isEmpty
-                      ? Center(
-                          child: Icon(Icons.shield_rounded, color: gameColor, size: 30),
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 14),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        final isDark = ThemeService.isDarkMode;
 
-                // Name, Game Tag & Stats
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              team.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: gameColor.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              (team.game.isNotEmpty ? team.game : 'PUBG').toUpperCase(),
-                              style: TextStyle(
-                                color: gameColor,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 10,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        "Leader: ${team.leaderName}",
-                        style: const TextStyle(
-                          color: Colors.white60,
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.group_rounded, color: neonBlue, size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            "${team.memberCount} Members",
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFB800), size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            "${team.wins} Wins",
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: ThemeService.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isOwnerFinal
+                  ? const Color(0xFFFFD700).withOpacity(0.6)
+                  : ThemeService.border,
+              width: isOwnerFinal ? 1.5 : 1.0,
             ),
-
-            const SizedBox(height: 14),
-
-            // Bottom Buttons Row
-            Row(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.35 : 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // View Team Button
-                Expanded(
-                  child: SizedBox(
-                    height: 38,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Color(0xFF2E384D), width: 1.2),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        backgroundColor: const Color(0xFF0E1524),
+                // Top Row: Logo + Info (Team Name, Tag, Leader, Stats)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Team Badge / Logo Box
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: ThemeService.cardSecondary,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: gameColor.withOpacity(0.4), width: 1.2),
+                        image: team.logo.isNotEmpty
+                            ? DecorationImage(
+                                image: NetworkImage(team.logo),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
                       ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => TeamProfileScreen(teamId: team.id),
+                      child: team.logo.isEmpty
+                          ? Center(
+                              child: Icon(Icons.shield_rounded, color: gameColor, size: 28),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Name, Game Tag & Stats
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  team.name,
+                                  style: TextStyle(
+                                    color: ThemeService.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: gameColor.withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Text(
+                                  (team.game.isNotEmpty ? team.game : 'PUBG').toUpperCase(),
+                                  style: TextStyle(
+                                    color: gameColor,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 9.5,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                      child: const Text(
-                        'View Team',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          const SizedBox(height: 3),
+                          Text(
+                            "Leader: ${team.leaderName}",
+                            style: TextStyle(
+                              color: ThemeService.textSecondary,
+                              fontSize: 11.5,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.group_rounded, color: Color(0xFF1877F2), size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                "${team.memberCount} Members",
+                                style: TextStyle(
+                                  color: ThemeService.textSecondary,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFB800), size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                "${team.wins} Wins",
+                                style: TextStyle(
+                                  color: ThemeService.textSecondary,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 10),
 
-                // Challenge / Action Button
-                Expanded(
-                  child: SizedBox(
-                    height: 38,
-                    child: isOwnerFinal || isMemberFinal
-                        ? ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00C853),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              elevation: 0,
-                            ),
-                            icon: const Icon(Icons.login_rounded, size: 16),
-                            label: const Text(
-                              'Open Team',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TeamProfileScreen(teamId: team.id),
-                                ),
-                              );
-                            },
-                          )
-                        : (hasRequested || _localRequested)
-                            ? OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.white54,
-                                  side: const BorderSide(color: darkCardBorder),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  backgroundColor: const Color(0xFF0E1524),
-                                ),
-                                icon: const Icon(Icons.hourglass_top_rounded, size: 14),
-                                label: const Text(
-                                  'Requested',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                ),
-                                onPressed: null,
-                              )
-                            : Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF1877F2), Color(0xFF00B0FF)],
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: neonBlue.withOpacity(0.35),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                  icon: const Icon(Icons.flash_on_rounded, size: 16, color: Colors.white),
-                                  label: const Text(
-                                    'Challenge',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  onPressed: () => _handleChallenge(currentUid),
-                                ),
+                const SizedBox(height: 12),
+
+                // Bottom Buttons Row (Compact height 36)
+                Row(
+                  children: [
+                    // View Team Button
+                    Expanded(
+                      child: SizedBox(
+                        height: 36,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: ThemeService.textPrimary,
+                            side: BorderSide(color: ThemeService.border, width: 1),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            backgroundColor: ThemeService.cardSecondary,
+                            padding: EdgeInsets.zero,
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => TeamProfileScreen(teamId: team.id),
                               ),
-                  ),
+                            );
+                          },
+                          child: Text(
+                            'view_team'.tr(),
+                            style: TextStyle(
+                              color: ThemeService.textPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Challenge / Action Button
+                    Expanded(
+                      child: SizedBox(
+                        height: 36,
+                        child: isOwnerFinal || isMemberFinal
+                            ? ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00C853),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  elevation: 0,
+                                  padding: EdgeInsets.zero,
+                                ),
+                                icon: const Icon(Icons.login_rounded, size: 15),
+                                label: Text(
+                                  'open_team'.tr(),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => TeamProfileScreen(teamId: team.id),
+                                    ),
+                                  );
+                                },
+                              )
+                            : (hasRequested || _localRequested)
+                                ? OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: ThemeService.textSecondary,
+                                      side: BorderSide(color: ThemeService.border),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      backgroundColor: ThemeService.cardSecondary,
+                                      padding: EdgeInsets.zero,
+                                    ),
+                                    icon: const Icon(Icons.hourglass_top_rounded, size: 14),
+                                    label: Text(
+                                      'btn_requested_wait'.tr(),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11.5,
+                                        color: ThemeService.textSecondary,
+                                      ),
+                                    ),
+                                    onPressed: null,
+                                  )
+                                : ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1877F2),
+                                      foregroundColor: Colors.white,
+                                      elevation: 2,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      padding: EdgeInsets.zero,
+                                    ),
+                                    icon: const Icon(Icons.flash_on_rounded, size: 15, color: Colors.white),
+                                    label: Text(
+                                      'btn_challenge_caps'.tr(),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                    onPressed: () => _handleChallenge(currentUid),
+                                  ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
