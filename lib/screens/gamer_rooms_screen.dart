@@ -77,7 +77,7 @@ class GamerRoom {
     required this.filledSlots,
     required this.status,
     required this.createdAt,
-    this.hostName = 'Host',
+    this.hostName = 'user_host'.tr(),
     this.joinedUserIds = const [],
     this.joinedUsers = const [],
     DateTime? startTime,
@@ -194,7 +194,7 @@ class GamerRoom {
       filledSlots: (row['filled_slots'] is num) ? (row['filled_slots'] as num).toInt() : 1,
       status: (row['status'] ?? 'active').toString(),
       createdAt: created,
-      hostName: (row['host_name'] ?? 'Host').toString(),
+      hostName: (row['host_name'] ?? 'user_host'.tr()).toString(),
       joinedUserIds: joinedUserIds,
       joinedUsers: joinedUsers,
       startTime: startTime ?? created,
@@ -231,7 +231,7 @@ class GamerRoomsScreen extends StatefulWidget {
         amount: prize,
         type: 'win_prize',
         roomId: room.id,
-        description: 'Tournament win prize: ${room.title}',
+        description: 'db_desc_win_prize'.tr(args: [room.title]),
       );
     } catch (e) {
       debugPrint('Error updating winner coins: $e');
@@ -266,7 +266,7 @@ class GamerRoomsScreen extends StatefulWidget {
         'room_id': room.id,
         'sender_id': 'system',
         'sender_name': 'ROOM BOT',
-        'message': '🏆 $winnerName won! +$prize coins',
+        'message': 'msg_sys_won_coins'.tr(args: [winnerName, '$prize']),
         'type': 'system_reward',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -276,8 +276,8 @@ class GamerRoomsScreen extends StatefulWidget {
       await NotificationService().sendNotification(
         userId: winnerId,
         type: 'match_result',
-        title: '🏆 You won! +$prize coins',
-        body: 'Congratulations $winnerName! You won ${room.title}.',
+        title: 'notif_you_won_title'.tr(args: ['$prize']),
+        body: 'notif_you_won_body'.tr(args: [winnerName, room.title]),
         data: {'room_id': room.id, 'prize': prize},
         priority: 'high',
       );
@@ -326,7 +326,7 @@ class GamerRoomsScreen extends StatefulWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '$gameName ID Details',
+                'room_game_id_details'.tr(args: [gameName]),
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: ThemeService.textPrimary),
               ),
             ),
@@ -338,7 +338,7 @@ class GamerRoomsScreen extends StatefulWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Enter your official $gameName details. This will be automatically saved for all future $gameName matches.',
+                'room_game_details_desc'.tr(args: [gameName, gameName]),
                 style: TextStyle(fontSize: 12, color: ThemeService.textSecondary),
               ),
               const SizedBox(height: 14),
@@ -346,9 +346,9 @@ class GamerRoomsScreen extends StatefulWidget {
                 controller: ignController,
                 style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
-                  labelText: 'In-Game Name (IGN)',
+                  labelText: 'in_game_name_ign'.tr(),
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
-                  hintText: 'e.g. Sniper_King',
+                  hintText: 'room_ign_example'.tr(),
                   hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
                   prefixIcon: Icon(Icons.badge_outlined, size: 20, color: ThemeService.textSecondary),
                   filled: true,
@@ -366,9 +366,9 @@ class GamerRoomsScreen extends StatefulWidget {
                 keyboardType: TextInputType.text,
                 style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
-                  labelText: 'Character ID / Game UID',
+                  labelText: 'room_character_id_uid'.tr(),
                   labelStyle: TextStyle(color: ThemeService.textSecondary),
-                  hintText: 'e.g. 5123456789',
+                  hintText: 'room_uid_example'.tr(),
                   hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
                   prefixIcon: Icon(Icons.tag, size: 20, color: ThemeService.textSecondary),
                   filled: true,
@@ -433,7 +433,7 @@ class GamerRoomsScreen extends StatefulWidget {
                 Navigator.pop(ctx, {'ign': ign, 'game_uid': uid});
               }
             },
-            child: const Text('Save & Continue', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text('save_and_continue'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -450,10 +450,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   final GamerAuthService _authService = GamerAuthService();
   final CoinWalletService _walletService = CoinWalletService();
   Timer? _cleanupTimer;
-  String _selectedCategory = 'All Games';
+  String _selectedCategory = 'all_games'.tr();
 
-  static const List<String> _gameCategories = [
-    'All Games',
+  final List<String> _gameCategories = [
+    'all_games'.tr(),
     'BGMI',
     'Free Fire',
     'PUBG Mobile',
@@ -472,7 +472,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   String get currentUserName =>
       _authService.currentGamer?.displayName ??
       SupabaseService.client.auth.currentUser?.userMetadata?["full_name"]?.toString() ??
-      'Gamer';
+      'user_gamer'.tr();
 
   String get currentUserPhoto =>
       _authService.currentGamer?.photoUrl ??
@@ -598,7 +598,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Room Limit Reached (Max 2)',
+                    'room_limit_reached_title'.tr(),
                     style: TextStyle(
                       color: ThemeService.textPrimary,
                       fontWeight: FontWeight.bold,
@@ -631,7 +631,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       if (mounted) {
         MatchRulesDialog.show(
           context,
-          title: 'Custom Room Creation Rules',
+          title: 'room_creation_rules_title'.tr(),
           onProceed: () {
             if (mounted) _showCreateRoomDialog();
           },
@@ -642,7 +642,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       if (mounted) {
         MatchRulesDialog.show(
           context,
-          title: 'Custom Room Creation Rules',
+          title: 'room_creation_rules_title'.tr(),
           onProceed: () {
             if (mounted) _showCreateRoomDialog();
           },
@@ -678,7 +678,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             backgroundColor: ThemeService.appBarBg,
             elevation: 0.5,
             title: Text(
-              'Rooms',
+              'nav_rooms'.tr(),
               style: TextStyle(
                 color: ThemeService.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -737,7 +737,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     }
                     final list = snapshot.data ?? [];
                     final filtered = list.where((r) {
-                      if (_selectedCategory == 'All Games') return true;
+                      if (_selectedCategory == 'all_games'.tr()) return true;
                       return (r['game'] ?? '').toString().toLowerCase() ==
                           _selectedCategory.toLowerCase();
                     }).toList();
@@ -745,7 +745,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     if (filtered.isEmpty) {
                       return Center(
                         child: Text(
-                          'No active rooms found. Tap + to create one!',
+                          'no_active_rooms_found_desc'.tr(),
                           style: TextStyle(color: ThemeService.textSecondary),
                         ),
                       );
@@ -789,7 +789,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                       const SizedBox(width: 6),
                                       Expanded(
                                         child: Text(
-                                          'WINNER: ${room.winnerName ?? "Champion"} (Closes in 5m)',
+                                          'room_winner_closes_in'.tr(args: [room.winnerName ?? 'room_champion'.tr()]),
                                           style: const TextStyle(
                                             color: Colors.black87,
                                             fontWeight: FontWeight.w900,
@@ -821,7 +821,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                   ),
                                 ),
                                 subtitle: Text(
-                                  'Host: ${room.hostName} • ${room.mode}',
+                                  'room_host_and_mode'.tr(args: [room.hostName, room.mode]),
                                   style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                                 ),
                                 trailing: Column(
@@ -829,7 +829,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      '🏆 ${room.prizePool} Coins',
+                                      'room_prize_pool_coins'.tr(args: ['${room.prizePool}']),
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: Colors.orange,
@@ -837,7 +837,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      '${room.filledSlots}/${room.totalSlots} Players',
+                                      'room_players_count_ratio'.tr(args: ['${room.filledSlots}', '${room.totalSlots}']),
                                       style: TextStyle(fontSize: 11, color: ThemeService.textSecondary),
                                     ),
                                   ],
@@ -867,11 +867,11 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     bool isCreating = false;
 
     int selectedSlots = 2;
-    String selectedFormat = '1 vs 1 (2 Slots)';
+    String selectedFormat = 'format_1v1_slots'.tr();
     final Map<String, int> formatOptions = {
-      '1 vs 1 (2 Slots)': 2,
-      '2 vs 2 (4 Slots)': 4,
-      '4 vs 4 TDM (8 Slots)': 8,
+      'format_1v1_slots'.tr(): 2,
+      'format_2v2_slots'.tr(): 4,
+      'format_4v4_slots'.tr(): 8,
     };
 
     showDialog(
@@ -881,7 +881,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
           backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
-            'Create Game Room',
+            'create_game_room'.tr(),
             style: TextStyle(fontWeight: FontWeight.bold, color: ThemeService.textPrimary),
           ),
           content: SingleChildScrollView(
@@ -892,7 +892,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   controller: gameCtrl,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Game',
+                    labelText: 'game_label'.tr(),
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -900,7 +900,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   controller: modeCtrl,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Map / Mode',
+                    labelText: 'mode_map_label'.tr(),
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -909,7 +909,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   dropdownColor: ThemeService.card,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Match Format / Slots',
+                    labelText: 'match_format_slots'.tr(),
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                   items: formatOptions.keys.map((format) {
@@ -931,7 +931,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   controller: roomIdCtrl,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Room ID',
+                    labelText: 'room_id_label'.tr(),
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -939,7 +939,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   controller: passCtrl,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Password',
+                    labelText: 'room_password_label'.tr(),
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -948,7 +948,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   keyboardType: TextInputType.number,
                   style: TextStyle(color: ThemeService.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Prize Pool (Coins)',
+                    labelText: 'prize_pool_coins_label'.tr(),
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                   ),
                 ),
@@ -1065,7 +1065,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Error creating room: $e'),
+                              content: Text('err_failed_with_msg'.tr(args: ['$e'])),
                               backgroundColor: Colors.red,
                             ),
                           );
@@ -1078,7 +1078,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text('Create', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  : Text('create'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1125,7 +1125,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
   void _showRulesDialog() {
     MatchRulesDialog.show(
       context,
-      title: 'Tournament & Verification Rules',
+      title: 'tournament_rules_title'.tr(),
       onProceed: () {},
     );
   }
@@ -1239,7 +1239,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'room_id': widget.roomId,
         'sender_id': 'system',
         'sender_name': 'ROOM BOT',
-        'message': '👋 ${widget.currentUserName} ($myIgn) joined the match!',
+        'message': 'msg_player_joined_match'.tr(args: [widget.currentUserName, myIgn]),
         'type': 'system',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1255,7 +1255,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error joining room: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('err_failed_with_msg'.tr(args: ['$e'])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1298,7 +1298,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         'room_id': widget.roomId,
         'sender_id': 'system',
         'sender_name': 'ROOM BOT',
-        'message': '📸 ${widget.currentUserName} uploaded win proof! Waiting for admin approval.',
+        'message': 'msg_player_uploaded_win_proof'.tr(args: [widget.currentUserName]),
         'type': 'system',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -1314,7 +1314,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('err_failed_with_msg'.tr(args: ['$e'])), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1328,7 +1328,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: ThemeService.card,
-        title: Text('Raise Dispute / Report Issue', style: TextStyle(color: ThemeService.textPrimary)),
+        title: Text('raise_dispute_title'.tr(), style: TextStyle(color: ThemeService.textPrimary)),
         content: TextField(
           controller: reasonCtrl,
           style: TextStyle(color: ThemeService.textPrimary),
@@ -1359,12 +1359,12 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 'room_id': widget.roomId,
                 'sender_id': 'system',
                 'sender_name': 'DISPUTE BOT',
-                'message': '⚠️ Dispute raised by ${widget.currentUserName}: "$reason". Admin will review.',
+                'message': 'msg_dispute_raised_by_player'.tr(args: [widget.currentUserName, reason]),
                 'type': 'system_dispute',
                 'created_at': DateTime.now().toUtc().toIso8601String(),
               });
             },
-            child: const Text('Submit Dispute', style: TextStyle(color: Colors.white)),
+            child: Text('submit_dispute'.tr(), style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1448,7 +1448,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                           ),
                         ),
                         Text(
-                          'Host: ${room.hostName} • ${room.mode}',
+                          'room_host_and_mode'.tr(args: [room.hostName, room.mode]),
                           style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                         ),
                       ],
@@ -1469,11 +1469,11 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       .where((u) => (u['id'] ?? '').toString() != (room.winnerId ?? ''))
                       .map((u) {
                         final ign = u['ign']?.toString() ?? '';
-                        final name = u['name']?.toString() ?? 'Player';
+                        final name = u['name']?.toString() ?? 'player'.tr();
                         return ign.isNotEmpty ? '$name ($ign)' : name;
                       })
                       .toList();
-                  final vsText = opponents.isNotEmpty ? opponents.join(', ') : 'Opponent';
+                  final vsText = opponents.isNotEmpty ? opponents.join(', ') : 'default_opponent'.tr();
 
                   return Container(
                     width: double.infinity,
@@ -1503,7 +1503,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'WINNER: ${room.winnerName ?? "Champion"}!',
+                                'room_winner_banner_title'.tr(args: [room.winnerName ?? 'room_champion'.tr()]),
                                 style: const TextStyle(
                                   color: Colors.black87,
                                   fontWeight: FontWeight.w900,
@@ -1512,7 +1512,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                '⚔️ Won against: $vsText',
+                                'room_won_against'.tr(args: [vsText]),
                                 style: const TextStyle(
                                   color: Colors.black87,
                                   fontWeight: FontWeight.bold,
@@ -1523,7 +1523,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                'Prize: ${room.prizePool} Coins • Room closes in: $timeStr',
+                                'room_prize_and_closes_in'.tr(args: ['${room.prizePool}', timeStr]),
                                 style: TextStyle(
                                   color: Colors.black.withOpacity(0.75),
                                   fontWeight: FontWeight.w600,
@@ -1550,9 +1550,9 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        '⚠️ MATCH DISPUTED — ESCALATED TO ADMIN',
-                        style: TextStyle(
+                      Text(
+                        'match_disputed_banner'.tr(),
+                        style: const TextStyle(
                           color: Colors.red,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
@@ -1560,7 +1560,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       ),
                       if (room.disputeReason != null)
                         Text(
-                          'Reason: ${room.disputeReason}',
+                          'reason_prefix'.tr(args: [room.disputeReason!]),
                           style: TextStyle(color: ThemeService.textPrimary, fontSize: 12),
                         ),
                     ],
@@ -1605,14 +1605,14 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.orange),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.hourglass_top, color: Colors.orange, size: 20),
-                      SizedBox(width: 8),
+                      const Icon(Icons.hourglass_top, color: Colors.orange, size: 20),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Match Finished! Winner proof under admin review ⏳',
-                          style: TextStyle(
+                          'proof_under_review_banner'.tr(),
+                          style: const TextStyle(
                             color: Colors.deepOrange,
                             fontWeight: FontWeight.bold,
                             fontSize: 12.5,
@@ -1644,7 +1644,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             const Icon(Icons.key, color: Colors.amber, size: 16),
                             const SizedBox(width: 6),
                             Text(
-                              'ROOM CREDENTIALS',
+                              'room_credentials_label'.tr(),
                               style: TextStyle(
                                 color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
                                 fontWeight: FontWeight.bold,
@@ -1666,7 +1666,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                               children: [
                                 const Text('📜 ', style: TextStyle(fontSize: 11)),
                                 Text(
-                                  'Rules',
+                                  'rules_button'.tr(),
                                   style: TextStyle(
                                     color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
                                     fontWeight: FontWeight.bold,
@@ -1684,7 +1684,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'ROOM ID\n${room.roomId}',
+                          'room_id_label_upper'.tr(args: [room.roomId]),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
@@ -1707,7 +1707,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'PASSWORD\n${room.roomPassword}',
+                          'room_password_label_upper'.tr(args: [room.roomPassword]),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
@@ -1746,7 +1746,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                         const Icon(Icons.group, size: 16, color: Color(0xFF1877F2)),
                         const SizedBox(width: 6),
                         Text(
-                          'PLAYERS (${room.joinedUsers.length}/${room.totalSlots})',
+                          'players_label_ratio'.tr(args: ['${room.joinedUsers.length}', '${room.totalSlots}']),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
@@ -1758,7 +1758,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     const SizedBox(height: 6),
                     ...room.joinedUsers.map((user) {
                       final uId = (user['id'] ?? '').toString();
-                      final uName = (user['name'] ?? 'Player').toString();
+                      final uName = (user['name'] ?? 'player'.tr()).toString();
                       final uAvatar = (user['avatar'] ?? '').toString();
                       final ign = user['ign']?.toString() ?? user['in_game_name']?.toString();
                       final gameUid = user['game_uid']?.toString() ?? user['character_id']?.toString();
@@ -1805,8 +1805,8 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             color: const Color(0xFFFFB300),
                                             borderRadius: BorderRadius.circular(4),
                                           ),
-                                          child: const Text('🏆 WINNER',
-                                              style: TextStyle(
+                                          child: Text('winner_label_caps'.tr(),
+                                              style: const TextStyle(
                                                   color: Colors.black87,
                                                   fontSize: 9,
                                                   fontWeight: FontWeight.bold)),
@@ -1820,8 +1820,8 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             borderRadius: BorderRadius.circular(4),
                                             border: Border.all(color: Colors.red, width: 0.8),
                                           ),
-                                          child: const Text('DEFEATED',
-                                              style: TextStyle(
+                                          child: Text('defeated_label_caps'.tr(),
+                                              style: const TextStyle(
                                                   color: Colors.red,
                                                   fontSize: 9,
                                                   fontWeight: FontWeight.bold)),
@@ -1834,8 +1834,8 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             color: Colors.blue.withOpacity(0.15),
                                             borderRadius: BorderRadius.circular(4),
                                           ),
-                                          child: const Text('HOST',
-                                              style: TextStyle(
+                                          child: Text('host_badge_caps'.tr(),
+                                              style: const TextStyle(
                                                   color: Colors.blue,
                                                   fontSize: 9,
                                                   fontWeight: FontWeight.bold)),
@@ -1849,8 +1849,8 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             color: Colors.green,
                                             borderRadius: BorderRadius.circular(4),
                                           ),
-                                          child: const Text('YOU',
-                                              style: TextStyle(
+                                          child: Text('you_badge_caps'.tr(),
+                                              style: const TextStyle(
                                                   color: Colors.white,
                                                   fontSize: 9,
                                                   fontWeight: FontWeight.bold)),
@@ -1883,7 +1883,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                             Clipboard.setData(ClipboardData(text: gameUid));
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               SnackBar(
-                                                content: Text('Copied Game UID: $gameUid'),
+                                                content: Text('copied_game_uid'.tr(args: [gameUid])),
                                                 duration: const Duration(seconds: 1),
                                               ),
                                             );
@@ -1923,7 +1923,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       itemBuilder: (context, idx) {
                         final m = msgs[idx];
                         final isSys = m['type'] != 'chat';
-                        final sender = m['sender_name'] ?? 'Player';
+                        final sender = m['sender_name'] ?? 'player'.tr();
                         final txt = m['message'] ?? '';
 
                         if (isSys) {
@@ -2038,7 +2038,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                               )
                             : const Icon(Icons.login, size: 20),
                         label: Text(
-                          _isJoining ? 'Joining Match...' : 'JOIN MATCH (${room.filledSlots}/${room.totalSlots})',
+                          _isJoining ? 'joining_label'.tr() : 'join_match_with_slots'.tr(args: ['${room.filledSlots}', '${room.totalSlots}']),
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         onPressed: _isJoining
@@ -2046,7 +2046,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                             : () {
                                 MatchRulesDialog.show(
                                   context,
-                                  title: 'Match Rules (${room.title})',
+                                  title: 'match_rules_title'.tr(args: [room.title]),
                                   onProceed: () => _joinMatch(room),
                                 );
                               },
@@ -2086,12 +2086,12 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                   ),
                             label: Text(
                               _isUploadingProof
-                                  ? 'Uploading...'
+                                  ? 'uploading_label'.tr()
                                   : (room.isRejected
-                                      ? 'Re-upload Proof 🔄'
+                                      ? 'reupload_proof_button'.tr()
                                       : (room.isProofSubmitted
-                                          ? 'Proof Submitted ⏳ (Tap to Change)'
-                                          : 'End Match (I Won)')),
+                                          ? 'proof_submitted_tap_to_change'.tr()
+                                          : 'end_match_claim_win'.tr())),
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             onPressed: _isUploadingProof ? null : _uploadWinScreenshot,
@@ -2106,8 +2106,8 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: TextButton.icon(
                         icon: const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.grey),
-                        label: const Text('Raise Dispute / Report Issue',
-                            style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        label: Text('raise_dispute_button'.tr(),
+                            style: const TextStyle(color: Colors.grey, fontSize: 12)),
                         onPressed: _raiseDisputeDialog,
                       ),
                     ),
