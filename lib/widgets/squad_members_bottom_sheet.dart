@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import '../services/supabase_service.dart';
 import '../constants/gamer_theme.dart';
 import '../models/squad_post_model.dart';
@@ -50,7 +51,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$label copied to clipboard!'),
+        content: Text('squad_copied_to_clipboard'.tr(args: [label])),
         backgroundColor: GamerTheme.neonGreen,
         duration: const Duration(seconds: 2),
       ),
@@ -62,15 +63,15 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardDark,
-        title: const Text('Kick Member', style: TextStyle(color: GamerTheme.textWhite)),
+        title: Text('squad_kick_member'.tr(), style: const TextStyle(color: GamerTheme.textWhite)),
         content: Text(
-          'Are you sure you want to remove $memberName from the squad?',
+          'squad_kick_confirm'.tr(args: [memberName]),
           style: const TextStyle(color: GamerTheme.textMuted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -78,7 +79,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Kick'),
+            child: Text('squad_kick_btn'.tr()),
           ),
         ],
       ),
@@ -97,7 +98,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$memberName removed from squad'),
+            content: Text('squad_member_removed'.tr(args: [memberName])),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -105,7 +106,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('err_failed_with_msg'.tr(args: ['$e'])), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -118,15 +119,15 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: GamerTheme.cardDark,
-        title: const Text('Leave Squad', style: TextStyle(color: GamerTheme.textWhite)),
-        content: const Text(
-          'Are you sure you want to leave this squad?',
-          style: TextStyle(color: GamerTheme.textMuted),
+        title: Text('squad_leave_squad'.tr(), style: const TextStyle(color: GamerTheme.textWhite)),
+        content: Text(
+          'squad_leave_confirm_short'.tr(),
+          style: const TextStyle(color: GamerTheme.textMuted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: GamerTheme.textMuted)),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(color: GamerTheme.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -134,7 +135,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Leave'),
+            child: Text('squad_leave_btn'.tr()),
           ),
         ],
       ),
@@ -153,8 +154,8 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
       if (mounted) {
         Navigator.pop(context); // Close bottom sheet
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('You left the squad'),
+          SnackBar(
+            content: Text('squad_you_left'.tr()),
             backgroundColor: GamerTheme.accentOrange,
           ),
         );
@@ -162,7 +163,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('err_failed_with_msg'.tr(args: ['$e'])), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -225,7 +226,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                     const Icon(Icons.shield_rounded, color: GamerTheme.accentCyan, size: 20),
                     const SizedBox(width: 8),
                     Text(
-                      'Squad Members ($filledCount/4)',
+                      'squad_members_count_short'.tr(args: ['$filledCount']),
                       style: const TextStyle(
                         color: GamerTheme.textWhite,
                         fontSize: 17,
@@ -241,9 +242,9 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: Colors.redAccent),
                         ),
-                        child: const Text(
-                          'FULL SQUAD',
-                          style: TextStyle(
+                        child: Text(
+                          'squad_full_squad'.tr(),
+                          style: const TextStyle(
                             color: Colors.redAccent,
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
@@ -276,7 +277,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      widget.squad.micOn ? 'Mic Required' : 'Mic Optional',
+                      widget.squad.micOn ? 'squad_mic_required'.tr() : 'squad_mic_optional'.tr(),
                       style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                     ),
                     const SizedBox(width: 12),
@@ -288,7 +289,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                     ),
                     const Spacer(),
                     Text(
-                      'Min K/D: ${widget.squad.kdNeeded}',
+                      'squad_kd_required'.tr(args: ['${widget.squad.kdNeeded}']),
                       style: const TextStyle(
                         color: GamerTheme.accentOrange,
                         fontSize: 11,
@@ -323,10 +324,10 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                         final user = userSnap.data;
                         final String displayName = user?.displayName.isNotEmpty == true
                             ? user!.displayName
-                            : (isLeader ? widget.squad.displayName : 'Gamer');
+                            : (isLeader ? widget.squad.displayName : 'user_gamer'.tr());
                         final String username = user?.username.isNotEmpty == true
                             ? '@${user!.username}'
-                            : (isLeader ? '@${widget.squad.username}' : '@gamer');
+                            : (isLeader ? '@${widget.squad.username}' : '@${'user_gamer'.tr()}');
                         final String photoUrl = user?.photoUrl.isNotEmpty == true
                             ? user!.photoUrl
                             : (isLeader ? widget.squad.userAvatar : '');
@@ -389,14 +390,14 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                                                   borderRadius: BorderRadius.circular(4),
                                                   border: Border.all(color: GamerTheme.accentOrange, width: 1),
                                                 ),
-                                                child: const Row(
+                                                child: Row(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    Icon(Icons.star_rounded, size: 11, color: GamerTheme.accentOrange),
-                                                    SizedBox(width: 2),
+                                                    const Icon(Icons.star_rounded, size: 11, color: GamerTheme.accentOrange),
+                                                    const SizedBox(width: 2),
                                                     Text(
-                                                      'LEADER',
-                                                      style: TextStyle(
+                                                      'squad_leader_caps'.tr(),
+                                                      style: const TextStyle(
                                                         color: GamerTheme.accentOrange,
                                                         fontSize: 9,
                                                         fontWeight: FontWeight.w900,
@@ -414,9 +415,9 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                                                   borderRadius: BorderRadius.circular(4),
                                                   border: Border.all(color: GamerTheme.accentCyan, width: 1),
                                                 ),
-                                                child: const Text(
-                                                  'YOU',
-                                                  style: TextStyle(
+                                                child: Text(
+                                                  'squad_you_caps'.tr(),
+                                                  style: const TextStyle(
                                                     color: GamerTheme.accentCyan,
                                                     fontSize: 9,
                                                     fontWeight: FontWeight.w900,
@@ -476,9 +477,9 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                                       ),
                                       child: Row(
                                         children: [
-                                          const Text(
-                                            'UID: ',
-                                            style: TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                                          Text(
+                                            'squad_uid_label_short'.tr(),
+                                            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
                                           ),
                                           Expanded(
                                             child: Text(
@@ -492,17 +493,17 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                                             ),
                                           ),
                                           InkWell(
-                                            onTap: () => _copyToClipboard(context, inGameUid, 'UID'),
-                                            child: const Padding(
-                                              padding: EdgeInsets.symmetric(horizontal: 4),
+                                            onTap: () => _copyToClipboard(context, inGameUid, 'squad_uid_label_only'.tr()),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Icon(Icons.copy_rounded, size: 12, color: GamerTheme.neonGreen),
-                                                  SizedBox(width: 2),
+                                                  const Icon(Icons.copy_rounded, size: 12, color: GamerTheme.neonGreen),
+                                                  const SizedBox(width: 2),
                                                   Text(
-                                                    'COPY',
-                                                    style: TextStyle(
+                                                    'btn_copy_caps'.tr(),
+                                                    style: const TextStyle(
                                                       color: GamerTheme.neonGreen,
                                                       fontSize: 10,
                                                       fontWeight: FontWeight.bold,
@@ -529,7 +530,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                       ),
                                       icon: const Icon(Icons.person_remove_rounded, size: 14),
-                                      label: const Text('KICK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                      label: Text('squad_kick_caps'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                       onPressed: _isActionInProgress
                                           ? null
                                           : () => _handleKick(context, uid, displayName, leaderUid),
@@ -545,7 +546,7 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
                                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                       ),
                                       icon: const Icon(Icons.exit_to_app_rounded, size: 14),
-                                      label: const Text('LEAVE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                      label: Text('squad_leave_btn_caps'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                       onPressed: _isActionInProgress
                                           ? null
                                           : () => _handleLeave(context, uid, leaderUid, displayName),
