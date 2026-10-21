@@ -19,7 +19,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final GamerSocialService _socialService = GamerSocialService();
 
   bool _isLoading = false;
-  String _selectedGame = 'Mobile Games';
+  String _selectedGame = 'mobile_games'.tr();
 
   @override
   void initState() {
@@ -71,12 +71,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       final gamer = _authService.currentGamer;
       final username = (gamer?.username.isNotEmpty == true)
           ? gamer!.username
-          : 'gamer';
+          : 'user_gamer'.tr();
       final displayName = (gamer?.displayName.isNotEmpty == true)
           ? gamer!.displayName
-          : (gamer?.username.isNotEmpty == true ? gamer!.username : 'Gamer');
+          : (gamer?.username.isNotEmpty == true ? gamer!.username : 'user_gamer'.tr());
       final userPhoto = gamer?.photoUrl ?? '';
-      final gameTag = (_selectedGame == 'Mobile Games' || _selectedGame == 'All')
+      final gameTag = (_selectedGame == 'mobile_games'.tr() || _selectedGame == 'all_games'.tr())
           ? 'BGMI'
           : _selectedGame;
 
@@ -118,9 +118,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final gamer = _authService.currentGamer;
     final displayName = gamer?.displayName.isNotEmpty == true
         ? gamer!.displayName
-        : (gamer?.username.isNotEmpty == true ? gamer!.username : 'Gamer');
+        : (gamer?.username.isNotEmpty == true ? gamer!.username : 'user_gamer'.tr());
     final username =
-        gamer?.username.isNotEmpty == true ? gamer!.username : 'gamer';
+        gamer?.username.isNotEmpty == true ? gamer!.username : 'user_gamer'.tr();
 
     return Scaffold(
       backgroundColor: GamerTheme.bgDark,
@@ -225,7 +225,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             fontWeight: FontWeight.bold),
                         items: [
                           DropdownMenuItem(
-                              value: 'Mobile Games',
+                              value: 'mobile_games'.tr(),
                               child: Text('cat_mobile_games'.tr())),
                           const DropdownMenuItem(
                               value: 'BGMI', child: Text('BGMI')),
