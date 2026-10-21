@@ -655,7 +655,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                   minLines: 3,
                   style: TextStyle(color: ThemeService.textPrimary, fontSize: 16),
                   decoration: InputDecoration(
-                    hintText: 'hint_whats_on_your_mind'.tr(),
+                    hintText: 'hint_whats_on_your_mind'.tr().contains('hint_') ? "What's on your mind?" : 'hint_whats_on_your_mind'.tr(),
                     hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 16),
                     border: InputBorder.none,
                   ),
@@ -789,7 +789,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        'hint_whats_on_your_mind'.tr(),
+                                        'hint_whats_on_your_mind'.tr().contains('hint_') ? "What's on your mind?" : 'hint_whats_on_your_mind'.tr(),
                                         style: TextStyle(color: ThemeService.textSecondary, fontSize: 14),
                                       ),
                                     ),
@@ -813,7 +813,13 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                       final imageUrl = (post['image_url'] ?? '').toString();
                       final content = (post['content'] ?? '').toString();
                       final likesCount = post['likes_count'] ?? 0;
-                      final commentsCount = post['comments_count'] ?? 0;
+                      final int commentsCount = (post['comments_count'] is num)
+                          ? (post['comments_count'] as num).toInt()
+                          : int.tryParse(post['comments_count']?.toString() ?? '0') ?? 0;
+
+                      final String commentLabel = commentsCount > 0
+                          ? '$commentsCount ${commentsCount == 1 ? "comment" : "comments"}'
+                          : 'No comments';
 
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
@@ -901,7 +907,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                     ],
                                   ),
                                   Text(
-                                    'comments_count'.tr(args: ['$commentsCount']),
+                                    commentLabel,
                                     style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
                                   ),
                                 ],
@@ -925,7 +931,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                           ),
                                           const SizedBox(width: 6),
                                           Text(
-                                            'btn_like'.tr(),
+                                            'btn_like'.tr().contains('btn_') ? 'Like' : 'btn_like'.tr(),
                                             style: TextStyle(
                                               color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
                                               fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
@@ -947,7 +953,10 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                         children: [
                                           Icon(Icons.chat_bubble_outline, size: 18, color: ThemeService.textSecondary),
                                           const SizedBox(width: 6),
-                                          Text('btn_comment'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 13)),
+                                          Text(
+                                            'btn_comment'.tr().contains('btn_') ? 'Comment' : 'btn_comment'.tr(),
+                                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -963,7 +972,10 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                         children: [
                                           Icon(Icons.share_outlined, size: 18, color: ThemeService.textSecondary),
                                           const SizedBox(width: 6),
-                                          Text('btn_share'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 13)),
+                                          Text(
+                                            'btn_share'.tr().contains('btn_') ? 'Share' : 'btn_share'.tr(),
+                                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                                          ),
                                         ],
                                       ),
                                     ),
