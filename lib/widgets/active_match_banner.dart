@@ -48,7 +48,7 @@ class ActiveMatchBanner extends StatelessWidget {
     final proofStatus =
         (match["proof_status"] ?? "").toString().toLowerCase();
     final adminNote = match["admin_note"]?.toString() ??
-        "Invalid proof screenshot";
+        "invalid_proof".tr();
 
     // ==========================================
     // STATE 3: under_review & accepted → 3s auto-hide
@@ -74,21 +74,21 @@ class ActiveMatchBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFF2E7D32), width: 1.5),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.emoji_events_rounded,
+            const Icon(Icons.emoji_events_rounded,
                 color: Color(0xFF2E7D32), size: 22),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                "✅ Your Proof Accepted - You Are Win! 🏆",
-                style: TextStyle(
+                "proof_accepted_you_won".tr(),
+                style: const TextStyle(
                     color: Color(0xFF2E7D32),
                     fontWeight: FontWeight.bold,
                     fontSize: 13.5),
               ),
             ),
-            Padding(
+            const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               child: _WonBadge(),
             ),
@@ -120,7 +120,7 @@ class ActiveMatchBanner extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    "❌ Proof Rejected - $adminNote - Dubara Proof Add Karo",
+                    'msg_proof_rejected_retry'.tr(args: [adminNote]),
                     style: const TextStyle(
                         color: Color(0xFFFF4655),
                         fontWeight: FontWeight.bold,
@@ -133,8 +133,8 @@ class ActiveMatchBanner extends StatelessWidget {
                   decoration: BoxDecoration(
                       color: const Color(0xFFFF4655),
                       borderRadius: BorderRadius.circular(10)),
-                  child: const Text("REJECTED",
-                      style: TextStyle(
+                  child: Text("status_rejected_caps".tr(),
+                      style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
                           fontSize: 10)),
@@ -153,14 +153,14 @@ class ActiveMatchBanner extends StatelessWidget {
                     opponentId: opponentId,
                     myTeamName: myTeamName,
                     opponentName: match["opponent_name"]?.toString() ??
-                        "Opponent",
+                        "default_opponent".tr(),
                   );
                   if (ended == true && context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                           content: Text(
                               'proof_submitted_under_review'.tr()),
-                          backgroundColor: Color(0xFFFFB800)),
+                          backgroundColor: const Color(0xFFFFB800)),
                     );
                   }
                 },
@@ -174,8 +174,8 @@ class ActiveMatchBanner extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8)),
                 ),
                 icon: const Icon(Icons.upload_file_rounded, size: 14),
-                label: const Text("Add Proof Again",
-                    style: TextStyle(
+                label: Text("btn_add_proof_again".tr(args: ['']),
+                    style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 11)),
               ),
             ),
@@ -206,9 +206,9 @@ class ActiveMatchBanner extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "⏳ Your Proof Under Review - Admin confirmation ka wait hai",
-                    style: TextStyle(
+                  Text(
+                    "sub_proof_under_review".tr(),
+                    style: const TextStyle(
                         color: Color(0xFFB78103),
                         fontWeight: FontWeight.bold,
                         fontSize: 13),
@@ -219,9 +219,9 @@ class ActiveMatchBanner extends StatelessWidget {
                     builder: (context, opSnap) {
                       final opponentName = opSnap.data?.name ??
                           match["opponent_name"]?.toString() ??
-                          "Opponent";
+                          "default_opponent".tr();
                       return Text(
-                        "vs $opponentName • Admin confirmation ka wait hai",
+                        "versus_vs".tr() + " " + opponentName + " • " + "pending_admin_review".tr(),
                         style: const TextStyle(
                             color: Color(0xFF8D6E63), fontSize: 11),
                       );
@@ -239,14 +239,14 @@ class ActiveMatchBanner extends StatelessWidget {
                   decoration: BoxDecoration(
                       color: const Color(0xFFFFB300),
                       borderRadius: BorderRadius.circular(8)),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.visibility_rounded,
+                      const Icon(Icons.visibility_rounded,
                           size: 13, color: Colors.black),
-                      SizedBox(width: 3),
-                      Text("View Proof",
-                          style: TextStyle(
+                      const SizedBox(width: 3),
+                      Text("view_proof".tr(),
+                          style: const TextStyle(
                               color: Colors.black,
                               fontWeight: FontWeight.bold,
                               fontSize: 10.5)),
@@ -261,8 +261,8 @@ class ActiveMatchBanner extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: const Color(0xFFFFB300),
                     borderRadius: BorderRadius.circular(10)),
-                child: const Text("REVIEW",
-                    style: TextStyle(
+                child: Text("status_review".tr(),
+                    style: const TextStyle(
                         color: Colors.black,
                         fontWeight: FontWeight.w900,
                         fontSize: 10)),
@@ -297,9 +297,9 @@ class ActiveMatchBanner extends StatelessWidget {
                   builder: (context, opSnap) {
                     final opponentName = opSnap.data?.name ??
                         match["opponent_name"]?.toString() ??
-                        "Opponent";
+                        "default_opponent".tr();
                     return Text(
-                      "🔥 Active Match vs $opponentName - Match is Live",
+                      'heading_active_match_live'.tr(args: [opponentName]),
                       style: const TextStyle(
                           color: Color(0xFF2E7D32),
                           fontWeight: FontWeight.bold,
@@ -314,8 +314,8 @@ class ActiveMatchBanner extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: const Color(0xFF2E7D32),
                     borderRadius: BorderRadius.circular(10)),
-                child: const Text("LIVE",
-                    style: TextStyle(
+                child: Text("status_live".tr(),
+                    style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
                         fontSize: 10)),
@@ -331,7 +331,7 @@ class ActiveMatchBanner extends StatelessWidget {
                 builder: (context, opSnap) {
                   final opponentName = opSnap.data?.name ??
                       match["opponent_name"]?.toString() ??
-                      "Opponent";
+                      "default_opponent".tr();
                   return ElevatedButton.icon(
                     onPressed: () async {
                       final ended = await EndMatchBottomSheet.show(
@@ -344,11 +344,11 @@ class ActiveMatchBanner extends StatelessWidget {
                       );
                       if (ended == true && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                               content: Text(
                                   'match_end_under_review'.tr()),
-                              backgroundColor: Color(0xFFFFB800),
-                              duration: Duration(seconds: 4)),
+                              backgroundColor: const Color(0xFFFFB800),
+                              duration: const Duration(seconds: 4)),
                         );
                       }
                     },
@@ -363,8 +363,8 @@ class ActiveMatchBanner extends StatelessWidget {
                       elevation: 0,
                     ),
                     icon: const Icon(Icons.check_circle_rounded, size: 14),
-                    label: const Text("END MATCH",
-                        style: TextStyle(
+                    label: Text("btn_end_match".tr(),
+                        style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 11)),
                   );
                 },
@@ -387,8 +387,8 @@ class _WonBadge extends StatelessWidget {
       decoration: BoxDecoration(
           color: const Color(0xFF2E7D32),
           borderRadius: BorderRadius.circular(10)),
-      child: const Text("WON 🏆",
-          style: TextStyle(
+      child: Text("badge_won".tr(),
+          style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 10)),
