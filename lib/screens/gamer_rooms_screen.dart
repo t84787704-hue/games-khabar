@@ -448,10 +448,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   final GamerAuthService _authService = GamerAuthService();
   final CoinWalletService _walletService = CoinWalletService();
   Timer? _cleanupTimer;
-  String _selectedCategory = 'All Games';
+  String _selectedCategory = 'all_games'.tr();
 
   final List<String> _gameCategories = [
-    'All Games',
+    'all_games'.tr(),
     'BGMI',
     'Free Fire',
     'PUBG Mobile',
@@ -470,7 +470,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   String get currentUserName =>
       _authService.currentGamer?.displayName ??
       SupabaseService.client.auth.currentUser?.userMetadata?["full_name"]?.toString() ??
-      'Gamer';
+      'user_gamer'.tr();
 
   String get currentUserPhoto =>
       _authService.currentGamer?.photoUrl ??
@@ -735,7 +735,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     }
                     final list = snapshot.data ?? [];
                     final filtered = list.where((r) {
-                      if (_selectedCategory == 'All Games') return true;
+                      if (_selectedCategory == 'all_games'.tr()) return true;
                       return (r['game'] ?? '').toString().toLowerCase() ==
                           _selectedCategory.toLowerCase();
                     }).toList();
