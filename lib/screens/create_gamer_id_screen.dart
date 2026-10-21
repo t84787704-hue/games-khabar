@@ -62,13 +62,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
   void _showNewUserLanguageDialog(BuildContext context) {
     final languages = [
-      {'code': 'en', 'name': 'English', 'flag': '🇬🇧'},
-      {'code': 'ur', 'name': 'اردو', 'flag': '🇵🇰'},
-      {'code': 'ro', 'name': 'Roman', 'flag': '🌐'},
-      {'code': 'hi', 'name': 'हिंदी', 'flag': '🇮🇳'},
-      {'code': 'ar', 'name': 'العربية', 'flag': '🇸🇦'},
-      {'code': 'zh', 'name': '中文', 'flag': '🇨🇳'},
-      {'code': 'bn', 'name': 'বাংলা', 'flag': '🇧🇩'},
+      {'code': 'en', 'name': 'lang_english_name'.tr(), 'flag': '🇬🇧'},
+      {'code': 'ur', 'name': 'lang_urdu_name'.tr(), 'flag': '🇵🇰'},
+      {'code': 'ro', 'name': 'lang_roman_name'.tr(), 'flag': '🌐'},
+      {'code': 'hi', 'name': 'lang_hindi_name'.tr(), 'flag': '🇮🇳'},
+      {'code': 'ar', 'name': 'lang_arabic_name'.tr(), 'flag': '🇸🇦'},
+      {'code': 'zh', 'name': 'lang_chinese_name'.tr(), 'flag': '🇨🇳'},
+      {'code': 'bn', 'name': 'lang_bengali_name'.tr(), 'flag': '🇧🇩'},
     ];
 
     showDialog(
