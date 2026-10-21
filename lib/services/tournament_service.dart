@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:easy_localization/easy_localization.dart'; // Added for localization
 import '../models/tournament_room_model.dart';
 import '../constants/tournament_game_categories.dart';
 import 'coin_wallet_service.dart';
@@ -61,19 +62,19 @@ class TournamentService extends ChangeNotifier {
         TournamentRoom(
           id: roomId,
           hostId: 'admin_bot',
-          hostName: 'AI Gaming Bot',
+          hostName: 'tournament_bot_name'.tr(),
           hostAvatar: '',
           gameType: gameName,
           gameMode: config.defaultMode,
           roomType: config.defaultMode,
-          title: '$gameName ${config.defaultMode} Auto #$idCounter',
+          title: 'tournament_auto_title'.tr(args: [gameName, config.defaultMode, '$idCounter']),
           map: config.defaultMap,
           platform: config.platform,
-          serverRegion: 'Asia / India',
-          rules: 'Official Auto Room. Entry is FREE (Watch 1 Ad to Join). 500 Coins Escrow Prize Pool from Admin Wallet.',
-          entryFee: 'FREE (Watch 1 Ad to Join)',
-          prize: '💰 500 Coins Prize',
-          prizePool: '💰 500 Coins',
+          serverRegion: 'tournament_server_region'.tr(),
+          rules: 'tournament_default_rules'.tr(),
+          entryFee: 'tournament_free_entry_ad'.tr(),
+          prize: 'tournament_prize_coins'.tr(args: ['500']),
+          prizePool: 'tournament_prize_coins'.tr(args: ['500']),
           prizePoolCoins: 500,
           entryFeeCoins: 0,
           escrowCoins: 500,
@@ -244,7 +245,7 @@ class TournamentService extends ChangeNotifier {
           _rooms = map.values.toList();
           _rooms.sort((a, b) => (b.startTime).compareTo(a.startTime));
 
-          if (gameName != null && gameName.isNotEmpty && gameName != 'All Games') {
+          if (gameName != null && gameName.isNotEmpty && gameName != 'all_games'.tr()) {
             final target = gameName.toLowerCase().trim();
             return _rooms.where((r) {
               final gName = r.gameName.toLowerCase().trim();
@@ -330,7 +331,7 @@ class TournamentService extends ChangeNotifier {
             'recipientUid': hostUid,
             'senderUid': playerUid,
             'type': 'room_joined',
-            'message': 'joined your Custom Tournament ($playerName)!',
+            'message': 'notif_room_joined_msg'.tr(args: [playerName]),
             'roomId': roomId,
             'read': false,
             'createdAt': DateTime.now().toIso8601String(),
@@ -490,7 +491,7 @@ class TournamentService extends ChangeNotifier {
       } else if (winnerName != null && winnerName.isNotEmpty) {
         allWinnerNames.add(winnerName);
       } else {
-        allWinnerNames.add('Winner');
+        allWinnerNames.add('match_winner_fallback'.tr());
       }
 
       // 1. Calculate total escrow reward
@@ -512,7 +513,7 @@ class TournamentService extends ChangeNotifier {
       // 2. Penalize any participant who did not submit result (-10 trustScore)
       for (final pUid in currentRoom.joinedPlayers) {
         if (!currentRoom.resultSubmissions.containsKey(pUid) && pUid != hostId) {
-          await _walletService.penalizeTrustScore(pUid, 10, 'Did not submit match result');
+          await _walletService.penalizeTrustScore(pUid, 10, 'trust_penalty_no_result'.tr());
         }
       }
 
