@@ -1594,5 +1594,74 @@
 "about_cat_coins_title": "Earn Coins & Rewards",
 "about_cat_coins_desc": "Play tournaments, win matches, and earn G-Coins.",
 "about_footer_built_by": "Built with ❤️ by Gamers ID Team",
-"about_footer_network_info": "Connect with us on social media for updates and giveaways."
+"about_footer_network_info": "Connect with us on social media for updates and giveaways.","terms_header_title": "User Service Agreement & Charter",
+"terms_header_desc": "Please read these terms carefully before using the Gamers ID app. By using our services, you agree to the rules outlined below.",
+"terms_last_updated": "Last updated: January 2025",
+
+"terms_sec1_title": "1. Acceptance of Terms",
+"terms_sec1_item1": "By downloading and using this app, you agree to these terms.",
+"terms_sec1_item2": "If you do not agree, please do not use the application.",
+"terms_sec1_item3": "We reserve the right to update these terms at any time.",
+
+"terms_sec2_title": "2. User Responsibilities",
+"terms_sec2_item1": "You must be at least 13 years old to use this app.",
+"terms_sec2_item2": "You are responsible for maintaining the security of your account.",
+"terms_sec2_item3": "Do not use offensive language or post inappropriate content.",
+"terms_sec2_item4": "Cheating, hacking, or exploiting bugs will result in a ban.",
+
+"terms_sec3_title": "3. Coins & Rewards",
+"terms_sec3_item1": "G-Coins have no real-world monetary value.",
+"terms_sec3_item2": "Coins are used only for in-app features and tournaments.",
+"terms_sec3_item3": "We are not responsible for any lost coins due to account issues.",
+"terms_sec3_item4": "Fake match results or fake proofs will lead to penalties.",
+"terms_sec3_item5": "Admin decisions regarding matches and rewards are final.",
+"terms_sec3_item6": "Abusing the referral system will result in a permanent ban.",
+
+"terms_sec4_title": "4. Tournament Rules",
+"terms_sec4_item1": "Players must join the room within the given time.",
+"terms_sec4_item2": "Screenshot proofs must be clear and unedited.",
+"terms_sec4_item3": "Any disputes must be raised immediately after the match.",
+"terms_sec4_item4": "Toxic behavior in match chats will not be tolerated.",
+
+"terms_sec5_title": "5. Content Guidelines",
+"terms_sec5_item1": "Do not post nudity, violence, or illegal content.",
+"terms_sec5_item2": "Respect other players and avoid hate speech.",
+"terms_sec5_item3": "Spamming or advertising without permission is not allowed.",
+"terms_sec5_item4": "We may remove any content that violates our guidelines.",
+
+"terms_sec6_title": "6. Privacy & Data",
+"terms_sec6_item1": "Your data is handled according to our Privacy Policy.",
+"terms_sec6_item2": "We do not sell your personal information to third parties.",
+"terms_sec6_item3": "You can request account deletion at any time.",
+"terms_sec6_item4": "Data may be retained for legal or security purposes.",
+
+"terms_sec7_title": "7. Account Suspension",
+"terms_sec7_item1": "We may suspend accounts for violating these terms.",
+"terms_sec7_item2": "Suspended users may lose access to their coins or rewards.",
+"terms_sec7_item3": "Bans can be appealed by contacting support.",
+"terms_sec7_item4": "Repeated violations may lead to a permanent ban.",
+
+"terms_sec8_title": "8. Third-Party Services",
+"terms_sec8_item1": "The app may contain links to third-party websites.",
+"terms_sec8_item2": "We are not responsible for external content.",
+"terms_sec8_item3": "Use third-party services at your own risk.",
+"terms_sec8_item4": "Advertisements are provided by external ad networks.",
+
+"terms_sec9_title": "9. Limitation of Liability",
+"terms_sec9_item1": "We are not liable for any in-game losses or data breaches.",
+"terms_sec9_item2": "The app is provided 'as is' without warranties.",
+"terms_sec9_item3": "Use the app at your own risk.",
+
+"terms_sec10_title": "10. Changes to Terms",
+"terms_sec10_item1": "We may update these terms from time to time.",
+"terms_sec10_item2": "Continued use means you accept the new terms.",
+"terms_sec10_item3": "Major changes will be notified in the app.",
+
+"terms_sec11_title": "11. Contact Information",
+"terms_sec11_item1": "If you have questions, contact us at support@gameskhabar.com.",
+"terms_sec11_item2": "We aim to respond within 7 business days.",
+"terms_sec11_item3": "For urgent matters, reach out via social media.",
+
+"btn_open_hosted_version": "Open Hosted Version",
+"btn_i_agree": "I Understand & Agree"
 }
