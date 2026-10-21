@@ -1,3 +1,8 @@
+// ===============================================================================
+// EARN COINS SCREEN — Multi-Language Live Translation & Adaptive Day/Night Theme
+// File: lib/screens/earn_coins_screen.dart
+// ===============================================================================
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +14,7 @@ import '../models/coin_wallet_model.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/ad_free_service.dart';
+import '../services/theme_service.dart';
 
 class EarnCoinsScreen extends StatefulWidget {
   const EarnCoinsScreen({Key? key}) : super(key: key);
@@ -201,109 +207,119 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B101B),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0B101B),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'title_earn_g_coins'.tr(),
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: StreamBuilder<CoinWallet>(
-        stream: _walletService.walletStream(_userId),
-        builder: (context, snapshot) {
-          final wallet = snapshot.data ?? _walletService.currentWallet ?? CoinWallet.empty(_userId);
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        final isDark = ThemeService.isDarkMode;
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildBalanceBanner(wallet.coins),
-                const SizedBox(height: 20),
-                Text(
-                  'ways_to_earn_title'.tr(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // 1. WATCH AD (+100 COINS, UNLIMITED)
-                _buildActionCard(
-                  icon: Icons.play_circle_fill_rounded,
-                  iconColor: GamerTheme.neonGreen,
-                  badgeText: 'badge_plus_100_coins'.tr(),
-                  title: 'watch_sponsored_ad_title'.tr(),
-                  subtitle: 'watch_sponsored_ad_sub'.tr(),
-                  buttonText: _isWatchingAd ? 'btn_loading'.tr() : 'btn_watch_ad_100'.tr(),
-                  isLoading: _isWatchingAd,
-                  onTap: _isWatchingAd ? null : _watchAd,
-                ),
-                const SizedBox(height: 12),
-
-                // 2. DAILY LOGIN BONUS (+50 COINS, 24H COOLDOWN)
-                _buildActionCard(
-                  icon: Icons.calendar_today_rounded,
-                  iconColor: GamerTheme.accentOrange,
-                  badgeText: 'badge_plus_50_coins'.tr(),
-                  title: 'daily_login_bonus_gift_title'.tr(),
-                  subtitle: wallet.canClaimDailyBonus
-                      ? 'daily_bonus_available_now'.tr()
-                      : 'daily_bonus_next_in'.tr(args: [_formatDuration(wallet.nextDailyBonusDuration)]),
-                  buttonText: _isClaimingDaily
-                      ? 'btn_claiming'.tr()
-                      : (wallet.canClaimDailyBonus ? 'btn_claim_50'.tr() : 'btn_locked_wait'.tr()),
-                  isLoading: _isClaimingDaily,
-                  onTap: wallet.canClaimDailyBonus && !_isClaimingDaily
-                      ? () => _claimDailyBonus(wallet)
-                      : null,
-                ),
-                const SizedBox(height: 20),
-
-                // 3. REFERRAL SECTION (+100 COINS)
-                Text(
-                  'refer_and_earn_title'.tr(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _buildReferralCard(),
-                const SizedBox(height: 100),
-              ],
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_rounded, color: ThemeService.textPrimary),
+              onPressed: () => Navigator.pop(context),
             ),
-          );
-        },
-      ),
+            title: Text(
+              'title_earn_g_coins'.tr(),
+              style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
+            ),
+          ),
+          body: StreamBuilder<CoinWallet>(
+            stream: _walletService.walletStream(_userId),
+            builder: (context, snapshot) {
+              final wallet = snapshot.data ?? _walletService.currentWallet ?? CoinWallet.empty(_userId);
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildBalanceBanner(wallet.coins, isDark),
+                    const SizedBox(height: 20),
+                    Text(
+                      'ways_to_earn_title'.tr(),
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 1. WATCH AD (+100 COINS, UNLIMITED)
+                    _buildActionCard(
+                      icon: Icons.play_circle_fill_rounded,
+                      iconColor: GamerTheme.neonGreen,
+                      badgeText: 'badge_plus_100_coins'.tr(),
+                      title: 'watch_sponsored_ad_title'.tr(),
+                      subtitle: 'watch_sponsored_ad_sub'.tr(),
+                      buttonText: _isWatchingAd ? 'btn_loading'.tr() : 'btn_watch_ad_100'.tr(),
+                      isLoading: _isWatchingAd,
+                      onTap: _isWatchingAd ? null : _watchAd,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 2. DAILY LOGIN BONUS (+50 COINS, 24H COOLDOWN)
+                    _buildActionCard(
+                      icon: Icons.calendar_today_rounded,
+                      iconColor: GamerTheme.accentOrange,
+                      badgeText: 'badge_plus_50_coins'.tr(),
+                      title: 'daily_login_bonus_gift_title'.tr(),
+                      subtitle: wallet.canClaimDailyBonus
+                          ? 'daily_bonus_available_now'.tr()
+                          : 'daily_bonus_next_in'.tr(args: [_formatDuration(wallet.nextDailyBonusDuration)]),
+                      buttonText: _isClaimingDaily
+                          ? 'btn_claiming'.tr()
+                          : (wallet.canClaimDailyBonus ? 'btn_claim_50'.tr() : 'btn_locked_wait'.tr()),
+                      isLoading: _isClaimingDaily,
+                      onTap: wallet.canClaimDailyBonus && !_isClaimingDaily
+                          ? () => _claimDailyBonus(wallet)
+                          : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 3. REFERRAL SECTION (+100 COINS)
+                    Text(
+                      'refer_and_earn_title'.tr(),
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildReferralCard(),
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildBalanceBanner(int coins) {
+  Widget _buildBalanceBanner(int coins, bool isDark) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF141D2E), Color(0xFF0F1523)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: isDark ? null : ThemeService.card,
+        gradient: isDark
+            ? const LinearGradient(
+                colors: [Color(0xFF141D2E), Color(0xFF0F1523)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.3)),
+        border: Border.all(color: isDark ? GamerTheme.neonGreen.withOpacity(0.3) : ThemeService.border),
         boxShadow: [
           BoxShadow(
-            color: GamerTheme.neonGreen.withOpacity(0.08),
+            color: isDark ? GamerTheme.neonGreen.withOpacity(0.08) : Colors.black.withOpacity(0.04),
             blurRadius: 16,
             spreadRadius: 1,
           ),
@@ -318,8 +334,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
             children: [
               Text(
                 'your_wallet_balance_caps'.tr(),
-                style: const TextStyle(
-                  color: GamerTheme.textMuted,
+                style: TextStyle(
+                  color: ThemeService.textSecondary,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.2,
@@ -355,9 +371,9 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GamerTheme.borderDark),
+        border: Border.all(color: ThemeService.border),
       ),
       child: Row(
         children: [
@@ -379,8 +395,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: ThemeService.textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
@@ -406,8 +422,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    color: GamerTheme.textMuted,
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
                     fontSize: 12,
                   ),
                 ),
@@ -417,10 +433,10 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                   height: 38,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: onTap != null ? iconColor : GamerTheme.cardElevated,
-                      foregroundColor: onTap != null ? Colors.black : GamerTheme.textMuted,
+                      backgroundColor: onTap != null ? iconColor : ThemeService.cardSecondary,
+                      foregroundColor: onTap != null ? Colors.black : ThemeService.textSecondary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      disabledBackgroundColor: GamerTheme.cardElevated,
+                      disabledBackgroundColor: ThemeService.cardSecondary,
                     ),
                     onPressed: onTap,
                     child: isLoading
@@ -449,9 +465,9 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: GamerTheme.cardDark,
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: GamerTheme.borderDark),
+        border: Border.all(color: ThemeService.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,8 +493,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                   children: [
                     Text(
                       'invite_earn_together_title'.tr(),
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
@@ -486,8 +502,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                     const SizedBox(height: 2),
                     Text(
                       'invite_earn_together_sub'.tr(),
-                      style: const TextStyle(
-                        color: GamerTheme.textMuted,
+                      style: TextStyle(
+                        color: ThemeService.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -502,7 +518,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0B101B),
+              color: ThemeService.cardSecondary,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.4)),
             ),
@@ -510,8 +526,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
               children: [
                 Text(
                   'your_code_caps'.tr(),
-                  style: const TextStyle(
-                    color: GamerTheme.textMuted,
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1,
@@ -572,18 +588,18 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          const Divider(color: GamerTheme.borderDark, height: 1),
+          Divider(color: ThemeService.border, height: 1),
           const SizedBox(height: 14),
 
           // Friend's referral entry field
           Text(
             'have_friend_referral_title'.tr(),
-            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            style: TextStyle(color: ThemeService.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
           Text(
             'have_friend_referral_sub'.tr(),
-            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+            style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
           ),
           const SizedBox(height: 10),
           Row(
@@ -592,16 +608,20 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                 child: TextField(
                   controller: _referralInputController,
                   textCapitalization: TextCapitalization.characters,
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: ThemeService.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                   decoration: InputDecoration(
                     hintText: 'hint_enter_referral_code'.tr(),
-                    hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
+                    hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                     filled: true,
-                    fillColor: const Color(0xFF0B101B),
+                    fillColor: ThemeService.cardSecondary,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: GamerTheme.borderDark),
+                      borderSide: BorderSide(color: ThemeService.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: ThemeService.border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
