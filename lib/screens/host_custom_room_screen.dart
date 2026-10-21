@@ -46,7 +46,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
     final String slotPart = (slots == 2)
         ? '1v1'
         : (slots == 4 ? '2v2' : '$slots slots');
-    return 'BGMI $map $slotPart - $prize Coins';
+    return 'room_auto_title'.tr(args: ['BGMI', map, slotPart, '$prize']);
   }
 
   int _getDefaultPrize(int slots) {
@@ -171,14 +171,14 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         style: const TextStyle(color: Colors.white, fontSize: 13),
-                        items: const [
-                          DropdownMenuItem(value: 2, child: Text('2 (1v1)')),
-                          DropdownMenuItem(value: 4, child: Text('4 (2v2)')),
-                          DropdownMenuItem(value: 10, child: Text('10 slots')),
-                          DropdownMenuItem(value: 12, child: Text('12 slots')),
-                          DropdownMenuItem(value: 24, child: Text('24 slots')),
-                          DropdownMenuItem(value: 50, child: Text('50 slots')),
-                          DropdownMenuItem(value: 100, child: Text('100 slots')),
+                        items: [
+                          DropdownMenuItem(value: 2, child: Text('slot_1v1'.tr())),
+                          DropdownMenuItem(value: 4, child: Text('slot_2v2'.tr())),
+                          DropdownMenuItem(value: 10, child: Text('slot_10'.tr())),
+                          DropdownMenuItem(value: 12, child: Text('slot_12'.tr())),
+                          DropdownMenuItem(value: 24, child: Text('slot_24'.tr())),
+                          DropdownMenuItem(value: 50, child: Text('slot_50'.tr())),
+                          DropdownMenuItem(value: 100, child: Text('slot_100'.tr())),
                         ],
                         onChanged: (val) {
                           if (val != null) {
@@ -209,11 +209,11 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
               style: const TextStyle(color: Colors.white, fontSize: 13),
-              items: const [
-                DropdownMenuItem(value: 100, child: Text('💰 100 Coins')),
-                DropdownMenuItem(value: 250, child: Text('💰 250 Coins')),
-                DropdownMenuItem(value: 500, child: Text('💰 500 Coins')),
-                DropdownMenuItem(value: 1000, child: Text('💰 1000 Coins')),
+              items: [
+                DropdownMenuItem(value: 100, child: Text('prize_100'.tr())),
+                DropdownMenuItem(value: 250, child: Text('prize_250'.tr())),
+                DropdownMenuItem(value: 500, child: Text('prize_500'.tr())),
+                DropdownMenuItem(value: 1000, child: Text('prize_1000'.tr())),
               ],
               onChanged: (val) {
                 if (val != null) {
@@ -305,7 +305,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                         final uid = user?.id ?? currentGamer?.userId ?? 'host_user';
                         final name = (currentGamer?.displayName.isNotEmpty == true)
                             ? currentGamer!.displayName
-                            : (user?.userMetadata?['displayName'] ?? 'Host');
+                            : (user?.userMetadata?['displayName'] ?? 'user_host'.tr());
                         final photo = currentGamer?.photoUrl ?? '';
                         final roomId = SupabaseService.toUuid('${DateTime.now().millisecondsSinceEpoch}_$uid');
                         final nowIso = DateTime.now().toIso8601String();
@@ -313,7 +313,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
 
                         final newRoomData = {
                           'id': roomId,
-                          'title': titleController.text.trim().isNotEmpty ? titleController.text.trim() : 'BGMI Custom Match',
+                          'title': titleController.text.trim().isNotEmpty ? titleController.text.trim() : 'room_default_title'.tr(),
                           'hostId': uid,
                           'hostName': name,
                           'hostAvatar': photo,
@@ -322,7 +322,7 @@ class _HostCustomRoomScreenState extends State<HostCustomRoomScreen> {
                           'map': selectedMap,
                           'prize': prizeCoins,
                           'prizePoolCoins': prizeCoins,
-                          'entryFee': 'FREE',
+                          'entryFee': 'room_entry_free'.tr(),
                           'entryFeeCoins': 0,
                           'total': maxSlots,
                           'totalSlots': maxSlots,
