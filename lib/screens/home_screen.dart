@@ -16,6 +16,8 @@ import '../constants/game_categories.dart';
 import '../widgets/translated_news_title.dart';
 import 'saved_news_screen.dart';
 import 'profile_screen.dart';
+import 'teams_screen.dart';
+import 'direct_messages_screen.dart';
 import 'following_screen.dart';
 import 'community_wall_screen.dart';
 import '../widgets/news_card.dart';
@@ -44,11 +46,17 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  Color get bgDark => ThemeService.bg;
-  Color get cardDark => ThemeService.card;
-  Color get cardDark2 => ThemeService.cardSecondary;
-  Color get borderDark => ThemeService.border;
-  Color get neonGreen => ThemeService.primaryGreen;
+  // Dark Neon Theme Palette
+  static const Color darkBg = Color(0xFF0A0F1D);
+  static const Color cardDark = Color(0xFF131B2E);
+  static const Color cardDark2 = Color(0xFF1E293B);
+  static const Color borderDark = Color(0xFF1E293B);
+  static const Color neonBlue = Color(0xFF00E5FF);
+  static const Color neonCyan = Color(0xFF1877F2);
+  static const Color neonGreen = Color(0xFF00FF88);
+
+  Color get bgDarkTheme => ThemeService.bg;
+  Color get cardDarkTheme => ThemeService.card;
   Color get textWhite => ThemeService.textPrimary;
   Color get textGray => ThemeService.textSecondary;
 
@@ -94,19 +102,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _getCategoryDisplayName(String cat) {
-    if (cat.toLowerCase() == 'all') {
-      return 'category_all'.tr();
-    }
-    return cat;
-  }
-
   void _navigateToDetail(NewsModel? news) {
     if (news == null) {
       debugPrint("Warning: Tried to navigate to detail with null news data");
       return;
     }
-    print("Clicked news: ${news.id}");
     _storeService.incrementView(news.id);
 
     final langCode = context.locale.languageCode;
@@ -174,95 +174,77 @@ class _HomeScreenState extends State<HomeScreen> {
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, _, __) {
         return Scaffold(
-          backgroundColor: bgDark,
+          backgroundColor: darkBg,
           extendBody: false,
           resizeToAvoidBottomInset: true,
           bottomNavigationBar: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: cardDark,
               border: Border(
                 top: BorderSide(color: borderDark, width: 1),
               ),
             ),
-            child: ValueListenableBuilder<Set<String>>(
-              valueListenable: BookmarkService.bookmarkedIdsNotifier,
-              builder: (context, bookmarkedIds, _) {
-                final savedCount = bookmarkedIds.length;
-                return BottomNavigationBar(
-                  currentIndex: _selectedNavIndex,
-                  type: BottomNavigationBarType.fixed,
-                  onTap: (index) {
-                    setState(() {
-                      _selectedNavIndex = index;
-                    });
-                  },
-                  backgroundColor: cardDark,
-                  selectedItemColor: neonGreen,
-                  unselectedItemColor: textGray,
-                  selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 11),
-                  elevation: 0,
-                  items: [
-                    BottomNavigationBarItem(
-                      icon: const Icon(Icons.sports_esports_outlined),
-                      activeIcon: const Icon(Icons.sports_esports_rounded),
-                      label: 'nav_khabar'.tr(),
-                    ),
-                    BottomNavigationBarItem(
-                      icon: const Icon(Icons.favorite_outline_rounded),
-                      activeIcon: const Icon(Icons.favorite_rounded),
-                      label: 'nav_following'.tr(),
-                    ),
-                    BottomNavigationBarItem(
-                      icon: const Icon(Icons.forum_outlined),
-                      activeIcon: const Icon(Icons.forum_rounded),
-                      label: 'nav_community'.tr(),
-                    ),
-                    BottomNavigationBarItem(
-                      icon: savedCount > 0
-                          ? Badge(
-                              label: Text(
-                                '$savedCount',
-                                style: const TextStyle(
-                                  color: Color(0xFF05080D),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              backgroundColor: neonGreen,
-                              child: const Icon(Icons.bookmark_border_rounded),
-                            )
-                          : const Icon(Icons.bookmark_border_rounded),
-                      activeIcon: savedCount > 0
-                          ? Badge(
-                              label: Text(
-                                '$savedCount',
-                                style: const TextStyle(
-                                  color: Color(0xFF05080D),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              backgroundColor: neonGreen,
-                              child: const Icon(Icons.bookmark_rounded),
-                            )
-                          : const Icon(Icons.bookmark_rounded),
-                      label: 'nav_saved'.tr(),
-                    ),
-                    BottomNavigationBarItem(
-                      icon: const Icon(Icons.person_outline_rounded),
-                      activeIcon: const Icon(Icons.person_rounded),
-                      label: 'nav_profile'.tr(),
-                    ),
-                  ],
-                );
+            child: BottomNavigationBar(
+              currentIndex: _selectedNavIndex,
+              type: BottomNavigationBarType.fixed,
+              onTap: (index) {
+                setState(() {
+                  _selectedNavIndex = index;
+                });
               },
+              backgroundColor: cardDark,
+              selectedItemColor: neonBlue,
+              unselectedItemColor: Colors.white54,
+              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 11),
+              elevation: 0,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.home_outlined),
+                  activeIcon: Icon(Icons.home_rounded),
+                  label: 'Feed',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.shield_outlined),
+                  activeIcon: Icon(Icons.shield_rounded),
+                  label: 'Teams',
+                ),
+                BottomNavigationBarItem(
+                  icon: Badge(
+                    label: Text(
+                      '12',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    backgroundColor: Color(0xFF1877F2),
+                    child: Icon(Icons.chat_bubble_outline_rounded),
+                  ),
+                  activeIcon: Badge(
+                    label: Text(
+                      '12',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    backgroundColor: Color(0xFF1877F2),
+                    child: Icon(Icons.chat_bubble_rounded),
+                  ),
+                  label: 'Messages',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.military_tech_outlined),
+                  activeIcon: Icon(Icons.military_tech_rounded),
+                  label: 'Rooms',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person_outline_rounded),
+                  activeIcon: Icon(Icons.person_rounded),
+                  label: 'Profile',
+                ),
+              ],
             ),
           ),
           appBar: _selectedNavIndex != 0
               ? null
               : AppBar(
-                  backgroundColor: const Color(0xFF0A2A1F),
+                  backgroundColor: darkBg,
                   elevation: 0,
                   centerTitle: false,
                   titleSpacing: 12,
@@ -272,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(
-                          color: neonGreen,
+                          color: neonBlue,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Text(
@@ -320,15 +302,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                 margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF131A15),
+                                  color: cardDark,
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: neonGreen,
+                                    color: neonBlue,
                                     width: 1.2,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: neonGreen.withOpacity(0.15),
+                                      color: neonBlue.withOpacity(0.15),
                                       blurRadius: 8,
                                     ),
                                   ],
@@ -340,8 +322,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                     const SizedBox(width: 4),
                                     Text(
                                       '$coins',
-                                      style: TextStyle(
-                                        color: neonGreen,
+                                      style: const TextStyle(
+                                        color: neonBlue,
                                         fontWeight: FontWeight.w900,
                                         fontSize: 12.5,
                                       ),
@@ -366,10 +348,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF05080D),
+                                color: Colors.white,
                               ),
                             ),
-                            backgroundColor: neonGreen,
+                            backgroundColor: const Color(0xFFFF4655),
                             child: const Icon(
                               Icons.notifications_outlined,
                               color: Colors.white,
@@ -390,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     IconButton(
                       icon: Icon(
                         _isSearching ? Icons.close : Icons.search_rounded,
-                        color: neonGreen,
+                        color: neonBlue,
                         size: 22,
                       ),
                       onPressed: () {
@@ -408,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   bottom: PreferredSize(
                     preferredSize: const Size.fromHeight(98),
                     child: Container(
-                      color: const Color(0xFF0A2A1F),
+                      color: darkBg,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -420,7 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 color: cardDark,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: _searchQuery.isNotEmpty ? neonGreen : borderDark,
+                                  color: _searchQuery.isNotEmpty ? neonBlue : borderDark,
                                   width: 1,
                                 ),
                               ),
@@ -435,7 +417,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 decoration: InputDecoration(
                                   hintText: 'search_news_hint'.tr(),
                                   hintStyle: TextStyle(color: textGray, fontSize: 12),
-                                  prefixIcon: Icon(Icons.search_rounded, color: neonGreen, size: 18),
+                                  prefixIcon: const Icon(Icons.search_rounded, color: neonBlue, size: 18),
                                   suffixIcon: _searchQuery.isNotEmpty
                                       ? IconButton(
                                           icon: Icon(Icons.clear_rounded, color: textGray, size: 16),
@@ -472,7 +454,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         labelText,
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: isSelected ? const Color(0xFF05080D) : textWhite,
+                                          color: isSelected ? Colors.white : textWhite,
                                           fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                                         ),
                                       ),
@@ -488,11 +470,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                       visualDensity: VisualDensity.compact,
                                       backgroundColor: cardDark,
-                                      selectedColor: const Color(0xFF00FF88),
+                                      selectedColor: neonCyan,
                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                       shape: StadiumBorder(
                                         side: BorderSide(
-                                          color: isSelected ? const Color(0xFF00FF88) : borderDark,
+                                          color: isSelected ? neonCyan : borderDark,
                                           width: isSelected ? 1.5 : 1,
                                         ),
                                       ),
@@ -508,17 +490,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
           body: _selectedNavIndex == 1
-              ? const FollowingScreen()
+              ? const TeamsScreen()
               : _selectedNavIndex == 2
-                  ? const CommunityWallScreen()
+                  ? const DirectMessagesScreen()
                   : _selectedNavIndex == 3
-                      ? SavedNewsScreen(
-                          onExploreTap: () {
-                            setState(() {
-                              _selectedNavIndex = 0;
-                            });
-                          },
-                        )
+                      ? const CommunityWallScreen() // Rooms / Arena screen
                       : _selectedNavIndex == 4
                           ? const ProfileScreen()
                           : StreamBuilder<List<NewsModel>>(
@@ -526,24 +502,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               stream: _storeService.getNewsStream(),
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState == ConnectionState.waiting && (!snapshot.hasData || snapshot.data!.isEmpty)) {
-                                  return Center(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        CircularProgressIndicator(
-                                          valueColor: AlwaysStoppedAnimation<Color>(neonGreen),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          'loading_khabar'.tr(),
-                                          style: TextStyle(
-                                            color: textWhite,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ],
+                                  return const Center(
+                                    child: CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(neonBlue),
                                     ),
                                   );
                                 }
@@ -565,7 +526,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           const SizedBox(height: 16),
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: neonGreen,
+                                              backgroundColor: neonBlue,
                                               foregroundColor: const Color(0xFF05080D),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                             ),
@@ -668,7 +629,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   if (featuredList.isNotEmpty) {
                                     featuredNews = featuredList.first;
                                   } else {
-                                    featuredNews = filteredList.first;
+                                    featuredNews = featuredList.first;
                                   }
                                 }
 
@@ -685,7 +646,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 }
 
                                 return RefreshIndicator(
-                                  color: neonGreen,
+                                  color: neonBlue,
                                   backgroundColor: cardDark,
                                   displacement: 40,
                                   strokeWidth: 2.5,
@@ -714,13 +675,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   color: cardDark,
                                                   borderRadius: BorderRadius.circular(12),
                                                   border: Border.all(color: borderDark),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: neonGreen.withOpacity(0.05),
-                                                      blurRadius: 16,
-                                                      spreadRadius: 1,
-                                                    ),
-                                                  ],
                                                 ),
                                                 child: ClipRRect(
                                                   borderRadius: BorderRadius.circular(12),
@@ -748,126 +702,37 @@ class _HomeScreenState extends State<HomeScreen> {
                                                       Positioned(
                                                         top: 12,
                                                         left: 12,
-                                                        child: Row(
-                                                          children: [
-                                                            Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                              decoration: BoxDecoration(
-                                                                color: neonGreen,
-                                                                borderRadius: BorderRadius.circular(4),
-                                                              ),
-                                                              child: Text(
-                                                                'badge_featured'.tr(),
-                                                                style: const TextStyle(
-                                                                  color: Color(0xFF05080D),
-                                                                  fontSize: 10,
-                                                                  fontWeight: FontWeight.w900,
-                                                                  letterSpacing: 0.5,
-                                                                ),
-                                                              ),
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                          decoration: BoxDecoration(
+                                                            color: neonBlue,
+                                                            borderRadius: BorderRadius.circular(4),
+                                                          ),
+                                                          child: Text(
+                                                            'badge_featured'.tr(),
+                                                            style: const TextStyle(
+                                                              color: Color(0xFF05080D),
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.w900,
+                                                              letterSpacing: 0.5,
                                                             ),
-                                                            if (featuredNews!.videoUrl != null && featuredNews!.videoUrl!.isNotEmpty) ...[
-                                                              const SizedBox(width: 6),
-                                                              Container(
-                                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                                                decoration: BoxDecoration(
-                                                                  color: const Color(0xFFFF4655),
-                                                                  borderRadius: BorderRadius.circular(4),
-                                                                ),
-                                                                child: Row(
-                                                                  mainAxisSize: MainAxisSize.min,
-                                                                  children: [
-                                                                    const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 12),
-                                                                    const SizedBox(width: 2),
-                                                                    Text(
-                                                                      'badge_video'.tr(),
-                                                                      style: const TextStyle(
-                                                                        color: Colors.white,
-                                                                        fontSize: 9,
-                                                                        fontWeight: FontWeight.w900,
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      Positioned(
-                                                        top: 10,
-                                                        right: 10,
-                                                        child: ValueListenableBuilder<Set<String>>(
-                                                          valueListenable: BookmarkService.bookmarkedIdsNotifier,
-                                                          builder: (context, ids, _) {
-                                                            final isSaved = ids.contains(featuredNews!.id);
-                                                            return GestureDetector(
-                                                              onTap: () => _toggleBookmark(featuredNews!),
-                                                              child: Container(
-                                                                padding: const EdgeInsets.all(6),
-                                                                decoration: BoxDecoration(
-                                                                  color: Colors.black.withOpacity(0.65),
-                                                                  shape: BoxShape.circle,
-                                                                ),
-                                                                child: Icon(
-                                                                  isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                                                                  color: isSaved ? neonGreen : textWhite,
-                                                                  size: 18,
-                                                                ),
-                                                              ),
-                                                            );
-                                                          },
+                                                          ),
                                                         ),
                                                       ),
                                                       Positioned(
                                                         bottom: 12,
                                                         left: 12,
                                                         right: 12,
-                                                        child: Column(
-                                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                                          children: [
-                                                            TranslatedNewsTitle(
-                                                              news: featuredNews!,
-                                                              langCode: langCode,
-                                                              maxLines: 2,
-                                                              overflow: TextOverflow.ellipsis,
-                                                              textAlign: isRtl ? TextAlign.right : TextAlign.left,
-                                                              textDirection: isRtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
-                                                              style: TextStyle(
-                                                                color: textWhite,
-                                                                fontSize: 16,
-                                                                fontWeight: FontWeight.w900,
-                                                                height: 1.25,
-                                                              ),
-                                                            ),
-                                                            const SizedBox(height: 6),
-                                                            Row(
-                                                              children: [
-                                                                Flexible(
-                                                                  child: Text(
-                                                                    (featuredNews!.gameName != null && featuredNews!.gameName!.trim().isNotEmpty
-                                                                            ? featuredNews!.gameName!
-                                                                            : featuredNews!.category)
-                                                                        .toUpperCase(),
-                                                                    maxLines: 1,
-                                                                    overflow: TextOverflow.ellipsis,
-                                                                    style: TextStyle(
-                                                                      color: neonGreen,
-                                                                      fontSize: 10,
-                                                                      fontWeight: FontWeight.bold,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                                const SizedBox(width: 8),
-                                                                Text('•', style: TextStyle(color: textGray, fontSize: 11)),
-                                                                const SizedBox(width: 8),
-                                                                Text(
-                                                                  featuredNews!.timeAgo,
-                                                                  style: TextStyle(color: textGray, fontSize: 11),
-                                                                ),
-                                                             ],
-                                                           ),
-                                                          ],
+                                                        child: TranslatedNewsTitle(
+                                                          news: featuredNews!,
+                                                          langCode: langCode,
+                                                          maxLines: 2,
+                                                          overflow: TextOverflow.ellipsis,
+                                                          style: TextStyle(
+                                                            color: textWhite,
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.w900,
+                                                          ),
                                                         ),
                                                       ),
                                                     ],
@@ -877,38 +742,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                             ),
                                           ),
                                         ),
-                                      SliverToBoxAdapter(
-                                        child: Padding(
-                                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                width: 4,
-                                                height: 18,
-                                                decoration: BoxDecoration(
-                                                  color: neonGreen,
-                                                  borderRadius: BorderRadius.circular(2),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                selectedCategory == 'All' ? 'latest_news'.tr() : selectedCategory.toUpperCase(),
-                                                style: TextStyle(
-                                                  color: textWhite,
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w900,
-                                                  letterSpacing: 1.0,
-                                                ),
-                                              ),
-                                              const Spacer(),
-                                              Text(
-                                                'articles_count'.tr(args: ['${remainingNews.length}']),
-                                                style: TextStyle(color: textGray, fontSize: 12),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
                                       if (remainingNews.isNotEmpty)
                                         SliverPadding(
                                           padding: const EdgeInsets.only(bottom: 90),
@@ -916,47 +749,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                             delegate: SliverChildBuilderDelegate(
                                               (context, index) {
                                                 final item = remainingNews[index];
-                                                return Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    NewsCard(
-                                                      news: item,
-                                                      langCode: langCode,
-                                                      isRtl: isRtl,
-                                                      onTap: () => _navigateToDetail(item),
-                                                    ),
-                                                    ValueListenableBuilder<DateTime?>(
-                                                      valueListenable: AdFreeService.adFreeUntilNotifier,
-                                                      builder: (context, adFreeUntil, _) {
-                                                        final isAdFree = AdFreeService().isAdFree;
-                                                        if (!isAdFree && index % 3 == 2) {
-                                                          return const NativeAdWidget();
-                                                        }
-                                                        return const SizedBox.shrink();
-                                                      },
-                                                    ),
-                                                  ],
+                                                return NewsCard(
+                                                  news: item,
+                                                  langCode: langCode,
+                                                  isRtl: isRtl,
+                                                  onTap: () => _navigateToDetail(item),
                                                 );
                                               },
                                               childCount: remainingNews.length,
-                                            ),
-                                          ),
-                                        ),
-                                      if (filteredList.isEmpty)
-                                        SliverToBoxAdapter(
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(40.0),
-                                            child: Center(
-                                              child: Column(
-                                                children: [
-                                                  Icon(Icons.search_off_rounded, color: textGray, size: 48),
-                                                  const SizedBox(height: 12),
-                                                  Text(
-                                                    'no_articles_found'.tr(),
-                                                    style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ],
-                                              ),
                                             ),
                                           ),
                                         ),
