@@ -573,7 +573,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     SupabaseService.toUuid(widget.teamId).toLowerCase();
                 final targetRawId = widget.teamId.toLowerCase();
 
-                // Find active match involving this viewed team
                 final activeMatch = activeMatches.firstWhere(
                   (m) {
                     final participants = m['participants'];
@@ -594,7 +593,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 final t1 = activeMatch['team1_id']?.toString() ?? '';
                 final t2 = activeMatch['team2_id']?.toString() ?? '';
 
-                // Check if viewer belongs to THIS viewed team
                 final bool isUserInThisTeam = isLeader ||
                     isMember ||
                     userTeams.any((t) {
@@ -606,7 +604,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 final bool isMyOwnTeam = isUserInThisTeam;
                 final bool isViewedMyTeam = isUserInThisTeam;
 
-                // Check which of current user's teams is in this active match (if any)
                 TeamModel? userMatchTeam;
                 for (final ut in userTeams) {
                   final uRaw = ut.id.toLowerCase();
@@ -618,18 +615,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   }
                 }
 
-                // 🌟 INTERNATIONAL ESPORTS PERMISSION CHECKS:
-                // 1. Current user is participant in this match (either as this team, or opponent team)
                 final bool isCurrentUserInMatch = hasActiveMatch && userMatchTeam != null;
-                // 2. Current user is the OPPONENT team in this match
                 final bool isMatchOpponent = hasActiveMatch && !isUserInThisTeam && isCurrentUserInMatch;
-                // 3. User can ONLY access live match features if they are participating in this match!
                 final bool canAccessMatch = hasActiveMatch && (isUserInThisTeam || isMatchOpponent);
 
-                // Privacy Level:
-                // LEVEL 1: Team Member / Leader
-                // LEVEL 3: Opponent Team (actually playing against this team right now)
-                // LEVEL 2: Outsider / Non-member (completely restricted from match & DM)
                 final int privacyLevel =
                     isUserInThisTeam ? 1 : (isMatchOpponent ? 3 : 2);
 
@@ -667,7 +656,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           fontSize: 16),
                     ),
                     actions: [
-                      // 1. OWN TEAM ACTIONS
                       if (privacyLevel == 1) ...[
                         if (canAccessMatch) ...[
                           IconButton(
@@ -756,7 +744,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             ],
                           ),
                       ] else if (privacyLevel == 3) ...[
-                        // 2. OPPONENT IN LIVE MATCH (Can coordinate & view live badge)
                         if (canAccessMatch) ...[
                           IconButton(
                             tooltip: 'Team DM 💬',
@@ -802,7 +789,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           ),
                         ],
                       ] else ...[
-                        // 3. OUTSIDER VIEW: NO DM, NO LIVE BADGE!
                         if (myLeaderTeams.isNotEmpty)
                           IconButton(
                             tooltip: 'Challenge Team',
@@ -818,7 +804,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 🌟 ONLY SHOW ACTIVE MATCH CARD IF USER IS IN THE MATCH!
                         if (canAccessMatch)
                           Builder(
                             builder: (context) {
@@ -1295,7 +1280,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             },
                           ),
 
-                        // Incoming / Outgoing Challenges (Own Team Only)
                         if (isMyOwnTeam) ...[
                           StreamBuilder<List<Map<String, dynamic>>>(
                             stream: SupabaseService.client
@@ -1566,7 +1550,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           ),
                         ],
 
-                        // TEAM SHOWCASE CARD (Publicly Visible)
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -1675,7 +1658,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         ),
                         const SizedBox(height: 14),
 
-                        // Stats
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
@@ -1745,7 +1727,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           const SizedBox(height: 16),
                         ],
 
-                        // Join Requests (Leader Only)
                         if (isLeader && team.pendingJoinRequests.isNotEmpty) ...[
                           _buildSectionHeader(
                               'Pending Requests (${team.pendingJoinRequests.length})'),
@@ -1978,14 +1959,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Match History (With Protected Proof Screenshots)
                         _buildMatchHistorySection(team, currentUid, userTeams),
                         const SizedBox(height: 20),
                       ],
                     ),
                   ),
-
-                  // 🌟 DYNAMIC BOTTOM BAR (OUTSIDERS CANNOT DM OR END MATCH)
                   bottomNavigationBar: Container(
                     padding: EdgeInsets.only(
                       left: 16,
@@ -2001,7 +1979,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     ),
                     child: Builder(
                       builder: (context) {
-                        // 1. User is viewing their own team
                         if (isViewedMyTeam) {
                           return Container(
                             width: double.infinity,
@@ -2033,7 +2010,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           );
                         }
 
-                        // 2. User is OPPONENT in Live Match (Allowed to DM & End Match)
                         if (canAccessMatch && isMatchOpponent) {
                           return Row(
                             children: [
@@ -2131,7 +2107,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           );
                         }
 
-                        // 3. OUTSIDER / NON-MEMBER (Strictly Join & Challenge Only)
                         return StreamBuilder<List<Map<String, dynamic>>>(
                           stream: myTeamId.isNotEmpty
                               ? SupabaseService.client
@@ -2486,13 +2461,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     );
   }
 
-  // 🌟 MATCH HISTORY (OUTSIDERS CANNOT VIEW OR TAP PRIVATE PROOF SCREENSHOTS)
   Widget _buildMatchHistorySection(
       TeamModel team, String currentUid, List<TeamModel> userTeams) {
     final targetUuid = SupabaseService.toUuid(widget.teamId).toLowerCase();
     final targetRawId = widget.teamId.toLowerCase();
 
-    // Check all team IDs current user belongs to
     final Set<String> myTeamIds = {};
     for (final ut in userTeams) {
       myTeamIds.add(ut.id.toLowerCase());
@@ -2592,7 +2565,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   }
                 }
 
-                // 🌟 Anti-Leak Check: Sirf match ke participants proof screenshot dekh sakte hain
                 final bool canViewProof = team.isMember(currentUid) ||
                     team.isLeader(currentUid) ||
                     myTeamIds.contains(t1.toLowerCase()) ||
@@ -2608,7 +2580,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   ),
                   child: Row(
                     children: [
-                      // Proof Container (Outsiders see Verified Shield, Participants see Screenshot)
                       GestureDetector(
                         onTap: (canViewProof && proofUrl != null && proofUrl.isNotEmpty)
                             ? () => _showProofDialog(context, proofUrl)
