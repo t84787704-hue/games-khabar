@@ -1785,5 +1785,34 @@
 "network_title": "My Network",
 "tab_followers_count": "Followers ({})",
 "tab_following_count": "Following ({})",
-"btn_following": "Following"
+"btn_following": "Following".
+"btn_clear_all": "Clear All",
+"network_title": "My Network",
+"tab_followers_count": "Followers ({})",
+"tab_following_count": "Following ({})",
+"btn_following": "Following",
+
+"get_official_blue_tick_title": "Get Official Blue Tick",
+"meet_all_requirements_sub": "Meet all the requirements below to get verified.",
+"completed_of_total": "Completed: {}/{}",
+"instant_vip_blue_tick_title": "Instant VIP Blue Tick",
+"instant_vip_blue_tick_desc": "Don't want to wait? Unlock the blue tick instantly using your G-Coins.",
+"btn_unlock_instantly_coins": "Unlock Instantly ({} Coins)",
+"daily_checkin_ready_sub": "Your daily reward is ready to claim!",
+"btn_claim_50_coins": "Claim 50 Coins",
+
+"title_download_my_data": "Download My Data",
+"download_data_banner_text": "Here is a copy of all the personal data we have stored for your account.",
+"download_data_included_title": "What's included in your download?",
+"download_bullet_profile": "Profile Information & Settings",
+"download_bullet_posts": "Your Posts & Comments",
+"download_bullet_comments": "Your Interactions",
+"download_bullet_followers": "Followers & Following List",
+"download_bullet_teams": "Team & Squad Memberships",
+"download_bullet_challenges": "Match History & Challenges",
+"download_bullet_coins": "Coin Balance & Transaction History",
+"download_bullet_notifications": "Notification History",
+"format_info_title": "Data Format",
+"format_info_desc": "Your data will be downloaded as a JSON file.",
+"btn_download_my_data": "Download My Data"
 }
