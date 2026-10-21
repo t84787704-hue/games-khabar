@@ -1832,5 +1832,12 @@
 "filter_tab_system": "System",
 "btn_like": "Like",
 "btn_comment": "Comment",
-"hint_whats_on_your_mind": "What's on your mind?"
+"hint_whats_on_your_mind": "What's on your mind?",
+"ineligible_low_balance": "Low Coin Balance",
+"min_coins_to_remain_desc": "Minimum 500 G-Coins needed to join or stay in teams",
+"eligible_leader_and_member": "Leader & Member Eligible",
+"eligible_member_only": "Member Eligible",
+"can_create_team_desc": "You can create or join an eSports team",
+"can_join_team_need_coins_desc": "You can join a team (1,000 coins required to create)",
+"coins_count_label": "{} Coins"
 }
