@@ -35,7 +35,7 @@ void main() async {
     debugPrint('Supabase initialize error: $e');
   }
 
-  // ✅ Language init
+  // ✅ Language init (Isse hum bypass kar rahe hain)
   try {
     await LanguageService.init();
   } catch (e) {
@@ -51,9 +51,10 @@ void main() async {
 
   runApp(
     EasyLocalization(
-      supportedLocales: LanguageService.supportedLocales,
+      supportedLocales: const [Locale('en')], // 🔥 Sirf English allow
       path: 'assets/translations',
       fallbackLocale: const Locale('en'),
+      startLocale: const Locale('en'), // 🔥 Force English
       child: const GamersIdApp(),
     ),
   );
