@@ -135,7 +135,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
     if (item != null && item.category.isNotEmpty) {
       _selectedCategory = item.category;
     } else {
-      _selectedCategory = categoriesList.isNotEmpty ? categoriesList.first : 'Open World';
+      _selectedCategory = categoriesList.isNotEmpty ? categoriesList.first : 'category_open_world'.tr();
     }
     _isFeatured = item?.isFeatured ?? false;
   }
@@ -316,7 +316,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: alertRed,
-            content: Text('Error: $e', style: const TextStyle(color: Colors.white)),
+            content: Text('${'error'.tr()}: $e', style: const TextStyle(color: Colors.white)),
           ),
         );
       }
@@ -411,17 +411,17 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                       style: const TextStyle(color: textGray, fontSize: 11.5, height: 1.35),
                     ),
                     const SizedBox(height: 10),
-                    const Wrap(
+                    Wrap(
                       spacing: 6,
                       runSpacing: 6,
                       children: [
-                        _LangPill(label: 'Roman', flag: '🇵🇰'),
-                        _LangPill(label: 'English', flag: '🇬🇧'),
-                        _LangPill(label: 'हिंदी', flag: '🇮🇳'),
-                        _LangPill(label: 'اردو', flag: '🇵🇰'),
-                        _LangPill(label: 'বাংলা', flag: '🇧🇩'),
-                        _LangPill(label: 'العربية', flag: '🇸🇦'),
-                        _LangPill(label: '中文', flag: '🇨🇳'),
+                        _LangPill(label: 'lang_roman'.tr(), flag: '🇵🇰'),
+                        _LangPill(label: 'lang_english'.tr(), flag: '🇬🇧'),
+                        _LangPill(label: 'lang_hindi'.tr(), flag: '🇮🇳'),
+                        _LangPill(label: 'lang_urdu'.tr(), flag: '🇵🇰'),
+                        _LangPill(label: 'lang_bengali'.tr(), flag: '🇧🇩'),
+                        _LangPill(label: 'lang_arabic'.tr(), flag: '🇸🇦'),
+                        _LangPill(label: 'lang_chinese'.tr(), flag: '🇨🇳'),
                       ],
                     ),
                   ],
@@ -482,7 +482,7 @@ class _AddNewsScreenState extends State<AddNewsScreen> {
                   if (_selectedCategory.isNotEmpty) _selectedCategory,
                 }.contains(_selectedCategory)
                     ? _selectedCategory
-                    : (availableCategories.isNotEmpty ? availableCategories.first : 'Open World'),
+                    : (availableCategories.isNotEmpty ? availableCategories.first : 'category_open_world'.tr()),
                 dropdownColor: cardDark,
                 isExpanded: true,
                 icon: const Icon(Icons.keyboard_arrow_down, color: neonGreen),
