@@ -1,5 +1,5 @@
 // ===============================================================================
-// GAMER MESSAGES SCREEN — Dark Futuristic Neon Gaming Theme (Matched to Reference)
+// GAMER MESSAGES SCREEN — Adaptive Day/Night Theme with Dynamic Presence
 // File: lib/screens/gamer_messages_screen.dart
 // ===============================================================================
 
@@ -32,10 +32,6 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
   bool _loading = true;
   String _searchQuery = '';
 
-  // Futuristic Neon Palette (Exact match to sample screenshot)
-  static const Color darkBg = Color(0xFF0A0F1D);
-  static const Color cardBg = Color(0xFF131B2E);
-  static const Color cardBorder = Color(0xFF1E293B);
   static const Color neonBlue = Color(0xFF1877F2);
   static const Color neonCyan = Color(0xFF00E5FF);
   static const Color neonGreen = Color(0xFF00FF88);
@@ -143,91 +139,96 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
           c.lastMessage.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
 
-    return Scaffold(
-      backgroundColor: darkBg,
-      appBar: AppBar(
-        backgroundColor: darkBg,
-        elevation: 0,
-        centerTitle: false,
-        titleSpacing: 16,
-        title: const Text(
-          'Direct Messages',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-            fontSize: 24,
-            letterSpacing: 0.5,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_note_rounded, color: neonCyan, size: 28),
-            tooltip: 'new_message'.tr(),
-            onPressed: _openUserSearch,
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Search Messages Input Bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: cardBorder, width: 1.2),
-              ),
-              child: TextField(
-                controller: _searchController,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Search messages...',
-                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-                  prefixIcon: const Icon(Icons.search, size: 20, color: Colors.white54),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18, color: Colors.white54),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                onChanged: (val) => setState(() => _searchQuery = val.trim()),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: 0,
+            centerTitle: false,
+            titleSpacing: 16,
+            title: Text(
+              'Direct Messages',
+              style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontWeight: FontWeight.w900,
+                fontSize: 24,
+                letterSpacing: 0.5,
               ),
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_note_rounded, color: neonCyan, size: 28),
+                tooltip: 'new_message'.tr(),
+                onPressed: _openUserSearch,
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
+          body: Column(
+            children: [
+              // Search Messages Input Bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: ThemeService.card,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: ThemeService.border, width: 1.2),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Search messages...',
+                      hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
+                      prefixIcon: Icon(Icons.search, size: 20, color: ThemeService.textSecondary),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, size: 18, color: ThemeService.textSecondary),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                  ),
+                ),
+              ),
 
-          // Conversation List / Loading / Empty
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: neonCyan),
-                  )
-                : filteredList.isEmpty
-                    ? _buildEmptyState()
-                    : RefreshIndicator(
-                        color: neonCyan,
-                        backgroundColor: cardBg,
-                        onRefresh: _loadConversations,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                          itemCount: filteredList.length,
-                          itemBuilder: (context, i) {
-                            final c = filteredList[i];
-                            return _buildConversationCard(c);
-                          },
-                        ),
-                      ),
+              // Conversation List / Loading / Empty
+              Expanded(
+                child: _loading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: neonCyan),
+                      )
+                    : filteredList.isEmpty
+                        ? _buildEmptyState()
+                        : RefreshIndicator(
+                            color: neonCyan,
+                            backgroundColor: ThemeService.card,
+                            onRefresh: _loadConversations,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              itemCount: filteredList.length,
+                              itemBuilder: (context, i) {
+                                final c = filteredList[i];
+                                return _buildConversationCard(c);
+                              },
+                            ),
+                          ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -241,9 +242,9 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
             Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: cardBg,
+                color: ThemeService.card,
                 shape: BoxShape.circle,
-                border: Border.all(color: cardBorder),
+                border: Border.all(color: ThemeService.border),
               ),
               child: const Icon(
                 Icons.chat_bubble_outline_rounded,
@@ -254,8 +255,8 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
             const SizedBox(height: 18),
             Text(
               'no_messages_yet'.tr(),
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: ThemeService.textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -264,7 +265,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
             Text(
               'start_conversation_desc'.tr(),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white54, fontSize: 13),
+              style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 18),
             ElevatedButton.icon(
@@ -291,23 +292,24 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
   }
 
   Widget _buildConversationCard(ChatConversation c) {
-    final gameTag = 'PUBG'; // Default ya dynamically model se pass kiya ja sakta hai
+    final gameTag = 'PUBG';
     final gameColor = _getGameBadgeColor(gameTag);
+    final isDark = ThemeService.isDarkMode;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: c.unreadCount > 0 ? neonBlue.withOpacity(0.4) : cardBorder,
+          color: c.unreadCount > 0 ? neonBlue.withOpacity(0.5) : ThemeService.border,
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -334,16 +336,16 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                // Avatar with Neon Glow + Online Dot (Exact Match to Design)
+                // Avatar with Theme-aware Container + Real Online Dot
                 Stack(
                   children: [
                     Container(
                       width: 50,
                       height: 50,
                       decoration: BoxDecoration(
-                        color: darkBg,
+                        color: ThemeService.cardSecondary,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: cardBorder, width: 1.5),
+                        border: Border.all(color: ThemeService.border, width: 1.5),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -366,25 +368,26 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                             : _buildInitials(c.otherUserName, 50),
                       ),
                     ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        width: 11,
-                        height: 11,
-                        decoration: BoxDecoration(
-                          color: neonGreen,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: cardBg, width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: neonGreen.withOpacity(0.6),
-                              blurRadius: 4,
-                            ),
-                          ],
+                    if (c.isOnline == true)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            color: neonGreen,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: ThemeService.card, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: neonGreen.withOpacity(0.6),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
                 const SizedBox(width: 12),
@@ -399,8 +402,8 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                           Flexible(
                             child: Text(
                               c.otherUserName,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: ThemeService.textPrimary,
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -411,7 +414,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: gameColor.withOpacity(0.2),
+                              color: gameColor.withOpacity(0.18),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -432,7 +435,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: c.unreadCount > 0 ? Colors.white : Colors.white60,
+                          color: c.unreadCount > 0 ? ThemeService.textPrimary : ThemeService.textSecondary,
                           fontSize: 13,
                           fontWeight: c.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
                         ),
@@ -441,7 +444,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                   ),
                 ),
 
-                // Timestamp & Glowing Unread Badge (Right Side)
+                // Timestamp & Glowing Unread Badge
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -449,7 +452,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                     Text(
                       _formatTime(c.lastMessageTime),
                       style: TextStyle(
-                        color: c.unreadCount > 0 ? neonCyan : Colors.white38,
+                        color: c.unreadCount > 0 ? neonCyan : ThemeService.textSecondary.withOpacity(0.7),
                         fontSize: 11,
                         fontWeight: c.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
                       ),
@@ -494,7 +497,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
     return Container(
       width: size,
       height: size,
-      color: const Color(0xFF1A263D),
+      color: ThemeService.cardSecondary,
       child: Center(
         child: Text(
           initials,
@@ -510,7 +513,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
 }
 
 // ============================================
-// USER SEARCH SHEET (Dark Gaming Theme)
+// USER SEARCH SHEET (Adaptive Theme)
 // ============================================
 class _UserSearchSheet extends StatefulWidget {
   const _UserSearchSheet();
@@ -526,9 +529,6 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
   bool _searching = false;
   String _query = '';
 
-  static const Color darkBg = Color(0xFF0A0F1D);
-  static const Color cardBg = Color(0xFF131B2E);
-  static const Color cardBorder = Color(0xFF1E293B);
   static const Color neonCyan = Color(0xFF00E5FF);
 
   Future<void> _search(String q) async {
@@ -569,9 +569,9 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
       ),
       child: Column(
         children: [
@@ -580,7 +580,7 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
             height: 4.5,
             margin: const EdgeInsets.only(top: 12),
             decoration: BoxDecoration(
-              color: Colors.white24,
+              color: ThemeService.textSecondary.withOpacity(0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -593,15 +593,15 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                 Expanded(
                   child: Text(
                     'new_message'.tr(),
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: ThemeService.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white54, size: 22),
+                  icon: Icon(Icons.close, color: ThemeService.textSecondary, size: 22),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -612,18 +612,18 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
             child: Container(
               padding: const EdgeInsetsDirectional.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: darkBg,
+                color: ThemeService.cardSecondary,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: cardBorder),
+                border: Border.all(color: ThemeService.border),
               ),
               child: TextField(
                 controller: _controller,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
+                style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'search_users_hint'.tr(),
-                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54, size: 20),
+                  hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
+                  prefixIcon: Icon(Icons.search, color: ThemeService.textSecondary, size: 20),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -645,8 +645,8 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                             _query.isEmpty
                                 ? 'type_to_search_users'.tr()
                                 : 'no_users_found'.tr(),
-                            style: const TextStyle(
-                              color: Colors.white54,
+                            style: TextStyle(
+                              color: ThemeService.textSecondary,
                               fontSize: 14,
                             ),
                           ),
@@ -660,7 +660,7 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                             onTap: () => Navigator.pop(context, u),
                             leading: CircleAvatar(
                               radius: 22,
-                              backgroundColor: darkBg,
+                              backgroundColor: ThemeService.cardSecondary,
                               backgroundImage: u.photoUrl.isNotEmpty
                                   ? CachedNetworkImageProvider(u.photoUrl)
                                   : null,
@@ -681,10 +681,10 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                                 Flexible(
                                   child: Text(
                                     u.displayName,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
-                                      color: Colors.white,
+                                      color: ThemeService.textPrimary,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -697,8 +697,8 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                             ),
                             subtitle: Text(
                               '@${u.username}',
-                              style: const TextStyle(
-                                color: Colors.white54,
+                              style: TextStyle(
+                                color: ThemeService.textSecondary,
                                 fontSize: 12,
                               ),
                             ),
