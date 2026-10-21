@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/countdown_service.dart';
 import '../services/theme_service.dart';
 
@@ -105,7 +106,7 @@ class _GameCountdownWidgetState extends State<GameCountdownWidget> {
               ),
               const SizedBox(width: 8),
               Text(
-                isReleased ? 'LAUNCHED / AVAILABLE' : 'LIVE RELEASE COUNTDOWN',
+                isReleased ? 'launched_available'.tr() : 'live_release_countdown'.tr(),
                 style: TextStyle(
                   color: isReleased ? Colors.redAccent : neonGreen,
                   fontWeight: FontWeight.w900,
@@ -144,13 +145,13 @@ class _GameCountdownWidgetState extends State<GameCountdownWidget> {
           if (!isReleased)
             Row(
               children: [
-                _buildTimeUnit(days.toString().padLeft(2, '0'), 'DAYS'),
+                _buildTimeUnit(days.toString().padLeft(2, '0'), 'days_unit'.tr()),
                 _buildDivider(),
-                _buildTimeUnit(hours.toString().padLeft(2, '0'), 'HOURS'),
+                _buildTimeUnit(hours.toString().padLeft(2, '0'), 'hours_unit'.tr()),
                 _buildDivider(),
-                _buildTimeUnit(minutes.toString().padLeft(2, '0'), 'MINS'),
+                _buildTimeUnit(minutes.toString().padLeft(2, '0'), 'mins_unit'.tr()),
                 _buildDivider(),
-                _buildTimeUnit(seconds.toString().padLeft(2, '0'), 'SECS', isLive: true),
+                _buildTimeUnit(seconds.toString().padLeft(2, '0'), 'secs_unit'.tr(), isLive: true),
               ],
             )
           else
@@ -164,7 +165,7 @@ class _GameCountdownWidgetState extends State<GameCountdownWidget> {
               ),
               alignment: Alignment.center,
               child: Text(
-                '🚀 GAME IS OUT NOW!',
+                'game_is_out_now'.tr(),
                 style: TextStyle(
                   color: neonGreen,
                   fontWeight: FontWeight.w900,
@@ -206,7 +207,7 @@ class _GameCountdownWidgetState extends State<GameCountdownWidget> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '${widget.gameName} countdown pinned to Android Home Widget! 📲',
+                              'countdown_pinned_widget'.tr(args: [widget.gameName]),
                               style: TextStyle(color: textWhite, fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                           ),
@@ -222,7 +223,7 @@ class _GameCountdownWidgetState extends State<GameCountdownWidget> {
               ),
               icon: Icon(Icons.widgets_outlined, color: neonGreen, size: 16),
               label: Text(
-                'Pin to Android Home Widget',
+                'pin_to_home_widget'.tr(),
                 style: TextStyle(color: neonGreen, fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
