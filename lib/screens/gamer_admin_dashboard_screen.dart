@@ -1,3 +1,8 @@
+// ===============================================================================
+// GAMER ADMIN DASHBOARD SCREEN — Real-time Counts, Dual Proofs & Theme Adaptive
+// File: lib/screens/gamer_admin_dashboard_screen.dart
+// ===============================================================================
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -15,9 +20,10 @@ import '../services/coin_reward_service.dart';
 import '../services/notification_service.dart';
 import '../services/supabase_service.dart';
 import '../services/team_service.dart';
+import '../services/theme_service.dart';
 import '../models/team_model.dart';
 import 'admin/admin_team_matches_screen.dart';
-import 'admin/admin_proofs_tabs.dart'; // ✅ NAYA IMPORT
+import 'admin/admin_proofs_tabs.dart';
 
 class GamerAdminDashboardScreen extends StatefulWidget {
   const GamerAdminDashboardScreen({super.key});
@@ -43,7 +49,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    // ✅ FIX: 7 se 9 tabs
     _tabController = TabController(length: 9, vsync: this);
     _ensureSampleQueueExists();
   }
@@ -96,28 +101,28 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
+        backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
-            SizedBox(width: 8),
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
+            const SizedBox(width: 8),
             Text('Delete All Demo Accounts?',
                 style: TextStyle(
-                    color: Colors.white,
+                    color: ThemeService.textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.bold)),
           ],
         ),
-        content: const Text(
+        content: Text(
           'This will permanently delete all 10 demo accounts (isDemoAccount == true) and their posts, clips, and follows. Real accounts will not be touched.',
-          style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white70)),
+            child: Text('Cancel',
+                style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -161,76 +166,78 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F14),
-      body: SafeArea(
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            return [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeader(),
-                      // ✅ FIX: _buildPendingProofsReviewSection() HATA DIYA
-                      const SizedBox(height: 14),
-                      _buildStatsCards(),
-                      const SizedBox(height: 16),
-                    ],
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          body: SafeArea(
+            child: NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) {
+                return [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 14),
+                          _buildStatsCards(),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _SliverAppBarDelegate(
-                  TabBar(
-                    controller: _tabController,
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    indicatorColor: const Color(0xFF00FF88),
-                    indicatorWeight: 3,
-                    labelColor: const Color(0xFF00FF88),
-                    unselectedLabelColor: const Color(0xFF8B949E),
-                    labelStyle: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 13),
-                    unselectedLabelStyle: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13),
-                    tabs: [
-                      const Tab(text: 'Users'),
-                      _buildRankVerifyTabTitle(),
-                      const Tab(text: 'Blue Tick Requests (3 pending)'),
-                      const Tab(text: 'Posts Moderation'),
-                      const Tab(text: 'Team Matches ⚔️'),
-                      const Tab(text: 'Reports'),
-                      const Tab(text: 'Coins'),
-                      // ✅ NAYE TABS
-                      const Tab(text: 'Under Review 🔍'),
-                      const Tab(text: 'History 📜'),
-                    ],
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _SliverAppBarDelegate(
+                      TabBar(
+                        controller: _tabController,
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        indicatorColor: const Color(0xFF00FF88),
+                        indicatorWeight: 3,
+                        labelColor: const Color(0xFF00FF88),
+                        unselectedLabelColor: ThemeService.textSecondary,
+                        labelStyle: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
+                        unselectedLabelStyle: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13),
+                        tabs: [
+                          const Tab(text: 'Users'),
+                          _buildRankVerifyTabTitle(),
+                          _buildBlueTickTabTitle(), // ✅ FIXED: DYNAMIC REALTIME COUNTER
+                          const Tab(text: 'Posts Moderation'),
+                          const Tab(text: 'Team Matches ⚔️'),
+                          const Tab(text: 'Reports'),
+                          const Tab(text: 'Coins'),
+                          const Tab(text: 'Under Review 🔍'),
+                          const Tab(text: 'History 📜'),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                ];
+              },
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildUsersTab(),
+                  _buildRankVerifyTab(),
+                  _buildBlueTickRequestsTab(),
+                  _buildPostsModerationTab(),
+                  const AdminTeamMatchesScreen(),
+                  _buildReportsTab(),
+                  _buildCoinsTab(),
+                  const AdminUnderReviewTab(),
+                  const AdminProofHistoryTab(),
+                ],
               ),
-            ];
-          },
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildUsersTab(),
-              _buildRankVerifyTab(),
-              _buildBlueTickRequestsTab(),
-              _buildPostsModerationTab(),
-              const AdminTeamMatchesScreen(),
-              _buildReportsTab(),
-              _buildCoinsTab(),
-              // ✅ NAYE TAB VIEWS
-              const AdminUnderReviewTab(),
-              const AdminProofHistoryTab(),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -244,7 +251,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             final rawGames = doc['games'];
             if (rawGames is List) {
               for (final g in rawGames) {
-                if (g is Map && g['status'] == 'pending') {
+                if (g is Map && (g['status'] ?? '').toString().toLowerCase() == 'pending') {
                   pendingCount++;
                 }
               }
@@ -262,6 +269,50 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFF8A00),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$pendingCount pending',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  // ✅ DYNAMIC REALTIME BLUE TICK TAB TITLE
+  Widget _buildBlueTickTabTitle() {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.getRealtimeUsers(),
+      builder: (context, snapshot) {
+        int pendingCount = 0;
+        if (snapshot.hasData) {
+          for (final doc in snapshot.data!) {
+            final isVerified = doc['is_verified'] == true || doc['has_blue_tick'] == true;
+            final vStatus = (doc['verification_status'] ?? doc['blue_tick_status'] ?? '').toString().toLowerCase();
+            if (!isVerified && (vStatus == 'pending' || vStatus == 'under_review')) {
+              pendingCount++;
+            }
+          }
+        }
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Blue Tick Requests'),
+            if (pendingCount > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1877F2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -300,12 +351,12 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF10141D),
+            color: ThemeService.card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF1F2B3E)),
+            border: Border.all(color: ThemeService.border),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withOpacity(0.1),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -332,10 +383,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Admin Dashboard',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: ThemeService.textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.3,
@@ -353,8 +404,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     const SizedBox(height: 4),
                     Text(
                       'Active Admin: $currentEmail',
-                      style: const TextStyle(
-                        color: Color(0xFF8B949E),
+                      style: TextStyle(
+                        color: ThemeService.textSecondary,
                         fontSize: 11,
                         fontFamily: 'monospace',
                       ),
@@ -470,9 +521,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF10141D),
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1F2B3E)),
+        border: Border.all(color: ThemeService.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -483,8 +534,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  color: Color(0xFF8B949E),
+                style: TextStyle(
+                  color: ThemeService.textSecondary,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
@@ -516,17 +567,17 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             controller: _searchController,
             onChanged: (val) =>
                 setState(() => _userSearchQuery = val.toLowerCase().trim()),
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
             decoration: InputDecoration(
               hintText: 'Search users by name, @username, or tag...',
               hintStyle:
-                  const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
-              prefixIcon: const Icon(Icons.search_rounded,
-                  color: Color(0xFF8B949E), size: 20),
+                  TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+              prefixIcon: Icon(Icons.search_rounded,
+                  color: ThemeService.textSecondary, size: 20),
               suffixIcon: _userSearchQuery.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear,
-                          color: Color(0xFF8B949E), size: 18),
+                      icon: Icon(Icons.clear,
+                          color: ThemeService.textSecondary, size: 18),
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _userSearchQuery = '');
@@ -534,20 +585,20 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     )
                   : null,
               filled: true,
-              fillColor: const Color(0xFF10141D),
+              fillColor: ThemeService.card,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                borderSide: BorderSide(color: ThemeService.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                borderSide: BorderSide(color: ThemeService.border),
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFF00FF88)),
+              focusedBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+                borderSide: BorderSide(color: Color(0xFF00FF88)),
               ),
             ),
           ),
@@ -635,10 +686,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         const Icon(Icons.error_outline_rounded,
                             color: Color(0xFFFF4655), size: 48),
                         const SizedBox(height: 14),
-                        const Text(
+                        Text(
                           'Could not load users',
                           style: TextStyle(
-                              color: Colors.white,
+                              color: ThemeService.textPrimary,
                               fontWeight: FontWeight.bold,
                               fontSize: 15),
                         ),
@@ -646,8 +697,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         Text(
                           '${snapshot.error}',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              color: Color(0xFF8B949E), fontSize: 12),
+                          style: TextStyle(
+                              color: ThemeService.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
@@ -687,19 +738,19 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         Container(
                           padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF10141D),
+                            color: ThemeService.card,
                             shape: BoxShape.circle,
                             border:
-                                Border.all(color: const Color(0xFF1F2B3E)),
+                                Border.all(color: ThemeService.border),
                           ),
-                          child: const Icon(Icons.people_outline_rounded,
-                              color: Color(0xFF8B949E), size: 40),
+                          child: Icon(Icons.people_outline_rounded,
+                              color: ThemeService.textSecondary, size: 40),
                         ),
                         const SizedBox(height: 14),
-                        const Text(
+                        Text(
                           'No users found',
                           style: TextStyle(
-                              color: Colors.white,
+                              color: ThemeService.textPrimary,
                               fontWeight: FontWeight.bold,
                               fontSize: 15),
                         ),
@@ -709,8 +760,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                               ? 'Try a different search term'
                               : 'No users registered yet',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              color: Color(0xFF8B949E), fontSize: 12),
+                          style: TextStyle(
+                              color: ThemeService.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
@@ -743,12 +794,12 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF10141D),
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: user.isBanned
               ? const Color(0xFFFF4655)
-              : const Color(0xFF1F2B3E),
+              : ThemeService.border,
           width: user.isBanned ? 1.5 : 1.0,
         ),
       ),
@@ -777,8 +828,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             user.displayName.isNotEmpty
                                 ? user.displayName
                                 : '@${user.username}',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: ThemeService.textPrimary,
                               fontWeight: FontWeight.w900,
                               fontSize: 15,
                             ),
@@ -802,8 +853,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       children: [
                         Text(
                           '@${user.username}',
-                          style: const TextStyle(
-                              color: Color(0xFF8B949E), fontSize: 12),
+                          style: TextStyle(
+                              color: ThemeService.textSecondary, fontSize: 12),
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -821,8 +872,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       children: [
                         Text(
                           joinedText,
-                          style: const TextStyle(
-                              color: Color(0xFF6E7681), fontSize: 11),
+                          style: TextStyle(
+                              color: ThemeService.textSecondary.withOpacity(0.7), fontSize: 11),
                         ),
                         if (user.isDemoAccount) ...[
                           const SizedBox(width: 8),
@@ -830,15 +881,15 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 1.5),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF21262D),
+                              color: ThemeService.cardSecondary,
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
-                                  color: const Color(0xFF8B949E), width: 0.8),
+                                  color: ThemeService.border, width: 0.8),
                             ),
-                            child: const Text(
+                            child: Text(
                               'DEMO',
                               style: TextStyle(
-                                color: Color(0xFF8B949E),
+                                color: ThemeService.textSecondary,
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 0.5,
@@ -876,7 +927,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ],
           ),
           const SizedBox(height: 10),
-          const Divider(color: Color(0xFF1F2B3E), height: 1),
+          Divider(color: ThemeService.border, height: 1),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -966,23 +1017,23 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          color: const Color(0xFF0B0F14),
+          color: ThemeService.bg,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextField(
                 controller: _rankSearchController,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+                style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search by username or Game ID...',
                   hintStyle:
-                      const TextStyle(color: Color(0xFF6E7681), fontSize: 13),
+                      TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                   prefixIcon: const Icon(Icons.search_rounded,
                       color: Color(0xFF00FF88), size: 18),
                   suffixIcon: _rankSearchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear,
-                              color: Color(0xFF6E7681), size: 16),
+                          icon: Icon(Icons.clear,
+                              color: ThemeService.textSecondary, size: 16),
                           onPressed: () {
                             _rankSearchController.clear();
                             setState(() => _rankSearchQuery = '');
@@ -990,20 +1041,20 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         )
                       : null,
                   filled: true,
-                  fillColor: const Color(0xFF10141D),
+                  fillColor: ThemeService.card,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                    borderSide: BorderSide(color: ThemeService.border),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF1F2B3E)),
+                    borderSide: BorderSide(color: ThemeService.border),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF00FF88)),
+                  focusedBorder: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(10)),
+                    borderSide: BorderSide(color: Color(0xFF00FF88)),
                   ),
                 ),
                 onChanged: (val) => setState(
@@ -1029,11 +1080,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             }
                           },
                           selectedColor: const Color(0xFF00FF88),
-                          backgroundColor: const Color(0xFF161B26),
+                          backgroundColor: ThemeService.card,
                           labelStyle: TextStyle(
                             color: _selectedRankGameFilter == game
                                 ? const Color(0xFF0B0F14)
-                                : Colors.white70,
+                                : ThemeService.textPrimary,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -1042,7 +1093,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                             side: BorderSide(
                               color: _selectedRankGameFilter == game
                                   ? const Color(0xFF00FF88)
-                                  : const Color(0xFF1F2B3E),
+                                  : ThemeService.border,
                             ),
                           ),
                         ),
@@ -1058,11 +1109,11 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           setState(() => _showOnlyPendingRanks = val),
                       selectedColor:
                           const Color(0xFFFF8A00).withOpacity(0.2),
-                      backgroundColor: const Color(0xFF161B26),
+                      backgroundColor: ThemeService.card,
                       labelStyle: TextStyle(
                         color: _showOnlyPendingRanks
                             ? const Color(0xFFFF8A00)
-                            : const Color(0xFF8B949E),
+                            : ThemeService.textSecondary,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -1071,7 +1122,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         side: BorderSide(
                           color: _showOnlyPendingRanks
                               ? const Color(0xFFFF8A00)
-                              : const Color(0xFF1F2B3E),
+                              : ThemeService.border,
                         ),
                       ),
                     ),
@@ -1095,16 +1146,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         const Icon(Icons.error_outline_rounded,
                             color: Color(0xFFFF4655), size: 48),
                         const SizedBox(height: 14),
-                        const Text('Could not load rank requests',
+                        Text('Could not load rank requests',
                             style: TextStyle(
-                                color: Colors.white,
+                                color: ThemeService.textPrimary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15)),
                         const SizedBox(height: 6),
                         Text('${snapshot.error}',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                color: Color(0xFF8B949E), fontSize: 12)),
+                            style: TextStyle(
+                                color: ThemeService.textSecondary, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -1213,19 +1264,19 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         Container(
                           padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF10141D),
+                            color: ThemeService.card,
                             shape: BoxShape.circle,
                             border:
-                                Border.all(color: const Color(0xFF1F2B3E)),
+                                Border.all(color: ThemeService.border),
                           ),
-                          child: const Icon(Icons.verified_outlined,
-                              color: Color(0xFF8B949E), size: 40),
+                          child: Icon(Icons.verified_outlined,
+                              color: ThemeService.textSecondary, size: 40),
                         ),
                         const SizedBox(height: 14),
-                        const Text(
+                        Text(
                           'No rank verification requests found',
                           style: TextStyle(
-                              color: Colors.white,
+                              color: ThemeService.textPrimary,
                               fontWeight: FontWeight.bold,
                               fontSize: 15),
                         ),
@@ -1235,8 +1286,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                               ? 'All pending screenshot rank submissions have been reviewed!'
                               : 'No requests match the selected filters.',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              color: Color(0xFF8B949E), fontSize: 12),
+                          style: TextStyle(
+                              color: ThemeService.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
@@ -1281,12 +1332,12 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF10141D),
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isPending
-              ? const Color(0xFFFF8A00).withOpacity(0.4)
-              : const Color(0xFF1F2B3E),
+              ? const Color(0xFFFF8A00).withOpacity(0.5)
+              : ThemeService.border,
         ),
       ),
       child: Column(
@@ -1310,15 +1361,15 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       user.displayName.isNotEmpty
                           ? user.displayName
                           : user.username,
-                      style: const TextStyle(
-                          color: Colors.white,
+                      style: TextStyle(
+                          color: ThemeService.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 14),
                     ),
                     Text(
                       '@${user.username} • UID: ${user.uid.length > 8 ? user.uid.substring(0, 8) : user.uid}',
-                      style: const TextStyle(
-                          color: Color(0xFF8B949E), fontSize: 11),
+                      style: TextStyle(
+                          color: ThemeService.textSecondary, fontSize: 11),
                     ),
                   ],
                 ),
@@ -1344,7 +1395,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ],
           ),
           const SizedBox(height: 12),
-          const Divider(color: Color(0xFF1F2B3E), height: 1),
+          Divider(color: ThemeService.border, height: 1),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -1352,9 +1403,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161B26),
+                  color: ThemeService.cardSecondary,
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFF2E384D)),
+                  border: Border.all(color: ThemeService.border),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1364,8 +1415,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     const SizedBox(width: 4),
                     Text(
                       game.gameName,
-                      style: const TextStyle(
-                          color: Colors.white,
+                      style: TextStyle(
+                          color: ThemeService.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 12),
                     ),
@@ -1387,16 +1438,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               Text(
                 dateStr,
                 style:
-                    const TextStyle(color: Color(0xFF6E7681), fontSize: 11),
+                    TextStyle(color: ThemeService.textSecondary, fontSize: 11),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              const Text(
+              Text(
                 'Claimed Rank: ',
-                style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
               ),
               Container(
                 padding:
@@ -1418,8 +1469,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               ),
               if (isApproved && game.verifiedRank.isNotEmpty) ...[
                 const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_rounded,
-                    size: 12, color: Color(0xFF8B949E)),
+                Icon(Icons.arrow_forward_rounded,
+                    size: 12, color: ThemeService.textSecondary),
                 const SizedBox(width: 8),
                 Container(
                   padding:
@@ -1461,7 +1512,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       fit: BoxFit.cover,
                       placeholder: (_, __) => Container(
                         height: 140,
-                        color: const Color(0xFF161B26),
+                        color: ThemeService.cardSecondary,
                         child: const Center(
                           child: CircularProgressIndicator(
                               color: Color(0xFF00FF88), strokeWidth: 2),
@@ -1469,10 +1520,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       ),
                       errorWidget: (_, __, ___) => Container(
                         height: 140,
-                        color: const Color(0xFF161B26),
-                        child: const Center(
+                        color: ThemeService.cardSecondary,
+                        child: Center(
                           child: Icon(Icons.broken_image_rounded,
-                              color: Colors.white38, size: 36),
+                              color: ThemeService.textSecondary, size: 36),
                         ),
                       ),
                     ),
@@ -1512,18 +1563,18 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF161B26),
+                color: ThemeService.cardSecondary,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Row(
+              child: Row(
                 children: [
                   Icon(Icons.image_not_supported_rounded,
-                      color: Color(0xFF8B949E), size: 16),
-                  SizedBox(width: 6),
+                      color: ThemeService.textSecondary, size: 16),
+                  const SizedBox(width: 6),
                   Text(
                     'No screenshot uploaded',
                     style:
-                        TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -1575,7 +1626,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF10141D),
+        backgroundColor: ThemeService.card,
         insetPadding: const EdgeInsets.all(16),
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1589,16 +1640,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(
-                          color: Colors.white,
+                      style: TextStyle(
+                          color: ThemeService.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 20),
+                    icon: Icon(Icons.close,
+                        color: ThemeService.textSecondary, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -1735,7 +1786,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  // ===================== TAB 3: BLUE TICK =====================
+  // ===================== TAB 3: BLUE TICK (ACCURATE PARSING & DISPLAY) =====================
   Widget _buildBlueTickRequestsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: SupabaseService.getRealtimeUsers(),
@@ -1750,16 +1801,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   const Icon(Icons.error_outline_rounded,
                       color: Color(0xFFFF4655), size: 48),
                   const SizedBox(height: 14),
-                  const Text('Could not load blue tick requests',
+                  Text('Could not load blue tick requests',
                       style: TextStyle(
-                          color: Colors.white,
+                          color: ThemeService.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 15)),
                   const SizedBox(height: 6),
                   Text('${snapshot.error}',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          color: Color(0xFF8B949E), fontSize: 12)),
+                      style: TextStyle(
+                          color: ThemeService.textSecondary, fontSize: 12)),
                 ],
               ),
             ),
@@ -1773,14 +1824,18 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         }
 
         final docs = snapshot.data ?? [];
-        final allUsers = docs.map((d) => GamerUser.fromMap(d)).toList();
+        
+        // Accurate identification of users who have requested Blue Tick
+        final List<GamerUser> requests = [];
+        for (final d in docs) {
+          final isVerified = d['is_verified'] == true || d['has_blue_tick'] == true;
+          final vStatus = (d['verification_status'] ?? d['blue_tick_status'] ?? '').toString().toLowerCase();
 
-        List<GamerUser> requests = allUsers
-            .where((u) =>
-                !u.hasBlueTick &&
-                (u.verificationStatus == 'pending' ||
-                    u.blueTickStatus == 'pending'))
-            .toList();
+          // Catch pending requests even if stored in various format variations
+          if (!isVerified && (vStatus == 'pending' || vStatus == 'under_review' || vStatus == 'submitted')) {
+            requests.add(GamerUser.fromMap(d));
+          }
+        }
 
         if (requests.isEmpty) {
           return Center(
@@ -1792,27 +1847,27 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10141D),
+                      color: ThemeService.card,
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF1F2B3E)),
+                      border: Border.all(color: ThemeService.border),
                     ),
                     child: const Icon(Icons.verified_outlined,
                         color: Color(0xFF38BDF8), size: 40),
                   ),
                   const SizedBox(height: 14),
-                  const Text(
+                  Text(
                     'No Blue Tick Requests',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: ThemeService.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 15),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'All verification requests have been reviewed!',
                     textAlign: TextAlign.center,
                     style:
-                        TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -1837,9 +1892,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF10141D),
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.35)),
+        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1861,9 +1916,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       children: [
                         Flexible(
                           child: Text(
-                            user.displayName,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            user.displayName.isNotEmpty ? user.displayName : user.username,
+                            style: TextStyle(
+                              color: ThemeService.textPrimary,
                               fontWeight: FontWeight.w900,
                               fontSize: 16,
                             ),
@@ -1879,13 +1934,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '@${user.username} • BGMI UID: ${user.gameId.isNotEmpty ? user.gameId : '512903819'}',
-                      style: const TextStyle(
-                          color: Color(0xFF8B949E), fontSize: 12),
+                      '@${user.username} • UID: ${user.uid.length > 8 ? user.uid.substring(0, 8) : user.uid}',
+                      style: TextStyle(
+                          color: ThemeService.textSecondary, fontSize: 12),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'K/D: ${user.kdRatio.toStringAsFixed(1)} • Followers: ${user.followersCount}',
+                      'Game: ${user.selectedGame.isNotEmpty ? user.selectedGame : "BGMI"} • ID: ${user.gameId.isNotEmpty ? user.gameId : "N/A"}',
                       style: const TextStyle(
                         color: Color(0xFF38BDF8),
                         fontSize: 11,
@@ -1915,7 +1970,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ],
           ),
           const SizedBox(height: 12),
-          const Divider(color: Color(0xFF1F2B3E), height: 1),
+          Divider(color: ThemeService.border, height: 1),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -1999,8 +2054,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             content: Text(ok
                 ? 'Rejected verification for @${user.username}'
                 : 'Error rejecting'),
-            backgroundColor:
-                ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
@@ -2030,16 +2084,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   const Icon(Icons.error_outline_rounded,
                       color: Color(0xFFFF4655), size: 48),
                   const SizedBox(height: 14),
-                  const Text('Could not load posts',
+                  Text('Could not load posts',
                       style: TextStyle(
-                          color: Colors.white,
+                          color: ThemeService.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 15)),
                   const SizedBox(height: 6),
                   Text('${snapshot.error}',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          color: Color(0xFF8B949E), fontSize: 12)),
+                      style: TextStyle(
+                          color: ThemeService.textSecondary, fontSize: 12)),
                 ],
               ),
             ),
@@ -2064,27 +2118,27 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10141D),
+                      color: ThemeService.card,
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF1F2B3E)),
+                      border: Border.all(color: ThemeService.border),
                     ),
-                    child: const Icon(Icons.dynamic_feed_rounded,
-                        color: Color(0xFF8B949E), size: 40),
+                    child: Icon(Icons.dynamic_feed_rounded,
+                        color: ThemeService.textSecondary, size: 40),
                   ),
                   const SizedBox(height: 14),
-                  const Text(
+                  Text(
                     'No posts to moderate',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: ThemeService.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 15),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'Community is clean — no posts need review!',
                     textAlign: TextAlign.center,
                     style:
-                        TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -2109,9 +2163,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             return Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF10141D),
+                color: ThemeService.card,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF1F2B3E)),
+                border: Border.all(color: ThemeService.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2133,8 +2187,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                                 Flexible(
                                   child: Text(
                                     author,
-                                    style: const TextStyle(
-                                        color: Colors.white,
+                                    style: TextStyle(
+                                        color: ThemeService.textPrimary,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14),
                                     overflow: TextOverflow.ellipsis,
@@ -2182,8 +2236,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   if (text.isNotEmpty) ...[
                     Text(
                       text,
-                      style: const TextStyle(
-                          color: Color(0xFFCBD5E1), fontSize: 13),
+                      style: TextStyle(
+                          color: ThemeService.textPrimary, fontSize: 13),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -2199,7 +2253,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         fit: BoxFit.cover,
                         placeholder: (_, __) => Container(
                           height: 140,
-                          color: const Color(0xFF161B26),
+                          color: ThemeService.cardSecondary,
                           child: const Center(
                             child: CircularProgressIndicator(
                                 color: Color(0xFF00FF88), strokeWidth: 2),
@@ -2207,10 +2261,10 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         ),
                         errorWidget: (_, __, ___) => Container(
                           height: 140,
-                          color: const Color(0xFF161B26),
-                          child: const Center(
+                          color: ThemeService.cardSecondary,
+                          child: Center(
                             child: Icon(Icons.broken_image_rounded,
-                                color: Colors.white38, size: 36),
+                                color: ThemeService.textSecondary, size: 36),
                           ),
                         ),
                       ),
@@ -2221,8 +2275,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     children: [
                       Text(
                         'ID: ${postId.length > 8 ? postId.substring(0, 8) : postId}',
-                        style: const TextStyle(
-                            color: Color(0xFF6E7681),
+                        style: TextStyle(
+                            color: ThemeService.textSecondary,
                             fontSize: 10,
                             fontFamily: 'monospace'),
                       ),
@@ -2279,16 +2333,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   const Icon(Icons.error_outline_rounded,
                       color: Color(0xFFFF4655), size: 48),
                   const SizedBox(height: 14),
-                  const Text('Could not load reports',
+                  Text('Could not load reports',
                       style: TextStyle(
-                          color: Colors.white,
+                          color: ThemeService.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 15)),
                   const SizedBox(height: 6),
                   Text('${snapshot.error}',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          color: Color(0xFF8B949E), fontSize: 12)),
+                      style: TextStyle(
+                          color: ThemeService.textSecondary, fontSize: 12)),
                 ],
               ),
             ),
@@ -2320,19 +2374,19 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         color: Color(0xFF00FF88), size: 40),
                   ),
                   const SizedBox(height: 14),
-                  const Text(
+                  Text(
                     'Community Safe • 0 Open Reports',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: ThemeService.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 16),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'No offensive content or active player violations reported.',
                     textAlign: TextAlign.center,
                     style:
-                        TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -2364,9 +2418,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             return Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF10141D),
+                color: ThemeService.card,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF1F2B3E)),
+                border: Border.all(color: ThemeService.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2444,8 +2498,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.person_outline_rounded,
-                          color: Color(0xFF8B949E), size: 14),
+                      Icon(Icons.person_outline_rounded,
+                          color: ThemeService.textSecondary, size: 14),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -2464,7 +2518,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF161B26),
+                        color: ThemeService.cardSecondary,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -2476,8 +2530,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           Expanded(
                             child: Text(
                               reason,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 12.5),
+                              style: TextStyle(
+                                  color: ThemeService.textPrimary, fontSize: 12.5),
                             ),
                           ),
                         ],
@@ -2486,14 +2540,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                     const SizedBox(height: 8),
                   ],
                   if (targetContent.isNotEmpty) ...[
-                    const Text('Reported Content:',
+                    Text('Reported Content:',
                         style: TextStyle(
-                            color: Color(0xFF8B949E), fontSize: 11)),
+                            color: ThemeService.textSecondary, fontSize: 11)),
                     const SizedBox(height: 4),
                     Text(
                       targetContent,
-                      style: const TextStyle(
-                          color: Color(0xFFCBD5E1), fontSize: 12),
+                      style: TextStyle(
+                          color: ThemeService.textPrimary, fontSize: 12),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -2504,8 +2558,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                       if (targetId.isNotEmpty)
                         Text(
                           'Target ID: ${targetId.length > 8 ? targetId.substring(0, 8) : targetId}',
-                          style: const TextStyle(
-                              color: Color(0xFF6E7681),
+                          style: TextStyle(
+                              color: ThemeService.textSecondary,
                               fontSize: 10,
                               fontFamily: 'monospace'),
                         ),
@@ -2814,14 +2868,16 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1A1A24), Color(0xFF261D10)],
+              gradient: LinearGradient(
+                colors: ThemeService.isDarkMode
+                    ? const [Color(0xFF1A1A24), Color(0xFF261D10)]
+                    : const [Color(0xFFFFF9E6), Color(0xFFFFF0CC)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
               border:
-                  Border.all(color: const Color(0xFFFFD700).withOpacity(0.3)),
+                  Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
             ),
             child: Row(
               children: [
@@ -2835,22 +2891,22 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                       color: Color(0xFFFFD700), size: 32),
                 ),
                 const SizedBox(width: 14),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Gamers ID Coins Vault',
                         style: TextStyle(
-                            color: Colors.white,
+                            color: ThemeService.textPrimary,
                             fontWeight: FontWeight.w900,
                             fontSize: 16),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
                         'Grant coins to players by Username, UID, or Email',
                         style: TextStyle(
-                            color: Color(0xFF8B949E), fontSize: 12),
+                            color: ThemeService.textSecondary, fontSize: 12),
                       ),
                     ],
                   ),
@@ -2859,17 +2915,17 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'Grant Coins to Player',
             style: TextStyle(
-                color: Colors.white,
+                color: ThemeService.textPrimary,
                 fontWeight: FontWeight.bold,
                 fontSize: 15),
           ),
           const SizedBox(height: 4),
           Text(
             'search_user_to_send_coins_desc'.tr(),
-            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 12),
           Row(
@@ -2878,7 +2934,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               Expanded(
                 child: TextField(
                   controller: _targetController,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: ThemeService.textPrimary),
                   onChanged: (val) {
                     if (_foundUser != null && _foundDocId != val.trim()) {
                       setState(() {
@@ -2893,15 +2949,15 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                   decoration: InputDecoration(
                     labelText: 'Target Username or UID',
                     hintText: 'e.g. fua, @user, UID, or email',
-                    hintStyle: const TextStyle(
-                        color: Color(0xFF555E6D), fontSize: 13),
-                    labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                    hintStyle: TextStyle(
+                        color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary),
                     prefixIcon: const Icon(Icons.person_search_rounded,
                         color: Color(0xFF38BDF8)),
                     suffixIcon: _targetController.text.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear,
-                                color: Colors.white54, size: 18),
+                            icon: Icon(Icons.clear,
+                                color: ThemeService.textSecondary, size: 18),
                             onPressed: () {
                               _targetController.clear();
                               setState(() {
@@ -2914,13 +2970,14 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                           )
                         : null,
                     filled: true,
-                    fillColor: const Color(0xFF10141D),
+                    fillColor: ThemeService.card,
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: ThemeService.border)),
+                    focusedBorder: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                       borderSide:
-                          const BorderSide(color: Color(0xFFFFD700)),
+                          BorderSide(color: Color(0xFFFFD700)),
                     ),
                   ),
                 ),
@@ -2931,7 +2988,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 child: ElevatedButton(
                   onPressed: _isSearching ? null : _handleSearch,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1F2B3E),
+                    backgroundColor: ThemeService.cardSecondary,
                     foregroundColor: const Color(0xFF38BDF8),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -2963,7 +3020,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D2319),
+                color: const Color(0xFF00FF88).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                     color: const Color(0xFF00FF88).withOpacity(0.5)),
@@ -2997,8 +3054,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                                         _foundUser!['username'] ??
                                         'User')
                                     .toString(),
-                                style: const TextStyle(
-                                    color: Colors.white,
+                                style: TextStyle(
+                                    color: ThemeService.textPrimary,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14),
                                 overflow: TextOverflow.ellipsis,
@@ -3034,8 +3091,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                         const SizedBox(height: 2),
                         Text(
                           '@${_foundUser!['username'] ?? ''} • ${_foundUser!['email'] ?? _foundDocId ?? ''}',
-                          style: const TextStyle(
-                              color: Color(0xFF8B949E), fontSize: 11),
+                          style: TextStyle(
+                              color: ThemeService.textSecondary, fontSize: 11),
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
@@ -3043,8 +3100,8 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                           children: [
                             Text(
                               'current_balance_prefix'.tr(),
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 11),
+                              style: TextStyle(
+                                  color: ThemeService.textSecondary, fontSize: 11),
                             ),
                             Text(
                               '${(_foundUser!['coins'] ?? 0)} 🪙',
@@ -3066,22 +3123,23 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           TextField(
             controller: _amountController,
             keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: ThemeService.textPrimary),
             decoration: InputDecoration(
               labelText: 'Coins Amount',
-              labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+              labelStyle: TextStyle(color: ThemeService.textSecondary),
               prefixIcon: const Icon(Icons.monetization_on_rounded,
                   color: Color(0xFFFFD700)),
               helperText: 'admin_unlimited_coins_desc'.tr(),
-              helperStyle: const TextStyle(
-                  color: Color(0xFF8B949E), fontSize: 11),
+              helperStyle: TextStyle(
+                  color: ThemeService.textSecondary, fontSize: 11),
               filled: true,
-              fillColor: const Color(0xFF10141D),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFFFD700)),
+              fillColor: ThemeService.card,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: ThemeService.border)),
+              focusedBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+                borderSide: BorderSide(color: Color(0xFFFFD700)),
               ),
             ),
           ),
@@ -3098,12 +3156,12 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                       style: const TextStyle(
                           fontSize: 11, fontWeight: FontWeight.bold),
                     ),
-                    backgroundColor: const Color(0xFF1A2130),
+                    backgroundColor: ThemeService.cardSecondary,
                     labelStyle:
                         const TextStyle(color: Color(0xFFFFD700)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: const BorderSide(color: Color(0xFF26354D)),
+                      side: BorderSide(color: ThemeService.border),
                     ),
                     onPressed: () {
                       _amountController.text = amt.toString();
@@ -3119,7 +3177,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF2D1216),
+                color: const Color(0xFFFF4655).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                     color: const Color(0xFFFF4655).withOpacity(0.6)),
@@ -3148,7 +3206,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF0E281C),
+                color: const Color(0xFF00FF88).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                     color: const Color(0xFF00FF88).withOpacity(0.6)),
@@ -3203,10 +3261,10 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Recent Coin Awards History',
                 style: TextStyle(
-                    color: Colors.white,
+                    color: ThemeService.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 14),
               ),
@@ -3254,15 +3312,15 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 return Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10141D),
+                    color: ThemeService.card,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF1F2B3E)),
+                    border: Border.all(color: ThemeService.border),
                   ),
                   child: Center(
                     child: Text(
                       'no_recent_transactions_found'.tr(),
                       style:
-                          const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                          TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                     ),
                   ),
                 );
@@ -3286,9 +3344,9 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10141D),
+                      color: ThemeService.card,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF1F2B3E)),
+                      border: Border.all(color: ThemeService.border),
                     ),
                     child: Row(
                       children: [
@@ -3309,16 +3367,16 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                             children: [
                               Text(
                                 description,
-                                style: const TextStyle(
-                                    color: Colors.white,
+                                style: TextStyle(
+                                    color: ThemeService.textPrimary,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12.5),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 'UID: $targetUserId ${date.isNotEmpty ? '• ${date.substring(0, 19).replaceAll('T', ' ')}' : ''}',
-                                style: const TextStyle(
-                                    color: Color(0xFF8B949E),
+                                style: TextStyle(
+                                    color: ThemeService.textSecondary,
                                     fontSize: 10.5),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -3361,7 +3419,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: const Color(0xFF0B0F14),
+      color: ThemeService.bg,
       child: _tabBar,
     );
   }
@@ -3419,7 +3477,7 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
           Container(
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF161B26),
+              color: ThemeService.cardSecondary,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                   color: const Color(0xFFFF4655).withOpacity(0.5)),
@@ -3429,13 +3487,13 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
               children: [
                 TextField(
                   controller: _reasonController,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: ThemeService.textPrimary, fontSize: 12),
+                  decoration: InputDecoration(
                     hintText:
                         'Enter rejection reason (e.g. Screenshot unclear, UID mismatch)...',
                     hintStyle: TextStyle(
-                        color: Color(0xFF8B949E), fontSize: 11),
-                    contentPadding: EdgeInsets.symmetric(
+                        color: ThemeService.textSecondary, fontSize: 11),
+                    contentPadding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 8),
                     border: InputBorder.none,
                   ),
@@ -3461,12 +3519,12 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1F2B3E),
+                            color: ThemeService.card,
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Text(
+                          child: const Text(
                             reason,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 color: Color(0xFF38BDF8), fontSize: 10),
                           ),
                         ),
