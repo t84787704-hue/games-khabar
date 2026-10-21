@@ -77,7 +77,7 @@ class GamerRoom {
     required this.filledSlots,
     required this.status,
     required this.createdAt,
-    this.hostName = 'user_host'.tr(),
+    this.hostName = 'Host', // Yahan tr() nahi laga sakte
     this.joinedUserIds = const [],
     this.joinedUsers = const [],
     DateTime? startTime,
@@ -103,11 +103,9 @@ class GamerRoom {
   bool get isDisputed =>
       disputed || status.toLowerCase() == 'disputed' || status.toLowerCase() == 'under_review';
 
-  // ✅ Check if proof was actually rejected by admin
   bool get isRejected =>
       status.toLowerCase() == 'rejected' || rewardStatus.toLowerCase() == 'rejected';
 
-  // ✅ Only true when submitted and still under review (NOT rejected, NOT completed)
   bool get isProofSubmitted =>
       !isCompleted &&
       !isRejected &&
@@ -194,7 +192,7 @@ class GamerRoom {
       filledSlots: (row['filled_slots'] is num) ? (row['filled_slots'] as num).toInt() : 1,
       status: (row['status'] ?? 'active').toString(),
       createdAt: created,
-      hostName: (row['host_name'] ?? 'user_host'.tr()).toString(),
+      hostName: (row['host_name'] ?? 'user_host'.tr()).toString(), // Yahan theek hai
       joinedUserIds: joinedUserIds,
       joinedUsers: joinedUsers,
       startTime: startTime ?? created,
@@ -450,10 +448,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   final GamerAuthService _authService = GamerAuthService();
   final CoinWalletService _walletService = CoinWalletService();
   Timer? _cleanupTimer;
-  String _selectedCategory = 'all_games'.tr();
+  String _selectedCategory = 'All Games';
 
   final List<String> _gameCategories = [
-    'all_games'.tr(),
+    'All Games',
     'BGMI',
     'Free Fire',
     'PUBG Mobile',
@@ -472,7 +470,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   String get currentUserName =>
       _authService.currentGamer?.displayName ??
       SupabaseService.client.auth.currentUser?.userMetadata?["full_name"]?.toString() ??
-      'user_gamer'.tr();
+      'Gamer';
 
   String get currentUserPhoto =>
       _authService.currentGamer?.photoUrl ??
@@ -737,7 +735,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     }
                     final list = snapshot.data ?? [];
                     final filtered = list.where((r) {
-                      if (_selectedCategory == 'all_games'.tr()) return true;
+                      if (_selectedCategory == 'All Games') return true;
                       return (r['game'] ?? '').toString().toLowerCase() ==
                           _selectedCategory.toLowerCase();
                     }).toList();
