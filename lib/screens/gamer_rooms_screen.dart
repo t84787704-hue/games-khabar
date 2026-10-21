@@ -77,7 +77,7 @@ class GamerRoom {
     required this.filledSlots,
     required this.status,
     required this.createdAt,
-    this.hostName = 'Host', // Yahan tr() nahi laga sakte
+    this.hostName = 'Host',
     this.joinedUserIds = const [],
     this.joinedUsers = const [],
     DateTime? startTime,
@@ -192,7 +192,7 @@ class GamerRoom {
       filledSlots: (row['filled_slots'] is num) ? (row['filled_slots'] as num).toInt() : 1,
       status: (row['status'] ?? 'active').toString(),
       createdAt: created,
-      hostName: (row['host_name'] ?? 'user_host'.tr()).toString(), // Yahan theek hai
+      hostName: (row['host_name'] ?? 'user_host'.tr()).toString(),
       joinedUserIds: joinedUserIds,
       joinedUsers: joinedUsers,
       startTime: startTime ?? created,
@@ -448,7 +448,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
   final GamerAuthService _authService = GamerAuthService();
   final CoinWalletService _walletService = CoinWalletService();
   Timer? _cleanupTimer;
-  String _selectedCategory = 'all_games'.tr();
+  int _selectedCategoryIndex = 0;
 
   final List<String> _gameCategories = [
     'all_games'.tr(),
@@ -520,7 +520,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               elapsed = now.difference(reinterpreted).inSeconds;
             }
 
-            // 5 minutes (300 seconds) pass hote hi auto delete
             if (elapsed >= 300) {
               final roomId = row['id'];
               await SupabaseService.client.from('rooms').delete().eq('id', roomId);
@@ -532,7 +531,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
     } catch (_) {}
   }
 
-  /// ✅ Check limit before opening Create Room dialog (Max 2 rooms per user)
   Future<void> _handleCreateRoomTap() async {
     if (currentUserId == 'guest') {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -541,7 +539,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
       return;
     }
 
-    // Pehle expired rooms ko saaf karein taake actual count mile
     await _purgeExpiredCompletedRooms();
 
     try {
@@ -565,7 +562,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                 final reinterpreted = DateTime(comp.year, comp.month, comp.day, comp.hour, comp.minute, comp.second);
                 elapsed = now.difference(reinterpreted).inSeconds;
               }
-              // Agar 300 seconds (5 min) guzar chuke hain to abhi delete karein aur count na karein
               if (elapsed >= 300) {
                 try {
                   await SupabaseService.client.from('rooms').delete().eq('id', r['id']);
@@ -579,7 +575,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         activeHostedRooms++;
       }
 
-      // 🛑 Max 2 Rooms Limit Alert
       if (activeHostedRooms >= 2) {
         if (!mounted) return;
         showDialog(
@@ -625,7 +620,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
         return;
       }
 
-      // Agar limit ke andar hai to pehle Rules Dialog show karein, phir room banayein
       if (mounted) {
         MatchRulesDialog.show(
           context,
@@ -686,7 +680,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, color: Color(0xFF1877F2), size: 28),
-                onPressed: _handleCreateRoomTap, // ✅ Limit Check + Verification Rules Dialog
+                onPressed: _handleCreateRoomTap,
               ),
               const SizedBox(width: 8),
             ],
@@ -702,7 +696,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                   itemCount: _gameCategories.length,
                   itemBuilder: (context, index) {
                     final cat = _gameCategories[index];
-                    final isSelected = cat == _selectedCategory;
+                    final isSelected = index == _selectedCategoryIndex;
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: ChoiceChip(
@@ -716,7 +710,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                         ),
                         backgroundColor: ThemeService.cardSecondary,
                         onSelected: (val) {
-                          if (val) setState(() => _selectedCategory = cat);
+                          if (val) setState(() => _selectedCategoryIndex = index);
                         },
                       ),
                     );
@@ -735,9 +729,10 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                     }
                     final list = snapshot.data ?? [];
                     final filtered = list.where((r) {
-                      if (_selectedCategory == 'all_games'.tr()) return true;
+                      if (_selectedCategoryIndex == 0) return true;
+                      final selectedGameName = _gameCategories[_selectedCategoryIndex];
                       return (r['game'] ?? '').toString().toLowerCase() ==
-                          _selectedCategory.toLowerCase();
+                          selectedGameName.toLowerCase();
                     }).toList();
 
                     if (filtered.isEmpty) {
@@ -768,7 +763,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                           ),
                           child: Column(
                             children: [
-                              // 🏆 Room Card Golden Winner Strip (If Completed)
                               if (room.isCompleted) ...[
                                 Container(
                                   width: double.infinity,
@@ -981,7 +975,6 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
                       setDialogState(() => isCreating = true);
 
                       try {
-                        // Double check limit before actual DB insert
                         final currentRooms = await SupabaseService.client
                             .from('rooms')
                             .select('id')
@@ -1428,7 +1421,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // Title Bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
@@ -1460,7 +1452,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               ),
               Divider(height: 1, color: ThemeService.border),
 
-              // 5-MINUTE GOLDEN WINNER BANNER (WITH LIVE TIMER & OPPONENT DETAILS)
               if (room.isCompleted) ...[
                 Builder(builder: (context) {
                   final opponents = room.joinedUsers
@@ -1565,7 +1556,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                   ),
                 ),
               ] else if (room.isRejected) ...[
-                // ❌ ADMIN NE PROOF REJECT KIYA HO TAB YEH AAYEGA
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -1593,7 +1583,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                   ),
                 ),
               ] else if (room.isProofSubmitted) ...[
-                // ⏳ JAB SIRF UNDER REVIEW HO
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -1622,7 +1611,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ],
 
-              // ROOM CREDENTIALS + RULES BUTTON
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 padding: const EdgeInsets.all(12),
@@ -1727,7 +1715,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // PLAYERS LIST (WITH WINNER & DEFEATED BADGES)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 padding: const EdgeInsets.all(10),
@@ -1905,7 +1892,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // CHAT MESSAGES STREAM
               Expanded(
                 child: StreamBuilder<List<Map<String, dynamic>>>(
                   stream: SupabaseService.client
@@ -1983,7 +1969,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // CHAT INPUT
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: Row(
@@ -2013,7 +1998,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                 ),
               ),
 
-              // ACTION BUTTONS: Join Match OR End Match & Dispute
               if (!room.isCompleted) ...[
                 if (!isJoined) ...[
                   Padding(
