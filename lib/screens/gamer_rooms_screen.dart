@@ -1399,6 +1399,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
 
           final room = GamerRoom.fromSupabase(snapshot.data!.first);
           final bool isJoined = room.joinedUserIds.contains(widget.currentUserId);
+          final bool canEndMatch = room.joinedUsers.length >= 2;
 
           if (room.isCompleted && _countdownTimer == null) {
             final compTime = room.completedAt ?? room.winProofUploadedAt ?? room.createdAt;
@@ -2043,12 +2044,14 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: room.isRejected
-                                  ? const Color(0xFFFF4655)
-                                  : (room.isProofSubmitted
-                                      ? const Color(0xFF1877F2)
-                                      : Colors.amber[700]),
-                              foregroundColor: Colors.white,
+                              backgroundColor: !canEndMatch
+                                  ? (isDark ? Colors.white12 : Colors.grey.shade400)
+                                  : (room.isRejected
+                                      ? const Color(0xFFFF4655)
+                                      : (room.isProofSubmitted
+                                          ? const Color(0xFF1877F2)
+                                          : Colors.amber[700])),
+                              foregroundColor: !canEndMatch ? Colors.white60 : Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
@@ -2059,24 +2062,40 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2, color: Colors.white))
                                 : Icon(
-                                    room.isRejected
-                                        ? Icons.refresh_rounded
-                                        : (room.isProofSubmitted
-                                            ? Icons.hourglass_top_rounded
-                                            : Icons.emoji_events),
+                                    !canEndMatch
+                                        ? Icons.lock_outline_rounded
+                                        : (room.isRejected
+                                            ? Icons.refresh_rounded
+                                            : (room.isProofSubmitted
+                                                ? Icons.hourglass_top_rounded
+                                                : Icons.emoji_events)),
                                     size: 18,
                                   ),
                             label: Text(
                               _isUploadingProof
                                   ? 'uploading_label'.tr()
-                                  : (room.isRejected
-                                      ? 'reupload_proof_button'.tr()
-                                      : (room.isProofSubmitted
-                                          ? 'proof_submitted_tap_to_change'.tr()
-                                          : 'end_match_claim_win'.tr())),
+                                  : (!canEndMatch
+                                      ? 'Waiting for Opponent...'
+                                      : (room.isRejected
+                                          ? 'reupload_proof_button'.tr()
+                                          : (room.isProofSubmitted
+                                              ? 'proof_submitted_tap_to_change'.tr()
+                                              : 'end_match_claim_win'.tr()))),
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
-                            onPressed: _isUploadingProof ? null : _uploadWinScreenshot,
+                            onPressed: _isUploadingProof
+                                ? null
+                                : (!canEndMatch
+                                    ? () {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Please wait for an opponent to join before claiming win!'),
+                                            backgroundColor: Color(0xFFFF4655),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                      }
+                                    : _uploadWinScreenshot),
                           ),
                         ),
                       ],
