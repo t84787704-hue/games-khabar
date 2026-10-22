@@ -187,6 +187,7 @@ class GamerUser {
   final bool isVipMember;
   final DateTime? vipTournamentPassUntil;
   final DateTime? leaderboardSpotlightUntil;
+  final String referredBy; // Referral tracking link
 
   // ═══════════════════════════════════════════════════════════
   // PRIVACY FIELDS — Play Store ready
@@ -253,6 +254,7 @@ class GamerUser {
     this.isVipMember = false,
     this.vipTournamentPassUntil,
     this.leaderboardSpotlightUntil,
+    this.referredBy = '',
     // Privacy defaults
     this.isRankPublic = true,
     this.isUidPublic = false,
@@ -575,9 +577,6 @@ class GamerUser {
           (data['kdRatio'] as num?)?.toDouble() ??
           0.0,
       rankBadgeType: _parseRankBadgeType(data['rankBadgeType']?.toString()),
-      // ═══════════════════════════════════════════════════════════
-      // FIXED: Pehle snake_case check karo, phir camelCase
-      // ═══════════════════════════════════════════════════════════
       followersCount: (data['followers_count'] as num?)?.toInt()
           ?? (data['followersCount'] as num?)?.toInt()
           ?? 0,
@@ -587,9 +586,12 @@ class GamerUser {
       postsCount: (data['posts_count'] as num?)?.toInt()
           ?? (data['postsCount'] as num?)?.toInt()
           ?? 0,
-      // ═══════════════════════════════════════════════════════════
-      likesReceived: (data['likesReceived'] as num?)?.toInt() ?? 0,
-      reportsCount: (data['reportsCount'] as num?)?.toInt() ?? 0,
+      likesReceived: (data['likes_received'] as num?)?.toInt()
+          ?? (data['likesReceived'] as num?)?.toInt()
+          ?? 0,
+      reportsCount: (data['reports_count'] as num?)?.toInt()
+          ?? (data['reportsCount'] as num?)?.toInt()
+          ?? 0,
       isVerified: hasApprovedBlueTick,
       verificationStatus: status,
       isVerifiedBlue: hasApprovedBlueTick,
@@ -642,6 +644,7 @@ class GamerUser {
       isVipMember: isVip,
       vipTournamentPassUntil: vipPassExpires,
       leaderboardSpotlightUntil: spotlightExpires,
+      referredBy: (data['referred_by'] ?? data['referredBy'] ?? '').toString(),
       // Privacy fields
       isRankPublic: data['is_rank_public'] != false,
       isUidPublic: data['is_uid_public'] == true,
@@ -719,6 +722,7 @@ class GamerUser {
         'leaderboardSpotlightUntil':
             leaderboardSpotlightUntil!.toIso8601String(),
       'games': games.map((g) => g.toMap()).toList(),
+      'referred_by': referredBy,
       'verificationProgress': {
         'postsCount': postsCount,
         'likesReceived': likesReceived,
@@ -798,6 +802,7 @@ class GamerUser {
     bool? isVipMember,
     DateTime? vipTournamentPassUntil,
     DateTime? leaderboardSpotlightUntil,
+    String? referredBy,
     bool? isRankPublic,
     bool? isUidPublic,
     bool? isCoinsPublic,
@@ -863,6 +868,7 @@ class GamerUser {
           vipTournamentPassUntil ?? this.vipTournamentPassUntil,
       leaderboardSpotlightUntil:
           leaderboardSpotlightUntil ?? this.leaderboardSpotlightUntil,
+      referredBy: referredBy ?? this.referredBy,
       isRankPublic: isRankPublic ?? this.isRankPublic,
       isUidPublic: isUidPublic ?? this.isUidPublic,
       isCoinsPublic: isCoinsPublic ?? this.isCoinsPublic,
