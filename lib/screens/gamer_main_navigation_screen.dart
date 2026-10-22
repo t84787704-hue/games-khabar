@@ -1,6 +1,6 @@
 // ===============================================================================
 // File: lib/screens/gamer_main_navigation_screen.dart
-// Clean Navigation Screen with Theme & Language Sync
+// Clean Navigation Screen with Theme & Language Sync + Daily Streak Popup
 // ===============================================================================
 
 import 'dart:async';
@@ -11,6 +11,8 @@ import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
+import '../services/streak_service.dart';
+import '../widgets/daily_streak_dialog.dart';
 import 'gamer_feed_screen.dart';
 import 'teams_screen.dart';
 import 'gamer_messages_screen.dart';
@@ -40,6 +42,28 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     _currentIndex = widget.initialIndex;
     _checkUsernameSetup();
     _checkAdminStatus();
+    _checkDailyLoginStreak();
+  }
+
+  void _checkDailyLoginStreak() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // 1.5 seconds wait karein taake UI render ho jaye
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (!mounted) return;
+
+      try {
+        final result = await StreakService().checkAndClaimDailyStreak();
+        if (result != null && !result.isClaimedToday && mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => DailyStreakDialog(result: result),
+          );
+        }
+      } catch (e) {
+        debugPrint('[GamerMainNavigationScreen] Streak check error: $e');
+      }
+    });
   }
 
   void _checkAdminStatus() async {
