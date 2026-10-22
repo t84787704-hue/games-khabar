@@ -1,4 +1,7 @@
-{"heading_outgoing_requests":"Outgoing Challenge Requests",
+{"notif_coins_earned_title": "Coins Earned!",
+ "wallet_ad_reward_reason": "Reward for watching ad",
+ "wallet_daily_bonus_reason": "Daily login bonus",
+"heading_outgoing_requests":"Outgoing Challenge Requests",
   "badge_sent_count": "Sent",
   "btn_cancel_caps": "CANCEL",
   "label_game_prefix": "Game",
