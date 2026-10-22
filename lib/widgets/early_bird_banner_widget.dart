@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/supabase_service.dart';
 import '../screens/verification_screen.dart';
 
@@ -16,7 +15,6 @@ class _EarlyBirdBannerWidgetState extends State<EarlyBirdBannerWidget> {
   bool _isVisible = false;
   int _userRankNumber = 0;
   int _referralCount = 0;
-  static const String _dismissPrefKey = 'early_bird_banner_dismissed';
 
   @override
   void initState() {
@@ -28,12 +26,7 @@ class _EarlyBirdBannerWidgetState extends State<EarlyBirdBannerWidget> {
     if (widget.userId.isEmpty) return;
 
     try {
-      // 1. Agar user ne pehle 'X' daba kar hide kar diya ho to return ho jaye
-      final prefs = await SharedPreferences.getInstance();
-      final isDismissed = prefs.getBool(_dismissPrefKey) ?? false;
-      if (isDismissed) return;
-
-      // 2. User ka record check karein
+      // 1. User ka record check karein
       final userRes = await SupabaseService.client
           .from('users')
           .select('created_at, is_verified, blue_tick_status, verification_status')
@@ -42,7 +35,7 @@ class _EarlyBirdBannerWidgetState extends State<EarlyBirdBannerWidget> {
 
       if (userRes == null) return;
 
-      // 3. RULE 1: Jis user ke paas Blue Tick aa chuka hai, use KABHI na dikhayein
+      // 2. RULE 1: Jis user ke paas Blue Tick aa chuka hai, use KABHI na dikhayein
       final bool isAlreadyVerified = userRes['is_verified'] == true ||
           (userRes['blue_tick_status']?.toString().toLowerCase() == 'approved') ||
           (userRes['verification_status']?.toString().toLowerCase() == 'verified');
@@ -52,7 +45,7 @@ class _EarlyBirdBannerWidgetState extends State<EarlyBirdBannerWidget> {
         return;
       }
 
-      // 4. RULE 2: Registration rank check karein
+      // 3. RULE 2: Registration rank check karein
       final createdAt = userRes['created_at'];
       if (createdAt != null) {
         final countRes = await SupabaseService.client
@@ -89,10 +82,11 @@ class _EarlyBirdBannerWidgetState extends State<EarlyBirdBannerWidget> {
     }
   }
 
-  Future<void> _dismissBanner() async {
-    setState(() => _isVisible = false);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_dismissPrefKey, true);
+  void _dismissBanner() {
+    // SharedPreferences mein save nahi karega, sirf is waqt ke liye screen se chhupega
+    if (mounted) {
+      setState(() => _isVisible = false);
+    }
   }
 
   @override
