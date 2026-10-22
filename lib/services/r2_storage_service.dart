@@ -8,7 +8,7 @@ class R2StorageService {
   R2StorageService._internal();
 
   static const String _accountId = '1cffac649ca0a4c545cf39588d0183d5';
-  static const String _accessKey = 'F95ff7a33b51c33530b9e852b621d97d';
+  static const String _accessKey = 'f95ff7a33b51c33530b9e852b621d97d';
   static const String _secretKey = 'c0628471d57c7fb82be1e24b77b44b8e45c3f22e7253cc56945dc8c6f495b194';
   static const String _bucketName = 'gamersid-post';
   static const String _publicBaseUrl = 'https://pub-7a0250f08fb949a49663fef70e707.r2.dev';
@@ -34,7 +34,7 @@ class R2StorageService {
         _bucketName,
         fileName,
         stream,
-        fileBytes.length,
+        size: fileBytes.length,
         metadata: {
           'Content-Type': 'image/jpeg',
         },
