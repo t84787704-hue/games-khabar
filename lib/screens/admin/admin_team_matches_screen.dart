@@ -1,3 +1,8 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN TEAM MATCHES SCREEN — Unified Live Proofs & Disputes
+// File: lib/screens/admin/admin_team_matches_screen.dart
+// ═══════════════════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -6,6 +11,7 @@ import '../../constants/gamer_theme.dart';
 import '../../models/team_match_model.dart';
 import '../../services/team_match_service.dart';
 import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
 import '../team_match_room_screen.dart';
 
 class _AdminMatchUnifiedData {
@@ -41,20 +47,24 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
   ];
 
   Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Pending':
+    switch (status.toLowerCase()) {
+      case 'pending':
         return const Color(0xFFFFB020);
-      case 'Accepted':
+      case 'accepted':
         return const Color(0xFF00FF88);
-      case 'Live':
+      case 'live':
         return const Color(0xFFFF4655);
-      case 'Proof Submitted':
+      case 'proof submitted':
+      case 'proof_submitted':
+      case 'review_pending':
         return const Color(0xFF38BDF8);
-      case 'Verified':
+      case 'verified':
+      case 'completed':
         return const Color(0xFF00FF88);
-      case 'Disputed':
+      case 'disputed':
+      case 'under_review':
         return const Color(0xFFFF4655);
-      case 'Rejected':
+      case 'rejected':
         return Colors.grey;
       default:
         return const Color(0xFFFF6B00);
@@ -76,7 +86,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white54, size: 20),
                     onPressed: () => Navigator.pop(ctx),
@@ -86,11 +102,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
             ),
             ClipRRect(
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.contain,
-                placeholder: (c, u) => const SizedBox(height: 200, child: Center(child: CircularProgressIndicator())),
-                errorWidget: (c, u, e) => const SizedBox(height: 200, child: Center(child: Icon(Icons.broken_image, color: Colors.white30))),
+              child: InteractiveViewer(
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (c, u) => const SizedBox(height: 220, child: Center(child: CircularProgressIndicator())),
+                  errorWidget: (c, u, e) => const SizedBox(height: 220, child: Center(child: Icon(Icons.broken_image, color: Colors.white30))),
+                ),
               ),
             ),
           ],
@@ -109,12 +127,12 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF161F2E),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
+          title: const Row(
             children: [
-              const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 22),
-              const SizedBox(width: 8),
+              Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 22),
+              SizedBox(width: 8),
               Expanded(
-                child: Text('verify_match_winner_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                child: Text('Verify Match Winner', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ],
           ),
@@ -123,13 +141,12 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'select_winner_after_proof_instruction'.tr(),
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+                const Text(
+                  'Select the winning team after verifying screenshot proofs:',
+                  style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
                 ),
                 const SizedBox(height: 14),
 
-                // Team 1 Option
                 RadioListTile<String>(
                   value: match.team1Id,
                   groupValue: selectedWinner,
@@ -139,13 +156,12 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
-                    '${'claim_label'.tr()}: ${match.team1Claim ?? "none_label".tr()}',
+                    'Claim: ${match.team1Claim ?? "None"}',
                     style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                   ),
                   onChanged: (val) => setDialogState(() => selectedWinner = val),
                 ),
 
-                // Team 2 Option
                 RadioListTile<String>(
                   value: match.team2Id,
                   groupValue: selectedWinner,
@@ -155,18 +171,17 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
-                    '${'claim_label'.tr()}: ${match.team2Claim ?? "none_label".tr()}',
+                    'Claim: ${match.team2Claim ?? "None"}',
                     style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                   ),
                   onChanged: (val) => setDialogState(() => selectedWinner = val),
                 ),
 
-                // Draw Option
                 RadioListTile<String>(
                   value: 'DRAW',
                   groupValue: selectedWinner,
                   activeColor: const Color(0xFFFFB020),
-                  title: Text('draw_option_label'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  title: const Text('Draw / Tie Match', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   onChanged: (val) => setDialogState(() => selectedWinner = val),
                 ),
 
@@ -174,11 +189,11 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                 TextField(
                   controller: notesController,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: InputDecoration(
-                    labelText: 'admin_notes_optional_label'.tr(),
-                    labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                  decoration: const InputDecoration(
+                    labelText: 'Admin Note (Optional)',
+                    labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                     filled: true,
-                    fillColor: const Color(0xFF10141D),
+                    fillColor: Color(0xFF10141D),
                   ),
                 ),
               ],
@@ -187,7 +202,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.grey)),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -253,9 +268,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('match_verified_leaderboard_success'.tr()),
-                        backgroundColor: const Color(0xFF00FF88),
+                      const SnackBar(
+                        content: Text('Match verified and stats updated on leaderboard!'),
+                        backgroundColor: Color(0xFF00FF88),
                       ),
                     );
                     setState(() {});
@@ -265,14 +280,14 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('${'error_updating_leaderboard'.tr()}: $e'),
+                        content: Text('Error updating leaderboard: $e'),
                         backgroundColor: const Color(0xFFFF4655),
                       ),
                     );
                   }
                 }
               },
-              child: Text('confirm_winner_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Confirm Winner', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -288,11 +303,11 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161F2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 22),
-            const SizedBox(width: 8),
-            Text('reject_match_proof_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 22),
+            SizedBox(width: 8),
+            Text('Reject Match Proof', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         content: Column(
@@ -301,8 +316,8 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
           children: [
             Text(
               match.proofAttempts >= 1
-                  ? 'reject_proof_second_attempt_warning'.tr(args: [(match.proofAttempts + 1).toString()])
-                  : 'reject_proof_first_attempt_warning'.tr(),
+                  ? 'Proof rejected on attempt ${match.proofAttempts + 1}.'
+                  : 'Reject submitted proof and request team to re-upload clear screenshot.',
               style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
             ),
             const SizedBox(height: 12),
@@ -310,13 +325,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               controller: reasonController,
               maxLines: 2,
               style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                labelText: 'write_admin_reason_label'.tr(),
-                hintText: 'admin_reason_hint_example'.tr(),
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-                labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+              decoration: const InputDecoration(
+                labelText: 'Rejection Reason',
+                hintText: 'e.g. Screenshot blurry, scores mismatch...',
+                hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                 filled: true,
-                fillColor: const Color(0xFF10141D),
+                fillColor: Color(0xFF10141D),
               ),
             ),
           ],
@@ -324,7 +339,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -333,7 +348,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
             ),
             onPressed: () async {
               final reason = reasonController.text.trim().isEmpty
-                  ? 'admin_default_reject_reason'.tr()
+                  ? 'Screenshot proof is invalid or unclear. Please re-upload.'
                   : reasonController.text.trim();
               Navigator.pop(ctx);
               await _matchService.adminRejectMatch(
@@ -343,14 +358,14 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               );
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('match_proof_rejected_snackbar'.tr()),
-                    backgroundColor: const Color(0xFFFF4655),
+                  const SnackBar(
+                    content: Text('Match proof rejected. Teams notified to re-upload.'),
+                    backgroundColor: Color(0xFFFF4655),
                   ),
                 );
               }
             },
-            child: Text('reject_proof_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Reject Proof', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -365,33 +380,33 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161F2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.replay_rounded, color: Color(0xFFFF6B00), size: 22),
-            const SizedBox(width: 8),
-            Text('request_new_proof_title'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            Icon(Icons.replay_rounded, color: Color(0xFFFF6B00), size: 22),
+            SizedBox(width: 8),
+            Text('Request New Proof', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'request_new_proof_desc'.tr(),
-              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
+            const Text(
+              'Ask teams to provide another screenshot proof with full scoreboard visible.',
+              style: TextStyle(color: Color(0xFF8B949E), fontSize: 12.5),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: reasonController,
               maxLines: 2,
               style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                labelText: 'write_admin_reason_label'.tr(),
-                hintText: 'request_proof_hint_example'.tr(),
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-                labelStyle: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+              decoration: const InputDecoration(
+                labelText: 'Reason for request',
+                hintText: 'e.g. Please show the final results screen',
+                hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                labelStyle: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
                 filled: true,
-                fillColor: const Color(0xFF10141D),
+                fillColor: Color(0xFF10141D),
               ),
             ),
           ],
@@ -399,7 +414,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -416,14 +431,14 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               );
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('request_new_proof_sent_snackbar'.tr()),
-                    backgroundColor: const Color(0xFFFF6B00),
+                  const SnackBar(
+                    content: Text('Request for new proof sent to team captains.'),
+                    backgroundColor: Color(0xFFFF6B00),
                   ),
                 );
               }
             },
-            child: Text('send_request_proof_btn'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Send Request', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -433,9 +448,80 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
   Stream<_AdminMatchUnifiedData> _getUnifiedMatchesStream() async* {
     while (true) {
       try {
-        final matchesList = await SupabaseService.getTeamMatches(status: _selectedFilter);
-        final matches = matchesList.map((m) => TeamMatch.fromMap(m)).toList();
+        final List<TeamMatch> matches = [];
 
+        // 1. Fetch from team_matches table
+        try {
+          final res = await SupabaseService.client
+              .from('team_matches')
+              .select()
+              .order('created_at', ascending: false);
+          if (res is List) {
+            for (final m in res) {
+              try {
+                matches.add(TeamMatch.fromMap(m));
+              } catch (_) {}
+            }
+          }
+        } catch (e) {
+          debugPrint('[AdminTeamMatches] Error loading team_matches: $e');
+        }
+
+        // 2. Fetch team rooms / 2v2 / 4v4 format rooms from rooms table
+        try {
+          final roomRes = await SupabaseService.client
+              .from('rooms')
+              .select()
+              .or('mode.ilike.%2v2%,mode.ilike.%4v4%,mode.ilike.%team%,total_slots.gte.4')
+              .order('created_at', ascending: false);
+
+          if (roomRes is List) {
+            for (final r in roomRes) {
+              final rId = (r['id'] ?? '').toString();
+              if (matches.any((m) => m.matchId == rId)) continue;
+
+              final winProof = (r['win_proof_url'] ?? r['proof_url'])?.toString();
+              final status = (r['status'] ?? 'active').toString();
+              final isDisputed = r['disputed'] == true || status == 'disputed' || status == 'under_review';
+              final isProofSubmitted = winProof != null && winProof.isNotEmpty;
+
+              String mappedStatus = 'Live';
+              if (isDisputed) {
+                mappedStatus = 'Disputed';
+              } else if (isProofSubmitted || status == 'review_pending' || status == 'proof_submitted') {
+                mappedStatus = 'Proof Submitted';
+              } else if (status == 'completed') {
+                mappedStatus = 'Verified';
+              } else if (status == 'rejected') {
+                mappedStatus = 'Rejected';
+              }
+
+              matches.add(
+                TeamMatch(
+                  matchId: rId,
+                  team1Id: (r['host_id'] ?? '').toString(),
+                  team1Name: (r['host_name'] ?? 'Host Team').toString(),
+                  team1LeaderName: (r['host_name'] ?? 'Host').toString(),
+                  team2Id: (r['winner_id'] ?? 'opponent').toString(),
+                  team2Name: (r['winner_name'] ?? 'Opponent Team').toString(),
+                  team2LeaderName: (r['winner_name'] ?? 'Opponent').toString(),
+                  game: (r['game'] ?? 'BGMI').toString(),
+                  mode: (r['mode'] ?? 'TDM').toString(),
+                  status: mappedStatus,
+                  matchTime: DateTime.tryParse(r['created_at']?.toString() ?? '') ?? DateTime.now(),
+                  team1Proof: winProof,
+                  team2Proof: (r['dispute_proof_url'] ?? r['second_proof_url'])?.toString(),
+                  disputeReason: (r['dispute_reason'] ?? '').toString(),
+                  winnerName: r['winner_name']?.toString(),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('[AdminTeamMatches] Error loading rooms: $e');
+        }
+
+        // 3. Fetch dispute reports
         List<Map<String, dynamic>> reports = [];
         try {
           final reportsRes = await SupabaseService.client
@@ -449,33 +535,6 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
           }
         } catch (e) {
           debugPrint('[AdminTeamMatches] Error loading reports: $e');
-        }
-
-        try {
-          final activeRes = await SupabaseService.client
-              .from('active_matches')
-              .select()
-              .eq('status', 'disputed')
-              .order('created_at', ascending: false);
-          if (activeRes is List) {
-            for (final a in activeRes) {
-              final aId = a['id']?.toString() ?? '';
-              if (!reports.any((r) => (r['target_id']?.toString() ?? '') == aId)) {
-                reports.add({
-                  'id': 'active_dispute_$aId',
-                  'target_id': aId,
-                  'target_type': 'match',
-                  'reporter_username': a['disputed_by']?.toString() ?? 'Gamer',
-                  'reason': a['dispute_reason']?.toString() ?? 'Room match disputed by player',
-                  'proof_url': a['dispute_proof_url']?.toString() ?? a['proof_url']?.toString(),
-                  'created_at': a['disputed_at']?.toString() ?? a['created_at']?.toString(),
-                  'status': 'pending',
-                });
-              }
-            }
-          }
-        } catch (e) {
-          debugPrint('[AdminTeamMatches] Error loading disputed active_matches: $e');
         }
 
         yield _AdminMatchUnifiedData(
@@ -512,9 +571,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('dispute_report_resolved_snackbar'.tr()),
-            backgroundColor: const Color(0xFF00FF88),
+          const SnackBar(
+            content: Text('Dispute marked as resolved!'),
+            backgroundColor: Color(0xFF00FF88),
           ),
         );
         setState(() {});
@@ -523,7 +582,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${'error_resolving_dispute'.tr()}: $e'),
+            content: Text('Error resolving dispute: $e'),
             backgroundColor: const Color(0xFFFF4655),
           ),
         );
@@ -549,7 +608,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
     }
     final formattedTime = dt != null
         ? DateFormat('dd MMM yyyy, hh:mm a').format(dt)
-        : 'recently_label'.tr();
+        : 'Recently';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -570,14 +629,14 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   color: const Color(0xFFFF4655).withOpacity(0.18),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFFF4655)),
-                    const SizedBox(width: 4),
+                    Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFFF4655)),
+                    SizedBox(width: 4),
                     Text(
-                      'match_dispute_report_badge'.tr(),
-                      style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 11),
+                      'MATCH DISPUTE',
+                      style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 11),
                     ),
                   ],
                 ),
@@ -590,9 +649,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFFFF4655)),
                 ),
-                child: Text(
-                  'disputed_priority_badge'.tr(),
-                  style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 10),
+                child: const Text(
+                  'PRIORITY',
+                  style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 10),
                 ),
               ),
             ],
@@ -603,13 +662,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               const Icon(Icons.person_rounded, size: 16, color: Color(0xFF8B949E)),
               const SizedBox(width: 6),
               Text(
-                '${'reporter_label'.tr()}: $reporterName',
+                'Reporter: $reporterName',
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
               ),
               if (targetId.isNotEmpty) ...[
                 const Spacer(),
                 Text(
-                  '${'match_id_label'.tr()}: ${targetId.length > 8 ? targetId.substring(0, 8) : targetId}',
+                  'ID: ${targetId.length > 8 ? targetId.substring(0, 8) : targetId}',
                   style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
                 ),
               ],
@@ -631,7 +690,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${'reason_prefix_label'.tr()}: $reason',
+                    'Reason: $reason',
                     style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ),
@@ -640,7 +699,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '${'reported_at_label'.tr()}: $formattedTime',
+            'Reported: $formattedTime',
             style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
           ),
           const SizedBox(height: 12),
@@ -658,8 +717,8 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                     minimumSize: const Size(0, 30),
                   ),
                   icon: const Icon(Icons.image_outlined, size: 14),
-                  label: Text('view_proof_btn'.tr(), style: const TextStyle(fontSize: 11)),
-                  onPressed: () => _showImageDialog(context, proofUrl, 'dispute_proof_screenshot_title'.tr()),
+                  label: const Text('View Proof', style: TextStyle(fontSize: 11)),
+                  onPressed: () => _showImageDialog(context, proofUrl, 'Dispute Proof Screenshot'),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -671,7 +730,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                     minimumSize: const Size(0, 30),
                   ),
                   icon: const Icon(Icons.open_in_new_rounded, size: 14),
-                  label: Text('match_room_btn'.tr(), style: const TextStyle(fontSize: 11)),
+                  label: const Text('Match Room', style: TextStyle(fontSize: 11)),
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -692,7 +751,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   elevation: 0,
                 ),
                 onPressed: () => _resolveDisputeReport(report),
-                child: Text('resolve_dispute_btn'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                child: const Text('Resolve', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
               ),
             ],
           ),
@@ -752,9 +811,18 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               final allMatches = unifiedData.matches;
               final showDisputes = _selectedFilter == 'All' || _selectedFilter == 'Disputed';
               final visibleReports = showDisputes ? unifiedData.disputeReports : <Map<String, dynamic>>[];
-              final visibleMatches = _selectedFilter == 'Disputed'
-                  ? allMatches.where((m) => m.isDisputed).toList()
-                  : allMatches;
+
+              // Filter matching logic (tolerant case & multi-status)
+              final visibleMatches = allMatches.where((m) {
+                if (_selectedFilter == 'All') return true;
+                if (_selectedFilter == 'Disputed') return m.isDisputed;
+                if (_selectedFilter == 'Proof Submitted') {
+                  return m.isProofSubmitted ||
+                      (m.team1Proof != null && m.team1Proof!.isNotEmpty) ||
+                      (m.team2Proof != null && m.team2Proof!.isNotEmpty);
+                }
+                return m.status.toLowerCase() == _selectedFilter.toLowerCase();
+              }).toList();
 
               if (visibleReports.isEmpty && visibleMatches.isEmpty) {
                 return Center(
@@ -841,7 +909,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  Text('${'leader_label'.tr()}: ${match.team1LeaderName}', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                  Text('Leader: ${match.team1LeaderName}', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                                 ],
                               ),
                             ),
@@ -860,7 +928,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                     overflow: TextOverflow.ellipsis,
                                     textAlign: TextAlign.end,
                                   ),
-                                  Text('${'leader_label'.tr()}: ${match.team2LeaderName}', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
+                                  Text('Leader: ${match.team2LeaderName}', style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11)),
                                 ],
                               ),
                             ),
@@ -868,64 +936,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                         ),
                         const SizedBox(height: 8),
 
-                        // Match Time & Dispute Banner
                         Text(
-                          '${'time_label'.tr()}: ${DateFormat('dd MMM yyyy, hh:mm a').format(match.matchTime)}',
+                          'Time: ${DateFormat('dd MMM yyyy, hh:mm a').format(match.matchTime)}',
                           style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
                         ),
 
-                        if (match.proofAttempts > 0) ...[
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: (match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020)).withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.camera_alt_outlined,
-                                      size: 13,
-                                      color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'attempt_count_label'.tr(args: [match.proofAttempts.toString()]),
-                                      style: TextStyle(
-                                        color: match.proofAttempts >= 2 ? const Color(0xFFFF4655) : const Color(0xFFFFB020),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (match.lastProofAt != null) ...[
-                                const SizedBox(width: 8),
-                                Text(
-                                  '${'submitted_at_label'.tr()}: ${DateFormat('dd MMM, hh:mm a').format(match.lastProofAt!)}',
-                                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
-                                ),
-                              ] else if (match.rejectedAt != null && !match.isProofSubmitted) ...[
-                                const SizedBox(width: 8),
-                                Text(
-                                  '${'rejected_on_label'.tr()}: ${DateFormat('dd MMM, hh:mm a').format(match.rejectedAt!)}',
-                                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10.5),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-
-                        if (match.isProofSubmitted) ...[
-                          const SizedBox(height: 6),
+                        if (match.team1Proof != null || match.team2Proof != null) ...[
+                          const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
@@ -933,44 +950,22 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
                             ),
-                            child: Row(
+                            child: const Row(
                               children: [
-                                const Icon(Icons.mark_email_unread_rounded, color: Color(0xFF38BDF8), size: 16),
-                                const SizedBox(width: 6),
+                                Icon(Icons.check_circle_outline, color: Color(0xFF38BDF8), size: 16),
+                                SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
-                                    match.proofAttempts >= 2
-                                        ? 'proof_submitted_attempt_2_banner'.tr()
-                                        : 'proof_submitted_banner'.tr(),
-                                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                    'Screenshot proof available for review',
+                                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ] else if (match.adminNote != null && match.adminNote!.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF4655).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.4)),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.cancel_outlined, color: Color(0xFFFF4655), size: 16),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    '${'admin_note_label'.tr()}: ${match.adminNote}',
-                                    style: const TextStyle(color: Color(0xFFFF4655), fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ] else if (match.disputeReason.isNotEmpty) ...[
+                        ],
+
+                        if (match.disputeReason.isNotEmpty) ...[
                           const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.all(8),
@@ -996,7 +991,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                         if (match.isVerified && match.winnerName != null) ...[
                           const SizedBox(height: 6),
                           Text(
-                            '🏆 ${'winner_label'.tr()}: ${match.winnerName} (${'verified_by_label'.tr(args: [match.verifiedBy ?? ''])})',
+                            '🏆 Winner: ${match.winnerName} (${match.verifiedBy ?? "Admin"})',
                             style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                         ],
@@ -1005,7 +1000,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                         const Divider(color: Color(0xFF2A3447), height: 1),
                         const SizedBox(height: 10),
 
-                        // Screenshots buttons + Admin Verify/Reject Actions
+                        // Action Buttons & Proof Viewers
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
@@ -1022,14 +1017,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                 ),
                                 icon: const Icon(Icons.image_outlined, size: 14),
                                 label: Text(
-                                  match.proofAttempts > 0
-                                      ? '${match.team1Name} ${'proof_label'.tr()} (${'attempt_count_label'.tr(args: [match.proofAttempts.toString()])})' : '${match.team1Name} ${'proof_label'.tr()}',
+                                  '${match.team1Name} Proof',
                                   style: const TextStyle(fontSize: 11),
                                 ),
                                 onPressed: () => _showImageDialog(
                                   context,
                                   match.team1Proof!,
-                                  '${match.team1Name} ${'proof_label'.tr()} (${'attempt_count_label'.tr(args: [match.proofAttempts.toString()])})',
+                                  '${match.team1Name} Match Proof',
                                 ),
                               ),
                             ],
@@ -1044,14 +1038,13 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                 ),
                                 icon: const Icon(Icons.image_outlined, size: 14),
                                 label: Text(
-                                  match.proofAttempts > 0
-                                      ? '${match.team2Name} ${'proof_label'.tr()} (${'attempt_count_label'.tr(args: [match.proofAttempts.toString()])})' : '${match.team2Name} ${'proof_label'.tr()}',
+                                  '${match.team2Name} Proof',
                                   style: const TextStyle(fontSize: 11),
                                 ),
                                 onPressed: () => _showImageDialog(
                                   context,
                                   match.team2Proof!,
-                                  '${match.team2Name} ${'proof_label'.tr()} (${'attempt_count_label'.tr(args: [match.proofAttempts.toString()])})',
+                                  '${match.team2Name} Match Proof',
                                 ),
                               ),
                             ],
@@ -1063,7 +1056,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                 minimumSize: const Size(0, 30),
                               ),
                               icon: const Icon(Icons.open_in_new_rounded, size: 14),
-                              label: Text('room_and_chat_btn'.tr(), style: const TextStyle(fontSize: 11)),
+                              label: const Text('Room & Chat', style: TextStyle(fontSize: 11)),
                               onPressed: () {
                                 Navigator.push(
                                   context,
@@ -1086,7 +1079,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                       minimumSize: const Size(0, 30),
                                     ),
                                     onPressed: () => _showRejectDialog(context, match),
-                                    child: Text('reject_btn'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: const Text('Reject', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                   ),
                                   const SizedBox(width: 6),
                                 ],
@@ -1100,7 +1093,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                       minimumSize: const Size(0, 30),
                                     ),
                                     icon: const Icon(Icons.replay_rounded, size: 13),
-                                    label: Text('request_new_proof_btn'.tr(), style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                    label: const Text('Request Proof', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
                                     onPressed: () => _showRequestNewProofDialog(context, match),
                                   ),
                                   const SizedBox(width: 6),
@@ -1116,7 +1109,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                                       elevation: 0,
                                     ),
                                     onPressed: () => _showVerifyDecisionDialog(context, match),
-                                    child: Text('verify_winner_btn'.tr(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                                    child: const Text('Verify Winner', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
                                   ),
                                 ],
                               ],
