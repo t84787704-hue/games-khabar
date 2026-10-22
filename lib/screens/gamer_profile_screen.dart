@@ -1,6 +1,6 @@
 // ===============================================================================
 // GAMER PROFILE SCREEN — Full About Details, Badges & Multi-Language Sync
-// + Adaptive Dark & Light Mode + 100% Clean Compilation
+// + Adaptive Dark & Light Mode + Early Bird 1200 VIP Banner
 // -------------------------------------------------------------------------------
 // File: lib/screens/gamer_profile_screen.dart
 // ===============================================================================
@@ -24,6 +24,7 @@ import '../services/language_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
+import '../widgets/early_bird_banner_widget.dart';
 import '../services/profile_service.dart';
 import '../services/block_service.dart';
 import '../widgets/posts_tab.dart';
@@ -535,6 +536,12 @@ ${'share_msg_download'.tr(args: [appLink])}
                                   height: 1.35,
                                 ),
                               ),
+                            ],
+
+                            // Early Bird Banner sirf apni profile par aur shuru ke 1200 users ko dikhega
+                            if (isOwnProfile) ...[
+                              const SizedBox(height: 10),
+                              EarlyBirdBannerWidget(userId: user.uid),
                             ],
 
                             const SizedBox(height: 14),
