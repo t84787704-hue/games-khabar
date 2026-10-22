@@ -247,9 +247,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                         .maybeSingle();
                     final int curWins = (winnerRes?['wins'] as num?)?.toInt() ?? 0;
                     await SupabaseService.client
-                        .from('teams')
-                        .update({'wins': curWins + 1})
-                        .eq('id', winner);
+                            .from('teams')
+                            .update({'wins': curWins + 1})
+                            .eq('id', winner);
 
                     final loserId = (winner == match.team1Id) ? match.team2Id : match.team1Id;
                     if (loserId.isNotEmpty) {
@@ -501,9 +501,11 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                   matchId: rId,
                   team1Id: (r['host_id'] ?? '').toString(),
                   team1Name: (r['host_name'] ?? 'Host Team').toString(),
+                  team1LeaderId: (r['host_id'] ?? '').toString(),
                   team1LeaderName: (r['host_name'] ?? 'Host').toString(),
                   team2Id: (r['winner_id'] ?? 'opponent').toString(),
                   team2Name: (r['winner_name'] ?? 'Opponent Team').toString(),
+                  team2LeaderId: (r['winner_id'] ?? '').toString(),
                   team2LeaderName: (r['winner_name'] ?? 'Opponent').toString(),
                   game: (r['game'] ?? 'BGMI').toString(),
                   mode: (r['mode'] ?? 'TDM').toString(),
