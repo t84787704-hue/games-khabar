@@ -1,6 +1,5 @@
 // ===============================================================================
-// GAMER PROFILE SCREEN — With eSports 500/1000 Coins Team Eligibility Badges
-// + Multi-Language Live Translation Sync via LanguageService
+// GAMER PROFILE SCREEN — Full About Details, Badges & Multi-Language Sync
 // + Adaptive Dark & Light Mode + 100% Clean Compilation
 // -------------------------------------------------------------------------------
 // File: lib/screens/gamer_profile_screen.dart
@@ -10,6 +9,7 @@ import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +21,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../services/supabase_service.dart';
 import '../services/language_service.dart';
+import '../services/coin_wallet_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../services/profile_service.dart';
@@ -216,7 +217,6 @@ ${'share_msg_download'.tr(args: [appLink])}
     );
   }
 
-  /// ✅ eSports Team Eligibility Badge (1,000 / 500 Coins Rule)
   Widget _buildTeamEligibilityCard(int coins) {
     final isLeaderEligible = coins >= 1000;
     final isMemberEligible = coins >= 500;
@@ -312,6 +312,56 @@ ${'share_msg_download'.tr(args: [appLink])}
     );
   }
 
+  Widget _buildAboutTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ThemeService.border),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: iconColor, size: 20),
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: ThemeService.textSecondary,
+            fontSize: 11.5,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(
+            subtitle,
+            style: TextStyle(
+              color: ThemeService.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        trailing: trailing,
+        onTap: onTap,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUid = _authService.currentUid ?? '';
@@ -372,8 +422,14 @@ ${'share_msg_download'.tr(args: [appLink])}
             }
 
             final user = _cachedUser!;
-            final gameColor = GamerTheme.gameColors[user.favoriteGame] ?? const Color(0xFF1877F2);
             final gameEmoji = GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
+            final referralCode = CoinWalletService().getReferralCode(user.uid);
+            final userRank = (user.selectedRank.isNotEmpty && user.selectedRank != 'None')
+                ? user.selectedRank
+                : (user.rank.isNotEmpty && user.rank != 'None' ? user.rank : 'Bronze');
+            final joinedDate = user.createdAt != null
+                ? DateFormat('dd MMM yyyy').format(user.createdAt!)
+                : 'Recent Member';
 
             return Scaffold(
               backgroundColor: ThemeService.bg,
@@ -409,7 +465,7 @@ ${'share_msg_download'.tr(args: [appLink])}
                               child: CachedNetworkImage(
                                 imageUrl: user.coverUrl.isNotEmpty
                                     ? user.coverUrl
-                                    : 'default_cover_url'.tr(),
+                                    : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
                                 fit: BoxFit.cover,
                               ),
                             ),
@@ -445,7 +501,7 @@ ${'share_msg_download'.tr(args: [appLink])}
                               children: [
                                 Flexible(
                                   child: Text(
-                                    user.displayName,
+                                    user.displayName.isNotEmpty ? user.displayName : user.username,
                                     style: TextStyle(
                                       color: ThemeService.textPrimary,
                                       fontSize: 22,
@@ -483,7 +539,6 @@ ${'share_msg_download'.tr(args: [appLink])}
 
                             const SizedBox(height: 14),
 
-                            // ✅ eSports Team Eligibility Card
                             _buildTeamEligibilityCard(user.coins),
 
                             const SizedBox(height: 14),
@@ -612,26 +667,72 @@ ${'share_msg_download'.tr(args: [appLink])}
                   children: [
                     PostsTab(user: user, isOwnProfile: isOwnProfile),
                     SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
-                          ListTile(
-                            leading: const Icon(Icons.sports_esports, color: Color(0xFF1877F2)),
-                            title: Text('main_game_label'.tr()),
-                            subtitle: Text('$gameEmoji ${user.favoriteGame}'),
-                          ),
-                          if (user.gameId.isNotEmpty)
-                            ListTile(
-                              leading: const Icon(Icons.tag, color: Color(0xFF1877F2)),
-                              title: Text('game_uid_label'.tr()),
-                              subtitle: Text(user.gameId),
+                          // 1. Main Game & Claimed Rank
+                          _buildAboutTile(
+                            icon: Icons.sports_esports_rounded,
+                            iconColor: const Color(0xFF1877F2),
+                            title: 'main_game_label'.tr(),
+                            subtitle: '$gameEmoji ${user.favoriteGame}',
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF8A00).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.4)),
+                              ),
+                              child: Text(
+                                userRank,
+                                style: const TextStyle(
+                                  color: Color(0xFFFF8A00),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
                             ),
-                          ListTile(
-                            leading: const Icon(Icons.monetization_on, color: Color(0xFFFFD700)),
-                            title: Text('g_coins_label'.tr()),
-                            subtitle: Text('coins_count'.tr(args: ['${user.coins}'])),
+                          ),
+
+                          // 2. Character ID / In-game UID
+                          _buildAboutTile(
+                            icon: Icons.badge_outlined,
+                            iconColor: const Color(0xFF00FF88),
+                            title: 'game_uid_label'.tr(),
+                            subtitle: user.gameId.isNotEmpty ? user.gameId : 'Not set',
+                            trailing: IconButton(
+                              icon: const Icon(Icons.copy_rounded, size: 18),
+                              color: ThemeService.textSecondary,
+                              tooltip: 'Copy ID',
+                              onPressed: () {
+                                final text = user.gameId.isNotEmpty ? user.gameId : user.uid;
+                                Clipboard.setData(ClipboardData(text: text));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('ID copied: $text'),
+                                    backgroundColor: const Color(0xFF00FF88),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+
+                          // 3. G-Coins Balance
+                          _buildAboutTile(
+                            icon: Icons.monetization_on_rounded,
+                            iconColor: const Color(0xFFFFD700),
+                            title: 'g_coins_label'.tr(),
+                            subtitle: '${NumberFormat('#,###').format(user.coins)} Coins',
                             trailing: isOwnProfile
-                                ? const Icon(Icons.history_rounded, size: 20)
+                                ? Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: ThemeService.cardSecondary,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.history_rounded, size: 18, color: Color(0xFFFFD700)),
+                                  )
                                 : null,
                             onTap: isOwnProfile
                                 ? () {
@@ -644,27 +745,56 @@ ${'share_msg_download'.tr(args: [appLink])}
                                   }
                                 : null,
                           ),
-                          ListTile(
-                            leading: Icon(
-                              user.coins >= 1000
-                                  ? Icons.verified_user_rounded
-                                  : user.coins >= 500
-                                      ? Icons.shield_outlined
-                                      : Icons.warning_amber_rounded,
-                              color: user.coins >= 1000
-                                  ? const Color(0xFF00FF88)
-                                  : user.coins >= 500
-                                      ? const Color(0xFFFFB800)
-                                      : const Color(0xFFFF4655),
+
+                          // 4. eSports Team Eligibility
+                          _buildAboutTile(
+                            icon: user.coins >= 1000
+                                ? Icons.verified_user_rounded
+                                : user.coins >= 500
+                                    ? Icons.shield_outlined
+                                    : Icons.warning_amber_rounded,
+                            iconColor: user.coins >= 1000
+                                ? const Color(0xFF00FF88)
+                                : user.coins >= 500
+                                    ? const Color(0xFFFFB800)
+                                    : const Color(0xFFFF4655),
+                            title: 'esports_team_status'.tr(),
+                            subtitle: user.coins >= 1000
+                                ? 'esports_status_leader'.tr()
+                                : user.coins >= 500
+                                    ? 'esports_status_member'.tr()
+                                    : 'esports_status_ineligible'.tr(),
+                          ),
+
+                          // 5. Squad Referral Code (Invite Code)
+                          _buildAboutTile(
+                            icon: Icons.group_add_rounded,
+                            iconColor: const Color(0xFF38BDF8),
+                            title: 'Squad Invite Code',
+                            subtitle: referralCode,
+                            trailing: IconButton(
+                              icon: const Icon(Icons.copy_rounded, size: 18),
+                              color: const Color(0xFF38BDF8),
+                              tooltip: 'Copy Invite Code',
+                              onPressed: () {
+                                Clipboard.setData(ClipboardData(text: referralCode));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Squad Invite Code copied: $referralCode'),
+                                    backgroundColor: const Color(0xFF38BDF8),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
                             ),
-                            title: Text('esports_team_status'.tr()),
-                            subtitle: Text(
-                              user.coins >= 1000
-                                  ? 'esports_status_leader'.tr()
-                                  : user.coins >= 500
-                                      ? 'esports_status_member'.tr()
-                                      : 'esports_status_ineligible'.tr(),
-                            ),
+                          ),
+
+                          // 6. Member Since
+                          _buildAboutTile(
+                            icon: Icons.calendar_month_rounded,
+                            iconColor: Colors.purpleAccent,
+                            title: 'Member Since',
+                            subtitle: joinedDate,
                           ),
                         ],
                       ),
