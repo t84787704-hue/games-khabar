@@ -1,6 +1,14 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// GAMER FEED SCREEN — With Compressed Image Post Upload & Feed View
+// File: lib/screens/gamer_feed_screen.dart
+// ═══════════════════════════════════════════════════════════════════════════════
+
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:share_plus/share_plus.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../services/supabase_service.dart';
 import 'gamer_profile_screen.dart';
 import 'user_search_screen.dart';
@@ -315,7 +323,7 @@ $postedByText: $username
 $ctaText
 
 $downloadAppText:
-https://play.google.com/store/apps/details?id=com.gamersid.app
+https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
 
 #GamersID #PUBG #BGMI #FreeFire #Esports
 ''';
@@ -527,6 +535,7 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
 
   void _showCreatePost() {
     final textController = TextEditingController();
+    File? selectedImage;
     bool isPosting = false;
 
     showModalBottomSheet(
@@ -538,6 +547,25 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
       ),
       builder: (sheetCtx) => StatefulBuilder(
         builder: (context, setSheetState) {
+          Future<void> pickImage(ImageSource source) async {
+            try {
+              final picker = ImagePicker();
+              final picked = await picker.pickImage(
+                source: source,
+                maxWidth: 900,
+                maxHeight: 900,
+                imageQuality: 70, // 100KB - 150KB safe compression
+              );
+              if (picked != null) {
+                setSheetState(() {
+                  selectedImage = File(picked.path);
+                });
+              }
+            } catch (e) {
+              debugPrint('Error picking image: $e');
+            }
+          }
+
           return Padding(
             padding: EdgeInsets.only(
               left: 16,
@@ -545,122 +573,204 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
               top: 16,
               bottom: MediaQuery.of(context).viewInsets.bottom + 16,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    GamerAvatar(
-                      photoUrl: currentAvatarUrl,
-                      displayName: currentUsername,
-                      radius: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        currentUsername,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: ThemeService.textPrimary,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      GamerAvatar(
+                        photoUrl: currentAvatarUrl,
+                        displayName: currentUsername,
+                        radius: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          currentUsername,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: ThemeService.textPrimary,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1877F2),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1877F2),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
-                      onPressed: isPosting
-                          ? null
-                          : () async {
-                              final text = textController.text.trim();
-                              if (text.isEmpty) return;
+                        onPressed: isPosting
+                            ? null
+                            : () async {
+                                final text = textController.text.trim();
+                                if (text.isEmpty && selectedImage == null) return;
 
-                              if (currentUserId.isEmpty || !_uuidRegex.hasMatch(currentUserId)) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('err_login_required_post'.tr()),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                                return;
-                              }
-
-                              setSheetState(() => isPosting = true);
-
-                              try {
-                                await SupabaseService.client.from('posts').insert({
-                                  'content': text,
-                                  'user_id': currentUserId,
-                                  'username': currentUsername,
-                                  'likes_count': 0,
-                                  'comments_count': 0,
-                                });
-
-                                if (sheetCtx.mounted) {
-                                  Navigator.pop(sheetCtx);
-                                }
-
-                                if (mounted) {
+                                if (currentUserId.isEmpty || !_uuidRegex.hasMatch(currentUserId)) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('msg_post_created'.tr()),
-                                      backgroundColor: const Color(0xFF1877F2),
-                                    ),
-                                  );
-                                  _loadFeed();
-                                }
-                              } catch (e) {
-                                debugPrint('Error creating post: $e');
-                                if (sheetCtx.mounted) {
-                                  setSheetState(() => isPosting = false);
-                                }
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('err_publish_failed'.tr(args: ['$e'])),
+                                      content: Text('err_login_required_post'.tr()),
                                       backgroundColor: Colors.red,
                                     ),
                                   );
+                                  return;
                                 }
-                              }
-                            },
-                      child: isPosting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+
+                                setSheetState(() => isPosting = true);
+
+                                try {
+                                  String? uploadedImageUrl;
+
+                                  // Upload image to Supabase Storage 'posts' bucket
+                                  if (selectedImage != null) {
+                                    final fileName = '${currentUserId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+                                    final uploadPath = '$fileName';
+
+                                    await SupabaseService.client.storage
+                                        .from('posts')
+                                        .upload(uploadPath, selectedImage!);
+
+                                    uploadedImageUrl = SupabaseService.client.storage
+                                        .from('posts')
+                                        .getPublicUrl(uploadPath);
+                                  }
+
+                                  await SupabaseService.client.from('posts').insert({
+                                    'content': text,
+                                    'user_id': currentUserId,
+                                    'username': currentUsername,
+                                    'image_url': uploadedImageUrl,
+                                    'likes_count': 0,
+                                    'comments_count': 0,
+                                    'created_at': DateTime.now().toIso8601String(),
+                                  });
+
+                                  if (sheetCtx.mounted) {
+                                    Navigator.pop(sheetCtx);
+                                  }
+
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('msg_post_created'.tr()),
+                                        backgroundColor: const Color(0xFF1877F2),
+                                      ),
+                                    );
+                                    _loadFeed();
+                                  }
+                                } catch (e) {
+                                  debugPrint('Error creating post: $e');
+                                  if (sheetCtx.mounted) {
+                                    setSheetState(() => isPosting = false);
+                                  }
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('err_publish_failed'.tr(args: ['$e'])),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        child: isPosting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text('btn_post'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: textController,
+                    autofocus: true,
+                    maxLines: 4,
+                    minLines: 2,
+                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 16),
+                    decoration: InputDecoration(
+                      hintText: 'hint_whats_on_your_mind'.tr().contains('hint_') ? "What's on your mind?" : 'hint_whats_on_your_mind'.tr(),
+                      hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 16),
+                      border: InputBorder.none,
+                    ),
+                  ),
+
+                  // Image Preview Card (if selected)
+                  if (selectedImage != null) ...[
+                    const SizedBox(height: 10),
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            selectedImage!,
+                            width: double.infinity,
+                            height: 200,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: GestureDetector(
+                            onTap: () => setSheetState(() => selectedImage = null),
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
                               ),
-                            )
-                          : Text('btn_post'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                              child: const Icon(Icons.close, color: Colors.white, size: 18),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: textController,
-                  autofocus: true,
-                  maxLines: 5,
-                  minLines: 3,
-                  style: TextStyle(color: ThemeService.textPrimary, fontSize: 16),
-                  decoration: InputDecoration(
-                    hintText: 'hint_whats_on_your_mind'.tr().contains('hint_') ? "What's on your mind?" : 'hint_whats_on_your_mind'.tr(),
-                    hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 16),
-                    border: InputBorder.none,
+
+                  const SizedBox(height: 12),
+                  Divider(color: ThemeService.border, height: 1),
+                  const SizedBox(height: 8),
+
+                  // Add Photo / Camera Options Bar
+                  Row(
+                    children: [
+                      Text(
+                        'Add to your post',
+                        style: TextStyle(
+                          color: ThemeService.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.photo_library_rounded, color: Color(0xFF00C853)),
+                        tooltip: 'Gallery',
+                        onPressed: isPosting ? null : () => pickImage(ImageSource.gallery),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.camera_alt_rounded, color: Color(0xFF1877F2)),
+                        tooltip: 'Camera',
+                        onPressed: isPosting ? null : () => pickImage(ImageSource.camera),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -794,6 +904,8 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.photo_library_rounded, color: Color(0xFF00C853), size: 22),
                                 ],
                               ),
                             ),
@@ -877,11 +989,18 @@ https://play.google.com/store/apps/details?id=com.gamersid.app
                             if (imageUrl.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
-                                child: Image.network(
-                                  imageUrl,
+                                child: CachedNetworkImage(
+                                  imageUrl: imageUrl,
                                   width: double.infinity,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                  placeholder: (context, url) => Container(
+                                    height: 200,
+                                    color: ThemeService.cardSecondary,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1877F2)),
+                                    ),
+                                  ),
+                                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
                                 ),
                               ),
                             Padding(
