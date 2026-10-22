@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// CREATE / EDIT GAMER ID SCREEN — Full Multi-Language Support via easy_localization
+// CREATE / EDIT GAMER ID SCREEN — Full Multi-Language & Adaptive Day/Night Support
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:io';
@@ -76,26 +76,26 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
-          backgroundColor: GamerTheme.cardDark,
+          backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: GamerTheme.neonGreen.withOpacity(0.5), width: 1.5),
+            side: BorderSide(color: ThemeService.border, width: 1.5),
           ),
           title: Column(
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: GamerTheme.neonGreen.withOpacity(0.15),
+                  color: const Color(0xFF1877F2).withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.language_rounded, color: GamerTheme.neonGreen, size: 28),
+                child: const Icon(Icons.language_rounded, color: Color(0xFF1877F2), size: 28),
               ),
               const SizedBox(height: 10),
               Text(
                 'choose_language'.tr(),
-                style: const TextStyle(
-                  color: GamerTheme.textWhite,
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),
@@ -103,7 +103,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
               const SizedBox(height: 4),
               Text(
                 'select_language_subtitle'.tr(),
-                style: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
+                style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -143,11 +143,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: isCurrent
-                          ? GamerTheme.neonGreen.withOpacity(0.2)
-                          : GamerTheme.cardElevated,
+                          ? const Color(0xFF1877F2).withOpacity(0.18)
+                          : ThemeService.cardSecondary,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isCurrent ? GamerTheme.neonGreen : GamerTheme.borderLight,
+                        color: isCurrent ? const Color(0xFF1877F2) : ThemeService.border,
                         width: isCurrent ? 1.5 : 1,
                       ),
                     ),
@@ -159,7 +159,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         Text(
                           lang['name']!,
                           style: TextStyle(
-                            color: isCurrent ? GamerTheme.neonGreen : GamerTheme.textWhite,
+                            color: isCurrent ? const Color(0xFF1877F2) : ThemeService.textPrimary,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
@@ -217,7 +217,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             Expanded(
               child: Text(
                 'rank_coming_soon_banner'.tr(),
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
               ),
             ),
           ],
@@ -713,284 +713,445 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   Widget build(BuildContext context) {
     final isEditing = widget.isEditing;
 
-    return Scaffold(
-      backgroundColor: GamerTheme.bgDark,
-      appBar: AppBar(
-        title: Text(isEditing ? 'title_edit_gamer_id'.tr() : 'title_create_gamer_id'.tr()),
-        automaticallyImplyLeading: isEditing,
-        actions: [
-          if (isEditing)
-            TextButton(
-              onPressed: _isSaving ? null : _saveGamerId,
-              child: Text('save'.tr(), style: const TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold)),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        final isDark = ThemeService.isDarkMode;
+
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: 0.5,
+            iconTheme: IconThemeData(color: ThemeService.textPrimary),
+            title: Text(
+              isEditing ? 'title_edit_gamer_id'.tr() : 'title_create_gamer_id'.tr(),
+              style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Stack(
+            automaticallyImplyLeading: isEditing,
+            actions: [
+              if (isEditing)
+                TextButton(
+                  onPressed: _isSaving ? null : _saveGamerId,
+                  child: Text(
+                    'save'.tr(),
+                    style: const TextStyle(
+                      color: Color(0xFFFF8A00),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      height: 175,
-                      width: double.infinity,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF0F172A),
-                      ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          if (_pickedCoverFile != null)
-                            Image.file(_pickedCoverFile!, fit: BoxFit.cover)
-                          else if (_coverUrl.isNotEmpty)
-                            CachedNetworkImage(
-                              imageUrl: _coverUrl,
-                              fit: BoxFit.cover,
-                              placeholder: (_, __) => Container(color: const Color(0xFF0F172A)),
-                              errorWidget: (_, __, ___) => Image.network(_defaultBgmiCoverUrl, fit: BoxFit.cover),
-                            )
-                          else
-                            Image.network(
-                              _defaultBgmiCoverUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
+                    Stack(
+                      children: [
+                        Container(
+                          height: 175,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: ThemeService.cardSecondary,
+                          ),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (_pickedCoverFile != null)
+                                Image.file(_pickedCoverFile!, fit: BoxFit.cover)
+                              else if (_coverUrl.isNotEmpty)
+                                CachedNetworkImage(
+                                  imageUrl: _coverUrl,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => Container(color: ThemeService.cardSecondary),
+                                  errorWidget: (_, __, ___) => Image.network(_defaultBgmiCoverUrl, fit: BoxFit.cover),
+                                )
+                              else
+                                Image.network(
+                                  _defaultBgmiCoverUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    decoration: BoxDecoration(
+                                      color: ThemeService.cardSecondary,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.black.withOpacity(0.5),
-                                  Colors.black.withOpacity(0.2),
-                                  GamerTheme.bgDark.withOpacity(0.85),
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      right: 14,
-                      bottom: 12,
-                      child: InkWell(
-                        onTap: _pickCoverFromGallery,
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.75),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white38, width: 1),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.4),
-                                blurRadius: 6,
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                              const SizedBox(width: 5),
-                              Text(
-                                'change_cover_photo'.tr(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.black.withOpacity(0.4),
+                                      Colors.transparent,
+                                      ThemeService.bg.withOpacity(0.85),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ),
+                        Positioned(
+                          right: 14,
+                          bottom: 12,
+                          child: InkWell(
+                            onTap: _pickCoverFromGallery,
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.75),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white38, width: 1),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.4),
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'change_cover_photo'.tr(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Column(
-                          children: [
-                            Stack(
-                              clipBehavior: Clip.none,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Column(
                               children: [
-                                Container(
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: GamerTheme.accentOrange.withOpacity(0.45),
-                                        blurRadius: 18,
-                                        spreadRadius: 3,
-                                      ),
-                                    ],
-                                  ),
-                                  child: GamerAvatar(
-                                    photoUrl: _photoUrl,
-                                    imageFile: _pickedImageFile,
-                                    displayName: _displayNameController.text.trim().isNotEmpty
-                                        ? _displayNameController.text.trim()
-                                        : (_usernameController.text.trim().isNotEmpty
-                                            ? _usernameController.text.trim()
-                                            : 'G'),
-                                    radius: 48,
-                                    hasGlow: true,
-                                    borderColor: GamerTheme.accentOrange,
-                                    frameId: _selectedFrame,
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: 0,
-                                  right: 0,
-                                  child: InkWell(
-                                    onTap: _pickImageFromGallery,
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(7),
-                                      decoration: const BoxDecoration(
-                                        gradient: GamerTheme.flameOrangeGradient,
+                                Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Container(
+                                      decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         boxShadow: [
-                                          BoxShadow(color: Colors.black54, blurRadius: 4),
+                                          BoxShadow(
+                                            color: const Color(0xFFFF8A00).withOpacity(0.35),
+                                            blurRadius: 18,
+                                            spreadRadius: 2,
+                                          ),
                                         ],
                                       ),
-                                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                                      child: GamerAvatar(
+                                        photoUrl: _photoUrl,
+                                        imageFile: _pickedImageFile,
+                                        displayName: _displayNameController.text.trim().isNotEmpty
+                                            ? _displayNameController.text.trim()
+                                            : (_usernameController.text.trim().isNotEmpty
+                                                ? _usernameController.text.trim()
+                                                : 'G'),
+                                        radius: 48,
+                                        hasGlow: true,
+                                        borderColor: const Color(0xFFFF8A00),
+                                        frameId: _selectedFrame,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      bottom: 0,
+                                      right: 0,
+                                      child: InkWell(
+                                        onTap: _pickImageFromGallery,
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(7),
+                                          decoration: const BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [Color(0xFFFF8A00), Color(0xFFFF5200)],
+                                            ),
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(color: Colors.black45, blurRadius: 4),
+                                            ],
+                                          ),
+                                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton.icon(
+                                  onPressed: _pickImageFromGallery,
+                                  icon: const Icon(Icons.photo_library_rounded, size: 16, color: Color(0xFFFF8A00)),
+                                  label: Text(
+                                    'upload_photo_gallery'.tr(),
+                                    style: const TextStyle(
+                                      color: Color(0xFFFF8A00),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'pro_gamer_avatar_presets'.tr(),
+                                  style: TextStyle(
+                                    color: ThemeService.textSecondary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: _gamingPresets.map((preset) {
+                                    final isSelected = _photoUrl == preset['id'] && _pickedImageFile == null;
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                                      child: InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            _pickedImageFile = null;
+                                            _photoUrl = preset['id'] as String;
+                                          });
+                                        },
+                                        borderRadius: BorderRadius.circular(24),
+                                        child: Column(
+                                          children: [
+                                            Container(
+                                              width: 46,
+                                              height: 46,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                gradient: LinearGradient(
+                                                  colors: preset['bg'] as List<Color>,
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
+                                                ),
+                                                border: Border.all(
+                                                  color: isSelected ? const Color(0xFFFF8A00) : ThemeService.border,
+                                                  width: isSelected ? 2.5 : 1,
+                                                ),
+                                                boxShadow: isSelected
+                                                    ? [
+                                                        BoxShadow(
+                                                          color: const Color(0xFFFF8A00).withOpacity(0.5),
+                                                          blurRadius: 8,
+                                                          spreadRadius: 1,
+                                                        ),
+                                                      ]
+                                                    : null,
+                                              ),
+                                              child: Center(
+                                                child: Icon(
+                                                  preset['icon'] as IconData,
+                                                  color: preset['color'] as Color,
+                                                  size: 22,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              (preset['label_key'] as String).tr(),
+                                              style: TextStyle(
+                                                color: isSelected ? const Color(0xFFFF8A00) : ThemeService.textSecondary,
+                                                fontSize: 10,
+                                                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            TextButton.icon(
-                              onPressed: _pickImageFromGallery,
-                              icon: const Icon(Icons.photo_library_rounded, size: 16, color: GamerTheme.accentOrange),
-                              label: Text(
-                                'upload_photo_gallery'.tr(),
-                                style: const TextStyle(
-                                  color: GamerTheme.accentOrange,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                          ),
+                          const SizedBox(height: 18),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: ThemeService.card,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: ThemeService.border),
                             ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'pro_gamer_avatar_presets'.tr(),
-                              style: const TextStyle(
-                                color: GamerTheme.textMuted,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: _gamingPresets.map((preset) {
-                                final isSelected = _photoUrl == preset['id'] && _pickedImageFile == null;
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                                  child: InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _pickedImageFile = null;
-                                        _photoUrl = preset['id'] as String;
-                                      });
-                                    },
-                                    borderRadius: BorderRadius.circular(24),
-                                    child: Column(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
                                       children: [
-                                        Container(
-                                          width: 46,
-                                          height: 46,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: LinearGradient(
-                                              colors: preset['bg'] as List<Color>,
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ),
-                                            border: Border.all(
-                                              color: isSelected ? GamerTheme.accentOrange : Colors.white24,
-                                              width: isSelected ? 2.5 : 1,
-                                            ),
-                                            boxShadow: isSelected
-                                                ? [
-                                                    BoxShadow(
-                                                      color: GamerTheme.accentOrange.withOpacity(0.5),
-                                                      blurRadius: 8,
-                                                      spreadRadius: 1,
-                                                    ),
-                                                  ]
-                                                : null,
-                                          ),
-                                          child: Center(
-                                            child: Icon(
-                                              preset['icon'] as IconData,
-                                              color: preset['color'] as Color,
-                                              size: 22,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
+                                        const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 18),
+                                        const SizedBox(width: 6),
                                         Text(
-                                          (preset['label_key'] as String).tr(),
+                                          'avatar_frame_title'.tr(),
                                           style: TextStyle(
-                                            color: isSelected ? GamerTheme.accentOrange : Colors.white70,
-                                            fontSize: 10,
-                                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                                            color: ThemeService.textPrimary,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.8,
                                           ),
                                         ),
                                       ],
                                     ),
+                                    InkWell(
+                                      onTap: () async {
+                                        await Navigator.of(context).push(
+                                          MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
+                                        );
+                                        _loadStorePerks();
+                                      },
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF00C853).withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: const Color(0xFF00C853).withOpacity(0.5)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.storefront_rounded, color: Color(0xFF00C853), size: 12),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'coin_store_caps'.tr(),
+                                              style: const TextStyle(
+                                                color: Color(0xFF00C853),
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      {
+                                        'id': '',
+                                        'name': 'frame_none'.tr(),
+                                        'emoji': '🚫',
+                                        'color': Colors.grey,
+                                      },
+                                      {
+                                        'id': 'neon_fire',
+                                        'name': 'frame_neon_fire'.tr(),
+                                        'emoji': '🔥',
+                                        'color': Colors.deepOrangeAccent,
+                                      },
+                                      {
+                                        'id': 'royal_crown',
+                                        'name': 'frame_royal_crown'.tr(),
+                                        'emoji': '👑',
+                                        'color': Colors.amber,
+                                      },
+                                      {
+                                        'id': 'cyber_glitch',
+                                        'name': 'frame_cyber_grid'.tr(),
+                                        'emoji': '⚡',
+                                        'color': const Color(0xFF00C853),
+                                      },
+                                      {
+                                        'id': 'cosmic_void',
+                                        'name': 'frame_cosmic_nebula'.tr(),
+                                        'emoji': '🌌',
+                                        'color': const Color(0xFFC084FC),
+                                      },
+                                    ].map((f) {
+                                      final id = f['id'] as String;
+                                      final isNone = id.isEmpty;
+                                      final isUnlocked = isNone || _unlockedFrames.contains(id);
+                                      final isEquipped = _selectedFrame == id;
+                                      final color = f['color'] as Color;
+
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: InkWell(
+                                          onTap: () {
+                                            if (isUnlocked) {
+                                              setState(() => _selectedFrame = id);
+                                            } else {
+                                              _showLockedItemBanner(f['name'] as String);
+                                            }
+                                          },
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                            decoration: BoxDecoration(
+                                              color: isEquipped ? color.withOpacity(0.18) : ThemeService.cardSecondary,
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: isEquipped
+                                                    ? color
+                                                    : ThemeService.border,
+                                                width: isEquipped ? 2 : 1,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(f['emoji'] as String, style: const TextStyle(fontSize: 14)),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  f['name'] as String,
+                                                  style: TextStyle(
+                                                    color: isEquipped ? ThemeService.textPrimary : (isUnlocked ? ThemeService.textPrimary.withOpacity(0.85) : ThemeService.textSecondary),
+                                                    fontSize: 11,
+                                                    fontWeight: isEquipped ? FontWeight.w900 : FontWeight.w600,
+                                                  ),
+                                                ),
+                                                if (!isUnlocked) ...[
+                                                  const SizedBox(width: 5),
+                                                  const Icon(Icons.lock_rounded, size: 12, color: Colors.amber),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
                                   ),
-                                );
-                              }).toList(),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: GamerTheme.cardDark,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: GamerTheme.borderDark),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
+                                ),
+                                const SizedBox(height: 14),
+                                Divider(color: ThemeService.border, height: 1),
+                                const SizedBox(height: 12),
                                 Row(
                                   children: [
-                                    const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 18),
+                                    const Icon(Icons.military_tech_rounded, color: Color(0xFF1877F2), size: 18),
                                     const SizedBox(width: 6),
                                     Text(
-                                      'avatar_frame_title'.tr(),
-                                      style: const TextStyle(
-                                        color: GamerTheme.textWhite,
+                                      'gamer_badge_title'.tr(),
+                                      style: TextStyle(
+                                        color: ThemeService.textPrimary,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w800,
                                         letterSpacing: 0.8,
@@ -998,948 +1159,851 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     ),
                                   ],
                                 ),
-                                InkWell(
-                                  onTap: () async {
-                                    await Navigator.of(context).push(
-                                      MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
-                                    );
-                                    _loadStorePerks();
-                                  },
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: GamerTheme.neonGreen.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.5)),
-                                    ),
+                                const SizedBox(height: 10),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      {
+                                        'id': '',
+                                        'name': 'frame_none'.tr(),
+                                      },
+                                      {
+                                        'id': 'pro_elite',
+                                        'name': 'badge_pro_elite'.tr(),
+                                      },
+                                      {
+                                        'id': 'kd_assassin',
+                                        'name': 'badge_assassin'.tr(),
+                                      },
+                                      {
+                                        'id': 'room_champion',
+                                        'name': 'badge_champion'.tr(),
+                                      },
+                                    ].map((b) {
+                                      final id = b['id'] as String;
+                                      final isNone = id.isEmpty;
+                                      final isUnlocked = isNone || _unlockedBadges.contains(id);
+                                      final isEquipped = _selectedBadge == id;
+
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: InkWell(
+                                          onTap: () {
+                                            if (isUnlocked) {
+                                              setState(() => _selectedBadge = id);
+                                            } else {
+                                              _showLockedItemBanner(b['name'] as String);
+                                            }
+                                          },
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: isEquipped ? const Color(0xFF1877F2).withOpacity(0.18) : ThemeService.cardSecondary,
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: isEquipped
+                                                    ? const Color(0xFF1877F2)
+                                                    : ThemeService.border,
+                                                width: isEquipped ? 2 : 1,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (isNone)
+                                                  Text('frame_none'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 11))
+                                                else
+                                                  GamerBadgeWidget(badgeId: id, scale: 0.9),
+                                                if (!isUnlocked) ...[
+                                                  const SizedBox(width: 5),
+                                                  const Icon(Icons.lock_rounded, size: 12, color: Colors.amber),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Text(
+                                'field_username_label'.tr(),
+                                style: const TextStyle(color: Color(0xFFFF8A00), fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.verified, color: Color(0xFF00E676), size: 16),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _usernameController,
+                            onChanged: _onUsernameChanged,
+                            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: ThemeService.cardSecondary,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: ThemeService.border),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFFF8A00), width: 1.5),
+                              ),
+                              prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(0xFFFF8A00)),
+                              hintText: 'hint_gamer_handle'.tr(),
+                              hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
+                              suffixIcon: _isCheckingUsername
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8A00)),
+                                      ),
+                                    )
+                                  : const Icon(Icons.check_circle_rounded, color: Color(0xFF00E676), size: 22),
+                            ),
+                            validator: (val) {
+                              final clean = (val ?? '').toLowerCase().trim();
+                              if (clean.isEmpty) return 'err_username_required'.tr();
+                              if (clean.length < 3) return 'err_username_min'.tr();
+                              if (clean.length > 15) return 'err_username_max'.tr();
+                              if (!RegExp(r'^[a-z0-9_]+$').hasMatch(clean)) {
+                                return 'err_username_chars'.tr();
+                              }
+                              return null;
+                            },
+                          ),
+                          if (_usernameFeedback.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _usernameFeedback,
+                              style: TextStyle(
+                                color: _isUsernameAvailable == true
+                                    ? const Color(0xFF00E676)
+                                    : _isUsernameAvailable == false
+                                        ? GamerTheme.redAccent
+                                        : ThemeService.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          Text(
+                            'field_display_name_label'.tr(),
+                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _displayNameController,
+                            style: TextStyle(color: ThemeService.textPrimary),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: ThemeService.cardSecondary,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: ThemeService.border),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF1877F2), width: 1.5),
+                              ),
+                              prefixIcon: Icon(Icons.person_rounded, color: ThemeService.textSecondary),
+                              hintText: 'hint_display_name_example'.tr(),
+                              hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
+                            ),
+                            validator: (val) {
+                              if ((val ?? '').trim().isEmpty) return 'err_display_name_required'.tr();
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            'field_fav_game_label'.tr(),
+                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: ThemeService.cardSecondary,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: ThemeService.border),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: GamerTheme.favoriteGames.contains(_selectedGame) ? _selectedGame : GamerTheme.favoriteGames.first,
+                                isExpanded: true,
+                                dropdownColor: ThemeService.card,
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFFF8A00)),
+                                items: GamerTheme.favoriteGames.map((game) {
+                                  final emoji = GamerTheme.gameEmojis[game] ?? '🎮';
+                                  final color = GamerTheme.gameColors[game] ?? const Color(0xFFFF8A00);
+                                  return DropdownMenuItem<String>(
+                                    value: game,
                                     child: Row(
-                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(Icons.storefront_rounded, color: GamerTheme.neonGreen, size: 12),
-                                        const SizedBox(width: 4),
+                                        Text(emoji, style: const TextStyle(fontSize: 18)),
+                                        const SizedBox(width: 10),
                                         Text(
-                                          'coin_store_caps'.tr(),
-                                          style: const TextStyle(
-                                            color: GamerTheme.neonGreen,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w900,
+                                          game,
+                                          style: TextStyle(
+                                            color: color,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  {
-                                    'id': '',
-                                    'name': 'frame_none'.tr(),
-                                    'emoji': '🚫',
-                                    'color': Colors.white38,
-                                  },
-                                  {
-                                    'id': 'neon_fire',
-                                    'name': 'frame_neon_fire'.tr(),
-                                    'emoji': '🔥',
-                                    'color': Colors.deepOrangeAccent,
-                                  },
-                                  {
-                                    'id': 'royal_crown',
-                                    'name': 'frame_royal_crown'.tr(),
-                                    'emoji': '👑',
-                                    'color': Colors.amber,
-                                  },
-                                  {
-                                    'id': 'cyber_glitch',
-                                    'name': 'frame_cyber_grid'.tr(),
-                                    'emoji': '⚡',
-                                    'color': GamerTheme.neonGreen,
-                                  },
-                                  {
-                                    'id': 'cosmic_void',
-                                    'name': 'frame_cosmic_nebula'.tr(),
-                                    'emoji': '🌌',
-                                    'color': const Color(0xFFC084FC),
-                                  },
-                                ].map((f) {
-                                  final id = f['id'] as String;
-                                  final isNone = id.isEmpty;
-                                  final isUnlocked = isNone || _unlockedFrames.contains(id);
-                                  final isEquipped = _selectedFrame == id;
-                                  final color = f['color'] as Color;
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: InkWell(
-                                      onTap: () {
-                                        if (isUnlocked) {
-                                          setState(() => _selectedFrame = id);
-                                        } else {
-                                          _showLockedItemBanner(f['name'] as String);
-                                        }
-                                      },
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                                        decoration: BoxDecoration(
-                                          color: isEquipped ? color.withOpacity(0.2) : GamerTheme.bgDark,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: isEquipped
-                                                ? color
-                                                : (isUnlocked ? GamerTheme.borderLight : GamerTheme.borderDark),
-                                            width: isEquipped ? 2 : 1,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(f['emoji'] as String, style: const TextStyle(fontSize: 14)),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              f['name'] as String,
-                                              style: TextStyle(
-                                                color: isEquipped ? Colors.white : (isUnlocked ? Colors.white70 : GamerTheme.textMuted),
-                                                fontSize: 11,
-                                                fontWeight: isEquipped ? FontWeight.w900 : FontWeight.w600,
-                                              ),
-                                            ),
-                                            if (!isUnlocked) ...[
-                                              const SizedBox(width: 5),
-                                              const Icon(Icons.lock_rounded, size: 12, color: Colors.amber),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                    ),
                                   );
                                 }).toList(),
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            const Divider(color: GamerTheme.borderDark, height: 1),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                const Icon(Icons.military_tech_rounded, color: GamerTheme.accentBlue, size: 18),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'gamer_badge_title'.tr(),
-                                  style: const TextStyle(
-                                    color: GamerTheme.textWhite,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  {
-                                    'id': '',
-                                    'name': 'frame_none'.tr(),
-                                  },
-                                  {
-                                    'id': 'pro_elite',
-                                    'name': 'badge_pro_elite'.tr(),
-                                  },
-                                  {
-                                    'id': 'kd_assassin',
-                                    'name': 'badge_assassin'.tr(),
-                                  },
-                                  {
-                                    'id': 'room_champion',
-                                    'name': 'badge_champion'.tr(),
-                                  },
-                                ].map((b) {
-                                  final id = b['id'] as String;
-                                  final isNone = id.isEmpty;
-                                  final isUnlocked = isNone || _unlockedBadges.contains(id);
-                                  final isEquipped = _selectedBadge == id;
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: InkWell(
-                                      onTap: () {
-                                        if (isUnlocked) {
-                                          setState(() => _selectedBadge = id);
-                                        } else {
-                                          _showLockedItemBanner(b['name'] as String);
-                                        }
-                                      },
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: isEquipped ? GamerTheme.accentBlue.withOpacity(0.2) : GamerTheme.bgDark,
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(
-                                            color: isEquipped
-                                                ? GamerTheme.accentBlue
-                                                : (isUnlocked ? GamerTheme.borderLight : GamerTheme.borderDark),
-                                            width: isEquipped ? 2 : 1,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (isNone)
-                                              Text('frame_none'.tr(), style: const TextStyle(color: Colors.white70, fontSize: 11))
-                                            else
-                                              GamerBadgeWidget(badgeId: id, scale: 0.9),
-                                            if (!isUnlocked) ...[
-                                              const SizedBox(width: 5),
-                                              const Icon(Icons.lock_rounded, size: 12, color: Colors.amber),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Text(
-                            'field_username_label'.tr(),
-                            style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                          ),
-                          const SizedBox(width: 6),
-                          const Icon(Icons.verified, color: Color(0xFF00E676), size: 16),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _usernameController,
-                        onChanged: _onUsernameChanged,
-                        style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold),
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.alternate_email_rounded, color: GamerTheme.accentOrange),
-                          hintText: 'hint_gamer_handle'.tr(),
-                          suffixIcon: _isCheckingUsername
-                              ? const Padding(
-                                  padding: EdgeInsets.all(12),
-                                  child: SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: GamerTheme.accentOrange),
-                                  ),
-                                )
-                              : const Icon(Icons.check_circle_rounded, color: Color(0xFF00E676), size: 22),
-                        ),
-                        validator: (val) {
-                          final clean = (val ?? '').toLowerCase().trim();
-                          if (clean.isEmpty) return 'err_username_required'.tr();
-                          if (clean.length < 3) return 'err_username_min'.tr();
-                          if (clean.length > 15) return 'err_username_max'.tr();
-                          if (!RegExp(r'^[a-z0-9_]+$').hasMatch(clean)) {
-                            return 'err_username_chars'.tr();
-                          }
-                          return null;
-                        },
-                      ),
-                      if (_usernameFeedback.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          _usernameFeedback,
-                          style: TextStyle(
-                            color: _isUsernameAvailable == true
-                                ? GamerTheme.neonGreen
-                                : _isUsernameAvailable == false
-                                    ? GamerTheme.redAccent
-                                    : GamerTheme.textMuted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      Text(
-                        'field_display_name_label'.tr(),
-                        style: const TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _displayNameController,
-                        style: const TextStyle(color: GamerTheme.textWhite),
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.person_rounded, color: GamerTheme.textMuted),
-                          hintText: 'hint_display_name_example'.tr(),
-                        ),
-                        validator: (val) {
-                          if ((val ?? '').trim().isEmpty) return 'err_display_name_required'.tr();
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'field_fav_game_label'.tr(),
-                        style: const TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: GamerTheme.cardElevated,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: GamerTheme.borderLight),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: GamerTheme.favoriteGames.contains(_selectedGame) ? _selectedGame : GamerTheme.favoriteGames.first,
-                            isExpanded: true,
-                            dropdownColor: GamerTheme.cardElevated,
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.accentOrange),
-                            items: GamerTheme.favoriteGames.map((game) {
-                              final emoji = GamerTheme.gameEmojis[game] ?? '🎮';
-                              final color = GamerTheme.gameColors[game] ?? GamerTheme.accentOrange;
-                              return DropdownMenuItem<String>(
-                                value: game,
-                                child: Row(
-                                  children: [
-                                    Text(emoji, style: const TextStyle(fontSize: 18)),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      game,
-                                      style: TextStyle(
-                                        color: color,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedGame = val;
-                                  final ranks = _dynamicRanks;
-                                  if (_rankController.text.trim().isNotEmpty && !ranks.contains(_rankController.text.trim())) {
-                                    _rankController.text = ranks.first;
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() {
+                                      _selectedGame = val;
+                                      final ranks = _dynamicRanks;
+                                      if (_rankController.text.trim().isNotEmpty && !ranks.contains(_rankController.text.trim())) {
+                                        _rankController.text = ranks.first;
+                                      }
+                                    });
                                   }
-                                });
-                              }
-                            },
+                                },
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
+                          const SizedBox(height: 20),
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Icon(Icons.military_tech_rounded, color: Color(0xFFFF8A00), size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                'my_game_rank_proof'.tr(),
-                                style: const TextStyle(
-                                  color: GamerTheme.textGray,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF1877F2), Color(0xFF00E5FF)],
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('🚀', style: TextStyle(fontSize: 10)),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'coming_soon_caps'.tr(),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF161B26),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.4)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.info_outline_rounded, color: Color(0xFF00E5FF), size: 18),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'rank_verification_info'.tr(),
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11.5,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: GamerTheme.cardElevated,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: GamerTheme.borderLight),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: MobileGamesRankData.games.contains(_selectedRankGame)
-                                ? _selectedRankGame
-                                : MobileGamesRankData.games.first,
-                            isExpanded: true,
-                            dropdownColor: const Color(0xFF161B26),
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF00FF88)),
-                            items: MobileGamesRankData.games.map((game) {
-                              final emoji = MobileGamesRankData.getGameEmoji(game);
-                              final color = MobileGamesRankData.getGameColor(game);
-                              return DropdownMenuItem<String>(
-                                value: game,
-                                child: Row(
-                                  children: [
-                                    Text(emoji, style: const TextStyle(fontSize: 18)),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        game,
-                                        style: TextStyle(
-                                          color: color,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13.5,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedRankGame = val;
-                                  _selectedGame = val;
-                                  final ranks = _dynamicRanks;
-                                  if (_rankController.text.trim().isNotEmpty && !ranks.contains(_rankController.text.trim())) {
-                                    _rankController.clear();
-                                    _pickedRankScreenshot = null;
-                                    _rankScreenshotUrl = '';
-                                  }
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'select_rank_label'.tr(),
-                            style: const TextStyle(
-                              color: GamerTheme.textGray,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.6,
-                            ),
-                          ),
-                          Text(
-                            _selectedRankGame.length > 20 ? '${_selectedRankGame.substring(0, 20)}...' : _selectedRankGame,
-                            style: TextStyle(
-                              color: MobileGamesRankData.getGameColor(_selectedRankGame),
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          InkWell(
-                            onTap: () {
-                              setState(() {
-                                _rankController.clear();
-                                _pickedRankScreenshot = null;
-                                _rankScreenshotUrl = '';
-                                _rankStatus = 'None';
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: _rankController.text.trim().isEmpty
-                                    ? GamerTheme.accentBlue.withOpacity(0.2)
-                                    : GamerTheme.cardElevated,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: _rankController.text.trim().isEmpty ? GamerTheme.accentBlue : GamerTheme.borderLight,
-                                  width: _rankController.text.trim().isEmpty ? 1.5 : 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                              Row(
                                 children: [
-                                  if (_rankController.text.trim().isEmpty) ...[
-                                    const Icon(Icons.check, color: GamerTheme.accentBlue, size: 12),
-                                    const SizedBox(width: 4),
-                                  ],
+                                  const Icon(Icons.military_tech_rounded, color: Color(0xFFFF8A00), size: 18),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    'skip_no_rank'.tr(),
+                                    'my_game_rank_proof'.tr(),
                                     style: TextStyle(
-                                      color: _rankController.text.trim().isEmpty ? GamerTheme.accentBlue : Colors.white70,
+                                      color: ThemeService.textSecondary,
                                       fontSize: 12,
-                                      fontWeight: _rankController.text.trim().isEmpty ? FontWeight.w900 : FontWeight.w700,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.8,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                          ..._dynamicRanks.map((rank) {
-                            final isSelected = _rankController.text.trim() == rank;
-                            final gameColor = MobileGamesRankData.getGameColor(_selectedRankGame);
-                            return InkWell(
-                              onTap: _showRankComingSoonBanner,
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? gameColor.withOpacity(0.2) : GamerTheme.cardElevated,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isSelected ? gameColor : GamerTheme.borderLight,
-                                    width: isSelected ? 1.5 : 1,
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF1877F2), Color(0xFF00E5FF)],
                                   ),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    if (isSelected) ...[
-                                      Icon(Icons.check, color: gameColor, size: 12),
-                                      const SizedBox(width: 4),
-                                    ],
+                                    const Text('🚀', style: TextStyle(fontSize: 10)),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      rank,
-                                      style: TextStyle(
-                                        color: isSelected ? gameColor : Colors.white70,
-                                        fontSize: 12,
-                                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                                      'coming_soon_caps'.tr(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.5,
                                       ),
                                     ),
-                                    const SizedBox(width: 5),
-                                    const Icon(Icons.lock_rounded, size: 11, color: Colors.amber),
                                   ],
                                 ),
                               ),
-                            );
-                          }),
-                        ],
-                      ),
-                      if (_rankController.text.trim().isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10141D),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white24,
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: ThemeService.card,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.info_outline_rounded, color: Color(0xFF1877F2), size: 18),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'rank_verification_info'.tr(),
+                                    style: TextStyle(
+                                      color: ThemeService.textSecondary,
+                                      fontSize: 11.5,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: ThemeService.cardSecondary,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: ThemeService.border),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: MobileGamesRankData.games.contains(_selectedRankGame)
+                                    ? _selectedRankGame
+                                    : MobileGamesRankData.games.first,
+                                isExpanded: true,
+                                dropdownColor: ThemeService.card,
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF00FF88)),
+                                items: MobileGamesRankData.games.map((game) {
+                                  final emoji = MobileGamesRankData.getGameEmoji(game);
+                                  final color = MobileGamesRankData.getGameColor(game);
+                                  return DropdownMenuItem<String>(
+                                    value: game,
+                                    child: Row(
+                                      children: [
+                                        Text(emoji, style: const TextStyle(fontSize: 18)),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            game,
+                                            style: TextStyle(
+                                              color: color,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13.5,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() {
+                                      _selectedRankGame = val;
+                                      _selectedGame = val;
+                                      final ranks = _dynamicRanks;
+                                      if (_rankController.text.trim().isNotEmpty && !ranks.contains(_rankController.text.trim())) {
+                                        _rankController.clear();
+                                        _pickedRankScreenshot = null;
+                                        _rankScreenshotUrl = '';
+                                      }
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              if (_rankStatus.toLowerCase() == 'pending') ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              Text(
+                                'select_rank_label'.tr(),
+                                style: TextStyle(
+                                  color: ThemeService.textSecondary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                              Text(
+                                _selectedRankGame.length > 20 ? '${_selectedRankGame.substring(0, 20)}...' : _selectedRankGame,
+                                style: TextStyle(
+                                  color: MobileGamesRankData.getGameColor(_selectedRankGame),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _rankController.clear();
+                                    _pickedRankScreenshot = null;
+                                    _rankScreenshotUrl = '';
+                                    _rankStatus = 'None';
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF332B00),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: const Color(0xFFFFD700)),
+                                    color: _rankController.text.trim().isEmpty
+                                        ? const Color(0xFF1877F2).withOpacity(0.18)
+                                        : ThemeService.cardSecondary,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: _rankController.text.trim().isEmpty ? const Color(0xFF1877F2) : ThemeService.border,
+                                      width: _rankController.text.trim().isEmpty ? 1.5 : 1,
+                                    ),
                                   ),
                                   child: Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFD700), size: 16),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'rank_status_pending'.tr(),
-                                          style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                      if (_rankController.text.trim().isEmpty) ...[
+                                        const Icon(Icons.check, color: Color(0xFF1877F2), size: 12),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      Text(
+                                        'skip_no_rank'.tr(),
+                                        style: TextStyle(
+                                          color: _rankController.text.trim().isEmpty ? const Color(0xFF1877F2) : ThemeService.textPrimary,
+                                          fontSize: 12,
+                                          fontWeight: _rankController.text.trim().isEmpty ? FontWeight.w900 : FontWeight.w700,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: 10),
-                              ] else if (_rankStatus.toLowerCase() == 'verified') ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF0D2818),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: const Color(0xFF00FF88)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 16),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'rank_status_verified'.tr(),
-                                          style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11.5),
-                                        ),
+                              ),
+                              ..._dynamicRanks.map((rank) {
+                                final isSelected = _rankController.text.trim() == rank;
+                                final gameColor = MobileGamesRankData.getGameColor(_selectedRankGame);
+                                return InkWell(
+                                  onTap: _showRankComingSoonBanner,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? gameColor.withOpacity(0.18) : ThemeService.cardSecondary,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isSelected ? gameColor : ThemeService.border,
+                                        width: isSelected ? 1.5 : 1,
                                       ),
-                                    ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (isSelected) ...[
+                                          Icon(Icons.check, color: gameColor, size: 12),
+                                          const SizedBox(width: 4),
+                                        ],
+                                        Text(
+                                          rank,
+                                          style: TextStyle(
+                                            color: isSelected ? gameColor : ThemeService.textPrimary,
+                                            fontSize: 12,
+                                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        const Icon(Icons.lock_rounded, size: 11, color: Colors.amber),
+                                      ],
+                                    ),
                                   ),
+                                );
+                              }),
+                            ],
+                          ),
+                          if (_rankController.text.trim().isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: ThemeService.card,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: ThemeService.border,
                                 ),
-                                const SizedBox(height: 10),
-                              ] else if (_rankStatus.toLowerCase() == 'rejected') ...[
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF3A0D11),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: const Color(0xFFFF4655)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (_rankStatus.toLowerCase() == 'pending') ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFB800).withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFFFFB800)),
+                                      ),
+                                      child: Row(
                                         children: [
-                                          const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 16),
+                                          const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFB800), size: 16),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              'rank_status_rejected_msg'.tr(),
-                                              style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 12),
+                                              'rank_status_pending'.tr(),
+                                              style: const TextStyle(color: Color(0xFFFFB800), fontWeight: FontWeight.bold, fontSize: 11.5),
                                             ),
                                           ),
                                         ],
                                       ),
-                                      if (_rankRejectReason.isNotEmpty) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'reason_prefix'.tr(args: [_rankRejectReason]),
-                                          style: const TextStyle(color: Colors.white70, fontSize: 11),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                              ],
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF161B26),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFF2E384D)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.info_outline_rounded, color: Color(0xFF38BDF8), size: 16),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'screenshot_requirement_hint'.tr(),
-                                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                    ),
+                                    const SizedBox(height: 10),
+                                  ] else if (_rankStatus.toLowerCase() == 'verified') ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF00FF88).withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFF00FF88)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 16),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'rank_status_verified'.tr(),
+                                              style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11.5),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
+                                    const SizedBox(height: 10),
+                                  ] else if (_rankStatus.toLowerCase() == 'rejected') ...[
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF4655).withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFFFF4655)),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 16),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  'rank_status_rejected_msg'.tr(),
+                                                  style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 12),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (_rankRejectReason.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'reason_prefix'.tr(args: [_rankRejectReason]),
+                                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
                                   ],
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              if (_pickedRankScreenshot != null) ...[
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Stack(
-                                    children: [
-                                      Image.file(
-                                        _pickedRankScreenshot!,
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: ThemeService.cardSecondary,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: ThemeService.border),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.info_outline_rounded, color: Color(0xFF1877F2), size: 16),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'screenshot_requirement_hint'.tr(),
+                                            style: const TextStyle(color: Color(0xFF1877F2), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  if (_pickedRankScreenshot != null) ...[
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Stack(
+                                        children: [
+                                          Image.file(
+                                            _pickedRankScreenshot!,
+                                            height: 140,
+                                            width: double.infinity,
+                                            fit: BoxFit.cover,
+                                          ),
+                                          Positioned(
+                                            top: 6,
+                                            right: 6,
+                                            child: CircleAvatar(
+                                              radius: 14,
+                                              backgroundColor: Colors.black.withOpacity(0.7),
+                                              child: IconButton(
+                                                padding: EdgeInsets.zero,
+                                                icon: const Icon(Icons.close, size: 14, color: Colors.white),
+                                                onPressed: () => setState(() => _pickedRankScreenshot = null),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: _showRankComingSoonBanner,
+                                            icon: Icon(Icons.edit_rounded, size: 14, color: ThemeService.textSecondary),
+                                            label: Text('btn_change_photo_coming_soon'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5)),
+                                            style: OutlinedButton.styleFrom(
+                                              side: BorderSide(color: ThemeService.border),
+                                              padding: const EdgeInsets.symmetric(vertical: 8),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ] else if (_rankScreenshotUrl.isNotEmpty) ...[
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: CachedNetworkImage(
+                                        imageUrl: _rankScreenshotUrl,
                                         height: 140,
                                         width: double.infinity,
                                         fit: BoxFit.cover,
-                                      ),
-                                      Positioned(
-                                        top: 6,
-                                        right: 6,
-                                        child: CircleAvatar(
-                                          radius: 14,
-                                          backgroundColor: Colors.black.withOpacity(0.7),
-                                          child: IconButton(
-                                            padding: EdgeInsets.zero,
-                                            icon: const Icon(Icons.close, size: 14, color: Colors.white),
-                                            onPressed: () => setState(() => _pickedRankScreenshot = null),
-                                          ),
+                                        placeholder: (_, __) => Container(
+                                          height: 140,
+                                          color: ThemeService.cardSecondary,
+                                          child: const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88), strokeWidth: 2)),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: OutlinedButton.icon(
-                                        onPressed: _showRankComingSoonBanner,
-                                        icon: const Icon(Icons.edit_rounded, size: 14, color: Colors.white38),
-                                        label: Text('btn_change_photo_coming_soon'.tr(), style: const TextStyle(color: Colors.white38, fontSize: 11.5)),
-                                        style: OutlinedButton.styleFrom(
-                                          side: const BorderSide(color: Colors.white24),
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        errorWidget: (_, __, ___) => Container(
+                                          height: 140,
+                                          color: ThemeService.cardSecondary,
+                                          child: Icon(Icons.broken_image, color: ThemeService.textSecondary),
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ] else if (_rankScreenshotUrl.isNotEmpty) ...[
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: CachedNetworkImage(
-                                    imageUrl: _rankScreenshotUrl,
-                                    height: 140,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                    placeholder: (_, __) => Container(
-                                      height: 140,
-                                      color: const Color(0xFF161B26),
-                                      child: const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88), strokeWidth: 2)),
-                                    ),
-                                    errorWidget: (_, __, ___) => Container(
-                                      height: 140,
-                                      color: const Color(0xFF161B26),
-                                      child: const Center(child: Icon(Icons.broken_image, color: Colors.white38)),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: OutlinedButton.icon(
-                                        onPressed: _showRankComingSoonBanner,
-                                        icon: const Icon(Icons.refresh_rounded, size: 14, color: Colors.white38),
-                                        label: Text('btn_new_screenshot_coming_soon'.tr(), style: const TextStyle(color: Colors.white38, fontSize: 11.5)),
-                                        style: OutlinedButton.styleFrom(
-                                          side: const BorderSide(color: Colors.white24),
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ] else ...[
-                                InkWell(
-                                  onTap: _showRankComingSoonBanner,
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF161B26),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Colors.white24,
-                                        style: BorderStyle.solid,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                    child: Column(
+                                    const SizedBox(height: 8),
+                                    Row(
                                       children: [
-                                        const Icon(Icons.lock_clock_rounded, color: Colors.white38, size: 36),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'rank_upload_coming_soon_title'.tr(),
-                                          style: const TextStyle(
-                                            color: Colors.white54,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'rank_upload_coming_soon_sub'.tr(),
-                                          style: const TextStyle(
-                                            color: Colors.white38,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: _showRankComingSoonBanner,
+                                            icon: Icon(Icons.refresh_rounded, size: 14, color: ThemeService.textSecondary),
+                                            label: Text('btn_new_screenshot_coming_soon'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5)),
+                                            style: OutlinedButton.styleFrom(
+                                              side: BorderSide(color: ThemeService.border),
+                                              padding: const EdgeInsets.symmetric(vertical: 8),
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ),
-                              ],
+                                  ] else ...[
+                                    InkWell(
+                                      onTap: _showRankComingSoonBanner,
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+                                        decoration: BoxDecoration(
+                                          color: ThemeService.cardSecondary,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: ThemeService.border,
+                                            style: BorderStyle.solid,
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Icon(Icons.lock_clock_rounded, color: ThemeService.textSecondary, size: 36),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'rank_upload_coming_soon_title'.tr(),
+                                              style: TextStyle(
+                                                color: ThemeService.textPrimary,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'rank_upload_coming_soon_sub'.tr(),
+                                              style: TextStyle(
+                                                color: ThemeService.textSecondary,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'field_bio_label'.tr(),
+                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                              ),
+                              ValueListenableBuilder<TextEditingValue>(
+                                valueListenable: _bioController,
+                                builder: (context, value, _) {
+                                  final count = value.text.length;
+                                  return Text(
+                                    '$count/100',
+                                    style: TextStyle(
+                                      color: count > 100 ? GamerTheme.redAccent : ThemeService.textSecondary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                                },
+                              ),
                             ],
                           ),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'field_bio_label'.tr(),
-                            style: const TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                          ),
-                          ValueListenableBuilder<TextEditingValue>(
-                            valueListenable: _bioController,
-                            builder: (context, value, _) {
-                              final count = value.text.length;
-                              return Text(
-                                '$count/100',
-                                style: TextStyle(
-                                  color: count > 100 ? GamerTheme.redAccent : GamerTheme.textMuted,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _bioController,
-                        maxLength: 100,
-                        maxLines: 2,
-                        buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
-                        style: const TextStyle(color: GamerTheme.textWhite),
-                        decoration: InputDecoration(
-                          prefixIcon: const Padding(
-                            padding: EdgeInsets.only(bottom: 24),
-                            child: Icon(Icons.edit_note_rounded, color: GamerTheme.textMuted),
-                          ),
-                          hintText: 'bio_hint'.tr(),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Text(
-                            'field_character_id_label'.tr(),
-                            style: const TextStyle(color: GamerTheme.textGray, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.lock_rounded, size: 14, color: GamerTheme.textMuted),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _gameIdController,
-                        style: const TextStyle(color: GamerTheme.textWhite),
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.sports_esports_rounded, color: GamerTheme.accentOrange),
-                          hintText: '12345',
-                          helperText: 'helper_character_uid'.tr(),
-                          helperStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 11),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: _isSaving ? null : _saveGamerId,
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            elevation: 4,
-                          ),
-                          child: Ink(
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFFF8A00), Color(0xFFFF5200)],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _bioController,
+                            maxLength: 100,
+                            maxLines: 2,
+                            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
+                            style: TextStyle(color: ThemeService.textPrimary),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: ThemeService.cardSecondary,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: ThemeService.border),
                               ),
-                              borderRadius: BorderRadius.circular(14),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFFFF8A00).withOpacity(0.35),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: _isSaving
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                                    )
-                                  : Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(Icons.check_rounded, color: Colors.white, size: 20),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          isEditing ? 'btn_save_changes'.tr() : 'btn_save_changes_join'.tr(),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 16,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFFF8A00), width: 1.5),
+                              ),
+                              prefixIcon: Padding(
+                                padding: const EdgeInsets.only(bottom: 24),
+                                child: Icon(Icons.edit_note_rounded, color: ThemeService.textSecondary),
+                              ),
+                              hintText: 'bio_hint'.tr(),
+                              hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              Text(
+                                'field_character_id_label'.tr(),
+                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(Icons.lock_rounded, size: 14, color: ThemeService.textSecondary),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _gameIdController,
+                            style: TextStyle(color: ThemeService.textPrimary),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: ThemeService.cardSecondary,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: ThemeService.border),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFFF8A00), width: 1.5),
+                              ),
+                              prefixIcon: const Icon(Icons.sports_esports_rounded, color: Color(0xFFFF8A00)),
+                              hintText: '12345',
+                              helperText: 'helper_character_uid'.tr(),
+                              helperStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: ElevatedButton(
+                              onPressed: _isSaving ? null : _saveGamerId,
+                              style: ElevatedButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                elevation: 4,
+                              ),
+                              child: Ink(
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFFFF8A00), Color(0xFFFF5200)],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFF8A00).withOpacity(0.35),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: _isSaving
+                                      ? const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                                        )
+                                      : Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(Icons.check_rounded, color: Colors.white, size: 20),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              isEditing ? 'btn_save_changes'.tr() : 'btn_save_changes_join'.tr(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 16,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
                       ),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -2068,9 +2132,9 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
         right: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      decoration: const BoxDecoration(
-        color: GamerTheme.cardDark,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -2079,15 +2143,15 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
           children: [
             Row(
               children: [
-                const Icon(Icons.shield_rounded, color: Color(0xFF00E5FF), size: 22),
+                const Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 22),
                 const SizedBox(width: 8),
                 Text(
                   'title_add_verify_rank'.tr(),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                  icon: Icon(Icons.close_rounded, color: ThemeService.textSecondary),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -2096,21 +2160,21 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               decoration: BoxDecoration(
-                color: GamerTheme.cardElevated,
+                color: ThemeService.cardSecondary,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: GamerTheme.borderLight),
+                border: Border.all(color: ThemeService.border),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _selectedGame,
                   isExpanded: true,
-                  dropdownColor: const Color(0xFF161B26),
+                  dropdownColor: ThemeService.card,
                   items: MobileGamesRankData.games.map((g) {
                     return DropdownMenuItem(
                       value: g,
                       child: Text(
                         g,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                        style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
                         overflow: TextOverflow.ellipsis,
                       ),
                     );
@@ -2127,7 +2191,7 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
               ),
             ),
             const SizedBox(height: 14),
-            Text('select_your_rank_label'.tr(), style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+            Text('select_your_rank_label'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
@@ -2135,10 +2199,10 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
               children: _ranks.map((r) {
                 final isSel = _selectedRank == r;
                 return ChoiceChip(
-                  label: Text(r, style: TextStyle(color: isSel ? Colors.black : Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  label: Text(r, style: TextStyle(color: isSel ? Colors.white : ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
                   selected: isSel,
-                  selectedColor: const Color(0xFF00FF88),
-                  backgroundColor: GamerTheme.surfaceDark,
+                  selectedColor: const Color(0xFF1877F2),
+                  backgroundColor: ThemeService.cardSecondary,
                   onSelected: (val) {
                     if (val) setState(() => _selectedRank = r);
                   },
@@ -2148,13 +2212,13 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
             const SizedBox(height: 14),
             TextField(
               controller: _uidController,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'field_character_id_label'.tr(),
-                hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12),
-                prefixIcon: const Icon(Icons.sports_esports_rounded, color: Color(0xFF00E5FF), size: 18),
+                hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                prefixIcon: const Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 18),
                 filled: true,
-                fillColor: GamerTheme.cardElevated,
+                fillColor: ThemeService.cardSecondary,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               ),
             ),
@@ -2165,15 +2229,15 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: GamerTheme.cardElevated,
+                  color: ThemeService.cardSecondary,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _proofFile != null ? const Color(0xFF00FF88) : GamerTheme.borderLight),
+                  border: Border.all(color: _proofFile != null ? const Color(0xFF00FF88) : ThemeService.border),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       _proofFile != null ? Icons.check_circle_rounded : Icons.add_photo_alternate_rounded,
-                      color: _proofFile != null ? const Color(0xFF00FF88) : const Color(0xFF00E5FF),
+                      color: _proofFile != null ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
                       size: 20,
                     ),
                     const SizedBox(width: 10),
@@ -2181,7 +2245,7 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
                       child: Text(
                         _proofFile != null ? 'proof_attached'.tr() : 'upload_rank_proof'.tr(),
                         style: TextStyle(
-                          color: _proofFile != null ? const Color(0xFF00FF88) : Colors.white,
+                          color: _proofFile != null ? const Color(0xFF00FF88) : ThemeService.textPrimary,
                           fontSize: 12.5,
                           fontWeight: FontWeight.bold,
                         ),
@@ -2198,12 +2262,12 @@ class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submitRank,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00E5FF),
-                  foregroundColor: Colors.black,
+                  backgroundColor: const Color(0xFF1877F2),
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isSubmitting
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : Text('btn_submit_verification'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               ),
             ),
