@@ -1,4 +1,6 @@
-{"confirm_action_title": "Confirm Action",
+{"no_proofs_under_review_title": "No Proofs Under Review",
+"all_proofs_reviewed_desc": "All match proofs have been reviewed and verified.",
+"confirm_action_title": "Confirm Action",
   "action_label": "Action",
   "use_coins_btn": "Use Coins",
   "your_balance_label": "Your Balance: {}",
