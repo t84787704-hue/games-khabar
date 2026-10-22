@@ -1,12 +1,18 @@
-{  
+{
+  "app_language": "App Language",
+  "coin_history_passbook": "Coin History & Passbook",
+  "coin_history_sub": "View transactions and spent history",
+  "blocked_users_sub": "Manage users you have blocked",
+  "saved_posts_news": "Saved Posts & News",
+  "saved_posts_news_sub": "View bookmarked stories and posts",
   "gaming_news_alerts": "Gaming News Alerts",
   "gaming_alerts_sub": "Get notified about breaking gaming news and updates",
   "day_night_mode": "Theme Mode",
   "light_theme_sub": "Switch between dark and light themes",
   "clear_cache_sub": "Clear cached images to free up space",
   "download_my_data_sub": "Export a copy of your personal data",
-  "log_out_confirm": "Are you sure you want to log out of your account?",
   "log_out_sub": "Sign out from this device",
+  "log_out_confirm": "Are you sure you want to log out of your account?",
   "delete_account_sub": "Permanently remove your account and data",
   "privacy_settings": "Privacy Settings",
   "privacy_settings_sub": "Manage who can see your activity",
@@ -1929,7 +1935,5 @@
   "btn_share_invite_code": "Share Invite Code",
   "have_friend_referral_title": "Have a Referral Code?",
   "have_friend_referral_sub": "Enter your friend's code to get instant starter coins.",
-  "hint_enter_referral_code": "Enter referral code",
-  "btn_share_profile": "Share Profile",
-  "game_uid_label": "Game UID"
+  "hint_enter_referral_code": "Enter referral code"
 }
