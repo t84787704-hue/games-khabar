@@ -5,6 +5,7 @@ import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../services/supabase_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_profile_screen.dart';
 
@@ -90,7 +91,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
 
   Widget _buildUserList(List<GamerUser> list, bool isLoading, String emptyLabel) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF1877F2)));
     }
 
     if (list.isEmpty) {
@@ -98,9 +99,9 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.people_outline_rounded, color: GamerTheme.textMuted, size: 48),
+            Icon(Icons.people_outline_rounded, color: ThemeService.textSecondary, size: 48),
             const SizedBox(height: 12),
-            Text(emptyLabel, style: const TextStyle(color: GamerTheme.textGray, fontSize: 14)),
+            Text(emptyLabel, style: TextStyle(color: ThemeService.textSecondary, fontSize: 14)),
           ],
         ),
       );
@@ -109,18 +110,18 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
     final currentUid = _authService.currentUid ?? '';
 
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: list.length,
-      separatorBuilder: (_, __) => const Divider(color: GamerTheme.borderDark, height: 1),
+      separatorBuilder: (_, __) => Divider(color: ThemeService.border, height: 1),
       itemBuilder: (context, index) {
         final user = list[index];
         final effectiveUserId = user.uid;
         final isSelf = _isSelfUser(user, currentUid, widget.userId);
-        final gameColor = GamerTheme.gameColors[user.favoriteGame] ?? GamerTheme.accentBlue;
+        final gameColor = GamerTheme.gameColors[user.favoriteGame] ?? const Color(0xFF1877F2);
         final gameEmoji = GamerTheme.gameEmojis[user.favoriteGame] ?? '🎮';
 
         return ListTile(
-          contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+          contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 0),
           leading: GamerAvatar(
             photoUrl: user.photoUrl,
             displayName: user.displayName,
@@ -135,8 +136,12 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
             children: [
               Flexible(
                 child: Text(
-                  user.displayName,
-                  style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 14),
+                  user.displayName.isNotEmpty ? user.displayName : user.username,
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14.5,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -146,25 +151,32 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
               ],
             ],
           ),
-          subtitle: Row(
-            children: [
-              Text(
-                '@${user.username}',
-                style: const TextStyle(color: GamerTheme.accentOrange, fontSize: 11, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: gameColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(4),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Row(
+              children: [
+                Text(
+                  '@${user.username}',
+                  style: const TextStyle(
+                    color: Color(0xFFFF8A00),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                child: Text(
-                  '$gameEmoji ${user.favoriteGame}',
-                  style: TextStyle(color: gameColor, fontSize: 10, fontWeight: FontWeight.w700),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: gameColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '$gameEmoji ${user.favoriteGame}',
+                    style: TextStyle(color: gameColor, fontSize: 10, fontWeight: FontWeight.w700),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           trailing: isSelf
               ? null
@@ -176,14 +188,14 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
                       height: 32,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          backgroundColor: isFollowing ? GamerTheme.cardElevated : GamerTheme.accentBlue,
-                          foregroundColor: isFollowing ? GamerTheme.textGray : GamerTheme.bgDark,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          backgroundColor: isFollowing ? ThemeService.cardSecondary : const Color(0xFF1877F2),
+                          foregroundColor: isFollowing ? ThemeService.textPrimary : Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                             side: BorderSide(
-                              color: isFollowing ? GamerTheme.borderLight : Colors.transparent,
+                              color: isFollowing ? ThemeService.border : Colors.transparent,
                             ),
                           ),
                         ),
@@ -198,9 +210,9 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
                         child: Text(
                           isFollowing ? 'btn_following'.tr() : 'btn_follow'.tr(),
                           style: TextStyle(
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.bold,
                             fontSize: 12,
-                            color: isFollowing ? GamerTheme.textGray : GamerTheme.bgDark,
+                            color: isFollowing ? ThemeService.textPrimary : Colors.white,
                           ),
                         ),
                       ),
@@ -219,30 +231,45 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: GamerTheme.bgDark,
-      appBar: AppBar(
-        title: Text('network_title'.tr(args: [widget.displayName])),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: GamerTheme.accentBlue,
-          indicatorWeight: 3,
-          labelColor: GamerTheme.accentBlue,
-          unselectedLabelColor: GamerTheme.textMuted,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-          tabs: [
-            Tab(text: 'tab_followers_count'.tr(args: ['${_followers.length}'])),
-            Tab(text: 'tab_following_count'.tr(args: ['${_following.length}'])),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildUserList(_followers, _loadingFollowers, 'no_followers_yet'.tr()),
-          _buildUserList(_following, _loadingFollowing, 'not_following_anyone_yet'.tr()),
-        ],
-      ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: ThemeService.isDarkMode ? 0 : 1,
+            iconTheme: IconThemeData(color: ThemeService.textPrimary),
+            title: Text(
+              'network_title'.tr(args: [widget.displayName]),
+              style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            bottom: TabBar(
+              controller: _tabController,
+              indicatorColor: const Color(0xFF1877F2),
+              indicatorWeight: 3,
+              labelColor: const Color(0xFF1877F2),
+              unselectedLabelColor: ThemeService.textSecondary,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+              tabs: [
+                Tab(text: 'tab_followers_count'.tr(args: ['${_followers.length}'])),
+                Tab(text: 'tab_following_count'.tr(args: ['${_following.length}'])),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildUserList(_followers, _loadingFollowers, 'no_followers_yet'.tr()),
+              _buildUserList(_following, _loadingFollowing, 'not_following_anyone_yet'.tr()),
+            ],
+          ),
+        );
+      },
     );
   }
 }
