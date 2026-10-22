@@ -28,7 +28,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
   VerificationStats? _liveStats;
   GamerUser? _currentUser;
 
-  // Early Bird Logic States
   bool _isEarlyBirdUser = false;
   int _userRegistrationRank = 0;
   int _referralCount = 0;
@@ -47,8 +46,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
       if (uid.isNotEmpty) {
         final stats = await VerificationService.fetchLiveStats(uid);
         final freshestUser = await _authService.fetchUserProfile(uid);
-
-        // 1. Check user registration index for First 1200 Users
         await _checkEarlyBirdStatus(uid);
 
         if (mounted) {
@@ -67,7 +64,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   Future<void> _checkEarlyBirdStatus(String uid) async {
     try {
-      // Check current user created_at timestamp
       final userRes = await SupabaseService.client
           .from('users')
           .select('created_at, referred_by')
@@ -77,7 +73,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
       if (userRes != null && userRes['created_at'] != null) {
         final userCreatedAt = userRes['created_at'];
 
-        // Count how many users joined before or at the same time
         final countRes = await SupabaseService.client
             .from('users')
             .select('id')
@@ -88,7 +83,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
         _isEarlyBirdUser = _userRegistrationRank <= 1200;
       }
 
-      // Check how many people this user has referred
       final refRes = await SupabaseService.client
           .from('users')
           .select('id')
@@ -105,10 +99,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
     bool canApply = false;
 
     if (_isEarlyBirdUser) {
-      // Early bird users only need 2 referrals
       canApply = _referralCount >= 2;
     } else {
-      // Regular users need standard strict criteria + 2 referrals
       final standardMet = VerificationService.canApplyForVerification(
         user,
         clipsCount: _liveStats?.clipsCount,
@@ -409,10 +401,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
     final bool isVerified = user.isVerified || user.verificationStatus == 'verified';
     final bool isPending = user.verificationStatus == 'pending' && !isVerified;
 
-    // Condition Check
     final bool referralMet = _referralCount >= 2;
     final int metCount = reqs.where((r) => r.isMet).length + (referralMet ? 1 : 0);
-    final int totalCount = reqs.length + 1; // Including referral requirement
+    final int totalCount = reqs.length + 1;
 
     final bool allMet = _isEarlyBirdUser ? referralMet : (metCount == totalCount);
 
@@ -429,13 +420,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
             _buildStatusHeaderCard(user, isVerified: isVerified, isPending: isPending, metCount: metCount, totalCount: totalCount),
             const SizedBox(height: 16),
 
-            // Early Bird Special Badge Banner
             if (!isVerified) ...[
               _buildEarlyBirdOfferCard(),
               const SizedBox(height: 18),
             ],
 
-            // Referral Requirement Card (Highlighted)
             _buildReferralRequirementCard(referralMet),
             const SizedBox(height: 16),
 
@@ -970,4 +959,37 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     side: BorderSide(color: ThemeService.border),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
-                  icon: Icon(Icons.edit_note_rounded, color: ThemeService.text
+                  icon: Icon(Icons.edit_note_rounded, color: ThemeService.textPrimary, size: 15),
+                  label: Text(
+                    'btn_shortcut_edit_bio'.tr(),
+                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => CreateGamerIdScreen(isEditing: true, existingUser: user))).then((_) => _refreshData());
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: ThemeService.border),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  icon: const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF1877F2), size: 15),
+                  label: const Text(
+                    'Post Picture',
+                    style: TextStyle(color: Color(0xFF1877F2), fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePostScreen())).then((_) => _refreshData());
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
