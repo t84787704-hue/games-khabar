@@ -247,9 +247,9 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
                         .maybeSingle();
                     final int curWins = (winnerRes?['wins'] as num?)?.toInt() ?? 0;
                     await SupabaseService.client
-                            .from('teams')
-                            .update({'wins': curWins + 1})
-                            .eq('id', winner);
+                        .from('teams')
+                        .update({'wins': curWins + 1})
+                        .eq('id', winner);
 
                     final loserId = (winner == match.team1Id) ? match.team2Id : match.team1Id;
                     if (loserId.isNotEmpty) {
@@ -480,43 +480,49 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
               final rId = (r['id'] ?? '').toString();
               if (matches.any((m) => m.matchId == rId)) continue;
 
-              final winProof = (r['win_proof_url'] ?? r['proof_url'])?.toString();
-              final status = (r['status'] ?? 'active').toString();
-              final isDisputed = r['disputed'] == true || status == 'disputed' || status == 'under_review';
-              final isProofSubmitted = winProof != null && winProof.isNotEmpty;
+              final winProof = (r['win_proof_url'] ?? r['proof_url'])?.toString() ?? '';
+              final rawStatus = (r['status'] ?? 'active').toString();
+              final isDisputed = r['disputed'] == true || rawStatus == 'disputed' || rawStatus == 'under_review';
+              final isProofSubmitted = winProof.isNotEmpty;
 
               String mappedStatus = 'Live';
               if (isDisputed) {
                 mappedStatus = 'Disputed';
-              } else if (isProofSubmitted || status == 'review_pending' || status == 'proof_submitted') {
+              } else if (isProofSubmitted || rawStatus == 'review_pending' || rawStatus == 'proof_submitted') {
                 mappedStatus = 'Proof Submitted';
-              } else if (status == 'completed') {
+              } else if (rawStatus == 'completed') {
                 mappedStatus = 'Verified';
-              } else if (status == 'rejected') {
+              } else if (rawStatus == 'rejected') {
                 mappedStatus = 'Rejected';
               }
 
-              matches.add(
-                TeamMatch(
-                  matchId: rId,
-                  team1Id: (r['host_id'] ?? '').toString(),
-                  team1Name: (r['host_name'] ?? 'Host Team').toString(),
-                  team1LeaderId: (r['host_id'] ?? '').toString(),
-                  team1LeaderName: (r['host_name'] ?? 'Host').toString(),
-                  team2Id: (r['winner_id'] ?? 'opponent').toString(),
-                  team2Name: (r['winner_name'] ?? 'Opponent Team').toString(),
-                  team2LeaderId: (r['winner_id'] ?? '').toString(),
-                  team2LeaderName: (r['winner_name'] ?? 'Opponent').toString(),
-                  game: (r['game'] ?? 'BGMI').toString(),
-                  mode: (r['mode'] ?? 'TDM').toString(),
-                  status: mappedStatus,
-                  matchTime: DateTime.tryParse(r['created_at']?.toString() ?? '') ?? DateTime.now(),
-                  team1Proof: winProof,
-                  team2Proof: (r['dispute_proof_url'] ?? r['second_proof_url'])?.toString(),
-                  disputeReason: (r['dispute_reason'] ?? '').toString(),
-                  winnerName: r['winner_name']?.toString(),
-                ),
-              );
+              final Map<String, dynamic> matchMap = {
+                'match_id': rId,
+                'id': rId,
+                'team1_id': (r['host_id'] ?? '').toString(),
+                'team1_name': (r['host_name'] ?? 'Host Team').toString(),
+                'team1_leader_id': (r['host_id'] ?? '').toString(),
+                'team1_leader_name': (r['host_name'] ?? 'Host').toString(),
+                'team2_id': (r['winner_id'] ?? 'opponent').toString(),
+                'team2_name': (r['winner_name'] ?? 'Opponent Team').toString(),
+                'team2_leader_id': (r['winner_id'] ?? '').toString(),
+                'team2_leader_name': (r['winner_name'] ?? 'Opponent').toString(),
+                'game': (r['game'] ?? 'BGMI').toString(),
+                'mode': (r['mode'] ?? 'TDM').toString(),
+                'status': mappedStatus,
+                'match_status': mappedStatus,
+                'match_time': r['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+                'created_at': r['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+                'team1_proof': winProof,
+                'proof_url': winProof,
+                'team2_proof': (r['dispute_proof_url'] ?? r['second_proof_url'])?.toString() ?? '',
+                'dispute_reason': (r['dispute_reason'] ?? '').toString(),
+                'winner_name': r['winner_name']?.toString() ?? '',
+              };
+
+              try {
+                matches.add(TeamMatch.fromMap(matchMap));
+              } catch (_) {}
             }
           }
         } catch (e) {
