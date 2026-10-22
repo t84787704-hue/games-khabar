@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLEAN COIN STORE SCREEN — Localized with easy_localization & Adaptive Theme
-// - Fixed UTC / Local Timezone mismatch for 24h countdown timer
+// - Real-time smooth ticking 24h countdown timer
 // - Retained: Live Balance, Daily Check-in, Rewarded Ads, Referral & Activity History
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
@@ -29,6 +29,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
   final GamerAuthService _authService = GamerAuthService();
 
   Timer? _countdownTimer;
+  DateTime? _lastClaimTime;
   Duration _timeUntilNextClaim = Duration.zero;
   bool _isClaimingDaily = false;
   bool _isWatchingAd = false;
@@ -39,47 +40,39 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
     final uid = _authService.currentUid ?? 'guest';
     _walletService.getOrCreateWallet(uid).then((wallet) {
       if (mounted) {
-        _updateCountdown(wallet);
+        _lastClaimTime = wallet.lastDailyBonusClaim;
+        _recalculateCountdown();
       }
     });
 
+    // Har 1 second baad timer smoothly chalega
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final w = _walletService.currentWallet;
-      if (w != null && mounted) {
-        _updateCountdown(w);
+      if (mounted) {
+        _recalculateCountdown();
       }
     });
   }
 
-  void _updateCountdown(CoinWallet wallet) {
-    setState(() {
-      _timeUntilNextNext(wallet);
-    });
-  }
-
-  void _timeUntilNextNext(CoinWallet wallet) {
-    if (wallet.lastDailyBonusClaim == null) {
-      _timeUntilNextClaim = Duration.zero;
+  void _recalculateCountdown() {
+    if (_lastClaimTime == null) {
+      if (_timeUntilNextClaim != Duration.zero) {
+        setState(() => _timeUntilNextClaim = Duration.zero);
+      }
       return;
     }
 
-    // Standardize both timestamps to UTC to eliminate timezone offset bugs
-    final claimUtc = wallet.lastDailyBonusClaim!.isUtc
-        ? wallet.lastDailyBonusClaim!
-        : wallet.lastDailyBonusClaim!.toUtc();
+    final claimUtc = _lastClaimTime!.toUtc();
     final nowUtc = DateTime.now().toUtc();
-
     final nextAvailableUtc = claimUtc.add(const Duration(hours: 24));
     final diff = nextAvailableUtc.difference(nowUtc);
 
-    if (diff.isNegative) {
-      _timeUntilNextClaim = Duration.zero;
-    } else if (diff.inSeconds > 86400) {
-      // Hard clamp: countdown can never exceed 24 hours
-      _timeUntilNextClaim = const Duration(hours: 24);
-    } else {
-      _timeUntilNextClaim = diff;
-    }
+    setState(() {
+      if (diff.isNegative || diff.inSeconds <= 0) {
+        _timeUntilNextClaim = Duration.zero;
+      } else {
+        _timeUntilNextClaim = diff;
+      }
+    });
   }
 
   @override
@@ -89,6 +82,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
   }
 
   String _formatDuration(Duration d) {
+    if (d == Duration.zero) return '00:00:00';
     final hours = d.inHours.toString().padLeft(2, '0');
     final minutes = (d.inMinutes % 60).toString().padLeft(2, '0');
     final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
@@ -115,7 +109,13 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
               Navigator.pop(dialogCtx);
               _walletService.claimDailyBonus(uid).then((success) {
                 if (mounted) {
-                  setState(() => _isClaimingDaily = false);
+                  setState(() {
+                    _isClaimingDaily = false;
+                    if (success) {
+                      _lastClaimTime = DateTime.now();
+                      _recalculateCountdown();
+                    }
+                  });
                   if (success) {
                     ScaffoldMessenger.of(this.context).showSnackBar(
                       SnackBar(
@@ -399,6 +399,10 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
             stream: _walletService.walletStream(uid),
             builder: (context, snapshot) {
               final wallet = snapshot.data ?? _walletService.currentWallet ?? CoinWallet.empty(uid);
+
+              if (wallet.lastDailyBonusClaim != null && _lastClaimTime != wallet.lastDailyBonusClaim) {
+                _lastClaimTime = wallet.lastDailyBonusClaim;
+              }
 
               return Column(
                 children: [
