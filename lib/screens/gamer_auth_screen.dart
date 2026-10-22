@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
@@ -17,10 +19,41 @@ class GamerAuthScreen extends StatefulWidget {
 class _GamerAuthScreenState extends State<GamerAuthScreen> {
   bool _isLoading = false;
   String? _errorMessage;
+  StreamSubscription<AuthState>? _authSubscription;
+  bool _isNavigating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ Supabase Auth Listener: Jaise hi Google redirect karega, foran andar bhejega
+    _authSubscription = SupabaseService.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+
+      if ((event == AuthChangeEvent.signedIn || event == AuthChangeEvent.tokenRefreshed) &&
+          session != null) {
+        if (!_isNavigating) {
+          _handlePostAuth();
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
 
   Future<void> _handlePostAuth() async {
+    if (_isNavigating) return;
+    _isNavigating = true;
+
     final authUser = SupabaseService.client.auth.currentUser;
-    if (authUser == null) return;
+    if (authUser == null) {
+      _isNavigating = false;
+      return;
+    }
 
     try {
       Map<String, dynamic>? profile;
@@ -83,13 +116,13 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     });
 
     try {
-      await GamerAuthService().signInWithGoogle().timeout(
-        const Duration(seconds: 6),
-        onTimeout: () {
-          debugPrint('OAuth launch timed out waiting on app return');
-        },
-      );
-      await _handlePostAuth();
+      // ✅ Timeout hata diya gaya hai, taake auth listener naturally callback receive kare
+      await GamerAuthService().signInWithGoogle();
+      
+      // Agar direct response mil jaye to manually handle karein
+      if (SupabaseService.client.auth.currentUser != null) {
+        await _handlePostAuth();
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -175,7 +208,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                     ),
                   ),
                 ),
-                // Subtitle hata diya gaya hai, clean spacing ke sath
                 const SizedBox(height: 40),
 
                 if (_errorMessage != null) ...[
