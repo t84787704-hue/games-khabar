@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/supabase_service.dart';
 import 'constants/gamer_theme.dart';
 import 'services/theme_service.dart';
@@ -14,8 +15,79 @@ import 'screens/banned_screen.dart';
 import 'screens/gamer_privacy_policy_screen.dart';
 import 'screens/gamer_terms_of_service_screen.dart';
 
+// ✅ Global Notification Plugin Instance
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+// ✅ Notification Permission, Sound aur Vibration Setup
+Future<void> initNotificationService() async {
+  try {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+    final androidPlugin = flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    // 1. App khulte hi System Permission Popup mangna (Naye mobiles par "Allow" aayega)
+    await androidPlugin?.requestNotificationsPermission();
+
+    // 2. High Priority Sound & Vibration Notification Channel create karna
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'gamers_id_notifications', // Channel ID
+      'Gamers ID Alerts',        // Channel Title
+      description: 'Match challenges, chat, and wallet reward alerts',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    await androidPlugin?.createNotificationChannel(channel);
+  } catch (e) {
+    debugPrint('Notification service init error: $e');
+  }
+}
+
+// ✅ Jab bhi mobile bajana ho, yeh function call karein
+Future<void> showLocalNotification({
+  required String title,
+  required String body,
+}) async {
+  try {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'gamers_id_notifications',
+      'Gamers ID Alerts',
+      channelDescription: 'Match challenges, chat, and wallet reward alerts',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    const NotificationDetails platformDetails =
+        NotificationDetails(android: androidDetails);
+
+    await flutterLocalNotificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      platformDetails,
+    );
+  } catch (e) {
+    debugPrint('Show notification error: $e');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ Initialize Notifications & Request Permission on startup
+  await initNotificationService();
 
   try {
     await EasyLocalization.ensureInitialized();
@@ -35,7 +107,7 @@ void main() async {
     debugPrint('Supabase initialize error: $e');
   }
 
-  // ✅ Language init (Isse hum bypass kar rahe hain)
+  // ✅ Language init
   try {
     await LanguageService.init();
   } catch (e) {
@@ -51,10 +123,10 @@ void main() async {
 
   runApp(
     EasyLocalization(
-      supportedLocales: const [Locale('en')], // 🔥 Sirf English allow
+      supportedLocales: const [Locale('en')],
       path: 'assets/translations',
       fallbackLocale: const Locale('en'),
-      startLocale: const Locale('en'), // 🔥 Force English
+      startLocale: const Locale('en'),
       child: const GamersIdApp(),
     ),
   );
