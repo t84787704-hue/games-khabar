@@ -1,3 +1,8 @@
+// ===============================================================================
+// TEAM PROFILE SCREEN — Day/Night Theme Adaptive & Clean Null Handlers
+// File: lib/screens/team_profile_screen.dart
+// ===============================================================================
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,6 +12,7 @@ import '../models/team_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/team_service.dart';
 import '../services/supabase_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/send_team_match_challenge_dialog.dart';
 import '../widgets/end_match_dialog.dart';
 import 'gamer_profile_screen.dart';
@@ -373,16 +379,20 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161F2E),
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: ThemeService.border),
+        ),
         title: Text('dialog_delete_team_title'.tr(),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
             'dialog_delete_team_desc'.tr(args: [team.name]),
-            style: const TextStyle(color: Colors.white70)),
+            style: TextStyle(color: ThemeService.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.white70)),
+            child: Text('btn_cancel'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -428,51 +438,57 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   Future<void> _showEditTeamDialog(TeamModel team) async {
     final nameCtrl = TextEditingController(text: team.name);
     final tagCtrl = TextEditingController(text: team.tag);
-    final descCtrl = TextEditingController(text: team.description);
-    final reqCtrl = TextEditingController(text: team.requirements);
+    final descCtrl = TextEditingController(
+        (team.description.toLowerCase() == 'null') ? '' : team.description);
+    final reqCtrl = TextEditingController(
+        (team.requirements.toLowerCase() == 'null') ? '' : team.requirements);
 
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161F2E),
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: ThemeService.border),
+        ),
         title: Text('dialog_edit_team_title'.tr(),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameCtrl,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
                     labelText: 'team_name'.tr(),
-                    labelStyle: const TextStyle(color: Colors.white70)),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: tagCtrl,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: ThemeService.textPrimary),
                 decoration: InputDecoration(
                     labelText: 'team_tag'.tr(),
-                    labelStyle: const TextStyle(color: Colors.white70)),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: descCtrl,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: ThemeService.textPrimary),
                 maxLines: 2,
                 decoration: InputDecoration(
                     labelText: 'description'.tr(),
-                    labelStyle: const TextStyle(color: Colors.white70)),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: reqCtrl,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: ThemeService.textPrimary),
                 maxLines: 2,
                 decoration: InputDecoration(
                     labelText: 'requirements'.tr(),
-                    labelStyle: const TextStyle(color: Colors.white70)),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary)),
               ),
             ],
           ),
@@ -480,7 +496,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('btn_cancel'.tr(), style: const TextStyle(color: Colors.white70)),
+            child: Text('btn_cancel'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -515,480 +531,727 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     final currentUid = GamerAuthService().currentUid ??
         (SupabaseService.client.auth.currentUser?.id ?? '');
 
-    return StreamBuilder<TeamModel?>(
-      stream: _teamService.getTeamStream(widget.teamId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0B0F17),
-            body: Center(
-                child: CircularProgressIndicator(color: Color(0xFFFF6B00))),
-          );
-        }
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return StreamBuilder<TeamModel?>(
+          stream: _teamService.getTeamStream(widget.teamId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return Scaffold(
+                backgroundColor: ThemeService.bg,
+                body: const Center(
+                    child: CircularProgressIndicator(color: Color(0xFFFF6B00))),
+              );
+            }
 
-        final team = snapshot.data;
-        if (team == null) {
-          return Scaffold(
-            backgroundColor: const Color(0xFF0B0F17),
-            body: Center(
-                child: Text('err_team_not_found'.tr(),
-                    style: const TextStyle(color: Colors.white))),
-          );
-        }
+            final team = snapshot.data;
+            if (team == null) {
+              return Scaffold(
+                backgroundColor: ThemeService.bg,
+                body: Center(
+                    child: Text('err_team_not_found'.tr(),
+                        style: TextStyle(color: ThemeService.textPrimary))),
+              );
+            }
 
-        final isLeader = team.isLeader(currentUid);
-        final isMember = team.isMember(currentUid);
-        final hasRequested = team.hasRequestedJoin(currentUid);
+            final isLeader = team.isLeader(currentUid);
+            final isMember = team.isMember(currentUid);
+            final hasRequested = team.hasRequestedJoin(currentUid);
 
-        return StreamBuilder<List<TeamModel>>(
-          stream: currentUid.isNotEmpty
-              ? _teamService.getUserTeamsStream(currentUid)
-              : Stream.value([]),
-          builder: (context, userTeamsSnap) {
-            final userTeams = userTeamsSnap.data ?? [];
-            final myLeaderTeams =
-                userTeams.where((t) => t.isLeader(currentUid)).toList();
-            final myTeamId = myLeaderTeams.isNotEmpty
-                ? myLeaderTeams.first.id
-                : (userTeams.isNotEmpty ? userTeams.first.id : '');
+            return StreamBuilder<List<TeamModel>>(
+              stream: currentUid.isNotEmpty
+                  ? _teamService.getUserTeamsStream(currentUid)
+                  : Stream.value([]),
+              builder: (context, userTeamsSnap) {
+                final userTeams = userTeamsSnap.data ?? [];
+                final myLeaderTeams =
+                    userTeams.where((t) => t.isLeader(currentUid)).toList();
+                final myTeamId = myLeaderTeams.isNotEmpty
+                    ? myLeaderTeams.first.id
+                    : (userTeams.isNotEmpty ? userTeams.first.id : '');
 
-            return StreamBuilder<List<Map<String, dynamic>>>(
-              stream: SupabaseService.client
-                  .from('active_matches')
-                  .stream(primaryKey: ['id']),
-              builder: (context, activeSnap) {
-                final streamMatches = activeSnap.data ?? [];
-                final activeMatches = [
-                  ..._optimisticActiveMatches,
-                  ...streamMatches,
-                ].where((m) {
-                  final st = (m['status'] ?? '').toString().toLowerCase();
-                  return (st == 'active' ||
-                          st == 'under_review' ||
-                          st == 'rejected') &&
-                      !_completedMatchIds.contains(m['id']?.toString());
-                }).toList();
+                return StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: SupabaseService.client
+                      .from('active_matches')
+                      .stream(primaryKey: ['id']),
+                  builder: (context, activeSnap) {
+                    final streamMatches = activeSnap.data ?? [];
+                    final activeMatches = [
+                      ..._optimisticActiveMatches,
+                      ...streamMatches,
+                    ].where((m) {
+                      final st = (m['status'] ?? '').toString().toLowerCase();
+                      return (st == 'active' ||
+                              st == 'under_review' ||
+                              st == 'rejected') &&
+                          !_completedMatchIds.contains(m['id']?.toString());
+                    }).toList();
 
-                final targetUuid =
-                    SupabaseService.toUuid(widget.teamId).toLowerCase();
-                final targetRawId = widget.teamId.toLowerCase();
+                    final targetUuid =
+                        SupabaseService.toUuid(widget.teamId).toLowerCase();
+                    final targetRawId = widget.teamId.toLowerCase();
 
-                final activeMatch = activeMatches.firstWhere(
-                  (m) {
-                    final participants = m['participants'];
-                    final List<String> pList = [];
-                    if (participants is List) {
-                      pList.addAll(
-                          participants.map((p) => p.toString().toLowerCase()));
+                    final activeMatch = activeMatches.firstWhere(
+                      (m) {
+                        final participants = m['participants'];
+                        final List<String> pList = [];
+                        if (participants is List) {
+                          pList.addAll(
+                              participants.map((p) => p.toString().toLowerCase()));
+                        }
+                        pList.add(m['team1_id']?.toString().toLowerCase() ?? '');
+                        pList.add(m['team2_id']?.toString().toLowerCase() ?? '');
+                        return pList.contains(targetUuid) ||
+                            pList.contains(targetRawId);
+                      },
+                      orElse: () => {},
+                    );
+                    final bool hasActiveMatch = activeMatch.isNotEmpty;
+
+                    final t1 = activeMatch['team1_id']?.toString() ?? '';
+                    final t2 = activeMatch['team2_id']?.toString() ?? '';
+
+                    final bool isUserInThisTeam = isLeader ||
+                        isMember ||
+                        userTeams.any((t) {
+                          final tUuid =
+                              SupabaseService.toUuid(t.id).toLowerCase();
+                          final tRaw = t.id.toLowerCase();
+                          return tUuid == targetUuid || tRaw == targetRawId;
+                        });
+                    final bool isMyOwnTeam = isUserInThisTeam;
+                    final bool isViewedMyTeam = isUserInThisTeam;
+
+                    TeamModel? userMatchTeam;
+                    for (final ut in userTeams) {
+                      final uRaw = ut.id.toLowerCase();
+                      final uUuid = SupabaseService.toUuid(ut.id).toLowerCase();
+                      if (t1.toLowerCase() == uRaw || t1.toLowerCase() == uUuid ||
+                          t2.toLowerCase() == uRaw || t2.toLowerCase() == uUuid) {
+                        userMatchTeam = ut;
+                        break;
+                      }
                     }
-                    pList.add(m['team1_id']?.toString().toLowerCase() ?? '');
-                    pList.add(m['team2_id']?.toString().toLowerCase() ?? '');
-                    return pList.contains(targetUuid) ||
-                        pList.contains(targetRawId);
-                  },
-                  orElse: () => {},
-                );
-                final bool hasActiveMatch = activeMatch.isNotEmpty;
 
-                final t1 = activeMatch['team1_id']?.toString() ?? '';
-                final t2 = activeMatch['team2_id']?.toString() ?? '';
+                    final bool isCurrentUserInMatch = hasActiveMatch && userMatchTeam != null;
+                    final bool isMatchOpponent = hasActiveMatch && !isUserInThisTeam && isCurrentUserInMatch;
+                    final bool canAccessMatch = hasActiveMatch && (isUserInThisTeam || isMatchOpponent);
 
-                final bool isUserInThisTeam = isLeader ||
-                    isMember ||
-                    userTeams.any((t) {
-                      final tUuid =
-                          SupabaseService.toUuid(t.id).toLowerCase();
-                      final tRaw = t.id.toLowerCase();
-                      return tUuid == targetUuid || tRaw == targetRawId;
-                    });
-                final bool isMyOwnTeam = isUserInThisTeam;
-                final bool isViewedMyTeam = isUserInThisTeam;
+                    final int privacyLevel =
+                        isUserInThisTeam ? 1 : (isMatchOpponent ? 3 : 2);
 
-                TeamModel? userMatchTeam;
-                for (final ut in userTeams) {
-                  final uRaw = ut.id.toLowerCase();
-                  final uUuid = SupabaseService.toUuid(ut.id).toLowerCase();
-                  if (t1.toLowerCase() == uRaw || t1.toLowerCase() == uUuid ||
-                      t2.toLowerCase() == uRaw || t2.toLowerCase() == uUuid) {
-                    userMatchTeam = ut;
-                    break;
-                  }
-                }
+                    final String userMatchTeamId = userMatchTeam?.id ?? myTeamId;
+                    final String userMatchTeamUuid = userMatchTeamId.isNotEmpty
+                        ? SupabaseService.toUuid(userMatchTeamId).toLowerCase()
+                        : '';
 
-                final bool isCurrentUserInMatch = hasActiveMatch && userMatchTeam != null;
-                final bool isMatchOpponent = hasActiveMatch && !isUserInThisTeam && isCurrentUserInMatch;
-                final bool canAccessMatch = hasActiveMatch && (isUserInThisTeam || isMatchOpponent);
+                    final bool isUserT1 = userMatchTeamUuid.isNotEmpty &&
+                        (t1.toLowerCase() == userMatchTeamUuid ||
+                            t1.toLowerCase() == userMatchTeamId.toLowerCase());
 
-                final int privacyLevel =
-                    isUserInThisTeam ? 1 : (isMatchOpponent ? 3 : 2);
+                    final String myTeamIdInMatch = isUserT1 ? t1 : t2;
+                    final String opponentTeamId = isUserT1 ? t2 : t1;
 
-                final String userMatchTeamId = userMatchTeam?.id ?? myTeamId;
-                final String userMatchTeamUuid = userMatchTeamId.isNotEmpty
-                    ? SupabaseService.toUuid(userMatchTeamId).toLowerCase()
-                    : '';
+                    final bool isMatchLeader = canAccessMatch &&
+                        (isLeader ||
+                            (userMatchTeam != null && userMatchTeam.isLeader(currentUid)));
 
-                final bool isUserT1 = userMatchTeamUuid.isNotEmpty &&
-                    (t1.toLowerCase() == userMatchTeamUuid ||
-                        t1.toLowerCase() == userMatchTeamId.toLowerCase());
-
-                final String myTeamIdInMatch = isUserT1 ? t1 : t2;
-                final String opponentTeamId = isUserT1 ? t2 : t1;
-
-                final bool isMatchLeader = canAccessMatch &&
-                    (isLeader ||
-                        (userMatchTeam != null && userMatchTeam.isLeader(currentUid)));
-
-                return Scaffold(
-                  backgroundColor: const Color(0xFF0B0F17),
-                  appBar: AppBar(
-                    backgroundColor: const Color(0xFF131A29),
-                    elevation: 0,
-                    leading: IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded,
-                          color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    title: Text(
-                      '${team.name} [${team.tag}]',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16),
-                    ),
-                    actions: [
-                      if (privacyLevel == 1) ...[
-                        if (canAccessMatch) ...[
-                          IconButton(
-                            tooltip: 'btn_team_dm'.tr(),
-                            icon: const Icon(Icons.chat_bubble_rounded,
-                                color: Color(0xFF00FF88), size: 22),
-                            onPressed: () {
-                              final activeMatchId =
-                                  activeMatch['id']?.toString() ?? '';
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => PrivateMatchRoomScreen(
-                                    matchId: activeMatchId,
-                                    myTeamId: myTeamIdInMatch,
-                                    myTeamName: team.name,
-                                    opponentId: opponentTeamId,
-                                    opponentName:
-                                        activeMatch['opponent_name'] ??
-                                            'default_opponent'.tr(),
+                    return Scaffold(
+                      backgroundColor: ThemeService.bg,
+                      appBar: AppBar(
+                        backgroundColor: ThemeService.appBarBg,
+                        elevation: 0,
+                        leading: IconButton(
+                          icon: Icon(Icons.arrow_back_rounded,
+                              color: ThemeService.textPrimary),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        title: Text(
+                          '${team.name} [${team.tag}]',
+                          style: TextStyle(
+                              color: ThemeService.textPrimary,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16),
+                        ),
+                        actions: [
+                          if (privacyLevel == 1) ...[
+                            if (canAccessMatch) ...[
+                              IconButton(
+                                tooltip: 'btn_team_dm'.tr(),
+                                icon: const Icon(Icons.chat_bubble_rounded,
+                                    color: Color(0xFF00FF88), size: 22),
+                                onPressed: () {
+                                  final activeMatchId =
+                                      activeMatch['id']?.toString() ?? '';
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PrivateMatchRoomScreen(
+                                        matchId: activeMatchId,
+                                        myTeamId: myTeamIdInMatch,
+                                        myTeamName: team.name,
+                                        opponentId: opponentTeamId,
+                                        opponentName:
+                                            activeMatch['opponent_name'] ??
+                                                'default_opponent'.tr(),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00FF88)
+                                          .withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: const Color(0xFF00FF88)),
+                                    ),
+                                    child: Text('badge_match_live'.tr(),
+                                        style: const TextStyle(
+                                            color: Color(0xFF00FF88),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11)),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00FF88)
-                                      .withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color: const Color(0xFF00FF88)),
-                                ),
-                                child: Text('badge_match_live'.tr(),
-                                    style: const TextStyle(
-                                        color: Color(0xFF00FF88),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11)),
-                              ),
-                            ),
-                          ),
-                        ],
-                        if (isLeader)
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert_rounded,
-                                color: Colors.white70),
-                            color: const Color(0xFF161F2E),
-                            onSelected: (val) {
-                              if (val == 'edit') {
-                                _showEditTeamDialog(team);
-                              } else if (val == 'delete') {
-                                _handleDeleteTeam(team, currentUid);
-                              }
-                            },
-                            itemBuilder: (ctx) => [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.edit_rounded,
-                                        color: Colors.white70, size: 18),
-                                    const SizedBox(width: 8),
-                                    Text('menu_edit_team'.tr(),
-                                        style: const TextStyle(color: Colors.white)),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.delete_forever_rounded,
-                                        color: Color(0xFFFF4655), size: 18),
-                                    const SizedBox(width: 8),
-                                    Text('menu_delete_team'.tr(),
-                                        style:
-                                            const TextStyle(color: Color(0xFFFF4655))),
-                                  ],
                                 ),
                               ),
                             ],
-                          ),
-                      ] else if (privacyLevel == 3) ...[
-                        if (canAccessMatch) ...[
-                          IconButton(
-                            tooltip: 'btn_team_dm'.tr(),
-                            icon: const Icon(Icons.chat_bubble_rounded,
-                                color: Color(0xFF00FF88), size: 22),
-                            onPressed: () {
-                              final activeMatchId =
-                                  activeMatch['id']?.toString() ?? '';
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => PrivateMatchRoomScreen(
-                                    matchId: activeMatchId,
-                                    myTeamId: myTeamIdInMatch,
-                                    myTeamName: userMatchTeam?.name ?? 'label_your_team'.tr(),
-                                    opponentId: opponentTeamId,
-                                    opponentName: team.name,
+                            if (isLeader)
+                              PopupMenuButton<String>(
+                                icon: Icon(Icons.more_vert_rounded,
+                                    color: ThemeService.textSecondary),
+                                color: ThemeService.card,
+                                onSelected: (val) {
+                                  if (val == 'edit') {
+                                    _showEditTeamDialog(team);
+                                  } else if (val == 'delete') {
+                                    _handleDeleteTeam(team, currentUid);
+                                  }
+                                },
+                                itemBuilder: (ctx) => [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_rounded,
+                                            color: ThemeService.textSecondary, size: 18),
+                                        const SizedBox(width: 8),
+                                        Text('menu_edit_team'.tr(),
+                                            style: TextStyle(color: ThemeService.textPrimary)),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(right: 12),
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00FF88)
-                                      .withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color: const Color(0xFF00FF88)),
-                                ),
-                                child: Text('badge_match_live'.tr(),
-                                    style: const TextStyle(
-                                        color: Color(0xFF00FF88),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11)),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.delete_forever_rounded,
+                                            color: Color(0xFFFF4655), size: 18),
+                                        const SizedBox(width: 8),
+                                        Text('menu_delete_team'.tr(),
+                                            style:
+                                                const TextStyle(color: Color(0xFFFF4655))),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ),
-                        ],
-                      ] else ...[
-                        if (myLeaderTeams.isNotEmpty)
-                          IconButton(
-                            tooltip: 'btn_challenge_team'.tr(),
-                            icon: const Icon(Icons.flash_on_rounded,
-                                color: Color(0xFF1877F2)),
-                            onPressed: () => _handleChallenge(team, currentUid),
-                          ),
-                      ],
-                    ],
-                  ),
-                  body: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (canAccessMatch)
-                          Builder(
-                            builder: (context) {
-                              final activeMatchId =
-                                  activeMatch['id']?.toString() ?? '';
-                              final matchStatus = (activeMatch['status'] ?? '')
-                                  .toString()
-                                  .toLowerCase();
-                              final proofStatus =
-                                  (activeMatch['proof_status'] ?? '')
-                                      .toString()
-                                      .toLowerCase();
-                              final adminNote = activeMatch['admin_note']
-                                      ?.toString() ??
-                                  'invalid_proof'.tr();
-
-                              final submittedBy = (activeMatch[
-                                          'submitted_by_team_id'] ??
-                                      activeMatch['winner_team_id'] ??
-                                      activeMatch['submitted_by'] ??
-                                      '')
-                                  .toString()
-                                  .trim()
-                                  .toLowerCase();
-                              final myIdLower = myTeamIdInMatch.toLowerCase();
-                              final myUuidLower = SupabaseService.toUuid(
-                                      myTeamIdInMatch)
-                                  .toLowerCase();
-                              final isSubmitter = isMyOwnTeam &&
-                                  submittedBy.isNotEmpty &&
-                                  (submittedBy == targetUuid ||
-                                      submittedBy == targetRawId ||
-                                      submittedBy == myIdLower ||
-                                      submittedBy == myUuidLower);
-
-                              if (matchStatus == 'under_review' &&
-                                  proofStatus == 'accepted') {
-                                if (!isSubmitter)
-                                  return const SizedBox.shrink();
-
-                                if (!_autoCompletingMatchIds
-                                    .contains(activeMatchId)) {
-                                  _autoCompletingMatchIds.add(activeMatchId);
-                                  Future.delayed(
-                                      const Duration(seconds: 3), () async {
-                                    try {
-                                      await SupabaseService.client
-                                          .from('active_matches')
-                                          .update({'status': 'completed'}).eq(
-                                              'id', activeMatchId);
-                                    } catch (_) {}
-                                    if (mounted) {
-                                      setState(() {
-                                        _completedMatchIds
-                                            .add(activeMatchId);
-                                      });
-                                    }
-                                  });
-                                }
-
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 14),
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF1B5E20)
-                                        .withOpacity(0.35),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                        color: const Color(0xFF00FF88),
-                                        width: 1.5),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFF00FF88)
-                                            .withOpacity(0.12),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
+                          ] else if (privacyLevel == 3) ...[
+                            if (canAccessMatch) ...[
+                              IconButton(
+                                tooltip: 'btn_team_dm'.tr(),
+                                icon: const Icon(Icons.chat_bubble_rounded,
+                                    color: Color(0xFF00FF88), size: 22),
+                                onPressed: () {
+                                  final activeMatchId =
+                                      activeMatch['id']?.toString() ?? '';
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PrivateMatchRoomScreen(
+                                        matchId: activeMatchId,
+                                        myTeamId: myTeamIdInMatch,
+                                        myTeamName: userMatchTeam?.name ?? 'label_your_team'.tr(),
+                                        opponentId: opponentTeamId,
+                                        opponentName: team.name,
                                       ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.emoji_events_rounded,
-                                          color: Color(0xFF00FF88), size: 24),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          'proof_accepted_you_won'.tr(),
-                                          style: const TextStyle(
+                                    ),
+                                  );
+                                },
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00FF88)
+                                          .withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: const Color(0xFF00FF88)),
+                                    ),
+                                    child: Text('badge_match_live'.tr(),
+                                        style: const TextStyle(
                                             color: Color(0xFF00FF88),
                                             fontWeight: FontWeight.bold,
-                                            fontSize: 14,
+                                            fontSize: 11)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ] else ...[
+                            if (myLeaderTeams.isNotEmpty)
+                              IconButton(
+                                tooltip: 'btn_challenge_team'.tr(),
+                                icon: const Icon(Icons.flash_on_rounded,
+                                    color: Color(0xFF1877F2)),
+                                onPressed: () => _handleChallenge(team, currentUid),
+                              ),
+                          ],
+                        ],
+                      ),
+                      body: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (canAccessMatch)
+                              Builder(
+                                builder: (context) {
+                                  final activeMatchId =
+                                      activeMatch['id']?.toString() ?? '';
+                                  final matchStatus = (activeMatch['status'] ?? '')
+                                      .toString()
+                                      .toLowerCase();
+                                  final proofStatus =
+                                      (activeMatch['proof_status'] ?? '')
+                                          .toString()
+                                          .toLowerCase();
+                                  final adminNote = activeMatch['admin_note']
+                                          ?.toString() ??
+                                      'invalid_proof'.tr();
+
+                                  final submittedBy = (activeMatch[
+                                              'submitted_by_team_id'] ??
+                                          activeMatch['winner_team_id'] ??
+                                          activeMatch['submitted_by'] ??
+                                          '')
+                                      .toString()
+                                      .trim()
+                                      .toLowerCase();
+                                  final myIdLower = myTeamIdInMatch.toLowerCase();
+                                  final myUuidLower = SupabaseService.toUuid(
+                                          myTeamIdInMatch)
+                                      .toLowerCase();
+                                  final isSubmitter = isMyOwnTeam &&
+                                      submittedBy.isNotEmpty &&
+                                      (submittedBy == targetUuid ||
+                                          submittedBy == targetRawId ||
+                                          submittedBy == myIdLower ||
+                                          submittedBy == myUuidLower);
+
+                                  if (matchStatus == 'under_review' &&
+                                      proofStatus == 'accepted') {
+                                    if (!isSubmitter)
+                                      return const SizedBox.shrink();
+
+                                    if (!_autoCompletingMatchIds
+                                        .contains(activeMatchId)) {
+                                      _autoCompletingMatchIds.add(activeMatchId);
+                                      Future.delayed(
+                                          const Duration(seconds: 3), () async {
+                                        try {
+                                          await SupabaseService.client
+                                              .from('active_matches')
+                                              .update({'status': 'completed'}).eq(
+                                                  'id', activeMatchId);
+                                        } catch (_) {}
+                                        if (mounted) {
+                                          setState(() {
+                                            _completedMatchIds
+                                                .add(activeMatchId);
+                                          });
+                                        }
+                                      });
+                                    }
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 14),
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1B5E20)
+                                            .withOpacity(0.35),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                            color: const Color(0xFF00FF88),
+                                            width: 1.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF00FF88)
+                                                .withOpacity(0.12),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
                                           ),
-                                        ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              final proofCount =
-                                  (activeMatch['proof_upload_count'] as num?)
-                                          ?.toInt() ??
-                                      0;
-                              final canAddMore = proofCount < 3;
-
-                              if (matchStatus == 'rejected' ||
-                                  (matchStatus == 'under_review' &&
-                                      proofStatus == 'rejected')) {
-                                if (!isSubmitter)
-                                  return const SizedBox.shrink();
-
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 14),
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF3B151A)
-                                        .withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                        color: const Color(0xFFFF4655),
-                                        width: 1.5),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFFFF4655)
-                                            .withOpacity(0.15),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
+                                      child: Row(
                                         children: [
-                                          const Icon(Icons.cancel_rounded,
-                                              color: Color(0xFFFF4655),
-                                              size: 22),
-                                          const SizedBox(width: 8),
+                                          const Icon(Icons.emoji_events_rounded,
+                                              color: Color(0xFF00FF88), size: 24),
+                                          const SizedBox(width: 10),
                                           Expanded(
                                             child: Text(
-                                              'msg_proof_rejected_retry'.tr(args: [adminNote, '$proofCount']),
+                                              'proof_accepted_you_won'.tr(),
                                               style: const TextStyle(
-                                                color: Color(0xFFFF4655),
+                                                color: Color(0xFF00FF88),
                                                 fontWeight: FontWeight.bold,
-                                                fontSize: 13,
+                                                fontSize: 14,
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 10),
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: canAddMore
-                                                ? const Color(0xFFFF4655)
-                                                : Colors.grey.shade700,
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets
-                                                .symmetric(
-                                                horizontal: 14, vertical: 8),
-                                            shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8)),
+                                    );
+                                  }
+
+                                  final proofCount =
+                                      (activeMatch['proof_upload_count'] as num?)
+                                              ?.toInt() ??
+                                          0;
+                                  final canAddMore = proofCount < 3;
+
+                                  if (matchStatus == 'rejected' ||
+                                      (matchStatus == 'under_review' &&
+                                          proofStatus == 'rejected')) {
+                                    if (!isSubmitter)
+                                      return const SizedBox.shrink();
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 14),
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF3B151A)
+                                            .withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                            color: const Color(0xFFFF4655),
+                                            width: 1.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFFFF4655)
+                                                .withOpacity(0.15),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
                                           ),
-                                          icon: Icon(
-                                              canAddMore
-                                                  ? Icons.upload_file_rounded
-                                                  : Icons.block_rounded,
-                                              size: 16),
-                                          label: Text(
-                                              canAddMore
-                                                  ? 'btn_add_proof_again'.tr(args: ['$proofCount'])
-                                                  : 'btn_proof_limit_reached'.tr(),
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12)),
-                                          onPressed: !canAddMore
-                                              ? null
-                                              : () async {
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.cancel_rounded,
+                                                  color: Color(0xFFFF4655),
+                                                  size: 22),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  'msg_proof_rejected_retry'.tr(args: [adminNote, '$proofCount']),
+                                                  style: const TextStyle(
+                                                    color: Color(0xFFFF4655),
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Align(
+                                            alignment: Alignment.centerRight,
+                                            child: ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: canAddMore
+                                                    ? const Color(0xFFFF4655)
+                                                    : Colors.grey.shade700,
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets
+                                                    .symmetric(
+                                                    horizontal: 14, vertical: 8),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(8)),
+                                              ),
+                                              icon: Icon(
+                                                  canAddMore
+                                                      ? Icons.upload_file_rounded
+                                                      : Icons.block_rounded,
+                                                  size: 16),
+                                              label: Text(
+                                                  canAddMore
+                                                      ? 'btn_add_proof_again'.tr(args: ['$proofCount'])
+                                                      : 'btn_proof_limit_reached'.tr(),
+                                                  style: const TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12)),
+                                              onPressed: !canAddMore
+                                                  ? null
+                                                  : () async {
+                                                      final ended =
+                                                          await EndMatchBottomSheet.show(
+                                                        context,
+                                                        activeMatchId: activeMatchId,
+                                                        myTeamId: myTeamIdInMatch,
+                                                        opponentId: opponentTeamId,
+                                                        myTeamName: isMyOwnTeam
+                                                            ? team.name
+                                                            : (userMatchTeam?.name ?? 'label_your_team'.tr()),
+                                                        opponentName: isMyOwnTeam
+                                                            ? (activeMatch[
+                                                                    'opponent_name'] ??
+                                                                'default_opponent'.tr())
+                                                            : team.name,
+                                                      );
+                                                      if (ended == true && mounted) {
+                                                        ScaffoldMessenger.of(context)
+                                                            .showSnackBar(
+                                                          SnackBar(
+                                                            content: Text(
+                                                                'msg_proof_submitted_review'.tr()),
+                                                            backgroundColor:
+                                                                const Color(0xFFFFB800),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
+                                  if (matchStatus == 'under_review') {
+                                    if (!isSubmitter)
+                                      return const SizedBox.shrink();
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 14),
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF332A00)
+                                            .withOpacity(0.6),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                            color: const Color(0xFFFFB800),
+                                            width: 1.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFFFFB800)
+                                                .withOpacity(0.12),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                              Icons.hourglass_top_rounded,
+                                              color: Color(0xFFFFB800),
+                                              size: 22),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'heading_proof_under_review'.tr(),
+                                                  style: const TextStyle(
+                                                    color: Color(0xFFFFB800),
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'sub_proof_under_review'.tr(),
+                                                  style: TextStyle(
+                                                      color: ThemeService.textSecondary,
+                                                      fontSize: 11),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFFB800),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: Text('badge_review'.tr(),
+                                                style: const TextStyle(
+                                                    color: Colors.black,
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 10)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 14),
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1B5E20)
+                                          .withOpacity(0.35),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: const Color(0xFF00FF88),
+                                          width: 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF00FF88)
+                                              .withOpacity(0.12),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                                Icons
+                                                    .local_fire_department_rounded,
+                                                color: Color(0xFF00FF88),
+                                                size: 22),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: FutureBuilder<TeamModel?>(
+                                                future: _teamService
+                                                    .getTeam(opponentTeamId),
+                                                builder: (context, opSnap) {
+                                                  final opName = opSnap.data?.name ??
+                                                      activeMatch['opponent_name']
+                                                          ?.toString() ??
+                                                      (!isMyOwnTeam
+                                                          ? team.name
+                                                          : 'default_opponent'.tr());
+                                                  return Text(
+                                                    'heading_active_match_live'.tr(args: [opName]),
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF00FF88),
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 14,
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF00FF88),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: Text('badge_live'.tr(),
+                                                  style: const TextStyle(
+                                                      color: Colors.black,
+                                                      fontWeight: FontWeight.w900,
+                                                      fontSize: 10)),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          children: [
+                                            ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    const Color(0xFF1877F2),
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets
+                                                    .symmetric(
+                                                    horizontal: 14, vertical: 8),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(8)),
+                                                elevation: 0,
+                                              ),
+                                              icon: const Icon(
+                                                  Icons.chat_bubble_rounded,
+                                                  size: 15),
+                                              label: Text('btn_team_dm'.tr(),
+                                                  style: const TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12)),
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        PrivateMatchRoomScreen(
+                                                      matchId: activeMatchId,
+                                                      myTeamId: myTeamIdInMatch,
+                                                      myTeamName: isMyOwnTeam
+                                                          ? team.name
+                                                          : (userMatchTeam?.name ?? 'label_your_team'.tr()),
+                                                      opponentId: opponentTeamId,
+                                                      opponentName: isMyOwnTeam
+                                                          ? (activeMatch[
+                                                                  'opponent_name'] ??
+                                                              'default_opponent'.tr())
+                                                          : team.name,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                            if (isMatchLeader) ...[
+                                              const SizedBox(width: 8),
+                                              ElevatedButton.icon(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      const Color(0xFFFF4655),
+                                                  foregroundColor: Colors.white,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          horizontal: 14,
+                                                          vertical: 8),
+                                                  shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(8)),
+                                                ),
+                                                icon: const Icon(
+                                                    Icons.stop_circle_rounded,
+                                                    size: 16),
+                                                label: Text('btn_end_match'.tr(),
+                                                    style: const TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 12)),
+                                                onPressed: () async {
                                                   final ended =
-                                                      await EndMatchBottomSheet.show(
+                                                      await EndMatchBottomSheet
+                                                          .show(
                                                     context,
                                                     activeMatchId: activeMatchId,
                                                     myTeamId: myTeamIdInMatch,
@@ -1002,1298 +1265,1079 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                             'default_opponent'.tr())
                                                         : team.name,
                                                   );
-                                                  if (ended == true && mounted) {
-                                                    ScaffoldMessenger.of(context)
-                                                        .showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                            'msg_proof_submitted_review'.tr()),
-                                                        backgroundColor:
-                                                            const Color(0xFFFFB800),
-                                                      ),
-                                                    );
+                                                  if (ended == true) {
+                                                    if (mounted) {
+                                                      setState(() {
+                                                        _completedMatchIds
+                                                            .add(
+                                                                activeMatchId);
+                                                        _optimisticActiveMatches
+                                                            .clear();
+                                                      });
+                                                      ScaffoldMessenger.of(
+                                                              context)
+                                                          .showSnackBar(
+                                                        SnackBar(
+                                                          content: Text(
+                                                              'msg_proof_submitted_review'.tr()),
+                                                          backgroundColor:
+                                                              const Color(0xFF00FF88),
+                                                          duration:
+                                                              const Duration(seconds: 4),
+                                                        ),
+                                                      );
+                                                    }
                                                   }
                                                 },
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              if (matchStatus == 'under_review') {
-                                if (!isSubmitter)
-                                  return const SizedBox.shrink();
-
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 14),
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF332A00)
-                                        .withOpacity(0.6),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                        color: const Color(0xFFFFB800),
-                                        width: 1.5),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFFFFB800)
-                                            .withOpacity(0.12),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                          Icons.hourglass_top_rounded,
-                                          color: Color(0xFFFFB800),
-                                          size: 22),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'heading_proof_under_review'.tr(),
-                                              style: const TextStyle(
-                                                color: Color(0xFFFFB800),
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
                                               ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              'sub_proof_under_review'.tr(),
-                                              style: const TextStyle(
-                                                  color: Color(0xFF8B949E),
-                                                  fontSize: 11),
-                                            ),
+                                            ],
                                           ],
                                         ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFFB800),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Text('badge_review'.tr(),
-                                            style: const TextStyle(
-                                                color: Colors.black,
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 10)),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 14),
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1B5E20)
-                                      .withOpacity(0.35),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                      color: const Color(0xFF00FF88),
-                                      width: 1.5),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF00FF88)
-                                          .withOpacity(0.12),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
+                                  );
+                                },
+                              ),
+
+                            if (isMyOwnTeam) ...[
+                              StreamBuilder<List<Map<String, dynamic>>>(
+                                stream: SupabaseService.client
+                                    .from('challenges')
+                                    .stream(primaryKey: ['id'])
+                                    .eq('from_team_id',
+                                        SupabaseService.toUuid(widget.teamId)),
+                                builder: (context, outSnap) {
+                                  if (!outSnap.hasData)
+                                    return const SizedBox.shrink();
+                                  final outgoingList = outSnap.data!
+                                      .where((d) =>
+                                          (d['status'] ?? '')
+                                              .toString()
+                                              .toLowerCase() ==
+                                          'pending')
+                                      .where((d) => !_cancelledChallengeIds
+                                          .contains(d['id']?.toString()))
+                                      .toList();
+                                  if (outgoingList.isEmpty)
+                                    return const SizedBox.shrink();
+
+                                  return Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 14),
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: ThemeService.card,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: const Color(0xFFFF6B00)
+                                              .withOpacity(0.6),
+                                          width: 1.5),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Icon(
-                                            Icons
-                                                .local_fire_department_rounded,
-                                            color: Color(0xFF00FF88),
-                                            size: 22),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: FutureBuilder<TeamModel?>(
-                                            future: _teamService
-                                                .getTeam(opponentTeamId),
-                                            builder: (context, opSnap) {
-                                              final opName = opSnap.data?.name ??
-                                                  activeMatch['opponent_name']
-                                                      ?.toString() ??
-                                                  (!isMyOwnTeam
-                                                      ? team.name
-                                                      : 'default_opponent'.tr());
-                                              return Text(
-                                                'heading_active_match_live'.tr(args: [opName]),
-                                                style: const TextStyle(
-                                                  color: Color(0xFF00FF88),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.send_rounded,
+                                                color: Color(0xFFFF6B00), size: 18),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'heading_outgoing_requests'.tr(),
+                                                style: TextStyle(
+                                                  color: ThemeService.textPrimary,
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 14,
                                                 ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF00FF88),
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                          ),
-                                          child: Text('badge_live'.tr(),
-                                              style: const TextStyle(
-                                                  color: Colors.black,
-                                                  fontWeight: FontWeight.w900,
-                                                  fontSize: 10)),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor:
-                                                const Color(0xFF1877F2),
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets
-                                                .symmetric(
-                                                horizontal: 14, vertical: 8),
-                                            shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8)),
-                                            elevation: 0,
-                                          ),
-                                          icon: const Icon(
-                                              Icons.chat_bubble_rounded,
-                                              size: 15),
-                                          label: Text('btn_team_dm'.tr(),
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12)),
-                                          onPressed: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    PrivateMatchRoomScreen(
-                                                  matchId: activeMatchId,
-                                                  myTeamId: myTeamIdInMatch,
-                                                  myTeamName: isMyOwnTeam
-                                                      ? team.name
-                                                      : (userMatchTeam?.name ?? 'label_your_team'.tr()),
-                                                  opponentId: opponentTeamId,
-                                                  opponentName: isMyOwnTeam
-                                                      ? (activeMatch[
-                                                              'opponent_name'] ??
-                                                          'default_opponent'.tr())
-                                                      : team.name,
-                                                ),
                                               ),
-                                            );
-                                          },
-                                        ),
-                                        if (isMatchLeader) ...[
-                                          const SizedBox(width: 8),
-                                          ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  const Color(0xFFFF4655),
-                                              foregroundColor: Colors.white,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 14,
-                                                      vertical: 8),
-                                              shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(8)),
                                             ),
-                                            icon: const Icon(
-                                                Icons.stop_circle_rounded,
-                                                size: 16),
-                                            label: Text('btn_end_match'.tr(),
-                                                style: const TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12)),
-                                            onPressed: () async {
-                                              final ended =
-                                                  await EndMatchBottomSheet
-                                                      .show(
-                                                context,
-                                                activeMatchId: activeMatchId,
-                                                myTeamId: myTeamIdInMatch,
-                                                opponentId: opponentTeamId,
-                                                myTeamName: isMyOwnTeam
-                                                    ? team.name
-                                                    : (userMatchTeam?.name ?? 'label_your_team'.tr()),
-                                                opponentName: isMyOwnTeam
-                                                    ? (activeMatch[
-                                                            'opponent_name'] ??
-                                                        'default_opponent'.tr())
-                                                    : team.name,
-                                              );
-                                              if (ended == true) {
-                                                if (mounted) {
-                                                  setState(() {
-                                                    _completedMatchIds
-                                                        .add(
-                                                            activeMatchId);
-                                                    _optimisticActiveMatches
-                                                        .clear();
-                                                  });
-                                                  ScaffoldMessenger.of(
-                                                          context)
-                                                      .showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                          'msg_proof_submitted_review'.tr()),
-                                                      backgroundColor:
-                                                          const Color(0xFF00FF88),
-                                                      duration:
-                                                          const Duration(seconds: 4),
-                                                    ),
-                                                  );
-                                                }
-                                              }
-                                            },
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-
-                        if (isMyOwnTeam) ...[
-                          StreamBuilder<List<Map<String, dynamic>>>(
-                            stream: SupabaseService.client
-                                .from('challenges')
-                                .stream(primaryKey: ['id'])
-                                .eq('from_team_id',
-                                    SupabaseService.toUuid(widget.teamId)),
-                            builder: (context, outSnap) {
-                              if (!outSnap.hasData)
-                                return const SizedBox.shrink();
-                              final outgoingList = outSnap.data!
-                                  .where((d) =>
-                                      (d['status'] ?? '')
-                                          .toString()
-                                          .toLowerCase() ==
-                                      'pending')
-                                  .where((d) => !_cancelledChallengeIds
-                                      .contains(d['id']?.toString()))
-                                  .toList();
-                              if (outgoingList.isEmpty)
-                                return const SizedBox.shrink();
-
-                              return Container(
-                                width: double.infinity,
-                                margin: const EdgeInsets.only(bottom: 14),
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF131A29),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                      color: const Color(0xFFFF6B00)
-                                          .withOpacity(0.6),
-                                      width: 1.5),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.send_rounded,
-                                            color: Color(0xFFFF6B00), size: 18),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'heading_outgoing_requests'.tr(),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 15,
-                                            ),
-                                          ),
-                                        ),
-                                        Text('badge_sent_count'.tr(args: ['${outgoingList.length}']),
-                                            style: const TextStyle(
-                                                color: Color(0xFFFF6B00),
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 11)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 10),
-                                    ...outgoingList.map((doc) {
-                                      final challengeId = doc['id'];
-                                      final toTeamName = doc['to_team_name']
-                                              ?.toString() ??
-                                          'default_opponent'.tr();
-
-                                      return Container(
-                                        margin: const EdgeInsets.only(bottom: 8),
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF1B2436),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFF6B00).withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
                                               child: Text(
-                                                'msg_challenge_sent_to_team'.tr(args: [toTeamName]),
+                                                '${outgoingList.length} ${'badge_sent_count'.tr()}',
                                                 style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.bold),
+                                                    color: Color(0xFFFF6B00),
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 11),
                                               ),
-                                            ),
-                                            ElevatedButton(
-                                              onPressed: () => _cancelChallenge(
-                                                  challengeId.toString()),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    const Color(0xFFFF4655),
-                                                padding: const EdgeInsets.symmetric(
-                                                    horizontal: 10, vertical: 4),
-                                                minimumSize: const Size(0, 30),
-                                              ),
-                                              child: Text('btn_cancel_caps'.tr(),
-                                                  style: const TextStyle(
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 11)),
                                             ),
                                           ],
                                         ),
-                                      );
-                                    }),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-
-                          StreamBuilder<List<Map<String, dynamic>>>(
-                            stream: SupabaseService.client
-                                .from('challenges')
-                                .stream(primaryKey: ['id'])
-                                .eq('to_team_id',
-                                    SupabaseService.toUuid(widget.teamId)),
-                            builder: (context, incSnap) {
-                              if (!incSnap.hasData)
-                                return const SizedBox.shrink();
-                              final incomingList = incSnap.data!
-                                  .where((d) =>
-                                      (d['status'] ?? '')
-                                          .toString()
-                                          .toLowerCase() ==
-                                      'pending')
-                                  .where((d) => !_acceptedChallengeIds
-                                      .contains(d['id']?.toString()))
-                                  .toList();
-                              if (incomingList.isEmpty)
-                                return const SizedBox.shrink();
-
-                              return Container(
-                                width: double.infinity,
-                                margin: const EdgeInsets.only(bottom: 14),
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF131A29),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                      color: const Color(0xFF00FF88)
-                                          .withOpacity(0.5),
-                                      width: 1.5),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.flash_on_rounded,
-                                            color: Color(0xFF00FF88), size: 18),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'heading_incoming_challenges'.tr(),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 15,
-                                            ),
-                                          ),
-                                        ),
-                                        Text('badge_new_count'.tr(args: ['${incomingList.length}']),
-                                            style: const TextStyle(
-                                                color: Color(0xFF00FF88),
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 11)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 10),
-                                    ...incomingList.map((doc) {
-                                      final challengeId = doc['id'];
-                                      final fromTeamName =
-                                          doc['from_team_name']?.toString() ??
+                                        const SizedBox(height: 10),
+                                        ...outgoingList.map((doc) {
+                                          final challengeId = doc['id'];
+                                          final toTeamName = doc['to_team_name']
+                                                  ?.toString() ??
                                               'default_opponent'.tr();
-                                      final fromTeamId =
-                                          doc['from_team_id']?.toString() ??
-                                              '';
-                                      final toTeamId =
-                                          doc['to_team_id']?.toString() ??
-                                              widget.teamId;
-                                      final isAccepting =
-                                          _acceptingChallengeIds.contains(
-                                              challengeId.toString());
 
-                                      return Container(
-                                        margin: const EdgeInsets.only(bottom: 8),
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF1B2436),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'msg_team_challenged_you'.tr(args: [fromTeamName]),
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 13.5,
-                                                  color: Colors.white),
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 8),
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: ThemeService.cardSecondary,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(color: ThemeService.border),
                                             ),
-                                            const SizedBox(height: 8),
-                                            Row(
+                                            child: Row(
                                               children: [
                                                 Expanded(
-                                                  child: OutlinedButton(
-                                                    onPressed: isAccepting
-                                                        ? null
-                                                        : () =>
-                                                            _handleRejectChallenge(
-                                                                challengeId
-                                                                    .toString()),
-                                                    style: OutlinedButton
-                                                        .styleFrom(
-                                                      foregroundColor:
-                                                          const Color(
-                                                              0xFFFF4655),
-                                                      side: const BorderSide(
-                                                          color: Color(
-                                                              0xFFFF4655)),
-                                                    ),
-                                                    child: Text('btn_reject_caps'.tr()),
+                                                  child: Text(
+                                                    'msg_challenge_sent_to_team'.tr(args: [toTeamName]),
+                                                    style: TextStyle(
+                                                        color: ThemeService.textPrimary,
+                                                        fontSize: 13,
+                                                        fontWeight: FontWeight.bold),
                                                   ),
                                                 ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: ElevatedButton(
-                                                    onPressed: isAccepting
-                                                        ? null
-                                                        : () =>
-                                                            _handleAcceptChallenge(
-                                                                challengeId:
-                                                                    challengeId
-                                                                        .toString(),
-                                                                fromTeamId:
-                                                                    fromTeamId,
-                                                                toTeamId:
-                                                                    toTeamId,
-                                                                fromTeamName:
-                                                                    fromTeamName,
-                                                                challengeData: doc,
-                                                            ),
-                                                    style: ElevatedButton
-                                                        .styleFrom(
-                                                      backgroundColor:
-                                                          const Color(
-                                                              0xFF00FF88),
-                                                      foregroundColor:
-                                                          Colors.black,
-                                                    ),
-                                                    child: isAccepting
-                                                        ? Text('btn_accepting'.tr())
-                                                        : Text('btn_accept_caps'.tr()),
+                                                ElevatedButton(
+                                                  onPressed: () => _cancelChallenge(
+                                                      challengeId.toString()),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        const Color(0xFFFF4655),
+                                                    foregroundColor: Colors.white,
+                                                    padding: const EdgeInsets.symmetric(
+                                                        horizontal: 10, vertical: 4),
+                                                    minimumSize: const Size(0, 30),
                                                   ),
+                                                  child: Text('btn_cancel_caps'.tr(),
+                                                      style: const TextStyle(
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 11)),
                                                 ),
                                               ],
                                             ),
-                                          ],
-                                        ),
-                                      );
-                                    }),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF1B2436), Color(0xFF131A29)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFF2A3447)),
-                          ),
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: () => _showLogoDialog(
-                                    context, team.logo, team.name),
-                                child: Container(
-                                  width: 72,
-                                  height: 72,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: const Color(0xFF26334D),
-                                    border: Border.all(
-                                        color: const Color(0xFFFF6B00),
-                                        width: 2),
-                                    image: team.logo.isNotEmpty
-                                        ? DecorationImage(
-                                            image: NetworkImage(team.logo),
-                                            fit: BoxFit.cover)
-                                        : null,
-                                  ),
-                                  child: team.logo.isEmpty
-                                      ? const Center(
-                                          child: Icon(Icons.shield_rounded,
-                                              color: Colors.white70, size: 36))
-                                      : null,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            team.name,
-                                            style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 18),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFF6B00)
-                                                .withOpacity(0.2),
-                                            borderRadius:
-                                                BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            team.tag,
-                                            style: const TextStyle(
-                                                color: Color(0xFFFF6B00),
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 11),
-                                          ),
-                                        ),
+                                          );
+                                        }),
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF00FF88)
-                                            .withOpacity(0.15),
-                                        borderRadius:
-                                            BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        'label_game_prefix'.tr(args: [team.game]),
-                                        style: const TextStyle(
-                                            color: Color(0xFF00FF88),
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'label_team_leader_prefix'.tr(args: [team.leaderName]),
-                                      style: const TextStyle(
-                                          color: Color(0xFF8B949E),
-                                          fontSize: 12),
-                                    ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
 
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF161F2E),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFF2A3447)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              _buildRecordStat('stat_wins'.tr(), '${team.wins}',
-                                  const Color(0xFF00FF88)),
-                              _buildDivider(),
-                              _buildRecordStat('stat_losses'.tr(), '${team.losses}',
-                                  const Color(0xFFFF4655)),
-                              _buildDivider(),
-                              _buildRecordStat('stat_draws'.tr(), '${team.draws}',
-                                  const Color(0xFFFFB020)),
-                              _buildDivider(),
-                              _buildRecordStat('stat_points'.tr(), '${team.points}',
-                                  const Color(0xFFFF6B00)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                              StreamBuilder<List<Map<String, dynamic>>>(
+                                stream: SupabaseService.client
+                                    .from('challenges')
+                                    .stream(primaryKey: ['id'])
+                                    .eq('to_team_id',
+                                        SupabaseService.toUuid(widget.teamId)),
+                                builder: (context, incSnap) {
+                                  if (!incSnap.hasData)
+                                    return const SizedBox.shrink();
+                                  final incomingList = incSnap.data!
+                                      .where((d) =>
+                                          (d['status'] ?? '')
+                                              .toString()
+                                              .toLowerCase() ==
+                                          'pending')
+                                      .where((d) => !_acceptedChallengeIds
+                                          .contains(d['id']?.toString()))
+                                      .toList();
+                                  if (incomingList.isEmpty)
+                                    return const SizedBox.shrink();
 
-                        if (team.description.isNotEmpty) ...[
-                          _buildSectionHeader('label_description'.tr()),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF161F2E),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              team.description,
-                              style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                  height: 1.4),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
+                                  return Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 14),
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: ThemeService.card,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: const Color(0xFF00FF88)
+                                              .withOpacity(0.5),
+                                          width: 1.5),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.flash_on_rounded,
+                                                color: Color(0xFF00FF88), size: 18),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'heading_incoming_challenges'.tr(),
+                                                style: TextStyle(
+                                                  color: ThemeService.textPrimary,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF00FF88).withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                '${incomingList.length} ${'badge_new_count'.tr()}',
+                                                style: const TextStyle(
+                                                    color: Color(0xFF00FF88),
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 11),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 10),
+                                        ...incomingList.map((doc) {
+                                          final challengeId = doc['id'];
+                                          final fromTeamName =
+                                              doc['from_team_name']?.toString() ??
+                                                  'default_opponent'.tr();
+                                          final fromTeamId =
+                                              doc['from_team_id']?.toString() ??
+                                                  '';
+                                          final toTeamId =
+                                              doc['to_team_id']?.toString() ??
+                                                  widget.teamId;
+                                          final isAccepting =
+                                              _acceptingChallengeIds.contains(
+                                                  challengeId.toString());
 
-                        if (team.requirements.isNotEmpty) ...[
-                          _buildSectionHeader('label_requirements'.tr()),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF161F2E),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: const Color(0xFFFFB020)
-                                      .withOpacity(0.3)),
-                            ),
-                            child: Text(
-                              team.requirements,
-                              style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                  height: 1.4),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-
-                        if (isLeader && team.pendingJoinRequests.isNotEmpty) ...[
-                          _buildSectionHeader(
-                              'heading_pending_requests_count'.tr(args: ['${team.pendingJoinRequests.length}'])),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1A1F2C),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                  color:
-                                      const Color(0xFF00FF88).withOpacity(0.4)),
-                            ),
-                            child: Column(
-                              children:
-                                  team.pendingJoinRequests.map((uid) {
-                                return FutureBuilder<Map<String, String>>(
-                                  future: _fetchUserProfile(uid),
-                                  builder: (context, snap) {
-                                    final userData = snap.data;
-                                    final isLoading = snap.connectionState ==
-                                        ConnectionState.waiting;
-                                    final gamerId = userData?['gamerId'];
-                                    final displayGamerId = isLoading
-                                        ? 'loading'.tr()
-                                        : 'gamer_id_display'.tr(args: [gamerId != null && gamerId.isNotEmpty ? gamerId : 'id_not_set'.tr()]);
-                                    final displayUsername =
-                                        userData?['username'] ?? 'user_gamer'.tr();
-
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 6),
-                                      child: Row(
-                                        children: [
-                                          const CircleAvatar(
-                                            radius: 16,
-                                            backgroundColor:
-                                                Color(0xFF26334D),
-                                            child: Icon(Icons.person,
-                                                color: Colors.white70,
-                                                size: 18),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 8),
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: ThemeService.cardSecondary,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(color: ThemeService.border),
+                                            ),
                                             child: Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  displayGamerId,
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 13),
+                                                  'msg_team_challenged_you'.tr(args: [fromTeamName]),
+                                                  style: TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 13.5,
+                                                      color: ThemeService.textPrimary),
                                                 ),
-                                                if (!isLoading &&
-                                                    displayUsername !=
-                                                        'Player') ...[
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    displayUsername,
-                                                    style: const TextStyle(
-                                                        color:
-                                                            Color(0xFF8B949E),
-                                                        fontSize: 11),
-                                                  ),
-                                                ],
+                                                const SizedBox(height: 8),
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: OutlinedButton(
+                                                        onPressed: isAccepting
+                                                            ? null
+                                                            : () =>
+                                                                _handleRejectChallenge(
+                                                                    challengeId
+                                                                        .toString()),
+                                                        style: OutlinedButton
+                                                            .styleFrom(
+                                                          foregroundColor:
+                                                              const Color(
+                                                                  0xFFFF4655),
+                                                          side: const BorderSide(
+                                                              color: Color(
+                                                                  0xFFFF4655)),
+                                                        ),
+                                                        child: Text('btn_reject_caps'.tr()),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Expanded(
+                                                      child: ElevatedButton(
+                                                        onPressed: isAccepting
+                                                            ? null
+                                                            : () =>
+                                                                _handleAcceptChallenge(
+                                                                    challengeId:
+                                                                        challengeId
+                                                                            .toString(),
+                                                                    fromTeamId:
+                                                                        fromTeamId,
+                                                                    toTeamId:
+                                                                        toTeamId,
+                                                                    fromTeamName:
+                                                                        fromTeamName,
+                                                                    challengeData: doc,
+                                                                ),
+                                                        style: ElevatedButton
+                                                            .styleFrom(
+                                                          backgroundColor:
+                                                              const Color(
+                                                                  0xFF00FF88),
+                                                          foregroundColor:
+                                                              Colors.black,
+                                                        ),
+                                                        child: isAccepting
+                                                            ? Text('btn_accepting'.tr())
+                                                            : Text('btn_accept_caps'.tr()),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ],
                                             ),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(
-                                                Icons.close_rounded,
-                                                color: Color(0xFFFF4655),
-                                                size: 20),
-                                            onPressed: () =>
-                                                _teamService.rejectJoinRequest(
-                                                    teamId: team.id,
-                                                    userId: uid),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(
-                                                Icons.check_rounded,
-                                                color: Color(0xFF00FF88),
-                                                size: 22),
-                                            onPressed: () =>
-                                                _teamService.acceptJoinRequest(
-                                              teamId: team.id,
-                                              userId: uid,
-                                              userName: displayUsername,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-
-                        _buildSectionHeader('heading_team_members_count'.tr(args: ['${team.memberCount}'])),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF161F2E),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF2A3447)),
-                          ),
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: team.memberDetails.isNotEmpty
-                                ? team.memberDetails.length
-                                : team.members.length,
-                            separatorBuilder: (c, i) => const Divider(
-                                color: Color(0xFF2A3447), height: 1),
-                            itemBuilder: (context, index) {
-                              String memberId = '';
-                              String memberName = 'member'.tr();
-                              String memberAvatar = '';
-                              String role = 'member'.tr();
-
-                              if (team.memberDetails.isNotEmpty &&
-                                  index < team.memberDetails.length) {
-                                final d = team.memberDetails[index];
-                                memberId = (d['id'] ?? '').toString();
-                                memberName =
-                                    (d['name'] ?? 'member'.tr()).toString();
-                                memberAvatar =
-                                    (d['avatar'] ?? '').toString();
-                                role = (d['role'] ?? 'member'.tr()).toString();
-                              } else {
-                                memberId = team.members[index];
-                                memberName = memberId == team.leaderId
-                                    ? team.leaderName
-                                    : 'member'.tr();
-                                role = memberId == team.leaderId
-                                    ? 'leader'.tr()
-                                    : 'member'.tr();
-                              }
-
-                              final isThisLeader = memberId == team.leaderId;
-                              final bool isDefaultName = memberName == 'Player' ||
-                                  memberName == 'Member' ||
-                                  memberName.isEmpty;
-
-                              return FutureBuilder<Map<String, String>>(
-                                future: isDefaultName
-                                    ? _fetchUserProfile(memberId)
-                                    : Future.value({
-                                        'username': memberName,
-                                        'avatar': memberAvatar
-                                      }),
-                                builder: (context, snap) {
-                                  final resolvedName =
-                                      (snap.data?['username'] != null &&
-                                              snap.data!['username'] !=
-                                                  'Player')
-                                          ? snap.data!['username']!
-                                          : (isDefaultName
-                                              ? (snap.connectionState ==
-                                                      ConnectionState.waiting
-                                                  ? '...'
-                                                  : memberName)
-                                              : memberName);
-                                  final resolvedAvatar =
-                                      (snap.data?['avatar'] != null &&
-                                              snap.data!['avatar']!.isNotEmpty)
-                                          ? snap.data!['avatar']!
-                                          : memberAvatar;
-
-                                  return ListTile(
-                                    leading: CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor:
-                                          const Color(0xFF26334D),
-                                      backgroundImage: resolvedAvatar.isNotEmpty
-                                          ? NetworkImage(resolvedAvatar)
-                                          : null,
-                                      child: resolvedAvatar.isEmpty
-                                          ? Text(
-                                              resolvedName.isNotEmpty
-                                                  ? resolvedName[0]
-                                                      .toUpperCase()
-                                                  : 'M',
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight:
-                                                      FontWeight.bold))
-                                          : null,
-                                    ),
-                                    title: Text(
-                                      resolvedName,
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13.5),
-                                    ),
-                                    trailing: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: isThisLeader
-                                            ? const Color(0xFFFF6B00)
-                                                .withOpacity(0.2)
-                                            : Colors.white10,
-                                        borderRadius:
-                                            BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        isThisLeader
-                                            ? 'badge_leader_caps'.tr()
-                                            : role.toUpperCase(),
-                                        style: TextStyle(
-                                          color: isThisLeader
-                                              ? const Color(0xFFFF6B00)
-                                              : Colors.white70,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 10.5,
-                                        ),
-                                      ),
+                                          );
+                                        }),
+                                      ],
                                     ),
                                   );
                                 },
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                              ),
+                            ],
 
-                        _buildMatchHistorySection(team, currentUid, userTeams),
-                        const SizedBox(height: 20),
-                      ],
-                    ),
-                  ),
-                  bottomNavigationBar: Container(
-                    padding: EdgeInsets.only(
-                      left: 16,
-                      right: 16,
-                      top: 10,
-                      bottom: MediaQuery.of(context).padding.bottom + 10,
-                    ),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF131A29),
-                      border: Border(
-                          top:
-                              BorderSide(color: Color(0xFF2A3447), width: 1)),
-                    ),
-                    child: Builder(
-                      builder: (context) {
-                        if (isViewedMyTeam) {
-                          return Container(
-                            width: double.infinity,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1877F2).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: const Color(0xFF1877F2), width: 1.2),
-                            ),
-                            child: Center(
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: ThemeService.card,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: ThemeService.border),
+                              ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.shield_rounded,
-                                      color: Color(0xFF1877F2), size: 18),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'label_your_team'.tr(),
-                                    style: const TextStyle(
-                                      color: Color(0xFF1877F2),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                  GestureDetector(
+                                    onTap: () => _showLogoDialog(
+                                        context, team.logo, team.name),
+                                    child: Container(
+                                      width: 72,
+                                      height: 72,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: ThemeService.cardSecondary,
+                                        border: Border.all(
+                                            color: const Color(0xFFFF6B00),
+                                            width: 2),
+                                        image: team.logo.isNotEmpty
+                                            ? DecorationImage(
+                                                image: NetworkImage(team.logo),
+                                                fit: BoxFit.cover)
+                                            : null,
+                                      ),
+                                      child: team.logo.isEmpty
+                                          ? Icon(Icons.shield_rounded,
+                                              color: ThemeService.textSecondary, size: 36)
+                                          : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                team.name,
+                                                style: TextStyle(
+                                                    color: ThemeService.textPrimary,
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 18),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFF6B00)
+                                                    .withOpacity(0.2),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                team.tag,
+                                                style: const TextStyle(
+                                                    color: Color(0xFFFF6B00),
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 11),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF00FF88)
+                                                .withOpacity(0.15),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            '${'label_game_prefix'.tr()}: ${team.game}',
+                                            style: const TextStyle(
+                                                color: Color(0xFF00FF88),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 11),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          '${'label_team_leader_prefix'.tr()}: ${team.leaderName}',
+                                          style: TextStyle(
+                                              color: ThemeService.textSecondary,
+                                              fontSize: 12),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          );
-                        }
+                            const SizedBox(height: 14),
 
-                        if (canAccessMatch && isMatchOpponent) {
-                          return Row(
-                            children: [
-                              Expanded(
-                                child: SizedBox(
-                                  height: 46,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () {
-                                      final activeMatchId =
-                                          activeMatch['id']?.toString() ?? '';
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              PrivateMatchRoomScreen(
-                                            matchId: activeMatchId,
-                                            myTeamId: myTeamIdInMatch,
-                                            myTeamName: userMatchTeam?.name ?? 'label_your_team'.tr(),
-                                            opponentId: opponentTeamId,
-                                            opponentName: team.name,
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: ThemeService.card,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: ThemeService.border),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _buildRecordStat('stat_wins'.tr(), '${team.wins}',
+                                      const Color(0xFF00FF88)),
+                                  _buildDivider(),
+                                  _buildRecordStat('stat_losses'.tr(), '${team.losses}',
+                                      const Color(0xFFFF4655)),
+                                  _buildDivider(),
+                                  _buildRecordStat('stat_draws'.tr(), '${team.draws}',
+                                      const Color(0xFFFFB020)),
+                                  _buildDivider(),
+                                  _buildRecordStat('stat_points'.tr(), '${team.points}',
+                                      const Color(0xFFFF6B00)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Description (Fixed Null String)
+                            _buildSectionHeader('label_description'.tr()),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: ThemeService.card,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: ThemeService.border),
+                              ),
+                              child: Text(
+                                (team.description.isNotEmpty &&
+                                        team.description.toLowerCase() != 'null')
+                                    ? team.description
+                                    : 'No description provided',
+                                style: TextStyle(
+                                    color: (team.description.isNotEmpty &&
+                                            team.description.toLowerCase() != 'null')
+                                        ? ThemeService.textPrimary
+                                        : ThemeService.textSecondary.withOpacity(0.7),
+                                    fontSize: 13,
+                                    height: 1.4),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Requirements (Fixed Null String)
+                            _buildSectionHeader('label_requirements'.tr()),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: ThemeService.card,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: ThemeService.border),
+                              ),
+                              child: Text(
+                                (team.requirements.isNotEmpty &&
+                                        team.requirements.toLowerCase() != 'null')
+                                    ? team.requirements
+                                    : 'No special requirements',
+                                style: TextStyle(
+                                    color: (team.requirements.isNotEmpty &&
+                                            team.requirements.toLowerCase() != 'null')
+                                        ? ThemeService.textPrimary
+                                        : ThemeService.textSecondary.withOpacity(0.7),
+                                    fontSize: 13,
+                                    height: 1.4),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            if (isLeader && team.pendingJoinRequests.isNotEmpty) ...[
+                              _buildSectionHeader(
+                                  'heading_pending_requests_count'.tr(args: ['${team.pendingJoinRequests.length}'])),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: ThemeService.card,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color:
+                                          const Color(0xFF00FF88).withOpacity(0.4)),
+                                ),
+                                child: Column(
+                                  children:
+                                      team.pendingJoinRequests.map((uid) {
+                                    return FutureBuilder<Map<String, String>>(
+                                      future: _fetchUserProfile(uid),
+                                      builder: (context, snap) {
+                                        final userData = snap.data;
+                                        final isLoading = snap.connectionState ==
+                                            ConnectionState.waiting;
+                                        final gamerId = userData?['gamerId'];
+                                        final displayGamerId = isLoading
+                                            ? 'loading'.tr()
+                                            : 'gamer_id_display'.tr(args: [gamerId != null && gamerId.isNotEmpty ? gamerId : 'id_not_set'.tr()]);
+                                        final displayUsername =
+                                            userData?['username'] ?? 'user_gamer'.tr();
+
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 6),
+                                          child: Row(
+                                            children: [
+                                              CircleAvatar(
+                                                radius: 16,
+                                                backgroundColor:
+                                                    ThemeService.cardSecondary,
+                                                child: Icon(Icons.person,
+                                                    color: ThemeService.textSecondary,
+                                                    size: 18),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      displayGamerId,
+                                                      style: TextStyle(
+                                                          color: ThemeService.textPrimary,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 13),
+                                                    ),
+                                                    if (!isLoading &&
+                                                        displayUsername !=
+                                                            'Player') ...[
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        displayUsername,
+                                                        style: TextStyle(
+                                                            color: ThemeService.textSecondary,
+                                                            fontSize: 11),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(
+                                                    Icons.close_rounded,
+                                                    color: Color(0xFFFF4655),
+                                                    size: 20),
+                                                onPressed: () =>
+                                                    _teamService.rejectJoinRequest(
+                                                        teamId: team.id,
+                                                        userId: uid),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(
+                                                    Icons.check_rounded,
+                                                    color: Color(0xFF00FF88),
+                                                    size: 22),
+                                                onPressed: () =>
+                                                    _teamService.acceptJoinRequest(
+                                                  teamId: team.id,
+                                                  userId: uid,
+                                                  userName: displayUsername,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+
+                            _buildSectionHeader('${'heading_team_members_count'.tr()} (${team.memberCount})'),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: ThemeService.card,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: ThemeService.border),
+                              ),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: team.memberDetails.isNotEmpty
+                                    ? team.memberDetails.length
+                                    : team.members.length,
+                                separatorBuilder: (c, i) => Divider(
+                                    color: ThemeService.border, height: 1),
+                                itemBuilder: (context, index) {
+                                  String memberId = '';
+                                  String memberName = 'member'.tr();
+                                  String memberAvatar = '';
+                                  String role = 'member'.tr();
+
+                                  if (team.memberDetails.isNotEmpty &&
+                                      index < team.memberDetails.length) {
+                                    final d = team.memberDetails[index];
+                                    memberId = (d['id'] ?? '').toString();
+                                    memberName =
+                                        (d['name'] ?? 'member'.tr()).toString();
+                                    memberAvatar =
+                                        (d['avatar'] ?? '').toString();
+                                    role = (d['role'] ?? 'member'.tr()).toString();
+                                  } else {
+                                    memberId = team.members[index];
+                                    memberName = memberId == team.leaderId
+                                        ? team.leaderName
+                                        : 'member'.tr();
+                                    role = memberId == team.leaderId
+                                        ? 'leader'.tr()
+                                        : 'member'.tr();
+                                  }
+
+                                  final isThisLeader = memberId == team.leaderId;
+                                  final bool isDefaultName = memberName == 'Player' ||
+                                      memberName == 'Member' ||
+                                      memberName.isEmpty;
+
+                                  return FutureBuilder<Map<String, String>>(
+                                    future: isDefaultName
+                                        ? _fetchUserProfile(memberId)
+                                        : Future.value({
+                                            'username': memberName,
+                                            'avatar': memberAvatar
+                                          }),
+                                    builder: (context, snap) {
+                                      final resolvedName =
+                                          (snap.data?['username'] != null &&
+                                                  snap.data!['username'] !=
+                                                      'Player')
+                                              ? snap.data!['username']!
+                                              : (isDefaultName
+                                                  ? (snap.connectionState ==
+                                                          ConnectionState.waiting
+                                                      ? '...'
+                                                      : memberName)
+                                                  : memberName);
+                                      final resolvedAvatar =
+                                          (snap.data?['avatar'] != null &&
+                                                  snap.data!['avatar']!.isNotEmpty)
+                                              ? snap.data!['avatar']!
+                                              : memberAvatar;
+
+                                      return ListTile(
+                                        leading: CircleAvatar(
+                                          radius: 18,
+                                          backgroundColor:
+                                              ThemeService.cardSecondary,
+                                          backgroundImage: resolvedAvatar.isNotEmpty
+                                              ? NetworkImage(resolvedAvatar)
+                                              : null,
+                                          child: resolvedAvatar.isEmpty
+                                              ? Text(
+                                                  resolvedName.isNotEmpty
+                                                      ? resolvedName[0]
+                                                          .toUpperCase()
+                                                      : 'M',
+                                                  style: TextStyle(
+                                                      color: ThemeService.textPrimary,
+                                                      fontWeight:
+                                                          FontWeight.bold))
+                                              : null,
+                                        ),
+                                        title: Text(
+                                          resolvedName,
+                                          style: TextStyle(
+                                              color: ThemeService.textPrimary,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13.5),
+                                        ),
+                                        trailing: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: isThisLeader
+                                                ? const Color(0xFFFF6B00)
+                                                    .withOpacity(0.2)
+                                                : ThemeService.cardSecondary,
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            isThisLeader
+                                                ? 'badge_leader_caps'.tr()
+                                                : role.toUpperCase(),
+                                            style: TextStyle(
+                                              color: isThisLeader
+                                                  ? const Color(0xFFFF6B00)
+                                                  : ThemeService.textSecondary,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 10.5,
+                                            ),
                                           ),
                                         ),
                                       );
                                     },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF1877F2),
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(10)),
-                                      elevation: 0,
-                                    ),
-                                    icon: const Icon(
-                                        Icons.chat_bubble_rounded,
-                                        size: 16),
-                                    label: Text(
-                                      'btn_team_dm'.tr(),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13),
-                                    ),
-                                  ),
-                                ),
+                                  );
+                                },
                               ),
-                              if (isMatchLeader) ...[
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 46,
-                                    child: ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            const Color(0xFFFF4655),
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(10)),
-                                        elevation: 0,
-                                      ),
-                                      icon: const Icon(
-                                          Icons.stop_circle_rounded,
-                                          size: 16),
-                                      label: Text(
-                                        'btn_end_match'.tr(),
+                            ),
+                            const SizedBox(height: 16),
+
+                            _buildMatchHistorySection(team, currentUid, userTeams),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+                      ),
+                      bottomNavigationBar: Container(
+                        padding: EdgeInsets.only(
+                          left: 16,
+                          right: 16,
+                          top: 10,
+                          bottom: MediaQuery.of(context).padding.bottom + 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: ThemeService.card,
+                          border: Border(
+                              top:
+                                  BorderSide(color: ThemeService.border, width: 1)),
+                        ),
+                        child: Builder(
+                          builder: (context) {
+                            if (isViewedMyTeam) {
+                              return Container(
+                                width: double.infinity,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1877F2).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: const Color(0xFF1877F2), width: 1.2),
+                                ),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.shield_rounded,
+                                          color: Color(0xFF1877F2), size: 18),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'label_your_team'.tr(),
                                         style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13),
+                                          color: Color(0xFF1877F2),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
                                       ),
-                                      onPressed: () async {
-                                        final activeMatchId =
-                                            activeMatch['id']?.toString() ??
-                                                '';
-                                        final ended =
-                                            await EndMatchBottomSheet.show(
-                                          context,
-                                          activeMatchId: activeMatchId,
-                                          myTeamId: myTeamIdInMatch,
-                                          opponentId: opponentTeamId,
-                                          myTeamName: userMatchTeam?.name ?? 'label_your_team'.tr(),
-                                          opponentName: team.name,
-                                        );
-                                        if (ended == true && mounted) {
-                                          setState(() {
-                                            _completedMatchIds
-                                                .add(activeMatchId);
-                                            _optimisticActiveMatches.clear();
-                                          });
-                                        }
-                                      },
-                                    ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ],
-                          );
-                        }
+                              );
+                            }
 
-                        return StreamBuilder<List<Map<String, dynamic>>>(
-                          stream: myTeamId.isNotEmpty
-                              ? SupabaseService.client
-                                  .from('challenges')
-                                  .stream(primaryKey: ['id'])
-                                  .eq('from_team_id',
-                                      SupabaseService.toUuid(myTeamId))
-                              : Stream.value([]),
-                          builder: (context, cSnap) {
-                            final challenges = cSnap.data ?? [];
-                            final rawTeamId = widget.teamId.toLowerCase();
-                            final pendingDoc = challenges.firstWhere(
-                              (d) {
-                                final toId =
-                                    d['to_team_id']?.toString().toLowerCase();
-                                final st = (d['status'] ?? '')
-                                    .toString()
-                                    .toLowerCase();
-                                final id = d['id']?.toString() ?? '';
-                                return (toId == targetUuid ||
-                                        toId == rawTeamId) &&
-                                    st == 'pending' &&
-                                    !_cancelledChallengeIds.contains(id);
-                              },
-                              orElse: () => {},
-                            );
-
-                            final bool isPending = pendingDoc.isNotEmpty;
-
-                            return Row(
-                              children: [
-                                if (!team.isMember(currentUid)) ...[
-                                  Builder(builder: (context) {
-                                    final bool isRequested =
-                                        hasRequested || _hasRequestedLocally;
-                                    return Expanded(
-                                      flex: 2,
+                            if (canAccessMatch && isMatchOpponent) {
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 46,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          final activeMatchId =
+                                              activeMatch['id']?.toString() ?? '';
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  PrivateMatchRoomScreen(
+                                                matchId: activeMatchId,
+                                                myTeamId: myTeamIdInMatch,
+                                                myTeamName: userMatchTeam?.name ?? 'label_your_team'.tr(),
+                                                opponentId: opponentTeamId,
+                                                opponentName: team.name,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1877F2),
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10)),
+                                          elevation: 0,
+                                        ),
+                                        icon: const Icon(
+                                            Icons.chat_bubble_rounded,
+                                            size: 16),
+                                        label: Text(
+                                          'btn_team_dm'.tr(),
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (isMatchLeader) ...[
+                                    const SizedBox(width: 10),
+                                    Expanded(
                                       child: SizedBox(
                                         height: 46,
-                                        child: OutlinedButton.icon(
-                                          onPressed: (isRequested ||
-                                                  _isActionLoading)
-                                              ? null
-                                              : () => _handleJoinRequest(
-                                                  team, currentUid),
-                                          style: OutlinedButton.styleFrom(
-                                            foregroundColor: Colors.white,
-                                            side: BorderSide(
-                                              color: isRequested
-                                                  ? const Color(0xFFFFB800)
-                                                      .withOpacity(0.5)
-                                                  : const Color(0xFF2A3447),
-                                            ),
+                                        child: ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
                                             backgroundColor:
-                                                const Color(0xFF1B2436),
+                                                const Color(0xFFFF4655),
+                                            foregroundColor: Colors.white,
                                             shape: RoundedRectangleBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(10)),
+                                            elevation: 0,
                                           ),
-                                          icon: Icon(
-                                            isRequested
-                                                ? Icons.hourglass_top_rounded
-                                                : Icons.person_add_rounded,
-                                            size: 16,
-                                            color: isRequested
-                                                ? const Color(0xFFFFB800)
-                                                : const Color(0xFF00FF88),
-                                          ),
+                                          icon: const Icon(
+                                              Icons.stop_circle_rounded,
+                                              size: 16),
                                           label: Text(
-                                            isRequested
-                                                ? 'btn_requested_wait'.tr()
-                                                : 'btn_join_team'.tr(),
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                              color: isRequested
-                                                  ? const Color(0xFFFFB800)
-                                                  : Colors.white,
-                                            ),
+                                            'btn_end_match'.tr(),
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13),
                                           ),
+                                          onPressed: () async {
+                                            final activeMatchId =
+                                                activeMatch['id']?.toString() ??
+                                                    '';
+                                            final ended =
+                                                await EndMatchBottomSheet.show(
+                                              context,
+                                              activeMatchId: activeMatchId,
+                                              myTeamId: myTeamIdInMatch,
+                                              opponentId: opponentTeamId,
+                                              myTeamName: userMatchTeam?.name ?? 'label_your_team'.tr(),
+                                              opponentName: team.name,
+                                            );
+                                            if (ended == true && mounted) {
+                                              setState(() {
+                                                _completedMatchIds
+                                                    .add(activeMatchId);
+                                                _optimisticActiveMatches.clear();
+                                              });
+                                            }
+                                          },
                                         ),
                                       ),
-                                    );
-                                  }),
-                                  const SizedBox(width: 10),
+                                    ),
+                                  ],
                                 ],
-                                Expanded(
-                                  flex: 3,
-                                  child: SizedBox(
-                                    height: 46,
-                                    child: isPending
-                                        ? Row(
-                                            children: [
-                                              Expanded(
-                                                child: Container(
-                                                  height: 46,
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(
-                                                        0xFF1B2436),
+                              );
+                            }
+
+                            return StreamBuilder<List<Map<String, dynamic>>>(
+                              stream: myTeamId.isNotEmpty
+                                  ? SupabaseService.client
+                                      .from('challenges')
+                                      .stream(primaryKey: ['id'])
+                                      .eq('from_team_id',
+                                          SupabaseService.toUuid(myTeamId))
+                                  : Stream.value([]),
+                              builder: (context, cSnap) {
+                                final challenges = cSnap.data ?? [];
+                                final rawTeamId = widget.teamId.toLowerCase();
+                                final pendingDoc = challenges.firstWhere(
+                                  (d) {
+                                    final toId =
+                                        d['to_team_id']?.toString().toLowerCase();
+                                    final st = (d['status'] ?? '')
+                                        .toString()
+                                        .toLowerCase();
+                                    final id = d['id']?.toString() ?? '';
+                                    return (toId == targetUuid ||
+                                            toId == rawTeamId) &&
+                                        st == 'pending' &&
+                                        !_cancelledChallengeIds.contains(id);
+                                  },
+                                  orElse: () => {},
+                                );
+
+                                final bool isPending = pendingDoc.isNotEmpty;
+
+                                return Row(
+                                  children: [
+                                    if (!team.isMember(currentUid)) ...[
+                                      Builder(builder: (context) {
+                                        final bool isRequested =
+                                            hasRequested || _hasRequestedLocally;
+                                        return Expanded(
+                                          flex: 2,
+                                          child: SizedBox(
+                                            height: 46,
+                                            child: OutlinedButton.icon(
+                                              onPressed: (isRequested ||
+                                                      _isActionLoading)
+                                                  ? null
+                                                  : () => _handleJoinRequest(
+                                                      team, currentUid),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: ThemeService.textPrimary,
+                                                side: BorderSide(
+                                                  color: isRequested
+                                                      ? const Color(0xFFFFB800)
+                                                          .withOpacity(0.5)
+                                                      : ThemeService.border,
+                                                ),
+                                                backgroundColor:
+                                                    ThemeService.cardSecondary,
+                                                shape: RoundedRectangleBorder(
                                                     borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                    border: Border.all(
-                                                        color: const Color(
-                                                            0xFFFFB800)),
-                                                  ),
-                                                  child: Center(
-                                                    child: Text(
-                                                      'badge_requested_wait'.tr(),
-                                                      style: const TextStyle(
-                                                        color: Color(
-                                                            0xFFFFB800),
-                                                        fontWeight:
-                                                            FontWeight.w900,
-                                                        fontSize: 12,
+                                                        BorderRadius.circular(10)),
+                                              ),
+                                              icon: Icon(
+                                                isRequested
+                                                    ? Icons.hourglass_top_rounded
+                                                    : Icons.person_add_rounded,
+                                                size: 16,
+                                                color: isRequested
+                                                    ? const Color(0xFFFFB800)
+                                                    : const Color(0xFF00FF88),
+                                              ),
+                                              label: Text(
+                                                isRequested
+                                                    ? 'btn_requested_wait'.tr()
+                                                    : 'btn_join_team'.tr(),
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                  color: isRequested
+                                                      ? const Color(0xFFFFB800)
+                                                      : ThemeService.textPrimary,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                      const SizedBox(width: 10),
+                                    ],
+                                    Expanded(
+                                      flex: 3,
+                                      child: SizedBox(
+                                        height: 46,
+                                        child: isPending
+                                            ? Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Container(
+                                                      height: 46,
+                                                      decoration: BoxDecoration(
+                                                        color: ThemeService.cardSecondary,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                                10),
+                                                        border: Border.all(
+                                                            color: const Color(
+                                                                0xFFFFB800)),
+                                                      ),
+                                                      child: Center(
+                                                        child: Text(
+                                                          'badge_requested_wait'.tr(),
+                                                          style: const TextStyle(
+                                                            color: Color(
+                                                                0xFFFFB800),
+                                                            fontWeight:
+                                                                FontWeight.w900,
+                                                            fontSize: 12,
+                                                          ),
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              SizedBox(
-                                                height: 46,
-                                                child: ElevatedButton(
-                                                  style: ElevatedButton
-                                                      .styleFrom(
-                                                    backgroundColor:
-                                                        const Color(
-                                                            0xFFFF4655),
-                                                    foregroundColor:
-                                                        Colors.white,
-                                                    shape:
-                                                        RoundedRectangleBorder(
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        10)),
-                                                    elevation: 0,
+                                                  const SizedBox(width: 8),
+                                                  SizedBox(
+                                                    height: 46,
+                                                    child: ElevatedButton(
+                                                      style: ElevatedButton
+                                                          .styleFrom(
+                                                        backgroundColor:
+                                                            const Color(
+                                                                0xFFFF4655),
+                                                        foregroundColor:
+                                                            Colors.white,
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            10)),
+                                                        elevation: 0,
+                                                      ),
+                                                      onPressed: () =>
+                                                          _cancelChallenge(
+                                                              pendingDoc['id']
+                                                                      ?.toString() ??
+                                                                  ''),
+                                                      child: Text('btn_cancel_caps'.tr(),
+                                                          style: const TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight.bold,
+                                                                  fontSize: 11)),
+                                                    ),
                                                   ),
-                                                  onPressed: () =>
-                                                      _cancelChallenge(
-                                                          pendingDoc['id']
-                                                                  ?.toString() ??
-                                                              ''),
-                                                  child: Text('btn_cancel_caps'.tr(),
-                                                      style: const TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 11)),
+                                                ],
+                                              )
+                                            : ElevatedButton.icon(
+                                                onPressed: () => _handleChallenge(
+                                                    team, currentUid),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      const Color(0xFF1877F2),
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              10)),
+                                                  elevation: 0,
+                                                ),
+                                                icon: const Icon(
+                                                    Icons.flash_on_rounded,
+                                                    size: 18,
+                                                    color: Colors.white),
+                                                label: Text(
+                                                  'btn_challenge_team'.tr(),
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 13,
+                                                  ),
                                                 ),
                                               ),
-                                            ],
-                                          )
-                                        : ElevatedButton.icon(
-                                            onPressed: () => _handleChallenge(
-                                                team, currentUid),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  const Color(0xFF1877F2),
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          10)),
-                                              elevation: 0,
-                                            ),
-                                            icon: const Icon(
-                                                Icons.flash_on_rounded,
-                                                size: 18,
-                                                color: Colors.white),
-                                            label: Text(
-                                              'btn_challenge_team'.tr(),
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                              ],
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             );
                           },
-                        );
-                      },
-                    ),
-                  ),
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             );
@@ -2308,8 +2352,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         title,
-        style: const TextStyle(
-            color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13.5),
+        style: TextStyle(
+            color: ThemeService.textPrimary,
+            fontWeight: FontWeight.w900,
+            fontSize: 13.5),
       ),
     );
   }
@@ -2322,8 +2368,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 color: color, fontWeight: FontWeight.w900, fontSize: 18)),
         const SizedBox(height: 2),
         Text(label,
-            style: const TextStyle(
-                color: Color(0xFF8B949E),
+            style: TextStyle(
+                color: ThemeService.textSecondary,
                 fontSize: 10,
                 fontWeight: FontWeight.bold)),
       ],
@@ -2331,14 +2377,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Widget _buildDivider() {
-    return Container(height: 24, width: 1, color: const Color(0xFF2A3447));
+    return Container(height: 24, width: 1, color: ThemeService.border);
   }
 
   void _showProofDialog(BuildContext context, String imageUrl) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF131A29),
+        backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2351,14 +2397,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 children: [
                   Text(
                     'dialog_match_proof_title'.tr(),
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: ThemeService.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 14),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.white54, size: 20),
+                    icon: Icon(Icons.close,
+                        color: ThemeService.textSecondary, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -2367,7 +2413,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
             InteractiveViewer(
               child: ClipRRect(
                 borderRadius:
-                    BorderRadius.vertical(bottom: const Radius.circular(16)),
+                    const BorderRadius.vertical(bottom: Radius.circular(16)),
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
@@ -2377,11 +2423,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         child: CircularProgressIndicator(
                             color: Color(0xFF00FF88))),
                   ),
-                  errorWidget: (c, u, e) => const SizedBox(
+                  errorWidget: (c, u, e) => SizedBox(
                     height: 180,
                     child: Center(
                       child: Icon(Icons.broken_image,
-                          color: Colors.white30, size: 40),
+                          color: ThemeService.textSecondary, size: 40),
                     ),
                   ),
                 ),
@@ -2398,7 +2444,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF131A29),
+        backgroundColor: ThemeService.card,
         insetPadding: const EdgeInsets.all(12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
@@ -2411,8 +2457,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   Expanded(
                     child: Text(
                       'dialog_team_logo_title'.tr(args: [teamName]),
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -2420,8 +2466,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 20),
+                    icon: Icon(Icons.close,
+                        color: ThemeService.textSecondary, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -2509,26 +2555,26 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF131A29),
+                  color: ThemeService.card,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF2A3447)),
+                  border: Border.all(color: ThemeService.border),
                 ),
                 child: Column(
                   children: [
-                    const Icon(Icons.history_rounded,
-                        color: Colors.white24, size: 36),
+                    Icon(Icons.history_rounded,
+                        color: ThemeService.textSecondary.withOpacity(0.4), size: 36),
                     const SizedBox(height: 8),
                     Text(
                       'no_match_history_title'.tr(),
-                      style: const TextStyle(
-                          color: Colors.white70,
+                      style: TextStyle(
+                          color: ThemeService.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 13),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'no_match_history_sub'.tr(),
-                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -2573,9 +2619,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF131A29),
+                    color: ThemeService.card,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2A3447)),
+                    border: Border.all(color: ThemeService.border),
                   ),
                   child: Row(
                     children: [
@@ -2587,10 +2633,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           width: 52,
                           height: 52,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1B2436),
+                            color: ThemeService.cardSecondary,
                             borderRadius: BorderRadius.circular(8),
                             border:
-                                Border.all(color: const Color(0xFF2A3447)),
+                                Border.all(color: ThemeService.border),
                           ),
                           child: (canViewProof && proofUrl != null && proofUrl.isNotEmpty)
                               ? ClipRRect(
@@ -2607,9 +2653,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                             color: Color(0xFF00FF88)),
                                       ),
                                     ),
-                                    errorWidget: (_, __, ___) => const Icon(
+                                    errorWidget: (_, __, ___) => Icon(
                                       Icons.image_not_supported_rounded,
-                                      color: Colors.white30,
+                                      color: ThemeService.textSecondary,
                                       size: 20,
                                     ),
                                   ),
@@ -2686,8 +2732,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
                                 return Text(
                                   '${'versus_vs'.tr()} $opName$tagStr',
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: ThemeService.textPrimary,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                   ),
@@ -2700,8 +2746,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             if (formattedDate.isNotEmpty)
                               Text(
                                 formattedDate,
-                                style: const TextStyle(
-                                  color: Color(0xFF8B949E),
+                                style: TextStyle(
+                                  color: ThemeService.textSecondary,
                                   fontSize: 11,
                                 ),
                               ),
@@ -2716,14 +2762,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           color: isWon
                               ? const Color(0xFF00FF88).withOpacity(0.18)
                               : isDraw
-                                  ? const Color(0xFFFFB800).withOpacity(0.18)
+                                  ? const Color(0xFFFFB020).withOpacity(0.18)
                                   : const Color(0xFFFF4655).withOpacity(0.18),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: isWon
                                 ? const Color(0xFF00FF88)
                                 : isDraw
-                                    ? const Color(0xFFFFB800)
+                                    ? const Color(0xFFFFB020)
                                     : const Color(0xFFFF4655),
                             width: 1.5,
                           ),
@@ -2738,7 +2784,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             color: isWon
                                 ? const Color(0xFF00FF88)
                                 : isDraw
-                                    ? const Color(0xFFFFB800)
+                                    ? const Color(0xFFFFB020)
                                     : const Color(0xFFFF4655),
                             fontWeight: FontWeight.w900,
                             fontSize: 12.5,
