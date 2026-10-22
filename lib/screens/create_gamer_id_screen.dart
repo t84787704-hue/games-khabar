@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// CREATE / EDIT GAMER ID SCREEN — Full Multi-Language & Adaptive Day/Night Support
+// CREATE / EDIT GAMER ID SCREEN — Exact Mockup Design Alignment
+// File: lib/screens/create_gamer_id_screen.dart
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:io';
@@ -18,7 +19,6 @@ import '../services/language_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'coin_store_screen.dart';
 import 'gamer_main_navigation_screen.dart';
-import 'gamer_profile_screen.dart';
 
 class CreateGamerIdScreen extends StatefulWidget {
   final bool isEditing;
@@ -35,7 +35,6 @@ class CreateGamerIdScreen extends StatefulWidget {
 }
 
 class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
-  final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _displayNameController = TextEditingController();
   final _bioController = TextEditingController();
@@ -48,236 +47,23 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   String _coverUrl = '';
   File? _pickedImageFile;
   File? _pickedCoverFile;
-  File? _pickedRankScreenshot;
-  String _rankScreenshotUrl = '';
-  String _rankStatus = 'None';
-  String _rankRejectReason = '';
   bool _isSaving = false;
 
   String _selectedFrame = '';
   List<String> _unlockedFrames = [];
   String _selectedBadge = '';
   List<String> _unlockedBadges = [];
-  Timer? _lockedItemBannerTimer;
-
-  void _showNewUserLanguageDialog(BuildContext context) {
-    final languages = [
-      {'code': 'en', 'name': 'lang_english_name'.tr(), 'flag': '🇬🇧'},
-      {'code': 'ur', 'name': 'lang_urdu_name'.tr(), 'flag': '🇵🇰'},
-      {'code': 'ro', 'name': 'lang_roman_name'.tr(), 'flag': '🌐'},
-      {'code': 'hi', 'name': 'lang_hindi_name'.tr(), 'flag': '🇮🇳'},
-      {'code': 'ar', 'name': 'lang_arabic_name'.tr(), 'flag': '🇸🇦'},
-      {'code': 'zh', 'name': 'lang_chinese_name'.tr(), 'flag': '🇨🇳'},
-      {'code': 'bn', 'name': 'lang_bengali_name'.tr(), 'flag': '🇧🇩'},
-    ];
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: ThemeService.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: ThemeService.border, width: 1.5),
-          ),
-          title: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1877F2).withOpacity(0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.language_rounded, color: Color(0xFF1877F2), size: 28),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'choose_language'.tr(),
-                style: TextStyle(
-                  color: ThemeService.textPrimary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'select_language_subtitle'.tr(),
-                style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: languages.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 2.3,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemBuilder: (context, index) {
-                final lang = languages[index];
-                final isCurrent = context.locale.languageCode == lang['code'];
-
-                return InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () async {
-                    final code = lang['code']!;
-                    await context.setLocale(Locale(code));
-                    try {
-                      await LanguageService.setLanguage(code);
-                    } catch (_) {}
-
-                    if (ctx.mounted) {
-                      Navigator.pop(ctx);
-                    }
-                    if (mounted) {
-                      setState(() {});
-                    }
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isCurrent
-                          ? const Color(0xFF1877F2).withOpacity(0.18)
-                          : ThemeService.cardSecondary,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isCurrent ? const Color(0xFF1877F2) : ThemeService.border,
-                        width: isCurrent ? 1.5 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(lang['flag']!, style: const TextStyle(fontSize: 16)),
-                        const SizedBox(width: 6),
-                        Text(
-                          lang['name']!,
-                          style: TextStyle(
-                            color: isCurrent ? const Color(0xFF1877F2) : ThemeService.textPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showLockedItemBanner(String itemName) {
-    _lockedItemBannerTimer?.cancel();
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('item_locked_banner'.tr(args: [itemName])),
-        backgroundColor: const Color(0xFF1877F2),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'btn_store'.tr(),
-          textColor: Colors.white,
-          onPressed: () async {
-            _lockedItemBannerTimer?.cancel();
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
-            );
-            _loadStorePerks();
-          },
-        ),
-      ),
-    );
-    _lockedItemBannerTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      }
-    });
-  }
-
-  void _showRankComingSoonBanner() {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Text('🚀', style: TextStyle(fontSize: 16)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'rank_coming_soon_banner'.tr(),
-                style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF1877F2),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  Timer? _debounceTimer;
-  bool _isCheckingUsername = false;
-  bool? _isUsernameAvailable;
-  String _usernameFeedback = '';
 
   static const String _defaultBgmiCoverUrl =
       'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
 
   final List<Map<String, dynamic>> _gamingPresets = [
-    {
-      'id': 'preset:helmet',
-      'label_key': 'preset_helmet',
-      'icon': Icons.sports_motorsports_rounded,
-      'color': const Color(0xFF60A5FA),
-      'bg': const [Color(0xFF1E293B), Color(0xFF0F172A)],
-    },
-    {
-      'id': 'preset:skull',
-      'label_key': 'preset_skull',
-      'icon': Icons.dangerous_rounded,
-      'color': const Color(0xFFFF5252),
-      'bg': const [Color(0xFF3B0764), Color(0xFF180322)],
-    },
-    {
-      'id': 'preset:ninja',
-      'label_key': 'preset_ninja',
-      'icon': Icons.masks_rounded,
-      'color': const Color(0xFFC084FC),
-      'bg': const [Color(0xFF1E1B4B), Color(0xFF0F0E2A)],
-    },
-    {
-      'id': 'preset:crown',
-      'label_key': 'preset_crown',
-      'icon': Icons.workspace_premium_rounded,
-      'color': const Color(0xFFFFD700),
-      'bg': const [Color(0xFF312E81), Color(0xFF18181B)],
-    },
-    {
-      'id': 'preset:crosshair',
-      'label_key': 'preset_crosshair',
-      'icon': Icons.filter_center_focus_rounded,
-      'color': const Color(0xFF00E676),
-      'bg': const [Color(0xFF064E3B), Color(0xFF022C22)],
-    },
+    {'id': 'preset:helmet', 'icon': Icons.sports_motorsports_rounded},
+    {'id': 'preset:skull', 'icon': Icons.dangerous_rounded},
+    {'id': 'preset:ninja', 'icon': Icons.masks_rounded},
+    {'id': 'preset:crown', 'icon': Icons.workspace_premium_rounded},
+    {'id': 'preset:crosshair', 'icon': Icons.filter_center_focus_rounded},
   ];
-
-  List<String> get _dynamicRanks {
-    return MobileGamesRankData.getRanksForGame(_selectedRankGame);
-  }
 
   @override
   void initState() {
@@ -287,19 +73,23 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _usernameController.text = u.username;
       _displayNameController.text = u.displayName;
       _bioController.text = u.bio;
-      _selectedGame = GamerTheme.favoriteGames.contains(u.favoriteGame) ? u.favoriteGame : 'BGMI';
+      _selectedGame = GamerTheme.favoriteGames.contains(u.favoriteGame)
+          ? u.favoriteGame
+          : 'BGMI';
       _selectedRankGame = MobileGamesRankData.resolveGameName(
         u.selectedGame.isNotEmpty ? u.selectedGame : u.favoriteGame,
       );
-      final rawUserRank = u.selectedRank.isNotEmpty ? u.selectedRank : u.rank;
-      _rankController.text = (rawUserRank.isNotEmpty && rawUserRank != 'None' && rawUserRank != 'Skip') ? rawUserRank : '';
-      _gameIdController.text = u.gameId.isNotEmpty ? u.gameId : '12345';
+      final rawUserRank =
+          u.selectedRank.isNotEmpty ? u.selectedRank : u.rank;
+      _rankController.text = (rawUserRank.isNotEmpty &&
+              rawUserRank != 'None' &&
+              rawUserRank != 'Skip')
+          ? rawUserRank
+          : 'Bronze';
+      _gameIdController.text =
+          u.gameId.isNotEmpty ? u.gameId : '12345';
       _photoUrl = u.photoUrl;
       _coverUrl = u.coverUrl;
-      _rankScreenshotUrl = u.rankScreenshot;
-      _rankStatus = u.rankStatus;
-      _rankRejectReason = u.rankRejectReason;
-      _isUsernameAvailable = true;
       _selectedFrame = u.activeFrame;
       _unlockedFrames = List<String>.from(u.unlockedFrames);
       _selectedBadge = u.activeBadge;
@@ -308,25 +98,20 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final fbUser = GamerAuthService().currentUser;
       if (fbUser != null) {
         final meta = fbUser.userMetadata ?? {};
-        final fullName = (meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? '').toString();
-        final avatar = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
+        final fullName = (meta['full_name'] ??
+                meta['name'] ??
+                meta['display_name'] ??
+                '')
+            .toString();
+        final avatar =
+            (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
         _displayNameController.text = fullName;
-        if (avatar.isNotEmpty) {
-          _photoUrl = avatar;
-        }
+        if (avatar.isNotEmpty) _photoUrl = avatar;
       }
-      _rankController.text = '';
+      _rankController.text = 'Bronze';
       _gameIdController.text = '12345';
     }
     _loadStorePerks();
-
-    if (!widget.isEditing) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _showNewUserLanguageDialog(context);
-        }
-      });
-    }
   }
 
   Future<void> _loadStorePerks() async {
@@ -337,29 +122,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final localFrame = prefs.getString('user_active_frame_$uid') ?? '';
       final localFrames = prefs.getStringList('user_unlocked_frames_$uid') ?? [];
       final localBadge = prefs.getString('user_active_badge_$uid') ?? '';
-      final localBadges = prefs.getStringList('user_unlocked_badges_$uid') ?? <String>[];
+      final localBadges = prefs.getStringList('user_unlocked_badges_$uid') ?? [];
       final data = await SupabaseService.getUser(uid);
       if (data != null && mounted) {
-        final activeF = (data['activeFrame'] as String?) ?? localFrame;
-        final unF = List<String>.from(data['unlockedFrames'] ?? localFrames);
-        final activeB = (data['activeBadge'] as String?) ?? localBadge;
-        final unB = List<String>.from(data['unlockedBadges'] ?? localBadges);
-
         setState(() {
-          _selectedFrame = activeF;
-          _unlockedFrames = unF;
-          _selectedBadge = activeB;
-          _unlockedBadges = unB;
-        });
-        return;
-      }
-
-      if (mounted) {
-        setState(() {
-          if (_selectedFrame.isEmpty) _selectedFrame = localFrame;
-          if (_unlockedFrames.isEmpty) _unlockedFrames = localFrames;
-          if (_selectedBadge.isEmpty) _selectedBadge = localBadge;
-          if (_unlockedBadges.isEmpty) _unlockedBadges = localBadges;
+          _selectedFrame = (data['activeFrame'] as String?) ?? localFrame;
+          _unlockedFrames = List<String>.from(data['unlockedFrames'] ?? localFrames);
+          _selectedBadge = (data['activeBadge'] as String?) ?? localBadge;
+          _unlockedBadges = List<String>.from(data['unlockedBadges'] ?? localBadges);
         });
       }
     } catch (_) {}
@@ -367,8 +137,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
   @override
   void dispose() {
-    _lockedItemBannerTimer?.cancel();
-    _debounceTimer?.cancel();
     _usernameController.dispose();
     _displayNameController.dispose();
     _bioController.dispose();
@@ -377,52 +145,49 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     super.dispose();
   }
 
-  void _onUsernameChanged(String value) {
-    _debounceTimer?.cancel();
-    final clean = value.toLowerCase().trim();
+  void _showRankComingSoonBanner() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Text('🚀', style: TextStyle(fontSize: 16)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Rank verification system is undergoing upgrades!',
+                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Color(0xFF1877F2),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
 
-    if (clean.isEmpty) {
-      setState(() {
-        _isCheckingUsername = false;
-        _isUsernameAvailable = null;
-        _usernameFeedback = '';
-      });
-      return;
-    }
-
-    final regExp = RegExp(r'^[a-z0-9_]{3,15}$');
-    if (!regExp.hasMatch(clean)) {
-      setState(() {
-        _isCheckingUsername = false;
-        _isUsernameAvailable = false;
-        _usernameFeedback = 'err_username_format'.tr();
-      });
-      return;
-    }
-
-    setState(() {
-      _isCheckingUsername = true;
-      _usernameFeedback = 'checking_availability'.tr();
-    });
-
-    _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
-      bool available = true;
-      try {
-        available = await GamerAuthService().isUsernameAvailable(
-          clean,
-          currentUid: widget.existingUser?.uid ?? GamerAuthService().currentUid,
-        ).timeout(const Duration(seconds: 2), onTimeout: () => true);
-      } catch (_) {
-        available = true;
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _isCheckingUsername = false;
-        _isUsernameAvailable = available;
-        _usernameFeedback = available ? 'username_available'.tr() : 'username_taken'.tr();
-      });
-    });
+  void _showLockedItemBanner(String itemName) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$itemName is locked! Unlock in Coin Store.'),
+        backgroundColor: const Color(0xFF1877F2),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'STORE',
+          textColor: Colors.white,
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
+            );
+            _loadStorePerks();
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _pickImageFromGallery() async {
@@ -434,20 +199,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         maxHeight: 600,
         imageQuality: 80,
       );
-
       if (picked != null) {
-        setState(() {
-          _pickedImageFile = File(picked.path);
-        });
+        setState(() => _pickedImageFile = File(picked.path));
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('err_pick_image'.tr(args: [e.toString()])),
-          backgroundColor: GamerTheme.redAccent,
-        ),
-      );
-    }
+    } catch (_) {}
   }
 
   Future<void> _pickCoverFromGallery() async {
@@ -459,138 +214,47 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         maxHeight: 600,
         imageQuality: 85,
       );
-
       if (picked != null) {
-        setState(() {
-          _pickedCoverFile = File(picked.path);
-        });
+        setState(() => _pickedCoverFile = File(picked.path));
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('err_pick_cover'.tr(args: [e.toString()])),
-          backgroundColor: GamerTheme.redAccent,
-        ),
-      );
-    }
+    } catch (_) {}
   }
 
   Future<void> _saveGamerId() async {
-    if (!_formKey.currentState!.validate()) return;
-
     final rawUsername = _usernameController.text.toLowerCase().trim();
-    if (_isUsernameAvailable == false) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('err_choose_available_username'.tr()),
-          backgroundColor: GamerTheme.redAccent,
-        ),
-      );
-      return;
-    }
-
     final uid = GamerAuthService().currentUid;
-    if (uid == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('err_session_expired'.tr()),
-          backgroundColor: GamerTheme.redAccent,
-        ),
-      );
-      return;
-    }
+    if (uid == null) return;
 
-    bool saveSucceeded = false;
     setState(() => _isSaving = true);
-
     try {
       String finalPhotoUrl = _photoUrl;
       if (_pickedImageFile != null) {
         final uploaded = await GamerAuthService().uploadProfilePhoto(_pickedImageFile!, uid);
-        if (uploaded.isNotEmpty) {
-          finalPhotoUrl = uploaded;
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('err_photo_upload_failed'.tr()),
-                backgroundColor: GamerTheme.redAccent,
-              ),
-            );
-          }
-          setState(() => _isSaving = false);
-          return;
-        }
+        if (uploaded.isNotEmpty) finalPhotoUrl = uploaded;
       }
 
       String finalCoverUrl = _coverUrl;
       if (_pickedCoverFile != null) {
         final uploaded = await GamerAuthService().uploadCoverPhoto(_pickedCoverFile!, uid);
-        if (uploaded.isNotEmpty) {
-          finalCoverUrl = uploaded;
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('err_cover_upload_failed'.tr()),
-                backgroundColor: GamerTheme.redAccent,
-              ),
-            );
-          }
-          setState(() => _isSaving = false);
-          return;
-        }
+        if (uploaded.isNotEmpty) finalCoverUrl = uploaded;
       }
 
       final enteredRank = _rankController.text.trim();
-      String finalRank = '';
-      String finalRankScreenshot = _rankScreenshotUrl;
-      String finalRankStatus = 'none';
-      String finalRankVerifiedBy = widget.existingUser?.rankVerifiedBy ?? '';
-      String finalRankRejectReason = widget.existingUser?.rankRejectReason ?? '';
-      bool isRankVerified = widget.existingUser?.isRankVerified ?? false;
-
-      if (enteredRank.isNotEmpty && enteredRank.toLowerCase() != 'none' && enteredRank.toLowerCase() != 'skip') {
-        finalRank = enteredRank;
-        if (_pickedRankScreenshot != null) {
-          finalRankScreenshot = await GamerAuthService().uploadRankScreenshot(_pickedRankScreenshot!, uid);
-          finalRankStatus = 'pending';
-          finalRankRejectReason = '';
-          isRankVerified = false;
-        } else if (finalRankScreenshot.isNotEmpty) {
-          finalRankStatus = widget.existingUser?.rankStatus.isNotEmpty == true
-              ? widget.existingUser!.rankStatus
-              : 'pending';
-        } else {
-          finalRankStatus = 'none';
-          finalRankScreenshot = '';
-          isRankVerified = false;
-        }
-      } else {
-        finalRank = '';
-        finalRankStatus = 'none';
-        finalRankScreenshot = '';
-        isRankVerified = false;
-      }
-
       final gamerUser = GamerUser(
         uid: uid,
-        username: rawUsername,
+        username: rawUsername.isNotEmpty ? rawUsername : (widget.existingUser?.username ?? 'gamer'),
         displayName: _displayNameController.text.trim().isNotEmpty
             ? _displayNameController.text.trim()
-            : rawUsername,
+            : (rawUsername.isNotEmpty ? rawUsername : 'Gamer'),
         photoUrl: finalPhotoUrl,
         coverUrl: finalCoverUrl.isNotEmpty ? finalCoverUrl : (widget.existingUser?.coverUrl ?? ''),
         bio: _bioController.text.trim(),
         favoriteGame: _selectedGame,
-        selectedGame: finalRank.isNotEmpty ? _selectedRankGame : '',
-        selectedRank: finalRank,
-        rank: finalRank,
-        rankScreenshot: finalRankScreenshot,
-        rankStatus: finalRankStatus,
-        rankVerifiedBy: finalRankVerifiedBy,
-        rankRejectReason: finalRankRejectReason,
-        isRankVerified: isRankVerified,
+        selectedGame: _selectedRankGame,
+        selectedRank: enteredRank,
+        rank: enteredRank,
+        rankScreenshot: widget.existingUser?.rankScreenshot ?? '',
+        rankStatus: widget.existingUser?.rankStatus ?? 'None',
         followersCount: widget.existingUser?.followersCount ?? 0,
         followingCount: widget.existingUser?.followingCount ?? 0,
         postsCount: widget.existingUser?.postsCount ?? 0,
@@ -603,1673 +267,928 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         unlockedFrames: _unlockedFrames,
         activeBadge: _selectedBadge,
         unlockedBadges: _unlockedBadges,
-        chatColor: widget.existingUser?.chatColor ?? '#00FF66',
-        unlockedChatColors: widget.existingUser?.unlockedChatColors ?? [],
-        isVipMember: widget.existingUser?.isVipMember ?? false,
-        vipTournamentPassUntil: widget.existingUser?.vipTournamentPassUntil,
-        leaderboardSpotlightUntil: widget.existingUser?.leaderboardSpotlightUntil,
       );
 
       await GamerAuthService().saveGamerProfile(gamerUser);
 
-      final Map<String, dynamic> directUpdates = {
+      await SupabaseService.client.from('users').update({
         'avatar_url': finalPhotoUrl,
         'cover_url': finalCoverUrl,
-        'display_name': _displayNameController.text.trim().isNotEmpty
-            ? _displayNameController.text.trim()
-            : rawUsername,
-        'bio': _bioController.text.trim(),
-        'updated_at': DateTime.now().toIso8601String(),
-      };
-      try {
-        await SupabaseService.client
-            .from('users')
-            .update(directUpdates)
-            .or('id.eq.$uid,uid.eq.$uid');
-      } catch (_) {}
-
-      try {
-        if (_photoUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(_photoUrl);
-        if (finalPhotoUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(finalPhotoUrl);
-        if (_coverUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(_coverUrl);
-        if (finalCoverUrl.isNotEmpty) await CachedNetworkImage.evictFromCache(finalCoverUrl);
-        PaintingBinding.instance.imageCache.clear();
-        PaintingBinding.instance.imageCache.clearLiveImages();
-      } catch (_) {}
-
-      try {
-        await SupabaseService.client.from('users').update({
-          'rank': finalRank.isNotEmpty ? finalRank : null,
-          'selected_rank': finalRank.isNotEmpty ? finalRank : null,
-          'is_rank_verified': isRankVerified,
-          'rank_status': finalRankStatus,
-          'rank_proof_url': finalRankScreenshot.isNotEmpty ? finalRankScreenshot : null,
-        }).eq('id', uid);
-      } catch (_) {}
-
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_active_frame_$uid', _selectedFrame);
-        await prefs.setStringList('user_unlocked_frames_$uid', _unlockedFrames);
-        await prefs.setString('user_active_badge_$uid', _selectedBadge);
-        await prefs.setStringList('user_unlocked_badges_$uid', _unlockedBadges);
-      } catch (_) {}
-
-      if (finalPhotoUrl.isNotEmpty) {
-        _photoUrl = finalPhotoUrl;
-      }
-      if (finalCoverUrl.isNotEmpty) {
-        _coverUrl = finalCoverUrl;
-      }
+        'display_name': gamerUser.displayName,
+        'bio': gamerUser.bio,
+        'favorite_game': gamerUser.favoriteGame,
+        'game_id': gamerUser.gameId,
+        'rank': enteredRank,
+        'selected_rank': enteredRank,
+        'active_frame': _selectedFrame,
+        'active_badge': _selectedBadge,
+      }).or('id.eq.$uid,uid.eq.$uid');
 
       GamerAuthService().currentGamerNotifier.value = gamerUser;
-      saveSucceeded = true;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Color(0xFF00C853),
+          ),
+        );
+        Navigator.of(context).pop(true);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('err_save_gamer_id'.tr(args: [e.toString()])),
-            backgroundColor: GamerTheme.redAccent,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
-
-    if (saveSucceeded) {
-      if (!mounted) return;
-
-      setState(() {
-        _pickedImageFile = null;
-        _pickedCoverFile = null;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.isEditing
-              ? 'msg_gamer_id_updated'.tr()
-              : 'msg_welcome_gamer'.tr(args: [rawUsername])),
-          backgroundColor: GamerTheme.neonGreen,
-        ),
-      );
-
-      if (widget.isEditing) {
-        try {
-          await GamerAuthService().refreshCurrentGamer();
-        } catch (_) {}
-        Navigator.of(context).pop(true);
-      } else {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
-          (route) => false,
-        );
-        GamerAuthService().refreshCurrentGamer();
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.isEditing;
-
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, _, __) {
         final isDark = ThemeService.isDarkMode;
 
+        final bgColor = isDark ? const Color(0xFF0D1117) : const Color(0xFFF8FAFC);
+        final cardColor = isDark ? const Color(0xFF161B22) : Colors.white;
+        final secondaryCard = isDark ? const Color(0xFF21262D) : const Color(0xFFF1F5F9);
+        final borderColor = isDark ? const Color(0xFF30363D) : const Color(0xFFE2E8F0);
+        final primaryTextColor = isDark ? Colors.white : const Color(0xFF0F172A);
+        final subTextColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
+
         return Scaffold(
-          backgroundColor: ThemeService.bg,
+          backgroundColor: bgColor,
           appBar: AppBar(
-            backgroundColor: ThemeService.appBarBg,
+            backgroundColor: isDark ? const Color(0xFF161B22) : Colors.white,
             elevation: 0.5,
-            iconTheme: IconThemeData(color: ThemeService.textPrimary),
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back, color: primaryTextColor),
+              onPressed: () => Navigator.pop(context),
+            ),
             title: Text(
-              isEditing ? 'title_edit_gamer_id'.tr() : 'title_create_gamer_id'.tr(),
+              'Edit Gamer ID',
               style: TextStyle(
-                color: ThemeService.textPrimary,
-                fontWeight: FontWeight.bold,
+                color: primaryTextColor,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
               ),
             ),
-            automaticallyImplyLeading: isEditing,
             actions: [
-              if (isEditing)
-                TextButton(
-                  onPressed: _isSaving ? null : _saveGamerId,
-                  child: Text(
-                    'save'.tr(),
-                    style: const TextStyle(
-                      color: Color(0xFFFF8A00),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
+              TextButton(
+                onPressed: _isSaving ? null : _saveGamerId,
+                child: const Text(
+                  'Save',
+                  style: TextStyle(
+                    color: Color(0xFFFF7A00),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
+              ),
+              const SizedBox(width: 8),
             ],
           ),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          body: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Cover Photo & Main Avatar
+                Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
                   children: [
-                    Stack(
-                      children: [
-                        Container(
-                          height: 175,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: ThemeService.cardSecondary,
-                          ),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              if (_pickedCoverFile != null)
-                                Image.file(_pickedCoverFile!, fit: BoxFit.cover)
-                              else if (_coverUrl.isNotEmpty)
-                                CachedNetworkImage(
-                                  imageUrl: _coverUrl,
-                                  fit: BoxFit.cover,
-                                  placeholder: (_, __) => Container(color: ThemeService.cardSecondary),
-                                  errorWidget: (_, __, ___) => Image.network(_defaultBgmiCoverUrl, fit: BoxFit.cover),
-                                )
-                              else
-                                Image.network(
-                                  _defaultBgmiCoverUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    decoration: BoxDecoration(
-                                      color: ThemeService.cardSecondary,
-                                    ),
-                                  ),
-                                ),
-                              Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.black.withOpacity(0.4),
-                                      Colors.transparent,
-                                      ThemeService.bg.withOpacity(0.85),
-                                    ],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Positioned(
-                          right: 14,
-                          bottom: 12,
-                          child: InkWell(
-                            onTap: _pickCoverFromGallery,
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.75),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white38, width: 1),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.4),
-                                    blurRadius: 6,
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    'change_cover_photo'.tr(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Container(
+                      height: 140,
+                      width: double.infinity,
+                      decoration: BoxDecoration(color: secondaryCard),
+                      child: Stack(
+                        fit: StackFit.expand,
                         children: [
-                          Center(
-                            child: Column(
-                              children: [
-                                Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: const Color(0xFFFF8A00).withOpacity(0.35),
-                                            blurRadius: 18,
-                                            spreadRadius: 2,
-                                          ),
-                                        ],
-                                      ),
-                                      child: GamerAvatar(
-                                        photoUrl: _photoUrl,
-                                        imageFile: _pickedImageFile,
-                                        displayName: _displayNameController.text.trim().isNotEmpty
-                                            ? _displayNameController.text.trim()
-                                            : (_usernameController.text.trim().isNotEmpty
-                                                ? _usernameController.text.trim()
-                                                : 'G'),
-                                        radius: 48,
-                                        hasGlow: true,
-                                        borderColor: const Color(0xFFFF8A00),
-                                        frameId: _selectedFrame,
-                                      ),
-                                    ),
-                                    Positioned(
-                                      bottom: 0,
-                                      right: 0,
-                                      child: InkWell(
-                                        onTap: _pickImageFromGallery,
-                                        borderRadius: BorderRadius.circular(20),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(7),
-                                          decoration: const BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [Color(0xFFFF8A00), Color(0xFFFF5200)],
-                                            ),
-                                            shape: BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(color: Colors.black45, blurRadius: 4),
-                                            ],
-                                          ),
-                                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                TextButton.icon(
-                                  onPressed: _pickImageFromGallery,
-                                  icon: const Icon(Icons.photo_library_rounded, size: 16, color: Color(0xFFFF8A00)),
-                                  label: Text(
-                                    'upload_photo_gallery'.tr(),
-                                    style: const TextStyle(
-                                      color: Color(0xFFFF8A00),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  'pro_gamer_avatar_presets'.tr(),
-                                  style: TextStyle(
-                                    color: ThemeService.textSecondary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: _gamingPresets.map((preset) {
-                                    final isSelected = _photoUrl == preset['id'] && _pickedImageFile == null;
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                                      child: InkWell(
-                                        onTap: () {
-                                          setState(() {
-                                            _pickedImageFile = null;
-                                            _photoUrl = preset['id'] as String;
-                                          });
-                                        },
-                                        borderRadius: BorderRadius.circular(24),
-                                        child: Column(
-                                          children: [
-                                            Container(
-                                              width: 46,
-                                              height: 46,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                gradient: LinearGradient(
-                                                  colors: preset['bg'] as List<Color>,
-                                                  begin: Alignment.topLeft,
-                                                  end: Alignment.bottomRight,
-                                                ),
-                                                border: Border.all(
-                                                  color: isSelected ? const Color(0xFFFF8A00) : ThemeService.border,
-                                                  width: isSelected ? 2.5 : 1,
-                                                ),
-                                                boxShadow: isSelected
-                                                    ? [
-                                                        BoxShadow(
-                                                          color: const Color(0xFFFF8A00).withOpacity(0.5),
-                                                          blurRadius: 8,
-                                                          spreadRadius: 1,
-                                                        ),
-                                                      ]
-                                                    : null,
-                                              ),
-                                              child: Center(
-                                                child: Icon(
-                                                  preset['icon'] as IconData,
-                                                  color: preset['color'] as Color,
-                                                  size: 22,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              (preset['label_key'] as String).tr(),
-                                              style: TextStyle(
-                                                color: isSelected ? const Color(0xFFFF8A00) : ThemeService.textSecondary,
-                                                fontSize: 10,
-                                                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: ThemeService.card,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: ThemeService.border),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 18),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'avatar_frame_title'.tr(),
-                                          style: TextStyle(
-                                            color: ThemeService.textPrimary,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 0.8,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    InkWell(
-                                      onTap: () async {
-                                        await Navigator.of(context).push(
-                                          MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
-                                        );
-                                        _loadStorePerks();
-                                      },
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF00C853).withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: const Color(0xFF00C853).withOpacity(0.5)),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.storefront_rounded, color: Color(0xFF00C853), size: 12),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              'coin_store_caps'.tr(),
-                                              style: const TextStyle(
-                                                color: Color(0xFF00C853),
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    children: [
-                                      {
-                                        'id': '',
-                                        'name': 'frame_none'.tr(),
-                                        'emoji': '🚫',
-                                        'color': Colors.grey,
-                                      },
-                                      {
-                                        'id': 'neon_fire',
-                                        'name': 'frame_neon_fire'.tr(),
-                                        'emoji': '🔥',
-                                        'color': Colors.deepOrangeAccent,
-                                      },
-                                      {
-                                        'id': 'royal_crown',
-                                        'name': 'frame_royal_crown'.tr(),
-                                        'emoji': '👑',
-                                        'color': Colors.amber,
-                                      },
-                                      {
-                                        'id': 'cyber_glitch',
-                                        'name': 'frame_cyber_grid'.tr(),
-                                        'emoji': '⚡',
-                                        'color': const Color(0xFF00C853),
-                                      },
-                                      {
-                                        'id': 'cosmic_void',
-                                        'name': 'frame_cosmic_nebula'.tr(),
-                                        'emoji': '🌌',
-                                        'color': const Color(0xFFC084FC),
-                                      },
-                                    ].map((f) {
-                                      final id = f['id'] as String;
-                                      final isNone = id.isEmpty;
-                                      final isUnlocked = isNone || _unlockedFrames.contains(id);
-                                      final isEquipped = _selectedFrame == id;
-                                      final color = f['color'] as Color;
-
-                                      return Padding(
-                                        padding: const EdgeInsets.only(right: 8),
-                                        child: InkWell(
-                                          onTap: () {
-                                            if (isUnlocked) {
-                                              setState(() => _selectedFrame = id);
-                                            } else {
-                                              _showLockedItemBanner(f['name'] as String);
-                                            }
-                                          },
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                                            decoration: BoxDecoration(
-                                              color: isEquipped ? color.withOpacity(0.18) : ThemeService.cardSecondary,
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: isEquipped
-                                                    ? color
-                                                    : ThemeService.border,
-                                                width: isEquipped ? 2 : 1,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(f['emoji'] as String, style: const TextStyle(fontSize: 14)),
-                                                const SizedBox(width: 6),
-                                                Text(
-                                                  f['name'] as String,
-                                                  style: TextStyle(
-                                                    color: isEquipped ? ThemeService.textPrimary : (isUnlocked ? ThemeService.textPrimary.withOpacity(0.85) : ThemeService.textSecondary),
-                                                    fontSize: 11,
-                                                    fontWeight: isEquipped ? FontWeight.w900 : FontWeight.w600,
-                                                  ),
-                                                ),
-                                                if (!isUnlocked) ...[
-                                                  const SizedBox(width: 5),
-                                                  const Icon(Icons.lock_rounded, size: 12, color: Colors.amber),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                Divider(color: ThemeService.border, height: 1),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.military_tech_rounded, color: Color(0xFF1877F2), size: 18),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'gamer_badge_title'.tr(),
-                                      style: TextStyle(
-                                        color: ThemeService.textPrimary,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.8,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    children: [
-                                      {
-                                        'id': '',
-                                        'name': 'frame_none'.tr(),
-                                      },
-                                      {
-                                        'id': 'pro_elite',
-                                        'name': 'badge_pro_elite'.tr(),
-                                      },
-                                      {
-                                        'id': 'kd_assassin',
-                                        'name': 'badge_assassin'.tr(),
-                                      },
-                                      {
-                                        'id': 'room_champion',
-                                        'name': 'badge_champion'.tr(),
-                                      },
-                                    ].map((b) {
-                                      final id = b['id'] as String;
-                                      final isNone = id.isEmpty;
-                                      final isUnlocked = isNone || _unlockedBadges.contains(id);
-                                      final isEquipped = _selectedBadge == id;
-
-                                      return Padding(
-                                        padding: const EdgeInsets.only(right: 8),
-                                        child: InkWell(
-                                          onTap: () {
-                                            if (isUnlocked) {
-                                              setState(() => _selectedBadge = id);
-                                            } else {
-                                              _showLockedItemBanner(b['name'] as String);
-                                            }
-                                          },
-                                          borderRadius: BorderRadius.circular(10),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: isEquipped ? const Color(0xFF1877F2).withOpacity(0.18) : ThemeService.cardSecondary,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(
-                                                color: isEquipped
-                                                    ? const Color(0xFF1877F2)
-                                                    : ThemeService.border,
-                                                width: isEquipped ? 2 : 1,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                if (isNone)
-                                                  Text('frame_none'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 11))
-                                                else
-                                                  GamerBadgeWidget(badgeId: id, scale: 0.9),
-                                                if (!isUnlocked) ...[
-                                                  const SizedBox(width: 5),
-                                                  const Icon(Icons.lock_rounded, size: 12, color: Colors.amber),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Text(
-                                'field_username_label'.tr(),
-                                style: const TextStyle(color: Color(0xFFFF8A00), fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                              ),
-                              const SizedBox(width: 6),
-                              const Icon(Icons.verified, color: Color(0xFF00E676), size: 16),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _usernameController,
-                            onChanged: _onUsernameChanged,
-                            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: ThemeService.cardSecondary,
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: ThemeService.border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFFF8A00), width: 1.5),
-                              ),
-                              prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(0xFFFF8A00)),
-                              hintText: 'hint_gamer_handle'.tr(),
-                              hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
-                              suffixIcon: _isCheckingUsername
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(12),
-                                      child: SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8A00)),
-                                      ),
-                                    )
-                                  : const Icon(Icons.check_circle_rounded, color: Color(0xFF00E676), size: 22),
-                            ),
-                            validator: (val) {
-                              final clean = (val ?? '').toLowerCase().trim();
-                              if (clean.isEmpty) return 'err_username_required'.tr();
-                              if (clean.length < 3) return 'err_username_min'.tr();
-                              if (clean.length > 15) return 'err_username_max'.tr();
-                              if (!RegExp(r'^[a-z0-9_]+$').hasMatch(clean)) {
-                                return 'err_username_chars'.tr();
-                              }
-                              return null;
-                            },
-                          ),
-                          if (_usernameFeedback.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              _usernameFeedback,
-                              style: TextStyle(
-                                color: _isUsernameAvailable == true
-                                    ? const Color(0xFF00E676)
-                                    : _isUsernameAvailable == false
-                                        ? GamerTheme.redAccent
-                                        : ThemeService.textSecondary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 20),
-                          Text(
-                            'field_display_name_label'.tr(),
-                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                          ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _displayNameController,
-                            style: TextStyle(color: ThemeService.textPrimary),
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: ThemeService.cardSecondary,
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: ThemeService.border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFF1877F2), width: 1.5),
-                              ),
-                              prefixIcon: Icon(Icons.person_rounded, color: ThemeService.textSecondary),
-                              hintText: 'hint_display_name_example'.tr(),
-                              hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
-                            ),
-                            validator: (val) {
-                              if ((val ?? '').trim().isEmpty) return 'err_display_name_required'.tr();
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 20),
-                          Text(
-                            'field_fav_game_label'.tr(),
-                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: ThemeService.cardSecondary,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: ThemeService.border),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: GamerTheme.favoriteGames.contains(_selectedGame) ? _selectedGame : GamerTheme.favoriteGames.first,
-                                isExpanded: true,
-                                dropdownColor: ThemeService.card,
-                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFFF8A00)),
-                                items: GamerTheme.favoriteGames.map((game) {
-                                  final emoji = GamerTheme.gameEmojis[game] ?? '🎮';
-                                  final color = GamerTheme.gameColors[game] ?? const Color(0xFFFF8A00);
-                                  return DropdownMenuItem<String>(
-                                    value: game,
-                                    child: Row(
-                                      children: [
-                                        Text(emoji, style: const TextStyle(fontSize: 18)),
-                                        const SizedBox(width: 10),
-                                        Text(
-                                          game,
-                                          style: TextStyle(
-                                            color: color,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setState(() {
-                                      _selectedGame = val;
-                                      final ranks = _dynamicRanks;
-                                      if (_rankController.text.trim().isNotEmpty && !ranks.contains(_rankController.text.trim())) {
-                                        _rankController.text = ranks.first;
-                                      }
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.military_tech_rounded, color: Color(0xFFFF8A00), size: 18),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'my_game_rank_proof'.tr(),
-                                    style: TextStyle(
-                                      color: ThemeService.textSecondary,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.8,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          if (_pickedCoverFile != null)
+                            Image.file(_pickedCoverFile!, fit: BoxFit.cover)
+                          else if (_coverUrl.isNotEmpty)
+                            CachedNetworkImage(
+                              imageUrl: _coverUrl,
+                              fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) =>
+                                  Image.network(_defaultBgmiCoverUrl, fit: BoxFit.cover),
+                            )
+                          else
+                            Image.network(_defaultBgmiCoverUrl, fit: BoxFit.cover),
+                          Container(color: Colors.black.withOpacity(0.25)),
+                          Positioned(
+                            top: 12,
+                            right: 12,
+                            child: InkWell(
+                              onTap: _pickCoverFromGallery,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF1877F2), Color(0xFF00E5FF)],
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.black.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(20),
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
+                                child: const Row(
                                   children: [
-                                    const Text('🚀', style: TextStyle(fontSize: 10)),
-                                    const SizedBox(width: 4),
+                                    Icon(Icons.camera_alt_outlined, color: Colors.white, size: 14),
+                                    SizedBox(width: 4),
                                     Text(
-                                      'coming_soon_caps'.tr(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 0.5,
-                                      ),
+                                      'Change Cover Photo',
+                                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: ThemeService.card,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.4)),
                             ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.info_outline_rounded, color: Color(0xFF1877F2), size: 18),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    'rank_verification_info'.tr(),
-                                    style: TextStyle(
-                                      color: ThemeService.textSecondary,
-                                      fontSize: 11.5,
-                                      height: 1.35,
-                                    ),
-                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Positioned(
+                      bottom: -40,
+                      child: Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const RadialGradient(
+                                colors: [Color(0xFFFF9432), Color(0xFFFF5400)],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF7A00).withOpacity(0.4),
+                                  blurRadius: 16,
+                                  spreadRadius: 2,
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: ThemeService.cardSecondary,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: ThemeService.border),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: MobileGamesRankData.games.contains(_selectedRankGame)
-                                    ? _selectedRankGame
-                                    : MobileGamesRankData.games.first,
-                                isExpanded: true,
-                                dropdownColor: ThemeService.card,
-                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF00FF88)),
-                                items: MobileGamesRankData.games.map((game) {
-                                  final emoji = MobileGamesRankData.getGameEmoji(game);
-                                  final color = MobileGamesRankData.getGameColor(game);
-                                  return DropdownMenuItem<String>(
-                                    value: game,
-                                    child: Row(
-                                      children: [
-                                        Text(emoji, style: const TextStyle(fontSize: 18)),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            game,
-                                            style: TextStyle(
-                                              color: color,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13.5,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setState(() {
-                                      _selectedRankGame = val;
-                                      _selectedGame = val;
-                                      final ranks = _dynamicRanks;
-                                      if (_rankController.text.trim().isNotEmpty && !ranks.contains(_rankController.text.trim())) {
-                                        _rankController.clear();
-                                        _pickedRankScreenshot = null;
-                                        _rankScreenshotUrl = '';
-                                      }
-                                    });
-                                  }
-                                },
-                              ),
+                            child: GamerAvatar(
+                              photoUrl: _photoUrl,
+                              imageFile: _pickedImageFile,
+                              displayName: _displayNameController.text.isNotEmpty
+                                  ? _displayNameController.text
+                                  : 'Gamer',
+                              radius: 40,
+                              borderColor: Colors.transparent,
+                              frameId: _selectedFrame,
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'select_rank_label'.tr(),
-                                style: TextStyle(
-                                  color: ThemeService.textSecondary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.6,
-                                ),
+                          InkWell(
+                            onTap: _pickImageFromGallery,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFF7A00),
+                                shape: BoxShape.circle,
                               ),
-                              Text(
-                                _selectedRankGame.length > 20 ? '${_selectedRankGame.substring(0, 20)}...' : _selectedRankGame,
-                                style: TextStyle(
-                                  color: MobileGamesRankData.getGameColor(_selectedRankGame),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _rankController.clear();
-                                    _pickedRankScreenshot = null;
-                                    _rankScreenshotUrl = '';
-                                    _rankStatus = 'None';
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                  decoration: BoxDecoration(
-                                    color: _rankController.text.trim().isEmpty
-                                        ? const Color(0xFF1877F2).withOpacity(0.18)
-                                        : ThemeService.cardSecondary,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: _rankController.text.trim().isEmpty ? const Color(0xFF1877F2) : ThemeService.border,
-                                      width: _rankController.text.trim().isEmpty ? 1.5 : 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (_rankController.text.trim().isEmpty) ...[
-                                        const Icon(Icons.check, color: Color(0xFF1877F2), size: 12),
-                                        const SizedBox(width: 4),
-                                      ],
-                                      Text(
-                                        'skip_no_rank'.tr(),
-                                        style: TextStyle(
-                                          color: _rankController.text.trim().isEmpty ? const Color(0xFF1877F2) : ThemeService.textPrimary,
-                                          fontSize: 12,
-                                          fontWeight: _rankController.text.trim().isEmpty ? FontWeight.w900 : FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              ..._dynamicRanks.map((rank) {
-                                final isSelected = _rankController.text.trim() == rank;
-                                final gameColor = MobileGamesRankData.getGameColor(_selectedRankGame);
-                                return InkWell(
-                                  onTap: _showRankComingSoonBanner,
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                    decoration: BoxDecoration(
-                                      color: isSelected ? gameColor.withOpacity(0.18) : ThemeService.cardSecondary,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: isSelected ? gameColor : ThemeService.border,
-                                        width: isSelected ? 1.5 : 1,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (isSelected) ...[
-                                          Icon(Icons.check, color: gameColor, size: 12),
-                                          const SizedBox(width: 4),
-                                        ],
-                                        Text(
-                                          rank,
-                                          style: TextStyle(
-                                            color: isSelected ? gameColor : ThemeService.textPrimary,
-                                            fontSize: 12,
-                                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 5),
-                                        const Icon(Icons.lock_rounded, size: 11, color: Colors.amber),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ],
-                          ),
-                          if (_rankController.text.trim().isNotEmpty) ...[
-                            const SizedBox(height: 14),
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: ThemeService.card,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: ThemeService.border,
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (_rankStatus.toLowerCase() == 'pending') ...[
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFFB800).withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: const Color(0xFFFFB800)),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFFB800), size: 16),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              'rank_status_pending'.tr(),
-                                              style: const TextStyle(color: Color(0xFFFFB800), fontWeight: FontWeight.bold, fontSize: 11.5),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                  ] else if (_rankStatus.toLowerCase() == 'verified') ...[
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF00FF88).withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: const Color(0xFF00FF88)),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 16),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              'rank_status_verified'.tr(),
-                                              style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11.5),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                  ] else if (_rankStatus.toLowerCase() == 'rejected') ...[
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFF4655).withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: const Color(0xFFFF4655)),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 16),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  'rank_status_rejected_msg'.tr(),
-                                                  style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 12),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          if (_rankRejectReason.isNotEmpty) ...[
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'reason_prefix'.tr(args: [_rankRejectReason]),
-                                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                  ],
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: ThemeService.cardSecondary,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: ThemeService.border),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.info_outline_rounded, color: Color(0xFF1877F2), size: 16),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'screenshot_requirement_hint'.tr(),
-                                            style: const TextStyle(color: Color(0xFF1877F2), fontSize: 11.5, fontWeight: FontWeight.w600),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  if (_pickedRankScreenshot != null) ...[
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Stack(
-                                        children: [
-                                          Image.file(
-                                            _pickedRankScreenshot!,
-                                            height: 140,
-                                            width: double.infinity,
-                                            fit: BoxFit.cover,
-                                          ),
-                                          Positioned(
-                                            top: 6,
-                                            right: 6,
-                                            child: CircleAvatar(
-                                              radius: 14,
-                                              backgroundColor: Colors.black.withOpacity(0.7),
-                                              child: IconButton(
-                                                padding: EdgeInsets.zero,
-                                                icon: const Icon(Icons.close, size: 14, color: Colors.white),
-                                                onPressed: () => setState(() => _pickedRankScreenshot = null),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: OutlinedButton.icon(
-                                            onPressed: _showRankComingSoonBanner,
-                                            icon: Icon(Icons.edit_rounded, size: 14, color: ThemeService.textSecondary),
-                                            label: Text('btn_change_photo_coming_soon'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5)),
-                                            style: OutlinedButton.styleFrom(
-                                              side: BorderSide(color: ThemeService.border),
-                                              padding: const EdgeInsets.symmetric(vertical: 8),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ] else if (_rankScreenshotUrl.isNotEmpty) ...[
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: CachedNetworkImage(
-                                        imageUrl: _rankScreenshotUrl,
-                                        height: 140,
-                                        width: double.infinity,
-                                        fit: BoxFit.cover,
-                                        placeholder: (_, __) => Container(
-                                          height: 140,
-                                          color: ThemeService.cardSecondary,
-                                          child: const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88), strokeWidth: 2)),
-                                        ),
-                                        errorWidget: (_, __, ___) => Container(
-                                          height: 140,
-                                          color: ThemeService.cardSecondary,
-                                          child: Icon(Icons.broken_image, color: ThemeService.textSecondary),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: OutlinedButton.icon(
-                                            onPressed: _showRankComingSoonBanner,
-                                            icon: Icon(Icons.refresh_rounded, size: 14, color: ThemeService.textSecondary),
-                                            label: Text('btn_new_screenshot_coming_soon'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5)),
-                                            style: OutlinedButton.styleFrom(
-                                              side: BorderSide(color: ThemeService.border),
-                                              padding: const EdgeInsets.symmetric(vertical: 8),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ] else ...[
-                                    InkWell(
-                                      onTap: _showRankComingSoonBanner,
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
-                                        decoration: BoxDecoration(
-                                          color: ThemeService.cardSecondary,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: ThemeService.border,
-                                            style: BorderStyle.solid,
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            Icon(Icons.lock_clock_rounded, color: ThemeService.textSecondary, size: 36),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              'rank_upload_coming_soon_title'.tr(),
-                                              style: TextStyle(
-                                                color: ThemeService.textPrimary,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'rank_upload_coming_soon_sub'.tr(),
-                                              style: TextStyle(
-                                                color: ThemeService.textSecondary,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'field_bio_label'.tr(),
-                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                              ),
-                              ValueListenableBuilder<TextEditingValue>(
-                                valueListenable: _bioController,
-                                builder: (context, value, _) {
-                                  final count = value.text.length;
-                                  return Text(
-                                    '$count/100',
-                                    style: TextStyle(
-                                      color: count > 100 ? GamerTheme.redAccent : ThemeService.textSecondary,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _bioController,
-                            maxLength: 100,
-                            maxLines: 2,
-                            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => const SizedBox.shrink(),
-                            style: TextStyle(color: ThemeService.textPrimary),
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: ThemeService.cardSecondary,
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: ThemeService.border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFFF8A00), width: 1.5),
-                              ),
-                              prefixIcon: Padding(
-                                padding: const EdgeInsets.only(bottom: 24),
-                                child: Icon(Icons.edit_note_rounded, color: ThemeService.textSecondary),
-                              ),
-                              hintText: 'bio_hint'.tr(),
-                              hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6)),
+                              child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              Text(
-                                'field_character_id_label'.tr(),
-                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(Icons.lock_rounded, size: 14, color: ThemeService.textSecondary),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _gameIdController,
-                            style: TextStyle(color: ThemeService.textPrimary),
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: ThemeService.cardSecondary,
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: ThemeService.border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFFF8A00), width: 1.5),
-                              ),
-                              prefixIcon: const Icon(Icons.sports_esports_rounded, color: Color(0xFFFF8A00)),
-                              hintText: '12345',
-                              helperText: 'helper_character_uid'.tr(),
-                              helperStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 52,
-                            child: ElevatedButton(
-                              onPressed: _isSaving ? null : _saveGamerId,
-                              style: ElevatedButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                elevation: 4,
-                              ),
-                              child: Ink(
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFFFF8A00), Color(0xFFFF5200)],
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFFFF8A00).withOpacity(0.35),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Center(
-                                  child: _isSaving
-                                      ? const SizedBox(
-                                          width: 22,
-                                          height: 22,
-                                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                                        )
-                                      : Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(Icons.check_rounded, color: Colors.white, size: 20),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              isEditing ? 'btn_save_changes'.tr() : 'btn_save_changes_join'.tr(),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 16,
-                                                letterSpacing: 0.5,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
                         ],
                       ),
                     ),
                   ],
                 ),
-              ),
+
+                const SizedBox(height: 50),
+
+                Center(
+                  child: InkWell(
+                    onTap: _pickImageFromGallery,
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.photo_library_rounded, size: 16, color: Color(0xFFFF7A00)),
+                        SizedBox(width: 6),
+                        Text(
+                          'Upload from Gallery',
+                          style: TextStyle(
+                            color: Color(0xFFFF7A00),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                Center(
+                  child: Text(
+                    'Pro Gamer Avatar Presets',
+                    style: TextStyle(
+                      color: primaryTextColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: _gamingPresets.map((preset) {
+                    final isSel = _photoUrl == preset['id'] && _pickedImageFile == null;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _pickedImageFile = null;
+                            _photoUrl = preset['id'] as String;
+                          });
+                        },
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isSel ? const Color(0xFF1E293B) : secondaryCard,
+                            border: Border.all(
+                              color: isSel ? const Color(0xFFFF7A00) : borderColor,
+                              width: isSel ? 2 : 1,
+                            ),
+                          ),
+                          child: Icon(
+                            preset['icon'] as IconData,
+                            color: isSel ? Colors.white : subTextColor,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+
+                const SizedBox(height: 20),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Avatar Frame Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Text('🏆', style: TextStyle(fontSize: 16)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Avatar Frame',
+                                style: TextStyle(
+                                  color: primaryTextColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          InkWell(
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
+                              );
+                              _loadStorePerks();
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00C853),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.storefront_rounded, size: 12, color: Colors.white),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'STORE',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildFrameChip('None', '', '🚫', isNone: true),
+                            _buildFrameChip('Neon Fire', 'neon_fire', '🔥'),
+                            _buildFrameChip('Royal', 'royal_crown', '👑'),
+                            _buildFrameChip('Cyber Grid', 'cyber_glitch', '⚡'),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      // Gamer Badge Section
+                      Row(
+                        children: [
+                          const Icon(Icons.shield_outlined, size: 16, color: Color(0xFF1877F2)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Gamer Badge',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildBadgeChip('None', '', Colors.grey),
+                            _buildBadgeChip('PRO ELITE', 'pro_elite', const Color(0xFF1877F2)),
+                            _buildBadgeChip('ASSASSIN 💀', 'kd_assassin', const Color(0xFFE11D48)),
+                            _buildBadgeChip('CHAMP 🏆', 'room_champion', const Color(0xFFF59E0B)),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      // Gamer Username
+                      Row(
+                        children: [
+                          Text(
+                            'Gamer Username',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 14),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.person, color: subTextColor, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                '@${_usernameController.text.trim().isNotEmpty ? _usernameController.text.trim() : "tufailm483"}',
+                                style: TextStyle(
+                                  color: primaryTextColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 18),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Favorite Game Dropdown Chip
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: GamerTheme.favoriteGames.contains(_selectedGame)
+                                ? _selectedGame
+                                : GamerTheme.favoriteGames.first,
+                            isExpanded: true,
+                            dropdownColor: cardColor,
+                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: subTextColor),
+                            items: GamerTheme.favoriteGames.map((game) {
+                              return DropdownMenuItem<String>(
+                                value: game,
+                                child: Row(
+                                  children: [
+                                    const Text('⭐', style: TextStyle(fontSize: 15)),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      game,
+                                      style: TextStyle(
+                                        color: primaryTextColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _selectedGame = val);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      // My Game & Rank Proof Header
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'My Game & Rank Proof',
+                                style: TextStyle(
+                                  color: primaryTextColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.shield_outlined, size: 15, color: Color(0xFF1877F2)),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1877F2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Row(
+                              children: [
+                                Text('🚀 ', style: TextStyle(fontSize: 9)),
+                                Text(
+                                  'COMING SOON',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 9.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Rank verification instruction box
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0F2FE),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFBAE6FD)),
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Upload a screenshot of your in-game profile showing your rank to get a verified rank badge.',
+                                style: TextStyle(
+                                  color: Color(0xFF0369A1),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Selected Game & Rank Subtitle
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Select Your Rank',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const Text(
+                            'BGMI (Battlegrounds Mobile)',
+                            style: TextStyle(
+                              color: Color(0xFFFF7A00),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 3x3 Grid of Ranks
+                      GridView.count(
+                        crossAxisCount: 3,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 2.3,
+                        children: [
+                          _buildRankGridItem('Bronze', isSelected: true),
+                          _buildRankGridItem('Silver', icon: Icons.shield_outlined),
+                          _buildRankGridItem('Gold', icon: Icons.lock_outline),
+                          _buildRankGridItem('Platinum', icon: Icons.shield_outlined),
+                          _buildRankGridItem('Diamond', icon: Icons.shield_outlined),
+                          _buildRankGridItem('Crown', icon: Icons.lock_outline),
+                          _buildRankGridItem('Ace Master', icon: Icons.shield_outlined),
+                          _buildRankGridItem('Ace Dominator', icon: Icons.lock_outline),
+                          _buildRankGridItem('Conqueror', icon: Icons.lock_outline),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Rank Verification Coming Soon Box
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0F2FE),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFBAE6FD)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.info_outline_rounded, size: 15, color: Color(0xFF0284C7)),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Screenshot must clearly show your in-game IGN and current rank.',
+                                    style: TextStyle(
+                                      color: Color(0xFF0369A1),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.lock_clock_outlined, size: 15, color: Color(0xFF0369A1)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Rank Verification Coming Soon',
+                                        style: TextStyle(
+                                          color: Color(0xFF0369A1),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Manual rank verification is currently undergoing system upgrades.',
+                                        style: TextStyle(
+                                          color: const Color(0xFF0369A1).withOpacity(0.8),
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.keyboard_arrow_down, size: 18, color: Color(0xFF0284C7)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Bio Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Bio (About You)',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          ValueListenableBuilder<TextEditingValue>(
+                            valueListenable: _bioController,
+                            builder: (context, value, _) {
+                              return Text(
+                                '${value.text.length}/100',
+                                style: TextStyle(color: subTextColor, fontSize: 11),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _bioController,
+                        maxLength: 100,
+                        style: TextStyle(color: primaryTextColor, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Tell other gamers your playstyle or online timings...',
+                          hintStyle: TextStyle(color: subTextColor.withOpacity(0.6), fontSize: 12),
+                          filled: true,
+                          fillColor: cardColor,
+                          counterText: '',
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: borderColor),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFFF7A00)),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Game Character ID
+                      Row(
+                        children: [
+                          Text(
+                            'Game Character ID / UID',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(Icons.lock_outline, size: 14, color: subTextColor),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: [
+                            const Text('🎮', style: TextStyle(fontSize: 16)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _gameIdController.text.isNotEmpty ? _gameIdController.text : '12345',
+                                style: TextStyle(
+                                  color: primaryTextColor,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            Icon(Icons.edit_outlined, size: 16, color: subTextColor),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Character ID helps teammates search and add you in-game.',
+                        style: TextStyle(color: subTextColor, fontSize: 11),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Save Changes Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _isSaving ? null : _saveGamerId,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF7A00),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            elevation: 3,
+                          ),
+                          child: _isSaving
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.check, size: 18, color: Colors.white),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Save Changes',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Footer
+                      Center(
+                        child: Text(
+                          'Gamers ID Official',
+                          style: TextStyle(
+                            color: subTextColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         );
       },
     );
   }
-}
 
-/// Bottom Sheet for adding or verifying game ranks
-class AddVerifyGamerRankSheet extends StatefulWidget {
-  final GamerUser user;
-  const AddVerifyGamerRankSheet({super.key, required this.user});
+  Widget _buildFrameChip(String title, String frameId, String emoji, {bool isNone = false}) {
+    final isSelected = _selectedFrame == frameId;
+    final isUnlocked = isNone || _unlockedFrames.contains(frameId);
 
-  @override
-  State<AddVerifyGamerRankSheet> createState() => _AddVerifyGamerRankSheetState();
-}
-
-typedef AddVerifyGameRankSheet = AddVerifyGamerRankSheet;
-
-class _AddVerifyGamerRankSheetState extends State<AddVerifyGamerRankSheet> {
-  late String _selectedGame;
-  String _selectedRank = '';
-  final TextEditingController _uidController = TextEditingController();
-  File? _proofFile;
-  bool _isSubmitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedGame = MobileGamesRankData.games.first;
-  }
-
-  @override
-  void dispose() {
-    _uidController.dispose();
-    super.dispose();
-  }
-
-  List<String> get _ranks => MobileGamesRankData.getRanksForGame(_selectedGame);
-
-  Future<void> _pickProof() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (picked != null) {
-      setState(() => _proofFile = File(picked.path));
-    }
-  }
-
-  Future<void> _submitRank() async {
-    final uid = widget.user.uid;
-    final gameId = _uidController.text.trim();
-    if (_selectedRank.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('err_select_rank'.tr()), backgroundColor: GamerTheme.redAccent),
-      );
-      return;
-    }
-    if (gameId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('err_enter_character_uid'.tr()), backgroundColor: GamerTheme.redAccent),
-      );
-      return;
-    }
-    if (_proofFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('err_upload_proof'.tr()), backgroundColor: GamerTheme.redAccent),
-      );
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-    try {
-      String proofUrl = '';
-      try {
-        proofUrl = await GamerAuthService().uploadRankScreenshot(_proofFile!, uid);
-      } catch (e) {
-        debugPrint('Upload rank proof error: $e');
-      }
-
-      final newRank = UserGameRank(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        gameName: _selectedGame,
-        gameId: gameId,
-        claimedRank: _selectedRank,
-        screenshotUrl: proofUrl,
-        status: 'pending',
-        submittedAt: DateTime.now(),
-        ownerUid: uid,
-      );
-
-      final updatedGames = List<UserGameRank>.from(widget.user.games)
-        ..removeWhere((g) => g.gameName.toLowerCase() == _selectedGame.toLowerCase())
-        ..add(newRank);
-
-      try {
-        await SupabaseService.client.from('users').update({
-          'games': updatedGames.map((g) => g.toMap()).toList(),
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', uid);
-      } catch (_) {}
-
-      await GamerAuthService().refreshCurrentGamer();
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('msg_rank_submitted'.tr(args: [_selectedGame])),
-            backgroundColor: GamerTheme.neonGreen,
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: () {
+          if (isUnlocked) {
+            setState(() => _selectedFrame = frameId);
+          } else {
+            _showLockedItemBanner(title);
+          }
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFFFE8D6) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? const Color(0xFFFF7A00) : const Color(0xFFE2E8F0),
+              width: isSelected ? 1.5 : 1,
+            ),
           ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('err_failed_with_msg'.tr(args: [e.toString()])), backgroundColor: GamerTheme.redAccent),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 13)),
+              const SizedBox(width: 4),
+              Text(
+                title,
+                style: TextStyle(
+                  color: isSelected ? const Color(0xFFFF7A00) : const Color(0xFF0F172A),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+              if (!isUnlocked) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.lock_rounded, size: 12, color: Colors.amber),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        top: 20,
-        left: 20,
-        right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  'title_add_verify_rank'.tr(),
-                  style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+  Widget _buildBadgeChip(String label, String badgeId, Color badgeColor) {
+    final isNone = badgeId.isEmpty;
+    final isSelected = _selectedBadge == badgeId;
+    final isUnlocked = isNone || _unlockedBadges.contains(badgeId);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: () {
+          if (isUnlocked) {
+            setState(() => _selectedBadge = badgeId);
+          } else {
+            _showLockedItemBanner(label);
+          }
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isNone
+                ? (isSelected ? const Color(0xFFE2E8F0) : const Color(0xFFF1F5F9))
+                : badgeColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? Colors.black87 : Colors.transparent,
+              width: isSelected ? 1.5 : 0,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: isNone ? const Color(0xFF0F172A) : Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: Icon(Icons.close_rounded, color: ThemeService.textSecondary),
-                  onPressed: () => Navigator.pop(context),
-                ),
+              ),
+              if (!isUnlocked) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.lock_rounded, size: 11, color: Colors.amber),
               ],
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-              decoration: BoxDecoration(
-                color: ThemeService.cardSecondary,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: ThemeService.border),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedGame,
-                  isExpanded: true,
-                  dropdownColor: ThemeService.card,
-                  items: MobileGamesRankData.games.map((g) {
-                    return DropdownMenuItem(
-                      value: g,
-                      child: Text(
-                        g,
-                        style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        _selectedGame = val;
-                        _selectedRank = '';
-                      });
-                    }
-                  },
-                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRankGridItem(String rank, {bool isSelected = false, IconData? icon}) {
+    return InkWell(
+      onTap: _showRankComingSoonBanner,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFFF7A00) : const Color(0xFFE2E8F0),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (isSelected)
+              const Icon(Icons.check, size: 13, color: Colors.white)
+            else if (icon != null)
+              Icon(icon, size: 13, color: const Color(0xFF475569)),
+            const SizedBox(width: 4),
+            Text(
+              rank,
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF0F172A),
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
               ),
             ),
-            const SizedBox(height: 14),
-            Text('select_your_rank_label'.tr(), style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: _ranks.map((r) {
-                final isSel = _selectedRank == r;
-                return ChoiceChip(
-                  label: Text(r, style: TextStyle(color: isSel ? Colors.white : ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
-                  selected: isSel,
-                  selectedColor: const Color(0xFF1877F2),
-                  backgroundColor: ThemeService.cardSecondary,
-                  onSelected: (val) {
-                    if (val) setState(() => _selectedRank = r);
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _uidController,
-              style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'field_character_id_label'.tr(),
-                hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                prefixIcon: const Icon(Icons.sports_esports_rounded, color: Color(0xFF1877F2), size: 18),
-                filled: true,
-                fillColor: ThemeService.cardSecondary,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 14),
-            InkWell(
-              onTap: _pickProof,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: ThemeService.cardSecondary,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _proofFile != null ? const Color(0xFF00FF88) : ThemeService.border),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _proofFile != null ? Icons.check_circle_rounded : Icons.add_photo_alternate_rounded,
-                      color: _proofFile != null ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _proofFile != null ? 'proof_attached'.tr() : 'upload_rank_proof'.tr(),
-                        style: TextStyle(
-                          color: _proofFile != null ? const Color(0xFF00FF88) : ThemeService.textPrimary,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _submitRank,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1877F2),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: _isSubmitting
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text('btn_submit_verification'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.lock,
+              size: 11,
+              color: isSelected ? Colors.white70 : const Color(0xFF475569),
             ),
           ],
         ),
