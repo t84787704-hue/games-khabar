@@ -1,5 +1,5 @@
 // ===============================================================================
-// TEAMS SCREEN — Adaptive Day/Night Theme with easy_localization
+// TEAMS SCREEN — Adaptive Day/Night Theme with easy_localization & Live Challenge Status
 // File: lib/screens/teams_screen.dart
 // ===============================================================================
 
@@ -567,71 +567,112 @@ class _TeamsScreenState extends State<TeamsScreen>
           ),
         ),
 
-        // Teams List Stream
+        // Teams List Stream with Live Pending Challenges
         Expanded(
-          child: StreamBuilder<List<TeamModel>>(
-            key: ValueKey("teams_stream_${_selectedGameFilter}_${_searchQuery}_$_teamsRetryKey"),
-            stream: _teamService.getTeamsStream(
-              gameFilter: _selectedGameFilter,
-              searchQuery: _searchQuery,
-            ),
-            builder: (context, snapshot) {
-              if (snapshot.hasData && snapshot.data != null) {
-                _cachedTeams = snapshot.data;
-              }
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: myTeamId.isNotEmpty
+                ? SupabaseService.client.from("challenges").stream(primaryKey: ["id"])
+                : Stream.value([]),
+            builder: (context, challengesSnap) {
+              final allChallenges = challengesSnap.data ?? [];
 
-              final teams = snapshot.data ?? _cachedTeams;
+              return StreamBuilder<List<TeamModel>>(
+                key: ValueKey("teams_stream_${_selectedGameFilter}_${_searchQuery}_$_teamsRetryKey"),
+                stream: _teamService.getTeamsStream(
+                  gameFilter: _selectedGameFilter,
+                  searchQuery: _searchQuery,
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    _cachedTeams = snapshot.data;
+                  }
 
-              if (teams == null && (snapshot.connectionState == ConnectionState.waiting || (!snapshot.hasData && !snapshot.hasError))) {
-                return const Center(child: CircularProgressIndicator(color: neonCyan));
-              }
+                  final teams = snapshot.data ?? _cachedTeams;
 
-              final displayTeams = teams ?? [];
-              if (displayTeams.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.shield_rounded, size: 44, color: ThemeService.textSecondary.withOpacity(0.4)),
-                      const SizedBox(height: 10),
-                      Text(
-                        'No Teams Found',
-                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+                  if (teams == null && (snapshot.connectionState == ConnectionState.waiting || (!snapshot.hasData && !snapshot.hasError))) {
+                    return const Center(child: CircularProgressIndicator(color: neonCyan));
+                  }
+
+                  final displayTeams = teams ?? [];
+                  if (displayTeams.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.shield_rounded, size: 44, color: ThemeService.textSecondary.withOpacity(0.4)),
+                          const SizedBox(height: 10),
+                          Text(
+                            'No Teams Found',
+                            style: TextStyle(color: ThemeService.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Be the first to create a team and compete!',
+                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                          ),
+                          const SizedBox(height: 14),
+                          ElevatedButton.icon(
+                            onPressed: _openCreateTeamDialog,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: neonCyan,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.add, color: Colors.white, size: 16),
+                            label: const Text('Create Team', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Be the first to create a team and compete!',
-                        style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                      ),
-                      const SizedBox(height: 14),
-                      ElevatedButton.icon(
-                        onPressed: _openCreateTeamDialog,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: neonCyan,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: const Icon(Icons.add, color: Colors.white, size: 16),
-                        label: const Text('Create Team', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                );
-              }
+                    );
+                  }
 
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                itemCount: displayTeams.length,
-                itemBuilder: (context, index) {
-                  final team = displayTeams[index];
-                  return TeamCard(
-                    team: team,
-                    myTeamId: myTeamId,
-                    myTeamName: myTeamName,
-                    isMyTeamFrozen: isMyTeamFrozen,
-                    pendingChallenge: null,
-                    onCancelChallenge: _handleCancelChallenge,
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    itemCount: displayTeams.length,
+                    itemBuilder: (context, index) {
+                      final team = displayTeams[index];
+
+                      // Check if there is an active/pending challenge between myTeam and this team
+                      Map<String, dynamic>? pendingChallenge;
+                      if (myTeamId.isNotEmpty && allChallenges.isNotEmpty) {
+                        final myIdLower = myTeamId.toLowerCase();
+                        final myUuidLower = myTeamUuid.toLowerCase();
+                        final oppIdLower = team.id.toLowerCase();
+                        final oppUuidLower = SupabaseService.toUuid(team.id).toLowerCase();
+
+                        for (final c in allChallenges) {
+                          final cId = c["id"]?.toString() ?? "";
+                          if (_cancelledChallengeIds.contains(cId)) continue;
+
+                          final status = (c["status"] ?? "").toString().toLowerCase();
+                          if (status != "pending") continue;
+
+                          final fromId = (c["from_team_id"] ?? "").toString().toLowerCase();
+                          final toId = (c["to_team_id"] ?? "").toString().toLowerCase();
+
+                          final isFromMe = fromId == myIdLower || fromId == myUuidLower;
+                          final isToOpp = toId == oppIdLower || toId == oppUuidLower;
+
+                          final isFromOpp = fromId == oppIdLower || fromId == oppUuidLower;
+                          final isToMe = toId == myIdLower || toId == myUuidLower;
+
+                          if ((isFromMe && isToOpp) || (isFromOpp && isToMe)) {
+                            pendingChallenge = c;
+                            break;
+                          }
+                        }
+                      }
+
+                      return TeamCard(
+                        team: team,
+                        myTeamId: myTeamId,
+                        myTeamName: myTeamName,
+                        isMyTeamFrozen: isMyTeamFrozen,
+                        pendingChallenge: pendingChallenge,
+                        onCancelChallenge: _handleCancelChallenge,
+                      );
+                    },
                   );
                 },
               );
