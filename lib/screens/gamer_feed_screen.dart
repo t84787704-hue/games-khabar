@@ -552,9 +552,9 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
               final picker = ImagePicker();
               final picked = await picker.pickImage(
                 source: source,
-                maxWidth: 900,
-                maxHeight: 900,
-                imageQuality: 70, // 100KB - 150KB safe compression
+                maxWidth: 1440,
+                maxHeight: 1440,
+                imageQuality: 85,
               );
               if (picked != null) {
                 setSheetState(() {
@@ -629,7 +629,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                 try {
                                   String? uploadedImageUrl;
 
-                                  // Upload image to Supabase Storage 'posts' bucket
                                   if (selectedImage != null) {
                                     final fileName = '${currentUserId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
                                     final uploadPath = '$fileName';
@@ -707,8 +706,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                       border: InputBorder.none,
                     ),
                   ),
-
-                  // Image Preview Card (if selected)
                   if (selectedImage != null) ...[
                     const SizedBox(height: 10),
                     Stack(
@@ -718,7 +715,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                           child: Image.file(
                             selectedImage!,
                             width: double.infinity,
-                            height: 200,
+                            height: 220,
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -740,12 +737,9 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                       ],
                     ),
                   ],
-
                   const SizedBox(height: 12),
                   Divider(color: ThemeService.border, height: 1),
                   const SizedBox(height: 8),
-
-                  // Add Photo / Camera Options Bar
                   Row(
                     children: [
                       Text(
@@ -989,18 +983,26 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                             if (imageUrl.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
-                                child: CachedNetworkImage(
-                                  imageUrl: imageUrl,
+                                child: Container(
                                   width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    height: 200,
-                                    color: ThemeService.cardSecondary,
-                                    child: const Center(
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1877F2)),
+                                  color: ThemeService.cardSecondary,
+                                  child: CachedNetworkImage(
+                                    imageUrl: imageUrl,
+                                    width: double.infinity,
+                                    fit: BoxFit.contain,
+                                    filterQuality: FilterQuality.high,
+                                    placeholder: (context, url) => Container(
+                                      height: 220,
+                                      color: ThemeService.cardSecondary,
+                                      child: const Center(
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFF1877F2),
+                                        ),
+                                      ),
                                     ),
+                                    errorWidget: (_, __, ___) => const SizedBox.shrink(),
                                   ),
-                                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
                                 ),
                               ),
                             Padding(
