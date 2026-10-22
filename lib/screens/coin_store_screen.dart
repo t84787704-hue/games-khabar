@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLEAN COIN STORE SCREEN — Localized with easy_localization & Adaptive Theme
+// - Fixed UTC / Local Timezone mismatch for 24h countdown timer
 // - Retained: Live Balance, Daily Check-in, Rewarded Ads, Referral & Activity History
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
@@ -61,9 +62,24 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
       _timeUntilNextClaim = Duration.zero;
       return;
     }
-    final nextAvailable = wallet.lastDailyBonusClaim!.add(const Duration(hours: 24));
-    final diff = nextAvailable.difference(DateTime.now());
-    _timeUntilNextClaim = diff.isNegative ? Duration.zero : diff;
+
+    // Standardize both timestamps to UTC to eliminate timezone offset bugs
+    final claimUtc = wallet.lastDailyBonusClaim!.isUtc
+        ? wallet.lastDailyBonusClaim!
+        : wallet.lastDailyBonusClaim!.toUtc();
+    final nowUtc = DateTime.now().toUtc();
+
+    final nextAvailableUtc = claimUtc.add(const Duration(hours: 24));
+    final diff = nextAvailableUtc.difference(nowUtc);
+
+    if (diff.isNegative) {
+      _timeUntilNextClaim = Duration.zero;
+    } else if (diff.inSeconds > 86400) {
+      // Hard clamp: countdown can never exceed 24 hours
+      _timeUntilNextClaim = const Duration(hours: 24);
+    } else {
+      _timeUntilNextClaim = diff;
+    }
   }
 
   @override
