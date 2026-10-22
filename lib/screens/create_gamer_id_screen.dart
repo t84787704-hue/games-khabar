@@ -228,7 +228,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     if (cleanCode.isEmpty) return;
 
     try {
-      // Find the user whose UID matches or starts with the referral code
       final users = await SupabaseService.query('users', select: 'id,uid,coins');
       Map<String, dynamic>? referrer;
 
@@ -244,14 +243,19 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       if (referrer != null) {
         final referrerUid = (referrer['id'] ?? referrer['uid'] ?? '').toString();
 
-        // 1. Reward the new user +200 coins
+        // 1. Ho'opa'a i ka ID kuhikuhi i loko o ka pākaukau 'users'
+        await SupabaseService.client.from('users').update({
+          'referred_by': referrerUid,
+        }).or('id.eq.$newUid,uid.eq.$newUid');
+
+        // 2. Hā'awi i nā kenikeni he 200 no ka mea ho'ohana hou
         await SupabaseService.awardCoins(
           userId: newUid,
           amount: 200,
           adminId: 'referral_system',
         );
 
-        // 2. Reward the inviter +200 coins
+        // 3. Hā'awi i nā kenikeni he 200 no ka mea nāna i kono mai
         await SupabaseService.awardCoins(
           userId: referrerUid,
           amount: 200,
@@ -327,7 +331,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         'active_badge': _selectedBadge,
       }).or('id.eq.$uid,uid.eq.$uid');
 
-      // Process referral code bonus if a new user entered a code
+      // Hana i ke kālailai kuhikuhi ke ho'okomo 'ia ka pā'ālua
       if (!widget.isEditing && _referralCodeController.text.trim().isNotEmpty) {
         await _processReferralBonus(uid, _referralCodeController.text.trim());
       }
