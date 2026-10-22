@@ -175,17 +175,8 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'auth_subtitle'.tr(),
-                  style: const TextStyle(
-                    color: GamerTheme.textGray,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 48),
+                // Subtitle hata diya gaya hai, clean spacing ke sath
+                const SizedBox(height: 40),
 
                 if (_errorMessage != null) ...[
                   Container(
@@ -246,21 +237,16 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                         : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Container(
+                              Image.network(
+                                'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png',
                                 width: 22,
                                 height: 22,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Center(
-                                  child: Text(
-                                    'G',
-                                    style: TextStyle(
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 15,
-                                    ),
+                                errorBuilder: (_, __, ___) => const Text(
+                                  'G',
+                                  style: TextStyle(
+                                    color: Color(0xFF4285F4),
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 18,
                                   ),
                                 ),
                               ),
