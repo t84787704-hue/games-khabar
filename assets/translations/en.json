@@ -1,4 +1,6 @@
-{"disputed_chip_priority": "Disputed",
+{"wallet_daily_bonus_claimed_title": "Daily Bonus Claimed",
+ "wallet_ad_reward_title": "Ad Reward",
+"disputed_chip_priority": "Disputed",
  "no_matches_found_filter": "No matches found for this filter",
 "no_proofs_under_review_title": "No Proofs Under Review",
 "all_proofs_reviewed_desc": "All match proofs have been reviewed and verified.",
