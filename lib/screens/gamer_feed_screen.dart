@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// GAMER FEED SCREEN — With Compressed Image Post Upload & Feed View
+// GAMER FEED SCREEN — With Cloudflare R2 Image Upload & Feed View
 // File: lib/screens/gamer_feed_screen.dart
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/supabase_service.dart';
+import '../services/r2_storage_service.dart';
 import 'gamer_profile_screen.dart';
 import 'user_search_screen.dart';
 import '../services/notification_service.dart';
@@ -463,8 +464,18 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                     builder: (c) => AlertDialog(
                       backgroundColor: ThemeService.card,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: Text('delete_post_dialog_title'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
-                      content: Text('delete_post_dialog_content'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
+                      title: Text(
+                        'delete_post_dialog_title'.tr().contains('delete_post_') 
+                            ? 'Delete Post' 
+                            : 'delete_post_dialog_title'.tr(),
+                        style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
+                      ),
+                      content: Text(
+                        'delete_post_dialog_content'.tr().contains('delete_post_') 
+                            ? 'Are you sure you want to delete this post? This action cannot be undone.' 
+                            : 'delete_post_dialog_content'.tr(),
+                        style: TextStyle(color: ThemeService.textSecondary),
+                      ),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(c, false),
@@ -629,17 +640,12 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                 try {
                                   String? uploadedImageUrl;
 
+                                  // Upload image to Cloudflare R2
                                   if (selectedImage != null) {
-                                    final fileName = '${currentUserId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-                                    final uploadPath = '$fileName';
-
-                                    await SupabaseService.client.storage
-                                        .from('posts')
-                                        .upload(uploadPath, selectedImage!);
-
-                                    uploadedImageUrl = SupabaseService.client.storage
-                                        .from('posts')
-                                        .getPublicUrl(uploadPath);
+                                    uploadedImageUrl = await R2StorageService().uploadImage(
+                                      file: selectedImage!,
+                                      userId: currentUserId,
+                                    );
                                   }
 
                                   await SupabaseService.client.from('posts').insert({
