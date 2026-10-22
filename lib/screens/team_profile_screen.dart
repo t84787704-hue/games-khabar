@@ -438,10 +438,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   Future<void> _showEditTeamDialog(TeamModel team) async {
     final nameCtrl = TextEditingController(text: team.name);
     final tagCtrl = TextEditingController(text: team.tag);
-    final descCtrl = TextEditingController(
-        (team.description.toLowerCase() == 'null') ? '' : team.description);
-    final reqCtrl = TextEditingController(
-        (team.requirements.toLowerCase() == 'null') ? '' : team.requirements);
+    final descCtrl = TextEditingController(text: team.description);
+    final reqCtrl = TextEditingController(text: team.requirements);
 
     await showDialog(
       context: context,
@@ -1349,6 +1347,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 14,
                                                 ),
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                             Container(
@@ -1387,7 +1386,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               children: [
                                                 Expanded(
                                                   child: Text(
-                                                    'msg_challenge_sent_to_team'.tr(args: [toTeamName]),
+                                                    'Challenge delivered to $toTeamName',
                                                     style: TextStyle(
                                                         color: ThemeService.textPrimary,
                                                         fontSize: 13,
@@ -1719,7 +1718,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Description (Fixed Null String)
+                            // Description
                             _buildSectionHeader('label_description'.tr()),
                             Container(
                               width: double.infinity,
@@ -1730,22 +1729,18 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 border: Border.all(color: ThemeService.border),
                               ),
                               child: Text(
-                                (team.description.isNotEmpty &&
-                                        team.description.toLowerCase() != 'null')
+                                team.description.isNotEmpty
                                     ? team.description
                                     : 'No description provided',
                                 style: TextStyle(
-                                    color: (team.description.isNotEmpty &&
-                                            team.description.toLowerCase() != 'null')
-                                        ? ThemeService.textPrimary
-                                        : ThemeService.textSecondary.withOpacity(0.7),
+                                    color: ThemeService.textPrimary,
                                     fontSize: 13,
                                     height: 1.4),
                               ),
                             ),
                             const SizedBox(height: 16),
 
-                            // Requirements (Fixed Null String)
+                            // Requirements
                             _buildSectionHeader('label_requirements'.tr()),
                             Container(
                               width: double.infinity,
@@ -1756,15 +1751,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 border: Border.all(color: ThemeService.border),
                               ),
                               child: Text(
-                                (team.requirements.isNotEmpty &&
-                                        team.requirements.toLowerCase() != 'null')
+                                team.requirements.isNotEmpty
                                     ? team.requirements
                                     : 'No special requirements',
                                 style: TextStyle(
-                                    color: (team.requirements.isNotEmpty &&
-                                            team.requirements.toLowerCase() != 'null')
-                                        ? ThemeService.textPrimary
-                                        : ThemeService.textSecondary.withOpacity(0.7),
+                                    color: ThemeService.textPrimary,
                                     fontSize: 13,
                                     height: 1.4),
                               ),
