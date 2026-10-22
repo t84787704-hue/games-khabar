@@ -1,16 +1,13 @@
 // ===============================================================================
-// VERIFICATION SCREEN — Full Adaptive Day & Night Mode + Multi-Language Support
-// -------------------------------------------------------------------------------
+// VERIFICATION SCREEN — Strict Rules & Early Bird 1200 VIP Tier
 // File: lib/screens/verification_screen.dart
 // ===============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/verification_service.dart';
-import '../services/coin_wallet_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import 'create_gamer_id_screen.dart';
@@ -28,9 +25,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
   final GamerAuthService _authService = GamerAuthService();
   bool _isLoading = true;
   bool _isSubmitting = false;
-  bool _isPurchasingVip = false;
   VerificationStats? _liveStats;
   GamerUser? _currentUser;
+
+  // Early Bird Logic States
+  bool _isEarlyBirdUser = false;
+  int _userRegistrationRank = 0;
+  int _referralCount = 0;
 
   @override
   void initState() {
@@ -46,6 +47,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
       if (uid.isNotEmpty) {
         final stats = await VerificationService.fetchLiveStats(uid);
         final freshestUser = await _authService.fetchUserProfile(uid);
+
+        // 1. Check user registration index for First 1200 Users
+        await _checkEarlyBirdStatus(uid);
+
         if (mounted) {
           setState(() {
             _liveStats = stats;
@@ -60,150 +65,51 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
   }
 
-  /// ⚡ INSTANT VIP BLUE TICK (Theme + Language Adaptive Dialogs)
-  Future<void> _handleInstantVipBuy(GamerUser user) async {
-    final wallet = await CoinWalletService().getOrCreateWallet(user.uid);
-
-    if (wallet.coins < 2000) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: ThemeService.card,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFB800), size: 24),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'dialog_insufficient_coins_title'.tr(),
-                  style: TextStyle(color: ThemeService.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            'dialog_insufficient_coins_desc'.tr(args: ['${wallet.coins}']),
-            style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(
-                'btn_ok'.tr(),
-                style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: ThemeService.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 24),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'dialog_unlock_vip_title'.tr(),
-                style: TextStyle(color: ThemeService.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          'dialog_unlock_vip_desc'.tr(),
-          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(
-              'cancel'.tr(),
-              style: TextStyle(color: ThemeService.textSecondary),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1877F2),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'btn_pay_2000_coins'.tr(),
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isPurchasingVip = true);
-
+  Future<void> _checkEarlyBirdStatus(String uid) async {
     try {
-      await CoinWalletService.updateCoins(
-        userId: user.uid,
-        amount: -2000,
-        type: 'store_purchase',
-        title: 'vip_blue_tick_tx_title'.tr(),
-        description: 'vip_blue_tick_tx_desc'.tr(),
-      );
+      // Check current user created_at timestamp
+      final userRes = await SupabaseService.client
+          .from('users')
+          .select('created_at, referred_by')
+          .or('id.eq.$uid,uid.eq.$uid')
+          .maybeSingle();
 
-      await SupabaseService.client.from('users').update({
-        'is_verified': true,
-        'has_blue_tick': true,
-        'verification_status': 'verified',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).or('id.eq.${user.uid},uid.eq.${user.uid}');
+      if (userRes != null && userRes['created_at'] != null) {
+        final userCreatedAt = userRes['created_at'];
 
-      await _authService.refreshCurrentGamer();
-      final freshest = await _authService.fetchUserProfile(user.uid);
+        // Count how many users joined before or at the same time
+        final countRes = await SupabaseService.client
+            .from('users')
+            .select('id')
+            .lte('created_at', userCreatedAt)
+            .count();
 
-      if (mounted) {
-        setState(() {
-          _currentUser = freshest ?? user.copyWith(
-            verificationStatus: 'verified',
-            isVerified: true,
-          );
-        });
-        _showVerifiedCelebrationDialog();
+        _userRegistrationRank = countRes.count;
+        _isEarlyBirdUser = _userRegistrationRank <= 1200;
       }
+
+      // Check how many people this user has referred
+      final refRes = await SupabaseService.client
+          .from('users')
+          .select('id')
+          .eq('referred_by', uid)
+          .count();
+
+      _referralCount = refRes.count;
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFFFF4655),
-            content: Text('err_failed_with_msg'.tr(args: [e.toString()])),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isPurchasingVip = false);
+      debugPrint('Error checking early bird/referral status: $e');
     }
   }
 
   Future<void> _handleApply(GamerUser user) async {
-    final canApply = VerificationService.canApplyForVerification(
-      user,
-      clipsCount: _liveStats?.clipsCount,
-      squadRoomsCount: _liveStats?.squadRoomsCount,
-      likesReceived: _liveStats?.likesReceived,
-      reportsCount: _liveStats?.reportsCount,
-      accountAgeDays: _liveStats?.accountAgeDays,
-    );
+    bool canApply = false;
 
-    if (!canApply) {
-      final reqs = VerificationService.getRequirements(
+    if (_isEarlyBirdUser) {
+      // Early bird users only need 2 referrals
+      canApply = _referralCount >= 2;
+    } else {
+      // Regular users need standard strict criteria + 2 referrals
+      final standardMet = VerificationService.canApplyForVerification(
         user,
         clipsCount: _liveStats?.clipsCount,
         squadRoomsCount: _liveStats?.squadRoomsCount,
@@ -211,12 +117,17 @@ class _VerificationScreenState extends State<VerificationScreen> {
         reportsCount: _liveStats?.reportsCount,
         accountAgeDays: _liveStats?.accountAgeDays,
       );
-      final unmet = reqs.where((r) => !r.isMet).toList();
+      canApply = standardMet && (_referralCount >= 2);
+    }
+
+    if (!canApply) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFFF4655),
           content: Text(
-            'err_cannot_apply_missing_reqs'.tr(args: ['${unmet.length}']),
+            _isEarlyBirdUser
+                ? 'Aapko verification ke liye kam az kam 2 doston ko refer karna zaroori hai (${_referralCount}/2 Completed)!'
+                : 'Pehle tamam requirements aur minimum 2 Referrals poore karein!',
           ),
         ),
       );
@@ -495,10 +406,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
       accountAgeDays: _liveStats?.accountAgeDays,
     );
 
-    final int metCount = reqs.where((r) => r.isMet).length;
-    final bool allMet = metCount == reqs.length;
     final bool isVerified = user.isVerified || user.verificationStatus == 'verified';
     final bool isPending = user.verificationStatus == 'pending' && !isVerified;
+
+    // Condition Check
+    final bool referralMet = _referralCount >= 2;
+    final int metCount = reqs.where((r) => r.isMet).length + (referralMet ? 1 : 0);
+    final int totalCount = reqs.length + 1; // Including referral requirement
+
+    final bool allMet = _isEarlyBirdUser ? referralMet : (metCount == totalCount);
 
     return RefreshIndicator(
       onRefresh: _refreshData,
@@ -510,42 +426,48 @@ class _VerificationScreenState extends State<VerificationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatusHeaderCard(user, isVerified: isVerified, isPending: isPending, metCount: metCount, totalCount: reqs.length),
+            _buildStatusHeaderCard(user, isVerified: isVerified, isPending: isPending, metCount: metCount, totalCount: totalCount),
             const SizedBox(height: 16),
 
+            // Early Bird Special Badge Banner
             if (!isVerified) ...[
-              _buildInstantVipBuyCard(user),
-              const SizedBox(height: 20),
+              _buildEarlyBirdOfferCard(),
+              const SizedBox(height: 18),
             ],
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'mandatory_requirements_title'.tr(),
-                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w900),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: allMet ? const Color(0xFF00FF88).withOpacity(0.15) : ThemeService.cardSecondary,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: allMet ? const Color(0xFF00FF88) : ThemeService.border),
+            // Referral Requirement Card (Highlighted)
+            _buildReferralRequirementCard(referralMet),
+            const SizedBox(height: 16),
+
+            if (!_isEarlyBirdUser) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'mandatory_requirements_title'.tr(),
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w900),
                   ),
-                  child: Text(
-                    'reqs_met_count'.tr(args: ['$metCount', '${reqs.length}']),
-                    style: TextStyle(
-                      color: allMet ? const Color(0xFF00FF88) : ThemeService.textSecondary,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: allMet ? const Color(0xFF00FF88).withOpacity(0.15) : ThemeService.cardSecondary,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: allMet ? const Color(0xFF00FF88) : ThemeService.border),
+                    ),
+                    child: Text(
+                      '$metCount / $totalCount Met',
+                      style: TextStyle(
+                        color: allMet ? const Color(0xFF00FF88) : ThemeService.textSecondary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            ...reqs.map((item) => _buildRequirementCard(item, user)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...reqs.map((item) => _buildRequirementCard(item, user)),
+            ],
 
             const SizedBox(height: 24),
 
@@ -553,80 +475,137 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
             const SizedBox(height: 16),
 
-            if (!isVerified) _buildQuickActionShortcuts(user),
+            if (!isVerified && !_isEarlyBirdUser) _buildQuickActionShortcuts(user),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInstantVipBuyCard(GamerUser user) {
+  Widget _buildEarlyBirdOfferCard() {
     final isDark = ThemeService.isDarkMode;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF172033) : const Color(0xFFE8F4FD),
+        color: _isEarlyBirdUser
+            ? (isDark ? const Color(0xFF1E2818) : const Color(0xFFEFFDEB))
+            : (isDark ? const Color(0xFF221C18) : const Color(0xFFFFF8F0)),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF1877F2), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1877F2).withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(
+          color: _isEarlyBirdUser ? const Color(0xFF00FF88) : const Color(0xFFFF8A00),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1877F2).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.flash_on_rounded, color: Color(0xFF1877F2), size: 20),
+              Icon(
+                _isEarlyBirdUser ? Icons.stars_rounded : Icons.info_outline_rounded,
+                color: _isEarlyBirdUser ? const Color(0xFF00FF88) : const Color(0xFFFF8A00),
+                size: 24,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'instant_vip_blue_tick_title'.tr(),
-                  style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w900, fontSize: 15),
+                  _isEarlyBirdUser
+                      ? 'Early Bird VIP: First 1200 Users! 🎉'
+                      : 'First 1200 Users Offer Ended',
+                  style: TextStyle(
+                    color: _isEarlyBirdUser ? const Color(0xFF00FF88) : const Color(0xFFFF8A00),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            'instant_vip_blue_tick_desc'.tr(),
-            style: TextStyle(color: ThemeService.textPrimary, fontSize: 12.5, height: 1.35),
+            _isEarlyBirdUser
+                ? 'Mubarak ho! Aap app ke pehle 1,200 users mein shamil hain (#$_userRegistrationRank). Aapke liye baqi tamam requirements exempted hain — sirf 2 Friends ko refer karein aur Blue Tick unlock karein!'
+                : 'Pehle 1,200 users ka quota mukammal ho chuka hai. Regular users ko Blue Tick ke liye neeche diye gaye tamam strict rules poore karne honge.',
+            style: TextStyle(color: ThemeService.textPrimary, fontSize: 12.5, height: 1.4),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1877F2),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                elevation: 0,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReferralRequirementCard(bool isMet) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isMet ? const Color(0xFF00FF88).withOpacity(0.5) : const Color(0xFFFF4655).withOpacity(0.4),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.people_alt_rounded,
+                color: isMet ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                size: 20,
               ),
-              icon: _isPurchasingVip
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700), size: 18),
-              label: Text(
-                _isPurchasingVip
-                    ? 'processing'.tr()
-                    : 'btn_unlock_instantly_coins'.tr(),
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Invite & Refer 2 Active Gamers',
+                      style: TextStyle(color: ThemeService.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      'Aapke referral link/code se kam az kam 2 doston ka join hona lazmi hai.',
+                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                    ),
+                  ],
+                ),
               ),
-              onPressed: _isPurchasingVip ? null : () => _handleInstantVipBuy(user),
+              Icon(
+                isMet ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                color: isMet ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                size: 20,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (_referralCount / 2).clamp(0.0, 1.0),
+              minHeight: 5,
+              backgroundColor: ThemeService.cardSecondary,
+              valueColor: AlwaysStoppedAnimation<Color>(isMet ? const Color(0xFF00FF88) : const Color(0xFFFF6B00)),
             ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '$_referralCount Joined',
+                style: TextStyle(
+                  color: isMet ? const Color(0xFF00FF88) : ThemeService.textPrimary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Text(
+                'Target: 2 Referrals',
+                style: TextStyle(color: Color(0xFF65676B), fontSize: 10.5),
+              ),
+            ],
           ),
         ],
       ),
@@ -702,7 +681,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'status_under_review_desc'.tr(),
+              'Admin review jari hai. Jald verification status update ho jayega.',
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
               textAlign: TextAlign.center,
             ),
@@ -735,7 +714,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
                       style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.w900),
                     ),
                     Text(
-                      'meet_all_requirements_sub'.tr(),
+                      _isEarlyBirdUser
+                          ? 'Early Bird VIP: Just 2 Referrals Needed'
+                          : 'meet_all_requirements_sub'.tr(),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                     ),
                   ],
@@ -747,10 +728,16 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
-              value: totalCount > 0 ? metCount / totalCount : 0.0,
+              value: _isEarlyBirdUser
+                  ? (_referralCount / 2).clamp(0.0, 1.0)
+                  : (totalCount > 0 ? metCount / totalCount : 0.0),
               minHeight: 7,
               backgroundColor: ThemeService.cardSecondary,
-              valueColor: AlwaysStoppedAnimation<Color>(metCount == totalCount ? const Color(0xFF00FF88) : const Color(0xFF1877F2)),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                (_isEarlyBirdUser ? _referralCount >= 2 : metCount == totalCount)
+                    ? const Color(0xFF00FF88)
+                    : const Color(0xFF1877F2),
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -758,11 +745,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'completed_of_total'.tr(args: ['$metCount', '$totalCount']),
+                _isEarlyBirdUser
+                    ? 'Referrals: $_referralCount / 2'
+                    : 'completed_of_total'.tr(args: ['$metCount', '$totalCount']),
                 style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
               ),
               Text(
-                '${((metCount / (totalCount > 0 ? totalCount : 1)) * 100).toInt()}%',
+                _isEarlyBirdUser
+                    ? '${((_referralCount / 2).clamp(0.0, 1.0) * 100).toInt()}%'
+                    : '${((metCount / (totalCount > 0 ? totalCount : 1)) * 100).toInt()}%',
                 style: const TextStyle(color: Color(0xFF1877F2), fontSize: 11, fontWeight: FontWeight.w900),
               ),
             ],
@@ -860,15 +851,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
           color: const Color(0xFF1877F2).withOpacity(0.15),
           border: Border.all(color: const Color(0xFF1877F2), width: 1.5),
         ),
-        child: Center(
+        child: const Center(
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 20),
-              const SizedBox(width: 8),
+              Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 20),
+              SizedBox(width: 8),
               Text(
-                'status_verified_blue_tick'.tr(),
-                style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w900, fontSize: 14),
+                'Official Verified Gamer',
+                style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w900, fontSize: 14),
               ),
             ],
           ),
@@ -891,7 +882,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             'btn_under_review_24h'.tr(),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
-          onPressed: _isSubmitting ? null : () => _handleApply(user),
+          onPressed: null,
         ),
       );
     }
@@ -912,11 +903,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
         icon: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Icon(allMet ? Icons.verified_rounded : Icons.lock_outline_rounded, size: 18),
         label: Text(
           allMet
-              ? 'btn_apply_for_verification'.tr()
+              ? 'Apply for Official Verification'
               : 'btn_apply_locked'.tr(),
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
         ),
-        onPressed: _isSubmitting ? null : () => _handleApply(user),
+        onPressed: allMet && !_isSubmitting ? () => _handleApply(user) : null,
       ),
     );
   }
@@ -979,37 +970,4 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     side: BorderSide(color: ThemeService.border),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
-                  icon: Icon(Icons.edit_note_rounded, color: ThemeService.textPrimary, size: 15),
-                  label: Text(
-                    'btn_shortcut_edit_bio'.tr(),
-                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => CreateGamerIdScreen(isEditing: true, existingUser: user))).then((_) => _refreshData());
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: ThemeService.border),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  icon: Icon(Icons.movie_creation_rounded, color: ThemeService.textPrimary, size: 15),
-                  label: Text(
-                    'btn_shortcut_post_clip'.tr(),
-                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePostScreen())).then((_) => _refreshData());
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
+                  icon: Icon(Icons.edit_note_rounded, color: ThemeService.text
