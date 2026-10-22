@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// CREATE / EDIT GAMER ID SCREEN — Exact Mockup Design Alignment
+// CREATE / EDIT GAMER ID SCREEN — Exact Mockup Design + Referral Code System
 // File: lib/screens/create_gamer_id_screen.dart
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/gamer_theme.dart';
 import '../constants/mobile_games_rank_data.dart';
 import '../models/gamer_user_model.dart';
+import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
@@ -40,6 +41,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   final _bioController = TextEditingController();
   final _rankController = TextEditingController();
   final _gameIdController = TextEditingController();
+  final _referralCodeController = TextEditingController();
 
   String _selectedGame = 'BGMI';
   String _selectedRankGame = 'BGMI (Battlegrounds Mobile India)';
@@ -142,6 +144,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     _bioController.dispose();
     _rankController.dispose();
     _gameIdController.dispose();
+    _referralCodeController.dispose();
     super.dispose();
   }
 
@@ -220,6 +223,46 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     } catch (_) {}
   }
 
+  Future<void> _processReferralBonus(String newUid, String inputCode) async {
+    final cleanCode = inputCode.trim().toUpperCase();
+    if (cleanCode.isEmpty) return;
+
+    try {
+      // Find the user whose UID matches or starts with the referral code
+      final users = await SupabaseService.query('users', select: 'id,uid,coins');
+      Map<String, dynamic>? referrer;
+
+      for (final u in users) {
+        final uId = (u['id'] ?? u['uid'] ?? '').toString();
+        final candidateCode = CoinWalletService().getReferralCode(uId).toUpperCase();
+        if (candidateCode == cleanCode && uId != newUid) {
+          referrer = u;
+          break;
+        }
+      }
+
+      if (referrer != null) {
+        final referrerUid = (referrer['id'] ?? referrer['uid'] ?? '').toString();
+
+        // 1. Reward the new user +200 coins
+        await SupabaseService.awardCoins(
+          userId: newUid,
+          amount: 200,
+          adminId: 'referral_system',
+        );
+
+        // 2. Reward the inviter +200 coins
+        await SupabaseService.awardCoins(
+          userId: referrerUid,
+          amount: 200,
+          adminId: 'referral_system',
+        );
+      }
+    } catch (e) {
+      debugPrint('Referral bonus processing note: $e');
+    }
+  }
+
   Future<void> _saveGamerId() async {
     final rawUsername = _usernameController.text.toLowerCase().trim();
     final uid = GamerAuthService().currentUid;
@@ -284,6 +327,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         'active_badge': _selectedBadge,
       }).or('id.eq.$uid,uid.eq.$uid');
 
+      // Process referral code bonus if a new user entered a code
+      if (!widget.isEditing && _referralCodeController.text.trim().isNotEmpty) {
+        await _processReferralBonus(uid, _referralCodeController.text.trim());
+      }
+
       GamerAuthService().currentGamerNotifier.value = gamerUser;
 
       if (mounted) {
@@ -293,7 +341,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             backgroundColor: Color(0xFF00C853),
           ),
         );
-        Navigator.of(context).pop(true);
+        if (widget.isEditing) {
+          Navigator.of(context).pop(true);
+        } else {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
+            (route) => false,
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -330,7 +385,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(
-              'Edit Gamer ID',
+              widget.isEditing ? 'Edit Gamer ID' : 'Create Gamer ID',
               style: TextStyle(
                 color: primaryTextColor,
                 fontWeight: FontWeight.w900,
@@ -340,9 +395,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             actions: [
               TextButton(
                 onPressed: _isSaving ? null : _saveGamerId,
-                child: const Text(
-                  'Save',
-                  style: TextStyle(
+                child: Text(
+                  widget.isEditing ? 'Save' : 'Done',
+                  style: const TextStyle(
                     color: Color(0xFFFF7A00),
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -995,6 +1050,84 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         style: TextStyle(color: subTextColor, fontSize: 11),
                       ),
 
+                      // ═════════════════════════════════════════════════════════
+                      // NEW: Squad Referral Code Box (Only on New Account Creation)
+                      // ═════════════════════════════════════════════════════════
+                      if (!widget.isEditing) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Text(
+                              'Squad Referral / Invite Code',
+                              style: TextStyle(
+                                color: primaryTextColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00C853).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                '+200 COINS',
+                                style: TextStyle(
+                                  color: Color(0xFF00C853),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              const Text('🎁', style: TextStyle(fontSize: 18)),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: _referralCodeController,
+                                  textCapitalization: TextCapitalization.characters,
+                                  style: TextStyle(
+                                    color: primaryTextColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13.5,
+                                    letterSpacing: 1.2,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter referral code (Optional)',
+                                    hintStyle: TextStyle(
+                                      color: subTextColor.withOpacity(0.6),
+                                      fontSize: 12,
+                                      letterSpacing: 0,
+                                    ),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Have an invite code from a squad friend? Enter it to get +200 free coins!',
+                          style: TextStyle(color: subTextColor, fontSize: 11),
+                        ),
+                      ],
+
                       const SizedBox(height: 24),
 
                       // Save Changes Button
@@ -1017,14 +1150,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   height: 22,
                                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                 )
-                              : const Row(
+                              : Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.check, size: 18, color: Colors.white),
-                                    SizedBox(width: 6),
+                                    const Icon(Icons.check, size: 18, color: Colors.white),
+                                    const SizedBox(width: 6),
                                     Text(
-                                      'Save Changes',
-                                      style: TextStyle(
+                                      widget.isEditing ? 'Save Changes' : 'Join & Save Profile',
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.w900,
                                         fontSize: 15,
                                       ),
