@@ -129,7 +129,6 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
                 final userChats = rawChats.where((chat) {
                   final members = List<dynamic>.from(chat['members'] ?? []);
                   if (currentUid.isNotEmpty && !members.contains(currentUid)) {
-                    // Filter if members are present and currentUid is not in chat
                     if (members.isNotEmpty) return false;
                   }
                   if (_searchQuery.isNotEmpty) {
@@ -174,7 +173,13 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
                     final title = chat['title'] ?? chat['displayName'] ?? 'Gamer';
                     final lastMessage = chat['lastMessage'] ?? 'Tap to chat';
                     final avatarUrl = (chat['avatarUrl'] ?? '').toString();
-                    final gameTag = (chat['game'] ?? chat['mode'] ?? 'PUBG').toString();
+                    
+                    // Fixed: Don't fallback to 'PUBG' if game or mode is null
+                    final dynamic rawGame = chat['game'] ?? chat['mode'];
+                    final String gameTag = (rawGame != null && rawGame.toString().trim().isNotEmpty)
+                        ? rawGame.toString().trim()
+                        : '';
+                        
                     final unreadCount = (chat['unreadCount'] as num?)?.toInt() ?? 0;
                     final isOnline = chat['isOnline'] == true;
 
@@ -252,23 +257,25 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: _getGameBadgeColor(gameTag).withOpacity(0.2),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              gameTag.toUpperCase(),
-                                              style: TextStyle(
-                                                color: _getGameBadgeColor(gameTag),
-                                                fontSize: 9.5,
-                                                fontWeight: FontWeight.w900,
+                                          if (gameTag.isNotEmpty) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: _getGameBadgeColor(gameTag).withOpacity(0.2),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                gameTag.toUpperCase(),
+                                                style: TextStyle(
+                                                  color: _getGameBadgeColor(gameTag),
+                                                  fontSize: 9.5,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
                                               ),
                                             ),
-                                          ),
+                                          ],
                                         ],
                                       ),
                                       const SizedBox(height: 4),
