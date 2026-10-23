@@ -17,8 +17,8 @@ class ContactUsScreen extends StatelessWidget {
   Color get textGray => ThemeService.textSecondary;
 
   static const String contactEmail = 'gamersidofficial.help@gmail.com';
-  static const String instagramHandle = '@gameskhabar';
-  static const String instagramUrl = 'https://instagram.com/gameskhabar';
+  static const String instagramHandle = '@gamersidofficial';
+  static const String instagramUrl = 'https://instagram.com/gamersidofficial';
 
   Future<void> _launchEmail(BuildContext context) async {
     final Uri emailUri = Uri(
