@@ -40,6 +40,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
 
   // Local optimistic cache to render sent messages instantly (0ms latency)
   final List<Map<String, dynamic>> _optimisticMessages = [];
+  final Set<String> _locallyDeletedMessageIds = {};
 
   // Design Theme Palette
   static const Color darkBg = Color(0xFF0A0F1D);
@@ -157,6 +158,158 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
     }
   }
 
+  Future<void> _deleteSingleMessage(String msgId) async {
+    if (msgId.isEmpty) return;
+
+    setState(() {
+      _locallyDeletedMessageIds.add(msgId);
+      _optimisticMessages.removeWhere((m) => m['id']?.toString() == msgId);
+    });
+
+    try {
+      try {
+        await SupabaseService.client.from('match_messages').delete().eq('id', msgId);
+      } catch (_) {}
+      try {
+        await SupabaseService.client.from('match_chat').delete().eq('id', msgId);
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Message deleted'),
+            backgroundColor: Color(0xFF2E7D32),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[MatchChat] Error deleting message: $e');
+    }
+  }
+
+  Future<void> _confirmClearChat() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: cardBorder),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Clear Match Chat?',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to permanently delete all messages in this match chat?',
+          style: TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear All', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _optimisticMessages.clear();
+    });
+
+    try {
+      try {
+        await SupabaseService.client.from('match_messages').delete().eq('match_id', widget.matchId);
+      } catch (_) {}
+      try {
+        await SupabaseService.client.from('match_chat').delete().eq('match_id', widget.matchId);
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Match chat cleared'),
+            backgroundColor: Color(0xFF2E7D32),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[MatchChat] Error clearing chat: $e');
+    }
+  }
+
+  void _showMessageOptions(Map<String, dynamic> msg) {
+    final msgId = msg['id']?.toString() ?? '';
+    final text = msg['message']?.toString() ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cardBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded, color: neonCyan),
+              title: const Text('Copy Text', style: TextStyle(color: Colors.white, fontSize: 14)),
+              onTap: () {
+                Navigator.pop(ctx);
+                Clipboard.setData(ClipboardData(text: text));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 1)),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655)),
+              title: const Text(
+                'Delete Message',
+                style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _deleteSingleMessage(msgId);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -171,10 +324,18 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
 
   /// Merges stream data with optimistic items to eliminate duplicates
   List<Map<String, dynamic>> _mergeMessages(List<Map<String, dynamic>> streamMessages) {
-    final merged = List<Map<String, dynamic>>.from(streamMessages);
+    final filteredStream = streamMessages.where((sm) {
+      final id = sm['id']?.toString() ?? '';
+      return !_locallyDeletedMessageIds.contains(id);
+    }).toList();
+
+    final merged = List<Map<String, dynamic>>.from(filteredStream);
 
     for (final opt in _optimisticMessages) {
-      final alreadyPresent = streamMessages.any((sm) {
+      final optId = opt['id']?.toString() ?? '';
+      if (_locallyDeletedMessageIds.contains(optId)) continue;
+
+      final alreadyPresent = filteredStream.any((sm) {
         final sameMsg = (sm['message'] ?? '') == opt['message'];
         final sameType = (sm['message_type'] ?? 'text') == opt['message_type'];
         final smTime = DateTime.tryParse(sm['created_at']?.toString() ?? '');
@@ -435,6 +596,31 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
             icon: const Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD700), size: 22),
             onPressed: _showUidShareDialog,
           ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white70),
+            color: cardBg,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: cardBorder),
+            ),
+            onSelected: (val) {
+              if (val == 'clear_chat') {
+                _confirmClearChat();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'clear_chat',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 18),
+                    SizedBox(width: 8),
+                    Text('Clear Chat', style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
+          ),
           const SizedBox(width: 4),
         ],
       ),
@@ -564,140 +750,146 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
     final bool isUidShare = type == 'uid_share' || text.toUpperCase().contains('ROOM ID:');
 
     if (isUidShare) {
-      return Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFFD700).withOpacity(0.12),
-              blurRadius: 10,
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD700), size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      'match_credentials_title'.tr(),
-                      style: const TextStyle(
-                        color: Color(0xFFFFD700),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-                InkWell(
-                  onTap: () {
-                    Clipboard.setData(ClipboardData(text: text));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('msg_room_info_copied'.tr()),
-                        backgroundColor: neonGreen,
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFD700),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.copy_rounded, size: 12, color: Colors.black),
-                        const SizedBox(width: 3),
-                        Text('btn_copy'.tr(), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10.5)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              text,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                fontFamily: 'monospace',
-              ),
-            ),
-            if (timeStr.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.bottomRight,
-                child: Text(timeStr, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+      return GestureDetector(
+        onLongPress: () => _showMessageOptions(msg),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFFD700).withOpacity(0.12),
+                blurRadius: 10,
               ),
             ],
-          ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.vpn_key_rounded, color: Color(0xFFFFD700), size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        'match_credentials_title'.tr(),
+                        style: const TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                  InkWell(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: text));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('msg_room_info_copied'.tr()),
+                          backgroundColor: neonGreen,
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFD700),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.copy_rounded, size: 12, color: Colors.black),
+                          const SizedBox(width: 3),
+                          Text('btn_copy'.tr(), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10.5)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                text,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  fontFamily: 'monospace',
+                ),
+              ),
+              if (timeStr.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Text(timeStr, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                ),
+              ],
+            ],
+          ),
         ),
       );
     }
 
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isMe ? null : cardBg,
-          gradient: isMe
-              ? const LinearGradient(
-                  colors: [Color(0xFF1877F2), Color(0xFF00A3FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isMe ? neonCyan.withOpacity(0.5) : cardBorder,
-            width: 1.2,
+    return GestureDetector(
+      onLongPress: () => _showMessageOptions(msg),
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.75,
           ),
-          boxShadow: [
-            if (isMe)
-              BoxShadow(
-                color: neonCyan.withOpacity(0.2),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              text,
-              style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.3),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isMe ? null : cardBg,
+            gradient: isMe
+                ? const LinearGradient(
+                    colors: [Color(0xFF1877F2), Color(0xFF00A3FF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isMe ? neonCyan.withOpacity(0.5) : cardBorder,
+              width: 1.2,
             ),
-            const SizedBox(height: 4),
-            Align(
-              alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-              child: Text(
-                timeStr,
-                style: TextStyle(
-                  color: isMe ? Colors.white70 : Colors.white38,
-                  fontSize: 10.5,
+            boxShadow: [
+              if (isMe)
+                BoxShadow(
+                  color: neonCyan.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                text,
+                style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.3),
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                child: Text(
+                  timeStr,
+                  style: TextStyle(
+                    color: isMe ? Colors.white70 : Colors.white38,
+                    fontSize: 10.5,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
