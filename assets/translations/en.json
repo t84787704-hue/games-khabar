@@ -1,4 +1,7 @@
-{"badge_leader_caps": "LEADER",
+{  "daily_bonus_available_now": "Your daily bonus is ready to claim!",
+  "btn_claim_50": "Claim +50 Coins",
+  "err_referral_already_linked_or_invalid": "Referral code is invalid or already used.",
+"badge_leader_caps": "LEADER",
   "no_match_history_title": "No Matches Played Yet",
   "no_match_history_sub": "Completed team battles and tournament matches will appear here",
   "btn_your_team": "Your Team",
