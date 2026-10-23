@@ -37,9 +37,11 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
   String _resolvedTeam1Name = '';
   String _resolvedTeam2Name = '';
   String _resolvedMyTeamId = '';
-  bool _isSending = false;
 
-  // Design Theme Palette (Matched to Reference)
+  // Local optimistic cache to render sent messages instantly (0ms latency)
+  final List<Map<String, dynamic>> _optimisticMessages = [];
+
+  // Design Theme Palette
   static const Color darkBg = Color(0xFF0A0F1D);
   static const Color cardBg = Color(0xFF131B2E);
   static const Color cardBorder = Color(0xFF1E293B);
@@ -90,15 +92,37 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
     }
   }
 
+  /// Instant message sending with Optimistic UI updates
   Future<void> _sendMessage({required String message, String messageType = 'text'}) async {
     final text = message.trim();
-    if (text.isEmpty || _isSending) return;
+    if (text.isEmpty) return;
 
-    setState(() => _isSending = true);
     _textController.clear();
 
     final myUuid = _resolvedMyTeamId.isNotEmpty ? SupabaseService.toUuid(_resolvedMyTeamId) : null;
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    final tempId = 'temp_${DateTime.now().microsecondsSinceEpoch}';
 
+    // 1. Optimistic Local Injection (Appears on screen instantly)
+    final localMsg = {
+      'id': tempId,
+      'match_id': widget.matchId,
+      'sender_team_id': myUuid ?? _resolvedMyTeamId,
+      'sender_id': myUuid ?? 'team',
+      'sender_name': _resolvedTeam1Name,
+      'message': text,
+      'message_type': messageType,
+      'created_at': nowIso,
+      'is_optimistic': true,
+    };
+
+    setState(() {
+      _optimisticMessages.add(localMsg);
+    });
+
+    _scrollToBottom();
+
+    // 2. Background Asynchronous Network Request
     try {
       try {
         await SupabaseService.client.from('match_messages').insert({
@@ -117,11 +141,12 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
           'message_type': messageType,
         });
       }
-
-      _scrollToBottom();
     } catch (e) {
       debugPrint('[MatchChat] Error sending message: $e');
       if (mounted) {
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m['id'] == tempId);
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('err_message_send_failed'.tr(args: [e.toString()])),
@@ -129,8 +154,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
           ),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -138,12 +161,43 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent + 60,
-          duration: const Duration(milliseconds: 300),
+          _scrollController.position.maxScrollExtent + 120,
+          duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
       }
     });
+  }
+
+  /// Merges stream data with optimistic items to eliminate duplicates
+  List<Map<String, dynamic>> _mergeMessages(List<Map<String, dynamic>> streamMessages) {
+    final merged = List<Map<String, dynamic>>.from(streamMessages);
+
+    for (final opt in _optimisticMessages) {
+      final alreadyPresent = streamMessages.any((sm) {
+        final sameMsg = (sm['message'] ?? '') == opt['message'];
+        final sameType = (sm['message_type'] ?? 'text') == opt['message_type'];
+        final smTime = DateTime.tryParse(sm['created_at']?.toString() ?? '');
+        final optTime = DateTime.tryParse(opt['created_at']?.toString() ?? '');
+
+        if (sameMsg && sameType && smTime != null && optTime != null) {
+          return smTime.difference(optTime).inSeconds.abs() <= 10;
+        }
+        return false;
+      });
+
+      if (!alreadyPresent) {
+        merged.add(opt);
+      }
+    }
+
+    merged.sort((a, b) {
+      final aD = a['created_at']?.toString() ?? '';
+      final bD = b['created_at']?.toString() ?? '';
+      return aD.compareTo(bD);
+    });
+
+    return merged;
   }
 
   void _showUidShareDialog() {
@@ -156,7 +210,10 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: cardBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: cardBorder)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: cardBorder),
+          ),
           title: Row(
             children: [
               const Text('🔑', style: TextStyle(fontSize: 22)),
@@ -221,7 +278,14 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                   children: ['TDM 4v4', 'Classic Squad', 'Gun Game', 'Sniper Training'].map((m) {
                     final isSel = selectedMode == m;
                     return ChoiceChip(
-                      label: Text(m, style: TextStyle(color: isSel ? Colors.black : Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      label: Text(
+                        m,
+                        style: TextStyle(
+                          color: isSel ? Colors.black : Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       selected: isSel,
                       selectedColor: const Color(0xFFFFD700),
                       backgroundColor: darkBg,
@@ -376,7 +440,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
       ),
       body: Column(
         children: [
-          // Messages Stream
+          // Real-time Messages Stream + Optimistic Cache
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: SupabaseService.client
@@ -388,16 +452,14 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                   return _buildFallbackChatStream();
                 }
 
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData &&
+                    _optimisticMessages.isEmpty) {
                   return const Center(child: CircularProgressIndicator(color: neonCyan));
                 }
 
-                final messages = snapshot.data ?? [];
-                messages.sort((a, b) {
-                  final aD = a['created_at']?.toString() ?? '';
-                  final bD = b['created_at']?.toString() ?? '';
-                  return aD.compareTo(bD);
-                });
+                final rawStream = snapshot.data ?? [];
+                final messages = _mergeMessages(rawStream);
 
                 if (messages.isEmpty) {
                   return _buildEmptyChatPlaceholder();
@@ -406,7 +468,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
                 return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  itemCount: messages.length + 1, // +1 for "Today" pill
+                  itemCount: messages.length + 1,
                   itemBuilder: (context, index) {
                     if (index == 0) {
                       return _buildDateSeparator('Today');
@@ -432,12 +494,8 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
           .stream(primaryKey: ['id'])
           .eq('match_id', widget.matchId),
       builder: (context, snap) {
-        final messages = snap.data ?? [];
-        messages.sort((a, b) {
-          final aD = a['created_at']?.toString() ?? '';
-          final bD = b['created_at']?.toString() ?? '';
-          return aD.compareTo(bD);
-        });
+        final rawStream = snap.data ?? [];
+        final messages = _mergeMessages(rawStream);
 
         if (messages.isEmpty) return _buildEmptyChatPlaceholder();
 
@@ -499,6 +557,8 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
         final dt = DateTime.parse(createdAtRaw.toString()).toLocal();
         timeStr = DateFormat('hh:mm a').format(dt);
       } catch (_) {}
+    } else {
+      timeStr = DateFormat('hh:mm a').format(DateTime.now());
     }
 
     final bool isUidShare = type == 'uid_share' || text.toUpperCase().contains('ROOM ID:');
@@ -588,7 +648,6 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
       );
     }
 
-    // Standard Chat Bubble (Left/Right Layout Matching Reference)
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -699,13 +758,7 @@ class _MatchChatScreenState extends State<MatchChatScreen> {
               ],
             ),
             child: IconButton(
-              icon: _isSending
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+              icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
               onPressed: () => _sendMessage(message: _textController.text),
             ),
           ),
