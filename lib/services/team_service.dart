@@ -1,7 +1,7 @@
 import "dart:io";
 import "dart:async";
 import "package:flutter/foundation.dart";
-import "package:easy_localization/easy_localization.dart"; // Added for localization
+import "package:easy_localization/easy_localization.dart";
 import "../models/team_model.dart";
 import "supabase_service.dart";
 
@@ -679,6 +679,53 @@ class TeamService {
       return true;
     } catch (e) {
       debugPrint("[TeamService] requestToJoinTeam error: $e");
+      return false;
+    }
+  }
+
+  /// Cancel join request sent by user
+  Future<bool> cancelJoinRequest({
+    required String teamId,
+    required String userId,
+  }) async {
+    if (teamId.isEmpty || userId.isEmpty) return false;
+    try {
+      final teamUuid = SupabaseService.toUuid(teamId);
+      final userUuid = SupabaseService.toUuid(userId);
+
+      // 1. Delete from team_join_requests table
+      await SupabaseService.client
+          .from("team_join_requests")
+          .delete()
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId")
+          .or("user_id.eq.$userUuid,user_id.eq.$userId");
+
+      // 2. Remove user from pending_join_requests array in teams table if present
+      try {
+        final teamRow = await SupabaseService.client
+            .from("teams")
+            .select()
+            .or("id.eq.$teamUuid,id.eq.$teamId")
+            .maybeSingle();
+
+        if (teamRow != null && teamRow.containsKey("pending_join_requests")) {
+          final pendingList = List<String>.from(
+            (teamRow["pending_join_requests"] as List? ?? []).map((e) => e.toString()),
+          )..removeWhere((id) => id == userUuid || id == userId);
+
+          await SupabaseService.client
+              .from("teams")
+              .update({"pending_join_requests": pendingList})
+              .eq("id", teamUuid);
+        }
+      } catch (e) {
+        debugPrint("[TeamService] cancelJoinRequest teams sync note: $e");
+      }
+
+      debugPrint("[TeamService] ✅ Join request cancelled for user $userId in team $teamId");
+      return true;
+    } catch (e) {
+      debugPrint("[TeamService] cancelJoinRequest error: $e");
       return false;
     }
   }
