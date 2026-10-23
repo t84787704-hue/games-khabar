@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
 import '../services/streak_service.dart';
 
@@ -39,7 +40,9 @@ class DailyStreakDialog extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              result.isStreakReset ? 'Streak Reset! ⚠️' : 'Daily Streak Claimed! 🔥',
+              result.isStreakReset
+                  ? 'streak_reset_title'.tr()
+                  : 'streak_claimed_title'.tr(),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
@@ -49,8 +52,8 @@ class DailyStreakDialog extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               result.isStreakReset
-                  ? 'Aapne kal login miss kiya tha. Day 1 se shuruat karein!'
-                  : 'Aap lagaataar ${result.streakDays} din se active hain!',
+                  ? 'streak_reset_desc'.tr()
+                  : 'streak_active_days_desc'.tr(namedArgs: {'days': '${result.streakDays}'}),
               textAlign: TextAlign.center,
               style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13),
             ),
@@ -63,7 +66,7 @@ class DailyStreakDialog extends StatelessWidget {
                 final dayNumber = index + 1;
                 final bool isCompleted = dayNumber <= result.streakDays;
                 final bool isCurrent = dayNumber == result.streakDays;
-                final int dayCoins = 50 + (index * 10); // Day 1 = 50, Day 2 = 60, Day 3 = 70 ... Day 7 = 110
+                final int dayCoins = 50 + (index * 10);
 
                 return Column(
                   children: [
@@ -133,7 +136,7 @@ class DailyStreakDialog extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '+${result.coinsEarned} G-Coins Added!',
+                    'streak_coins_added'.tr(namedArgs: {'coins': '${result.coinsEarned}'}),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -156,9 +159,9 @@ class DailyStreakDialog extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'Collect & Continue',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                child: Text(
+                  'btn_collect_and_continue'.tr(),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                 ),
               ),
             ),
