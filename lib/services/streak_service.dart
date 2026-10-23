@@ -88,15 +88,15 @@ class StreakService {
 
   static final ValueNotifier<bool> celebrationNotifier = ValueNotifier<bool>(false);
 
-  // Day 1 se Day 7 tak ka coin reward table
+  // Day 1 se Day 7 tak ka coin reward table (50 se shuru, har din +10)
   static const Map<int, int> streakCoinTable = {
-    1: 10,
-    2: 20,
-    3: 35,
-    4: 50,
-    5: 75,
+    1: 50,
+    2: 60,
+    3: 70,
+    4: 80,
+    5: 90,
     6: 100,
-    7: 200,
+    7: 110,
   };
 
   String _formatToday() {
@@ -192,7 +192,7 @@ class StreakService {
         streak = 1;
       }
 
-      final int rewardCoins = streakCoinTable[streak] ?? 10;
+      final int rewardCoins = streakCoinTable[streak] ?? 50;
 
       // Supabase update
       await _supabase.from('users').update({
