@@ -13,6 +13,8 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _tournaments = [];
+  final Set<String> _registeredTournamentIds = {};
+  String? _myTeamId;
 
   @override
   void initState() {
@@ -22,7 +24,34 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
   Future<void> _fetchTournaments() async {
     setState(() => _isLoading = true);
+    final user = _supabase.auth.currentUser;
+
     try {
+      // 1. Get leader's team
+      if (user != null) {
+        final teamRes = await _supabase
+            .from('teams')
+            .select('id')
+            .eq('leader_id', user.id)
+            .maybeSingle();
+
+        _myTeamId = teamRes?['id']?.toString();
+
+        // 2. Fetch all registered tournaments for this team
+        if (_myTeamId != null) {
+          final regRes = await _supabase
+              .from('tournament_registrations')
+              .select('tournament_id')
+              .eq('team_id', _myTeamId!);
+
+          _registeredTournamentIds.clear();
+          for (var r in regRes) {
+            _registeredTournamentIds.add(r['tournament_id'].toString());
+          }
+        }
+      }
+
+      // 3. Fetch tournaments
       final res = await _supabase
           .from('tournaments')
           .select()
@@ -38,7 +67,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading tournaments: $e')),
+          SnackBar(content: Text('Error: $e')),
         );
       }
     }
@@ -53,48 +82,22 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       return;
     }
 
+    if (_myTeamId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only Team Leaders can register a squad!')),
+      );
+      return;
+    }
+
     try {
-      // 1. Leader check
-      final teamRes = await _supabase
-          .from('teams')
-          .select('id, leader_id')
-          .eq('leader_id', user.id)
-          .maybeSingle();
-
-      if (teamRes == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Only Team Leaders can register a squad!')),
-        );
-        return;
-      }
-
-      final teamId = teamRes['id'];
-
-      // 2. Duplicate registration check
-      final checkRegistration = await _supabase
-          .from('tournament_registrations')
-          .select('id')
-          .eq('tournament_id', tournamentId)
-          .eq('team_id', teamId)
-          .maybeSingle();
-
-      if (checkRegistration != null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Your team is already registered!')),
-        );
-        return;
-      }
-
-      // 3. Register Squad
+      // Register Squad
       await _supabase.from('tournament_registrations').insert({
         'tournament_id': tournamentId,
-        'team_id': teamId,
+        'team_id': _myTeamId,
         'leader_id': user.id,
       });
 
-      // 4. Update count in Supabase
+      // Update count
       await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
 
       if (!mounted) return;
@@ -117,9 +120,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0A0E17),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF161A22),
         elevation: 0,
         title: const Text(
           'Tournaments',
@@ -139,13 +142,15 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(16),
                     itemCount: _tournaments.length,
                     itemBuilder: (context, index) {
                       final item = _tournaments[index];
+                      final tId = item['id'].toString();
                       final maxTeams = (item['max_teams'] ?? 16) as int;
                       final currentTeams = (item['current_teams'] ?? 0) as int;
                       final isFull = currentTeams >= maxTeams;
+                      final isRegistered = _registeredTournamentIds.contains(tId);
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -154,7 +159,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                           color: const Color(0xFF161A22),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: const Color(0xFF00FF88).withOpacity(0.2),
+                            color: isRegistered
+                                ? const Color(0xFF00FF88).withOpacity(0.5)
+                                : Colors.white10,
                             width: 1,
                           ),
                         ),
@@ -207,7 +214,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                               child: LinearProgressIndicator(
                                 value: maxTeams > 0 ? (currentTeams / maxTeams) : 0,
                                 backgroundColor: Colors.white10,
-                                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00FF88)),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  isRegistered ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
+                                ),
                                 minHeight: 6,
                               ),
                             ),
@@ -222,22 +231,26 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                               height: 44,
                               child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: isFull
-                                      ? Colors.white24
-                                      : const Color(0xFF00FF88),
-                                  foregroundColor: isFull ? Colors.white54 : Colors.black,
+                                  backgroundColor: isRegistered
+                                      ? Colors.white12
+                                      : (isFull ? Colors.white24 : const Color(0xFF00FF88)),
+                                  foregroundColor: isRegistered
+                                      ? const Color(0xFF00FF88)
+                                      : (isFull ? Colors.white54 : Colors.black),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
+                                    side: isRegistered
+                                        ? const BorderSide(color: Color(0xFF00FF88), width: 1)
+                                        : BorderSide.none,
                                   ),
                                 ),
-                                onPressed: isFull
+                                onPressed: (isFull || isRegistered)
                                     ? null
-                                    : () => _registerTeam(
-                                          item['id'].toString(),
-                                          item['entry_fee'] ?? 0,
-                                        ),
+                                    : () => _registerTeam(tId, item['entry_fee'] ?? 0),
                                 child: Text(
-                                  isFull ? 'Slots Full' : 'Register Squad',
+                                  isRegistered
+                                      ? '✓ Already Registered'
+                                      : (isFull ? 'Slots Full' : 'Register Squad'),
                                   style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
                               ),
