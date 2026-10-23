@@ -49,7 +49,9 @@ class _TeamCardState extends State<TeamCard> {
   bool _isMemberFromDb = false;
   bool _isOwnerFromDb = false;
 
-  final Set<String> _localCancelledIds = {};
+  // Local optimistic state for sent challenges
+  bool _localSentChallenge = false;
+  String? _localSentChallengeId;
 
   @override
   void initState() {
@@ -189,6 +191,72 @@ class _TeamCardState extends State<TeamCard> {
     }
   }
 
+  Future<void> _handleCancelSentChallenge(String challengeId) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'confirm_cancel_challenge_title'.tr().contains('confirm_')
+              ? 'Cancel Challenge?'
+              : 'confirm_cancel_challenge_title'.tr(),
+          style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        content: Text(
+          'confirm_cancel_challenge_desc'.tr().contains('confirm_')
+              ? 'Are you sure you want to cancel the challenge request sent to ${widget.team.name}?'
+              : 'confirm_cancel_challenge_desc'.tr(),
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('cancel'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('btn_cancel'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _localSentChallenge = false;
+      _localSentChallengeId = null;
+    });
+
+    if (widget.onCancelChallenge != null && challengeId.isNotEmpty) {
+      await widget.onCancelChallenge!(challengeId);
+    } else if (challengeId.isNotEmpty) {
+      try {
+        await SupabaseService.client.from('challenges').delete().eq('id', challengeId);
+      } catch (e) {
+        debugPrint('[TeamCard] Error cancelling challenge: $e');
+      }
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('msg_challenge_cancelled_success'.tr().contains('msg_')
+              ? 'Challenge cancelled successfully'
+              : 'msg_challenge_cancelled_success'.tr()),
+          backgroundColor: const Color(0xFFFF4655),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   Future<void> _handleChallenge(String currentUid) async {
     if (widget.isMyTeamFrozen) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -229,14 +297,23 @@ class _TeamCardState extends State<TeamCard> {
       title: 'Challenge Rules (${widget.team.name})',
       onProceed: () async {
         try {
-          await SupabaseService.client.from('challenges').insert({
+          // 0ms Optimistic UI update: instantly change button to "REQUESTED"
+          setState(() {
+            _localSentChallenge = true;
+          });
+
+          final res = await SupabaseService.client.from('challenges').insert({
             'from_team_id': effectiveMyTeamId,
             'to_team_id': effectiveTargetId,
             'from_team_name': effectiveMyTeamName,
             'to_team_name': widget.team.name,
             'status': 'pending',
             'game': widget.team.game.isNotEmpty ? widget.team.game : 'PUBG',
-          });
+          }).select().maybeSingle();
+
+          if (res != null && res['id'] != null) {
+            _localSentChallengeId = res['id'].toString();
+          }
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -247,7 +324,11 @@ class _TeamCardState extends State<TeamCard> {
             );
           }
         } catch (e) {
+          // Revert optimistic update on failure
           if (mounted) {
+            setState(() {
+              _localSentChallenge = false;
+            });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
             );
@@ -271,6 +352,12 @@ class _TeamCardState extends State<TeamCard> {
 
     final bool isOwnerFinal = isLeader || _isOwnerFromDb;
     final bool isMemberFinal = isMember || _isMemberFromDb || isOwnerFinal;
+
+    // Active Challenge detection: either from stream prop or locally triggered
+    final bool hasActiveChallenge = _localSentChallenge || (widget.pendingChallenge != null);
+    final String activeChallengeId = widget.pendingChallenge?['id']?.toString() ??
+        _localSentChallengeId ??
+        '';
 
     final gameColor = _getGameBadgeColor(team.game.isNotEmpty ? team.game : 'PUBG');
 
@@ -446,7 +533,7 @@ class _TeamCardState extends State<TeamCard> {
                     ),
                     const SizedBox(width: 6),
 
-                    // Action Button (Open / Requested (Clickable to Cancel) / Challenge)
+                    // Action Button (Open / Cancel Join Request / Cancel Challenge / Send Challenge)
                     Expanded(
                       child: SizedBox(
                         height: 30,
@@ -473,7 +560,7 @@ class _TeamCardState extends State<TeamCard> {
                                   );
                                 },
                               )
-                            : hasRequested
+                            : hasActiveChallenge
                                 ? OutlinedButton.icon(
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: const Color(0xFFFF8A00),
@@ -482,45 +569,65 @@ class _TeamCardState extends State<TeamCard> {
                                       backgroundColor: const Color(0xFFFF8A00).withOpacity(0.08),
                                       padding: EdgeInsets.zero,
                                     ),
-                                    icon: _isCancelling
-                                        ? const SizedBox(
-                                            width: 12,
-                                            height: 12,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 1.5,
-                                              color: Color(0xFFFF8A00),
-                                            ),
-                                          )
-                                        : const Icon(Icons.close_rounded, size: 12, color: Color(0xFFFF8A00)),
+                                    icon: const Icon(Icons.hourglass_top_rounded, size: 12, color: Color(0xFFFF8A00)),
                                     label: Text(
-                                      _isCancelling
-                                          ? 'loading'.tr()
-                                          : 'btn_cancel_request'.tr(),
+                                      'btn_requested'.tr().contains('btn_') ? 'Requested' : 'btn_requested'.tr(),
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 10.5,
                                         color: Color(0xFFFF8A00),
                                       ),
                                     ),
-                                    onPressed: _isCancelling
-                                        ? null
-                                        : () => _handleCancelJoinRequest(currentUid),
+                                    onPressed: () => _handleCancelSentChallenge(activeChallengeId),
                                   )
-                                : ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF1877F2),
-                                      foregroundColor: Colors.white,
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                      padding: EdgeInsets.zero,
-                                    ),
-                                    icon: const Icon(Icons.flash_on_rounded, size: 13, color: Colors.white),
-                                    label: Text(
-                                      'btn_challenge_caps'.tr(),
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                                    ),
-                                    onPressed: () => _handleChallenge(currentUid),
-                                  ),
+                                : hasRequested
+                                    ? OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(0xFFFF8A00),
+                                          side: const BorderSide(color: Color(0xFFFF8A00), width: 1),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                          backgroundColor: const Color(0xFFFF8A00).withOpacity(0.08),
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                        icon: _isCancelling
+                                            ? const SizedBox(
+                                                width: 12,
+                                                height: 12,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 1.5,
+                                                  color: Color(0xFFFF8A00),
+                                                ),
+                                              )
+                                            : const Icon(Icons.close_rounded, size: 12, color: Color(0xFFFF8A00)),
+                                        label: Text(
+                                          _isCancelling
+                                              ? 'loading'.tr()
+                                              : 'btn_cancel_request'.tr(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 10.5,
+                                            color: Color(0xFFFF8A00),
+                                          ),
+                                        ),
+                                        onPressed: _isCancelling
+                                            ? null
+                                            : () => _handleCancelJoinRequest(currentUid),
+                                      )
+                                    : ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1877F2),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                        icon: const Icon(Icons.flash_on_rounded, size: 13, color: Colors.white),
+                                        label: Text(
+                                          'btn_challenge_caps'.tr(),
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                        onPressed: () => _handleChallenge(currentUid),
+                                      ),
                       ),
                     ),
                   ],
