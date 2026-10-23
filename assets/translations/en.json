@@ -1,4 +1,9 @@
 {
+  "notif_team_join_request_title": "Team Join Request",
+  "notif_team_join_request_body": "A player has requested to join your squad.",
+  "notif_coins_earned_title": "Coins Earned!",
+  "wallet_ad_reward_reason": "Watched ad video reward",
+  "wallet_daily_bonus_reason": "Daily login streak bonus",
   "heading_incoming_challenges": "Incoming Challenges",
   "badge_new_count": "{} New",
   "msg_team_challenged_you": "Team challenged you to a match!",
