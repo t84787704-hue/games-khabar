@@ -1,3 +1,8 @@
+// ===============================================================================
+// GAMER AUTH SCREEN — With Manual Referral Code Input & Post-Auth Linking
+// File: lib/screens/gamer_auth_screen.dart
+// ===============================================================================
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -22,10 +27,12 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
   StreamSubscription<AuthState>? _authSubscription;
   bool _isNavigating = false;
 
+  final TextEditingController _referralController = TextEditingController();
+  bool _showReferralField = false;
+
   @override
   void initState() {
     super.initState();
-    // ✅ Supabase Auth Listener: Jaise hi Google redirect karega, foran andar bhejega
     _authSubscription = SupabaseService.client.auth.onAuthStateChange.listen((data) {
       final AuthChangeEvent event = data.event;
       final Session? session = data.session;
@@ -42,6 +49,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _referralController.dispose();
     super.dispose();
   }
 
@@ -56,6 +64,31 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     }
 
     try {
+      // 1. Agar user ne referral code dala hai to referrer dhoond kar link karein
+      final rawRefCode = _referralController.text.trim().toLowerCase().replaceAll('@', '');
+      if (rawRefCode.isNotEmpty) {
+        try {
+          final referrer = await SupabaseService.client
+              .from('users')
+              .select('id, uid')
+              .or('username.ilike.$rawRefCode,id.eq.$rawRefCode')
+              .maybeSingle();
+
+          if (referrer != null) {
+            final referrerUid = (referrer['id'] ?? referrer['uid'])?.toString();
+            if (referrerUid != null && referrerUid != authUser.id) {
+              await SupabaseService.client
+                  .from('users')
+                  .update({'referred_by': referrerUid})
+                  .or('id.eq.${authUser.id},uid.eq.${authUser.id}');
+            }
+          }
+        } catch (refError) {
+          debugPrint('[Referral Link Error]: $refError');
+        }
+      }
+
+      // 2. Profile fetch karein
       Map<String, dynamic>? profile;
       try {
         profile = await SupabaseService.client
@@ -116,10 +149,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     });
 
     try {
-      // ✅ Timeout hata diya gaya hai, taake auth listener naturally callback receive kare
       await GamerAuthService().signInWithGoogle();
-      
-      // Agar direct response mil jaye to manually handle karein
       if (SupabaseService.client.auth.currentUser != null) {
         await _handlePostAuth();
       }
@@ -208,7 +238,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 32),
 
                 if (_errorMessage != null) ...[
                   Container(
@@ -243,7 +273,49 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
+                ],
+
+                // REFERRAL CODE INPUT (OPTIONAL ACCORDION)
+                if (!_showReferralField) ...[
+                  TextButton.icon(
+                    onPressed: () => setState(() => _showReferralField = true),
+                    icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFF00FF88), size: 16),
+                    label: const Text(
+                      'Have a Referral Code?',
+                      style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ] else ...[
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF161A22),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
+                    ),
+                    child: TextField(
+                      controller: _referralController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Enter Friend\'s Username (e.g. @fua)',
+                        hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                        labelText: 'Referral Code (Optional)',
+                        labelStyle: const TextStyle(color: Color(0xFF00FF88), fontSize: 12),
+                        prefixIcon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFF00FF88), size: 18),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.white54, size: 16),
+                          onPressed: () {
+                            _referralController.clear();
+                            setState(() => _showReferralField = false);
+                          },
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 ],
 
                 SizedBox(
