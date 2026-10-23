@@ -1,9 +1,10 @@
 // ===============================================================================
-// GAMER CHAT SCREEN — Adaptive Day/Night Theme with Dynamic Online Status
+// GAMER CHAT SCREEN — Adaptive Day/Night Theme with Dynamic Online Status & Delete
 // File: lib/screens/gamer_chat_screen.dart
 // ===============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
@@ -189,6 +190,144 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _deleteMessage(ChatMessage message) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.delete_forever_rounded, color: Color(0xFFFF4655)),
+            const SizedBox(width: 8),
+            Text(
+              'Delete Message?',
+              style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete this message?',
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final msgId = message.id;
+      bool deleted = false;
+
+      // 1. Try deleting from direct_messages table
+      try {
+        await SupabaseService.client
+            .from('direct_messages')
+            .delete()
+            .eq('id', msgId);
+        deleted = true;
+      } catch (_) {}
+
+      // 2. Fallback to messages table if needed
+      if (!deleted) {
+        try {
+          await SupabaseService.client
+              .from('messages')
+              .delete()
+              .eq('id', msgId);
+          deleted = true;
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Message deleted'),
+            backgroundColor: Color(0xFFFF4655),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[GamerChatScreen] Delete message error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete message: $e')),
+        );
+      }
+    }
+  }
+
+  void _showMessageOptions(ChatMessage m, bool isMyMsg) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ThemeService.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded, color: neonCyan),
+              title: Text('Copy Text', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+              onTap: () {
+                Navigator.pop(ctx);
+                Clipboard.setData(ClipboardData(text: m.message));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Copied to clipboard!'),
+                    backgroundColor: neonBlue,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
+            if (isMyMsg)
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655)),
+                title: const Text('Delete Message', style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _deleteMessage(m);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _formatTime(DateTime dt) {
@@ -458,59 +597,62 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
   Widget _buildMessageBubble(ChatMessage m, bool isMyMsg) {
     return Align(
       alignment: isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isMyMsg ? null : ThemeService.card,
-          gradient: isMyMsg
-              ? const LinearGradient(
-                  colors: [Color(0xFF1877F2), Color(0xFF00A3FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isMyMsg ? neonCyan.withOpacity(0.5) : ThemeService.border,
-            width: 1,
+      child: GestureDetector(
+        onLongPress: () => _showMessageOptions(m, isMyMsg),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 5),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.75,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: isMyMsg
-                  ? neonCyan.withOpacity(0.18)
-                  : Colors.black.withOpacity(ThemeService.isDarkMode ? 0.2 : 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isMyMsg ? null : ThemeService.card,
+            gradient: isMyMsg
+                ? const LinearGradient(
+                    colors: [Color(0xFF1877F2), Color(0xFF00A3FF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isMyMsg ? neonCyan.withOpacity(0.5) : ThemeService.border,
+              width: 1,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              m.message,
-              style: TextStyle(
-                color: isMyMsg ? Colors.white : ThemeService.textPrimary,
-                fontSize: 13.5,
-                height: 1.3,
+            boxShadow: [
+              BoxShadow(
+                color: isMyMsg
+                    ? neonCyan.withOpacity(0.18)
+                    : Colors.black.withOpacity(ThemeService.isDarkMode ? 0.2 : 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
               ),
-            ),
-            const SizedBox(height: 3),
-            Align(
-              alignment: isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
-              child: Text(
-                _formatTime(m.createdAt),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                m.message,
                 style: TextStyle(
-                  color: isMyMsg ? Colors.white70 : ThemeService.textSecondary.withOpacity(0.8),
-                  fontSize: 10,
+                  color: isMyMsg ? Colors.white : ThemeService.textPrimary,
+                  fontSize: 13.5,
+                  height: 1.3,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 3),
+              Align(
+                alignment: isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
+                child: Text(
+                  _formatTime(m.createdAt),
+                  style: TextStyle(
+                    color: isMyMsg ? Colors.white70 : ThemeService.textSecondary.withOpacity(0.8),
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
