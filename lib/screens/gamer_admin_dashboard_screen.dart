@@ -426,7 +426,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   border: Border.all(color: const Color(0xFF00FF88)),
                 ),
                 child: const Row(
-                  mainAxisSize: minAxisSize,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.fiber_manual_record,
                         color: Color(0xFF00FF88), size: 10),
@@ -1833,7 +1833,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         allUsersSorted.sort((a, b) {
           final tA = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2020);
           final tB = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2020);
-          return tA.compareTo(tB); // FIXED
+          return tA.compareTo(tB);
         });
 
         final List<Map<String, dynamic>> requestsWithIndex = [];
