@@ -1,4 +1,5 @@
-{  "create_new_team_title": "Create New Team",
+{"team_created_success": "Team {0} created successfully! 🎉",
+"create_new_team_title": "Create New Team",
   "create_team_subtitle": "Form your squad and dominate tournaments",
   "edit_team_title": "Edit Team",
   "edit_team_subtitle": "Update your team details",
