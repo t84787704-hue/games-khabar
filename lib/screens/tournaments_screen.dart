@@ -266,15 +266,22 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                 child: ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: isRegistered
-                                        ? Colors.white12
-                                        : (isFull ? Colors.white24 : const Color(0xFF00FF88)),
+                                        ? const Color(0xFF00FF88).withOpacity(0.15)
+                                        : (isFull ? Colors.white12 : const Color(0xFF00FF88)),
                                     foregroundColor: isRegistered
                                         ? const Color(0xFF00FF88)
-                                        : (isFull ? Colors.white54 : Colors.black),
+                                        : (isFull ? Colors.white38 : Colors.black),
+                                    disabledBackgroundColor: isRegistered
+                                        ? const Color(0xFF00FF88).withOpacity(0.15)
+                                        : Colors.white12,
+                                    disabledForegroundColor: isRegistered
+                                        ? const Color(0xFF00FF88)
+                                        : Colors.white38,
+                                    elevation: 0,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                       side: isRegistered
-                                          ? const BorderSide(color: Color(0xFF00FF88), width: 1)
+                                          ? const BorderSide(color: Color(0xFF00FF88), width: 1.2)
                                           : BorderSide.none,
                                     ),
                                   ),
@@ -285,7 +292,13 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                     isRegistered
                                         ? '✓ Already Registered'
                                         : (isFull ? 'Slots Full' : 'Register Squad'),
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: isRegistered
+                                          ? const Color(0xFF00FF88)
+                                          : (isFull ? Colors.white38 : Colors.black),
+                                    ),
                                   ),
                                 ),
                               ),
