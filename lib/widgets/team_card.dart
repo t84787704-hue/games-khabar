@@ -43,7 +43,9 @@ class TeamCard extends StatefulWidget {
 class _TeamCardState extends State<TeamCard> {
   final TeamService _teamService = TeamService();
   bool _isRequesting = false;
+  bool _isCancelling = false;
   bool _localRequested = false;
+  bool _localCancelled = false;
   bool _isMemberFromDb = false;
   bool _isOwnerFromDb = false;
 
@@ -98,6 +100,92 @@ class _TeamCardState extends State<TeamCard> {
         return const Color(0xFFE11D48);
       default:
         return const Color(0xFF00E5FF);
+    }
+  }
+
+  Future<void> _handleCancelJoinRequest(String currentUid) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'dialog_cancel_request_title'.tr(),
+          style: TextStyle(
+            color: ThemeService.textPrimary,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        content: Text(
+          'dialog_cancel_request_desc'.tr(namedArgs: {'team': widget.team.name}),
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'cancel'.tr(),
+              style: TextStyle(color: ThemeService.textSecondary),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'btn_cancel_request'.tr(),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isCancelling = true);
+
+    try {
+      final success = await _teamService.cancelJoinRequest(
+        teamId: widget.team.id,
+        userId: currentUid,
+      );
+
+      if (!mounted) return;
+
+      if (success) {
+        setState(() {
+          _localRequested = false;
+          _localCancelled = true;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('msg_request_cancelled_success'.tr()),
+            backgroundColor: const Color(0xFFFF4655),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('err_something_went_wrong'.tr()),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCancelling = false);
     }
   }
 
@@ -176,7 +264,10 @@ class _TeamCardState extends State<TeamCard> {
         (SupabaseService.client.auth.currentUser?.id ?? '');
     final isLeader = team.isLeader(currentUid);
     final isMember = team.isMember(currentUid);
-    final hasRequested = team.hasRequestedJoin(currentUid);
+    final rawHasRequested = team.hasRequestedJoin(currentUid);
+
+    // Agar local cancel kar diya ho to requested false ho jaye
+    final hasRequested = !_localCancelled && (rawHasRequested || _localRequested);
 
     final bool isOwnerFinal = isLeader || _isOwnerFromDb;
     final bool isMemberFinal = isMember || _isMemberFromDb || isOwnerFinal;
@@ -355,7 +446,7 @@ class _TeamCardState extends State<TeamCard> {
                     ),
                     const SizedBox(width: 6),
 
-                    // Challenge / Action Button
+                    // Action Button (Open / Requested (Clickable to Cancel) / Challenge)
                     Expanded(
                       child: SizedBox(
                         height: 30,
@@ -382,25 +473,38 @@ class _TeamCardState extends State<TeamCard> {
                                   );
                                 },
                               )
-                            : (hasRequested || _localRequested)
+                            : hasRequested
                                 ? OutlinedButton.icon(
                                     style: OutlinedButton.styleFrom(
-                                      foregroundColor: ThemeService.textSecondary,
-                                      side: BorderSide(color: ThemeService.border),
+                                      foregroundColor: const Color(0xFFFF8A00),
+                                      side: const BorderSide(color: Color(0xFFFF8A00), width: 1),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                      backgroundColor: ThemeService.cardSecondary,
+                                      backgroundColor: const Color(0xFFFF8A00).withOpacity(0.08),
                                       padding: EdgeInsets.zero,
                                     ),
-                                    icon: const Icon(Icons.hourglass_top_rounded, size: 12),
+                                    icon: _isCancelling
+                                        ? const SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 1.5,
+                                              color: Color(0xFFFF8A00),
+                                            ),
+                                          )
+                                        : const Icon(Icons.close_rounded, size: 12, color: Color(0xFFFF8A00)),
                                     label: Text(
-                                      'btn_requested_wait'.tr(),
-                                      style: TextStyle(
+                                      _isCancelling
+                                          ? 'loading'.tr()
+                                          : 'btn_cancel_request'.tr(),
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 10.5,
-                                        color: ThemeService.textSecondary,
+                                        color: Color(0xFFFF8A00),
                                       ),
                                     ),
-                                    onPressed: null,
+                                    onPressed: _isCancelling
+                                        ? null
+                                        : () => _handleCancelJoinRequest(currentUid),
                                   )
                                 : ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
