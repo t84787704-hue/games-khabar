@@ -7,6 +7,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/gamer_theme.dart';
 import '../constants/mobile_games_rank_data.dart';
 import '../models/gamer_user_model.dart';
@@ -49,7 +50,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 9, vsync: this);
+    _tabController = TabController(length: 10, vsync: this);
     _ensureSampleQueueExists();
   }
 
@@ -205,6 +206,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         unselectedLabelStyle: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13),
                         tabs: [
+                          const Tab(text: 'Tournaments 🏆'),
                           const Tab(text: 'Users'),
                           _buildRankVerifyTabTitle(),
                           _buildBlueTickTabTitle(),
@@ -223,6 +225,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               body: TabBarView(
                 controller: _tabController,
                 children: [
+                  _AdminTournamentsTab(),
                   _buildUsersTab(),
                   _buildRankVerifyTab(),
                   _buildBlueTickRequestsTab(),
@@ -2608,6 +2611,560 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   }
 }
 
+// ===================== TAB 0: TOURNAMENTS ADMIN CONTROLLER =====================
+class _AdminTournamentsTab extends StatefulWidget {
+  const _AdminTournamentsTab();
+
+  @override
+  State<_AdminTournamentsTab> createState() => _AdminTournamentsTabState();
+}
+
+class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
+  final SupabaseClient _supabase = SupabaseService.client;
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _tournaments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTournaments();
+  }
+
+  Future<void> _loadTournaments() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await _supabase
+          .from('tournaments')
+          .select()
+          .order('created_at', ascending: false);
+      if (mounted) {
+        setState(() {
+          _tournaments = List<Map<String, dynamic>>.from(res);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading tournaments: $e')),
+        );
+      }
+    }
+  }
+
+  void _openCreateTournamentDialog() {
+    final titleController = TextEditingController();
+    final mapController = TextEditingController(text: 'Erangel');
+    final feeController = TextEditingController(text: '50');
+    final prizeController = TextEditingController(text: '500');
+    final roomController = TextEditingController();
+    final passController = TextEditingController();
+    int maxTeams = 4;
+    String mode = 'Squad (4v4)';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF161A22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.emoji_events_rounded, color: Color(0xFF00FF88)),
+                SizedBox(width: 8),
+                Text('Create Tournament',
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Tournament Title',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: mode,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Match Mode',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Squad (4v4)', child: Text('Squad (4v4)')),
+                      DropdownMenuItem(value: 'Duo (2v2)', child: Text('Duo (2v2)')),
+                      DropdownMenuItem(value: 'Solo', child: Text('Solo')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDState(() => mode = val);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: mapController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Map Name (Erangel, Livik, etc.)',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: feeController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Entry Fee 🪙',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: prizeController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Prize Pool 🪙',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<int>(
+                    value: maxTeams,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Max Slots / Teams',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 2, child: Text('2 Teams (Final Match)')),
+                      DropdownMenuItem(value: 4, child: Text('4 Teams (Fast Tournament)')),
+                      DropdownMenuItem(value: 8, child: Text('8 Teams')),
+                      DropdownMenuItem(value: 16, child: Text('16 Teams (Classic Squad)')),
+                      DropdownMenuItem(value: 25, child: Text('25 Teams (Full Lobby)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDState(() => maxTeams = val);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: roomController,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Room ID (optional)',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: passController,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Room Pass (optional)',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00FF88),
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: () async {
+                  final title = titleController.text.trim();
+                  if (title.isEmpty) return;
+
+                  final fee = int.tryParse(feeController.text.trim()) ?? 0;
+                  final prize = int.tryParse(prizeController.text.trim()) ?? 0;
+
+                  try {
+                    await _supabase.from('tournaments').insert({
+                      'title': title,
+                      'game_mode': mode,
+                      'map_name': mapController.text.trim().isEmpty ? 'Erangel' : mapController.text.trim(),
+                      'entry_fee': fee,
+                      'prize_pool': prize,
+                      'max_teams': maxTeams,
+                      'current_teams': 0,
+                      'match_time': DateTime.now().add(const Duration(hours: 24)).toIso8601String(),
+                      'room_id': roomController.text.trim(),
+                      'room_password': passController.text.trim(),
+                      'status': 'upcoming',
+                    });
+
+                    if (context.mounted) Navigator.pop(ctx);
+                    _loadTournaments();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Tournament Created Successfully! 🎉'),
+                          backgroundColor: Color(0xFF00FF88),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error creating tournament: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Publish Tournament', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _openRoomCredentialsDialog(String tournamentId, String oldId, String oldPass) {
+    final idController = TextEditingController(text: oldId);
+    final passController = TextEditingController(text: oldPass);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161A22),
+        title: const Text('Update Room Credentials', style: TextStyle(color: Colors.white, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: idController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Custom Room ID', labelStyle: TextStyle(color: Colors.white70)),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: passController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Room Password', labelStyle: TextStyle(color: Colors.white70)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.white60))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF88), foregroundColor: Colors.black),
+            onPressed: () async {
+              await _supabase.from('tournaments').update({
+                'room_id': idController.text.trim(),
+                'room_password': passController.text.trim(),
+              }).eq('id', tournamentId);
+
+              if (context.mounted) Navigator.pop(ctx);
+              _loadTournaments();
+            },
+            child: const Text('Save Credentials'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openDeclareWinnerDialog(String tournamentId, int prizePool) async {
+    final regRes = await _supabase
+        .from('tournament_registrations')
+        .select('team_id, teams:teams(id, name, leader_id)')
+        .eq('tournament_id', tournamentId);
+
+    if (regRes.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No teams registered in this tournament yet!')),
+      );
+      return;
+    }
+
+    String? selectedTeamId = regRes.first['team_id']?.toString();
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF161A22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700)),
+                SizedBox(width: 8),
+                Text('Declare Winner & Pay', style: TextStyle(color: Colors.white, fontSize: 16)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Total Prize: $prizePool Coins',
+                    style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 12),
+                const Text('Select Winning Team:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: selectedTeamId,
+                  dropdownColor: const Color(0xFF161A22),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  items: regRes.map<DropdownMenuItem<String>>((r) {
+                    final tName = r['teams']?['name']?.toString() ?? 'Team #${r['team_id'].toString().substring(0, 5)}';
+                    return DropdownMenuItem(value: r['team_id'].toString(), child: Text(tName));
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) setDState(() => selectedTeamId = val);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.white60))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black),
+                onPressed: () async {
+                  if (selectedTeamId == null) return;
+                  try {
+                    await _supabase.rpc('distribute_match_reward', params: {
+                      'p_team_id': selectedTeamId,
+                      'p_total_prize': prizePool,
+                    });
+
+                    await _supabase.from('tournaments').update({
+                      'status': 'completed',
+                      'winner_team_id': selectedTeamId,
+                    }).eq('id', tournamentId);
+
+                    if (context.mounted) Navigator.pop(ctx);
+                    _loadTournaments();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Winner Declared & Prize Coins Distributed to Squad Members! 🏆'),
+                          backgroundColor: Color(0xFF00FF88),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Reward distribution failed: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Distribute Prize Now', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _deleteTournament(String id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161A22),
+        title: const Text('Delete Tournament?', style: TextStyle(color: Colors.white)),
+        content: const Text('Are you sure you want to delete this tournament?', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _supabase.from('tournaments').delete().eq('id', id);
+      _loadTournaments();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openCreateTournamentDialog,
+        backgroundColor: const Color(0xFF00FF88),
+        foregroundColor: Colors.black,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Create Tournament', style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))
+          : _tournaments.isEmpty
+              ? const Center(
+                  child: Text('No tournaments found. Tap + to create one.', style: TextStyle(color: Colors.white60)),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                  itemCount: _tournaments.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final item = _tournaments[index];
+                    final tId = item['id'].toString();
+                    final title = item['title'] ?? 'Tournament';
+                    final currentTeams = item['current_teams'] ?? 0;
+                    final maxTeams = item['max_teams'] ?? 16;
+                    final prize = item['prize_pool'] ?? 0;
+                    final fee = item['entry_fee'] ?? 0;
+                    final status = (item['status'] ?? 'upcoming').toString();
+                    final roomId = (item['room_id'] ?? '').toString();
+                    final roomPass = (item['room_password'] ?? '').toString();
+
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: ThemeService.card,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: ThemeService.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: TextStyle(
+                                    color: ThemeService.textPrimary,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: status == 'completed'
+                                      ? Colors.white10
+                                      : const Color(0xFF00FF88).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  status.toUpperCase(),
+                                  style: TextStyle(
+                                    color: status == 'completed' ? Colors.white60 : const Color(0xFF00FF88),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Text('Prize: $prize 🪙',
+                                  style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 12)),
+                              const SizedBox(width: 12),
+                              Text('Fee: $fee 🪙',
+                                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
+                              const SizedBox(width: 12),
+                              Text('Slots: $currentTeams / $maxTeams',
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            roomId.isNotEmpty ? 'Room ID: $roomId • Pass: $roomPass' : 'Room ID: Not assigned yet',
+                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontFamily: 'monospace'),
+                          ),
+                          const SizedBox(height: 10),
+                          Divider(color: ThemeService.border, height: 1),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Color(0xFFFF4655), size: 20),
+                                onPressed: () => _deleteTournament(tId),
+                              ),
+                              const Spacer(),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF38BDF8),
+                                  side: const BorderSide(color: Color(0xFF38BDF8)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                ),
+                                icon: const Icon(Icons.vpn_key_rounded, size: 14),
+                                label: const Text('Room ID', style: TextStyle(fontSize: 11)),
+                                onPressed: () => _openRoomCredentialsDialog(tId, roomId, roomPass),
+                              ),
+                              const SizedBox(width: 8),
+                              if (status != 'completed')
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFFFD700),
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  ),
+                                  icon: const Icon(Icons.military_tech_rounded, size: 14),
+                                  label: const Text('Declare Winner', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  onPressed: () => _openDeclareWinnerDialog(tId, prize),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
+
 class _AdminCoinsVaultTab extends StatefulWidget {
   const _AdminCoinsVaultTab();
 
@@ -3207,7 +3764,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                     color: const Color(0xFF00FF88).withOpacity(0.6)),
-              ),
+                ),
               child: Row(
                 children: [
                   const Icon(Icons.check_circle_rounded,
