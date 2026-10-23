@@ -1,6 +1,6 @@
 // ===============================================================================
 // File: lib/screens/gamer_main_navigation_screen.dart
-// Clean Navigation Screen with Theme & Language Sync + Daily Streak Popup
+// Clean Navigation Screen with Theme & Language Sync + Daily Streak Popup + 10-Min Active Stay Tracker
 // ===============================================================================
 
 import 'dart:async';
@@ -12,6 +12,7 @@ import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../services/streak_service.dart';
+import '../services/app_stay_timer_service.dart';
 import '../widgets/daily_streak_dialog.dart';
 import 'gamer_feed_screen.dart';
 import 'tournaments_screen.dart';
@@ -43,6 +44,15 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     _checkUsernameSetup();
     _checkAdminStatus();
     _checkDailyLoginStreak();
+    _initActiveStayTracker();
+  }
+
+  void _initActiveStayTracker() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppStayTimerService().init(context);
+      }
+    });
   }
 
   void _checkDailyLoginStreak() {
