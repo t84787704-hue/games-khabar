@@ -1,4 +1,6 @@
-{  "badge_leader_caps": "LEADER",
+{"btn_cancel_request": "Cancel Request",
+  "msg_request_cancelled": "Team request cancelled successfully",
+  "badge_leader_caps": "LEADER",
   "btn_challenge_team": "Challenge Team",
   "team_description_title": "Description",
   "team_requirements_title": "Requirements",
