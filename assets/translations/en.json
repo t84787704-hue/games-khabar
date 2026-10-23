@@ -1,4 +1,7 @@
 {
+  "dialog_age_restriction_title": "Age Restriction Notice",
+  "dialog_age_restriction_desc": "You must be 13 years or older to use Gamers ID Network in compliance with child safety policies.",
+  "btn_i_understand": "I Understand",
   "notif_team_join_request_title": "Team Join Request",
   "notif_team_join_request_body": "A player has requested to join your squad.",
   "notif_coins_earned_title": "Coins Earned!",
