@@ -1,5 +1,11 @@
+// ===============================================================================
+// TOURNAMENTS SCREEN — Tournament Feed & Navigation to Details
+// File: lib/screens/tournaments_screen.dart
+// ===============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'tournament_detail_screen.dart';
 
 class TournamentsScreen extends StatefulWidget {
   const TournamentsScreen({super.key});
@@ -152,110 +158,139 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                       final isFull = currentTeams >= maxTeams;
                       final isRegistered = _registeredTournamentIds.contains(tId);
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF161A22),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isRegistered
-                                ? const Color(0xFF00FF88).withOpacity(0.5)
-                                : Colors.white10,
-                            width: 1,
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TournamentDetailScreen(
+                                tournament: item,
+                                isRegistered: isRegistered,
+                              ),
+                            ),
+                          ).then((_) => _fetchTournaments());
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161A22),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isRegistered
+                                  ? const Color(0xFF00FF88).withOpacity(0.5)
+                                  : Colors.white10,
+                              width: 1,
+                            ),
                           ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    item['title'] ?? 'Tournament',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item['title'] ?? 'Tournament',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF00FF88).withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    'Prize: ${item['prize_pool']} Coins',
-                                    style: const TextStyle(
-                                      color: Color(0xFF00FF88),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00FF88).withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      'Prize: ${item['prize_pool']} Coins',
+                                      style: const TextStyle(
+                                        color: Color(0xFF00FF88),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                _badge(Icons.sports_esports, item['game_mode'] ?? 'Squad (4v4)'),
-                                const SizedBox(width: 8),
-                                _badge(Icons.map, item['map_name'] ?? 'Erangel'),
-                                const SizedBox(width: 8),
-                                _badge(Icons.monetization_on, 'Fee: ${item['entry_fee'] ?? 0}'),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: LinearProgressIndicator(
-                                value: maxTeams > 0 ? (currentTeams / maxTeams) : 0,
-                                backgroundColor: Colors.white10,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  isRegistered ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
-                                ),
-                                minHeight: 6,
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Slots: $currentTeams / $maxTeams Teams Registered',
-                              style: const TextStyle(color: Colors.white54, fontSize: 12),
-                            ),
-                            const SizedBox(height: 14),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 44,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: isRegistered
-                                      ? Colors.white12
-                                      : (isFull ? Colors.white24 : const Color(0xFF00FF88)),
-                                  foregroundColor: isRegistered
-                                      ? const Color(0xFF00FF88)
-                                      : (isFull ? Colors.white54 : Colors.black),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    side: isRegistered
-                                        ? const BorderSide(color: Color(0xFF00FF88), width: 1)
-                                        : BorderSide.none,
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  _badge(Icons.sports_esports, item['game_mode'] ?? 'Squad (4v4)'),
+                                  const SizedBox(width: 8),
+                                  _badge(Icons.map, item['map_name'] ?? 'Erangel'),
+                                  const SizedBox(width: 8),
+                                  _badge(Icons.monetization_on, 'Fee: ${item['entry_fee'] ?? 0}'),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: LinearProgressIndicator(
+                                  value: maxTeams > 0 ? (currentTeams / maxTeams) : 0,
+                                  backgroundColor: Colors.white10,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    isRegistered ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
+                                  ),
+                                  minHeight: 6,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Slots: $currentTeams / $maxTeams Teams Registered',
+                                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                  ),
+                                  const Row(
+                                    children: [
+                                      Text(
+                                        'View Details',
+                                        style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                      SizedBox(width: 2),
+                                      Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF38BDF8), size: 10),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 44,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isRegistered
+                                        ? Colors.white12
+                                        : (isFull ? Colors.white24 : const Color(0xFF00FF88)),
+                                    foregroundColor: isRegistered
+                                        ? const Color(0xFF00FF88)
+                                        : (isFull ? Colors.white54 : Colors.black),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      side: isRegistered
+                                          ? const BorderSide(color: Color(0xFF00FF88), width: 1)
+                                          : BorderSide.none,
+                                    ),
+                                  ),
+                                  onPressed: (isFull || isRegistered)
+                                      ? null
+                                      : () => _registerTeam(tId, item['entry_fee'] ?? 0),
+                                  child: Text(
+                                    isRegistered
+                                        ? '✓ Already Registered'
+                                        : (isFull ? 'Slots Full' : 'Register Squad'),
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                 ),
-                                onPressed: (isFull || isRegistered)
-                                    ? null
-                                    : () => _registerTeam(tId, item['entry_fee'] ?? 0),
-                                child: Text(
-                                  isRegistered
-                                      ? '✓ Already Registered'
-                                      : (isFull ? 'Slots Full' : 'Register Squad'),
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       );
                     },
