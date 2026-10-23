@@ -136,7 +136,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           .from('posts')
           .select('*')
           .order('created_at', ascending: false)
-          .limit(20);
+          .limit(30);
 
       final fetchedPosts = List<Map<String, dynamic>>.from(data as List);
 
@@ -648,28 +648,59 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                     );
                                   }
 
-                                  await SupabaseService.client.from('posts').insert({
+                                  final nowIso = DateTime.now().toIso8601String();
+                                  final insertPayload = {
                                     'content': text,
                                     'user_id': currentUserId,
                                     'username': currentUsername,
                                     'image_url': uploadedImageUrl,
                                     'likes_count': 0,
                                     'comments_count': 0,
-                                    'created_at': DateTime.now().toIso8601String(),
-                                  });
+                                    'created_at': nowIso,
+                                  };
+
+                                  // Insert and return the created record
+                                  final insertedRecord = await SupabaseService.client
+                                      .from('posts')
+                                      .insert(insertPayload)
+                                      .select()
+                                      .maybeSingle();
+
+                                  final Map<String, dynamic> newPost =
+                                      insertedRecord != null
+                                          ? Map<String, dynamic>.from(insertedRecord)
+                                          : {
+                                              ...insertPayload,
+                                              'id': 'temp_${DateTime.now().millisecondsSinceEpoch}',
+                                            };
 
                                   if (sheetCtx.mounted) {
                                     Navigator.pop(sheetCtx);
                                   }
 
                                   if (mounted) {
+                                    // Inject immediately to the top of feed (0ms delay)
+                                    setState(() {
+                                      posts.removeWhere((p) => p['id'] == newPost['id']);
+                                      posts.insert(0, newPost);
+                                      userProfiles[currentUserId] = {
+                                        'id': currentUserId,
+                                        'username': currentUsername,
+                                        'avatar_url': currentAvatarUrl,
+                                      };
+                                    });
+
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text('msg_post_created'.tr()),
                                         backgroundColor: const Color(0xFF1877F2),
                                       ),
                                     );
-                                    _loadFeed();
+
+                                    // Refresh in background after a slight delay to sync DB IDs
+                                    Future.delayed(const Duration(milliseconds: 1500), () {
+                                      if (mounted) _loadFeed();
+                                    });
                                   }
                                 } catch (e) {
                                   debugPrint('Error creating post: $e');
