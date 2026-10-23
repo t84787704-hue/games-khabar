@@ -14,10 +14,9 @@ import '../services/language_service.dart';
 import '../services/streak_service.dart';
 import '../widgets/daily_streak_dialog.dart';
 import 'gamer_feed_screen.dart';
-import 'tournaments_screen.dart'; // Naya Tournaments Screen Import
+import 'tournaments_screen.dart';
 import 'teams_screen.dart';
 import 'gamer_messages_screen.dart';
-import 'gamer_rooms_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
 import 'gamer_admin_dashboard_screen.dart';
@@ -85,8 +84,8 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
           if (isDocAdmin != _isAdmin) {
             setState(() {
               _isAdmin = isDocAdmin;
-              // Tournaments add hone ke baad admin tab index 6 banta hai
-              if (!_isAdmin && _currentIndex > 5) {
+              // Rooms nikalne ke baad regular tabs 0 se 4 hain, admin tab 5 banta hai
+              if (!_isAdmin && _currentIndex > 4) {
                 _currentIndex = 0;
               }
             });
@@ -121,20 +120,18 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Index mapping:
+    // Index mapping (Rooms removed):
     // 0: Feed
     // 1: Tournaments
     // 2: Teams
     // 3: Messages
-    // 4: Rooms
-    // 5: Profile
-    // 6: Admin (if admin)
+    // 4: Profile
+    // 5: Admin (if admin)
     final screens = <Widget>[
       const GamerFeedScreen(),
       const TournamentsScreen(),
       const TeamsScreen(),
       const GamerMessagesScreen(),
-      const GamerRoomsScreen(),
       const GamerProfileScreen(),
       if (_isAdmin) const GamerAdminDashboardScreen(),
     ];
@@ -187,7 +184,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 0,
                           isDark: isDark,
                         ),
-                        // 1: Tournaments (Feed aur Teams ke darmiyan)
+                        // 1: Tournaments
                         _buildNavItem(
                           index: 1,
                           icon: Icons.emoji_events_rounded,
@@ -211,29 +208,21 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 3,
                           isDark: isDark,
                         ),
-                        // 4: Rooms
+                        // 4: Profile
                         _buildNavItem(
                           index: 4,
-                          icon: Icons.military_tech_rounded,
-                          label: 'nav_rooms'.tr(),
+                          icon: Icons.person_rounded,
+                          label: 'nav_profile'.tr(),
                           isSelected: _currentIndex == 4,
                           isDark: isDark,
                         ),
-                        // 5: Profile
-                        _buildNavItem(
-                          index: 5,
-                          icon: Icons.person_rounded,
-                          label: 'nav_profile'.tr(),
-                          isSelected: _currentIndex == 5,
-                          isDark: isDark,
-                        ),
-                        // 6: Admin
+                        // 5: Admin
                         if (_isAdmin)
                           _buildNavItem(
-                            index: 6,
+                            index: 5,
                             icon: Icons.admin_panel_settings_rounded,
                             label: 'nav_admin'.tr(),
-                            isSelected: _currentIndex == 6,
+                            isSelected: _currentIndex == 5,
                             activeColor: const Color(0xFF1877F2),
                             isDark: isDark,
                           ),
