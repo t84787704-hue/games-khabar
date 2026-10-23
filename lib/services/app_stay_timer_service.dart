@@ -1,3 +1,8 @@
+// ===============================================================================
+// File: lib/services/app_stay_timer_service.dart
+// 10-Min Active Stay Tracker with 2-Second Auto-Dismiss Banner
+// ===============================================================================
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -16,10 +21,12 @@ class AppStayTimerService with WidgetsBindingObserver {
 
   final ValueNotifier<int> secondsNotifier = ValueNotifier<int>(0);
 
-  void init(BuildContext context) {
+  void init(BuildContext context) async {
     WidgetsBinding.instance.addObserver(this);
-    _checkTodayStatus();
-    startTimer(context);
+    await _checkTodayStatus();
+    if (context.mounted) {
+      startTimer(context);
+    }
   }
 
   void dispose() {
@@ -102,7 +109,7 @@ class AppStayTimerService with WidgetsBindingObserver {
         'last_stay_bonus_date': DateTime.now().toIso8601String(),
       }).eq('id', user.id);
 
-      // 3. Screen par Celebration Banner Dikhayein
+      // 3. Screen par Celebration Banner Dikhayein (2 seconds mein auto-hide)
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -110,7 +117,7 @@ class AppStayTimerService with WidgetsBindingObserver {
             behavior: SnackBarBehavior.floating,
             elevation: 8,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            duration: const Duration(seconds: 6),
+            duration: const Duration(seconds: 2),
             content: Row(
               children: [
                 Container(
