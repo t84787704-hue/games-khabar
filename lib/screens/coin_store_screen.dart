@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLEAN COIN STORE SCREEN — Localized with easy_localization & Adaptive Theme
-// - Real-time smooth ticking 24h countdown timer
+// - Real-time smooth ticking 24h countdown timer (Max 24h capped, Timezone synced)
 // - Retained: Live Balance, Daily Check-in, Rewarded Ads, Referral & Activity History
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
@@ -61,14 +61,21 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
       return;
     }
 
-    final claimUtc = _lastClaimTime!.toUtc();
+    // Both times must be in UTC to avoid timezone offset inflation
+    final claimUtc = _lastClaimTime!.isUtc 
+        ? _lastClaimTime! 
+        : _lastClaimTime!.toUtc();
     final nowUtc = DateTime.now().toUtc();
+    
     final nextAvailableUtc = claimUtc.add(const Duration(hours: 24));
     final diff = nextAvailableUtc.difference(nowUtc);
 
     setState(() {
       if (diff.isNegative || diff.inSeconds <= 0) {
         _timeUntilNextClaim = Duration.zero;
+      } else if (diff.inSeconds > 24 * 3600) {
+        // Hard-cap at 24 hours to prevent clock skew or offset anomalies
+        _timeUntilNextClaim = const Duration(hours: 24);
       } else {
         _timeUntilNextClaim = diff;
       }
@@ -112,7 +119,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   setState(() {
                     _isClaimingDaily = false;
                     if (success) {
-                      _lastClaimTime = DateTime.now();
+                      _lastClaimTime = DateTime.now().toUtc();
                       _recalculateCountdown();
                     }
                   });
