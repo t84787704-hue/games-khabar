@@ -449,28 +449,38 @@ class _TeamsScreenState extends State<TeamsScreen>
           Container(
             width: double.infinity,
             margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFFFF4655).withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFFFF4655), width: 1.2),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 22),
-                const SizedBox(width: 8),
+                const Icon(Icons.lock_clock_rounded, color: Color(0xFFD32F2F), size: 22),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'team_frozen_title'.tr(),
-                        style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 12),
+                        style: const TextStyle(
+                          color: Color(0xFFC62828),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
                         'team_frozen_desc'.tr(),
-                        style: const TextStyle(color: Colors.white70, fontSize: 10.5),
+                        style: const TextStyle(
+                          color: Color(0xFFB71C1C),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11.5,
+                          height: 1.3,
+                        ),
                       ),
                     ],
                   ),
@@ -647,9 +657,9 @@ class _TeamsScreenState extends State<TeamsScreen>
                     final bool aIsMyTeam = currentUserId.isNotEmpty && (a.isLeader(currentUserId) || a.isMember(currentUserId));
                     final bool bIsMyTeam = currentUserId.isNotEmpty && (b.isLeader(currentUserId) || b.isMember(currentUserId));
 
-                    if (aIsMyTeam && !bIsMyTeam) return -1; // 'a' stays at top
-                    if (!aIsMyTeam && bIsMyTeam) return 1;  // 'b' stays at top
-                    return 0; // Maintain relative ordering for remaining teams
+                    if (aIsMyTeam && !bIsMyTeam) return -1;
+                    if (!aIsMyTeam && bIsMyTeam) return 1;
+                    return 0;
                   });
 
                   return RefreshIndicator(
