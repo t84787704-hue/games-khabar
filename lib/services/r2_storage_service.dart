@@ -12,13 +12,15 @@ class R2StorageService {
   static const String _accessKey = 'f95ff7a33b51c33530b9e852b621d97d';
   static const String _secretKey = 'c0628471d57c7fb82be1e24b77b44b8e45c3f22e7253cc56945dc8c6f495b194';
   static const String _bucketName = 'gamersid-post';
-  static const String _publicBaseUrl = 'https://pub-7a0250f08fb949a49663fef70e707.r2.dev';
+  
+  // ✅ Pura accurate Public URL:
+  static const String _publicBaseUrl = 'https://pub-7a0250f08fb949a49663fef70e7070d7.r2.dev';
 
   late final Minio _minioClient = Minio(
     endPoint: '$_accountId.r2.cloudflarestorage.com',
     accessKey: _accessKey,
     secretKey: _secretKey,
-    region: 'auto', // Cloudflare R2 requires region 'auto'
+    region: 'auto',
     useSSL: true,
   );
 
@@ -31,7 +33,6 @@ class R2StorageService {
       final fileName = 'posts/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final fileLength = await file.length();
       
-      // Fix: Stream<List<int>> ko Stream<Uint8List> me map kiya hai
       final Stream<Uint8List> stream = file.openRead().map((chunk) => Uint8List.fromList(chunk));
 
       debugPrint('[R2 Storage] Uploading $fileName (${fileLength} bytes)...');
@@ -51,7 +52,6 @@ class R2StorageService {
       return publicUrl;
     } catch (e) {
       debugPrint('[R2 Storage Error]: $e');
-      // Throw so that post creation catches it and warns user instead of faking success
       throw Exception('Image upload failed: $e');
     }
   }
