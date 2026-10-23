@@ -125,7 +125,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   }
 
   Future<void> _loadFeed() async {
-    if (mounted) setState(() => isLoading = true);
+    if (mounted && posts.isEmpty) setState(() => isLoading = true);
 
     if (currentUserId.isEmpty) {
       await _loadCurrentUserInfo();
@@ -646,6 +646,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                       file: selectedImage!,
                                       userId: currentUserId,
                                     );
+
+                                    if (uploadedImageUrl == null || uploadedImageUrl.isEmpty) {
+                                      throw Exception('Image upload failed: Empty URL returned');
+                                    }
                                   }
 
                                   final nowIso = DateTime.now().toIso8601String();
@@ -659,7 +663,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                     'created_at': nowIso,
                                   };
 
-                                  // Insert and return the created record
+                                  // Insert into Supabase
                                   final insertedRecord = await SupabaseService.client
                                       .from('posts')
                                       .insert(insertPayload)
@@ -679,7 +683,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                   }
 
                                   if (mounted) {
-                                    // Inject immediately to the top of feed (0ms delay)
+                                    // Instantly show at top of feed
                                     setState(() {
                                       posts.removeWhere((p) => p['id'] == newPost['id']);
                                       posts.insert(0, newPost);
@@ -696,11 +700,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                         backgroundColor: const Color(0xFF1877F2),
                                       ),
                                     );
-
-                                    // Refresh in background after a slight delay to sync DB IDs
-                                    Future.delayed(const Duration(milliseconds: 1500), () {
-                                      if (mounted) _loadFeed();
-                                    });
                                   }
                                 } catch (e) {
                                   debugPrint('Error creating post: $e');
@@ -953,7 +952,9 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                           (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
                       final postId = post['id']?.toString() ?? '';
                       final isLiked = likedPostIds.contains(postId);
-                      final imageUrl = (post['image_url'] ?? '').toString();
+                      
+                      // Support both image_url and media_url columns if present
+                      final imageUrl = (post['image_url'] ?? post['media_url'] ?? '').toString().trim();
                       final content = (post['content'] ?? '').toString();
                       final likesCount = post['likes_count'] ?? 0;
                       final int commentsCount = (post['comments_count'] is num)
@@ -1022,6 +1023,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Container(
                                   width: double.infinity,
+                                  constraints: const BoxConstraints(minHeight: 180, maxHeight: 420),
                                   color: ThemeService.cardSecondary,
                                   child: CachedNetworkImage(
                                     imageUrl: imageUrl,
@@ -1038,7 +1040,23 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                         ),
                                       ),
                                     ),
-                                    errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                                    errorWidget: (context, url, error) => Container(
+                                      height: 180,
+                                      color: ThemeService.cardSecondary,
+                                      child: Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 36),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              'Image loading error',
+                                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
