@@ -718,9 +718,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                                 children: [
-                                  _buildRecordStat('Wins', '${team.wins}', const Color(0xFF00FF88)), _buildDivider(), _buildRecordStat('Losses', '${team.losses}', const Color(0xFFFF4655)),
+                                  _buildRecordStat('Wins', '${team.wins}', const Color(0xFF00FF88)),
                                   _buildDivider(),
-                                  _buildRecordStat('Draws', '${team.draws}', const Color(0xFFFFB020)), _buildDivider(), _buildRecordStat('Points', '${team.points}', const Color(0xFFFF6B00)),
+                                  _buildRecordStat('Losses', '${team.losses}', const Color(0xFFFF4655)),
+                                  _buildDivider(),
+                                  _buildRecordStat('Draws', '${team.draws}', const Color(0xFFFFB020)),
+                                  _buildDivider(),
+                                  _buildRecordStat('Points', '${team.points}', const Color(0xFFFF6B00)),
                                 ],
                               ),
                             ),
@@ -1037,4 +1041,114 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     final tId = widget.teamId;
 
     return Column(
-      crossAxisAlignment:
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Match & Tournament History'),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: SupabaseService.client
+              .from('tournaments')
+              .select('id, title, winner_team_id, prize_pool, match_time, status')
+              .eq('status', 'completed')
+              .eq('winner_team_id', tId)
+              .order('match_time', ascending: false),
+          builder: (context, tourSnap) {
+            final wonTournaments = tourSnap.data ?? [];
+
+            if (wonTournaments.isEmpty) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                decoration: BoxDecoration(
+                  color: ThemeService.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.history_rounded, color: ThemeService.textSecondary.withOpacity(0.4), size: 36),
+                    const SizedBox(height: 8),
+                    Text(
+                      'No Matches Played Yet',
+                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Completed team battles and tournament matches will appear here',
+                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return Column(
+              children: wonTournaments.map((t) {
+                final title = t['title'] ?? 'Tournament Match';
+                final prize = t['prize_pool'] ?? 0;
+                String dateStr = 'Recent';
+                if (t['match_time'] != null) {
+                  try {
+                    dateStr = DateFormat('dd MMM yyyy').format(DateTime.parse(t['match_time'].toString()).toLocal());
+                  } catch (_) {}
+                }
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: ThemeService.card,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFD700).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Won $prize Coins • $dateStr',
+                              style: const TextStyle(color: Color(0xFF00FF88), fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00FF88).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF00FF88)),
+                        ),
+                        child: const Text(
+                          'WON #1',
+                          style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
