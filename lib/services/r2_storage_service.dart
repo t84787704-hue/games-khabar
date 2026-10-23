@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:minio_new/minio.dart';
 
@@ -29,7 +30,9 @@ class R2StorageService {
     try {
       final fileName = 'posts/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final fileLength = await file.length();
-      final stream = file.openRead();
+      
+      // Fix: Stream<List<int>> ko Stream<Uint8List> me map kiya hai
+      final Stream<Uint8List> stream = file.openRead().map((chunk) => Uint8List.fromList(chunk));
 
       debugPrint('[R2 Storage] Uploading $fileName (${fileLength} bytes)...');
 
