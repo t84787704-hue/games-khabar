@@ -60,20 +60,25 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
 
     setState(() => _isClaiming = true);
     try {
-      final userRes = await SupabaseService.client.from('gamers').select('coins').eq('id', uid).maybeSingle();
+      // ✅ 'gamers' ko 'users' se replace kiya gaya
+      final userRes = await SupabaseService.client.from('users').select('coins').eq('id', uid).maybeSingle();
       final currentCoins = (userRes?['coins'] as num?)?.toInt() ?? 0;
 
-      await SupabaseService.client.from('gamers').update({
+      await SupabaseService.client.from('users').update({
         'coins': currentCoins + 50,
       }).eq('id', uid);
 
-      await SupabaseService.client.from('coin_transactions').insert({
-        'user_id': uid,
-        'amount': 50,
-        'type': 'daily_stay_reward',
-        'description': '10 Minutes daily active app reward',
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      try {
+        await SupabaseService.client.from('coin_transactions').insert({
+          'user_id': uid,
+          'amount': 50,
+          'type': 'daily_stay_reward',
+          'description': '10 Minutes daily active app reward',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      } catch (_) {
+        // Agar coin_transactions table mojood na ho to error na de
+      }
 
       setState(() {
         _hasClaimedToday = true;
@@ -84,13 +89,18 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
           const SnackBar(
             content: Text('🎉 +50 Coins Added for spending 10 minutes!'),
             backgroundColor: Color(0xFF00FF88),
+            duration: Duration(seconds: 2), // 2 seconds mein auto hide
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Claim failed: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(
+            content: Text('Claim failed: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     } finally {
@@ -146,20 +156,25 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
               if (playerUid.isEmpty) return;
 
               try {
-                final userRes = await SupabaseService.client.from('gamers').select('coins').eq('id', uid!).maybeSingle();
+                // ✅ 'gamers' ko 'users' se replace kiya gaya
+                final userRes = await SupabaseService.client.from('users').select('coins').eq('id', uid!).maybeSingle();
                 final balance = (userRes?['coins'] as num?)?.toInt() ?? 0;
 
                 if (balance < requiredCoins) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Insufficient Coins! Play more to earn.'), backgroundColor: Color(0xFFFF4655)),
+                      const SnackBar(
+                        content: Text('Insufficient Coins! Play more to earn.'),
+                        backgroundColor: Color(0xFFFF4655),
+                        duration: Duration(seconds: 2),
+                      ),
                     );
                   }
                   return;
                 }
 
                 // Deduct coins & create order
-                await SupabaseService.client.from('gamers').update({'coins': balance - requiredCoins}).eq('id', uid);
+                await SupabaseService.client.from('users').update({'coins': balance - requiredCoins}).eq('id', uid);
                 await SupabaseService.client.from('reports').insert({
                   'reporter_username': playerUid,
                   'target_type': 'redeem_request',
@@ -175,13 +190,18 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
                     SnackBar(
                       content: Text('Redeem request for $itemName submitted! Will be delivered in 2 hours.'),
                       backgroundColor: const Color(0xFF00FF88),
+                      duration: const Duration(seconds: 2),
                     ),
                   );
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Redeem error: $e'), backgroundColor: const Color(0xFFFF4655)),
+                    SnackBar(
+                      content: Text('Redeem error: $e'),
+                      backgroundColor: const Color(0xFFFF4655),
+                      duration: const Duration(seconds: 2),
+                    ),
                   );
                 }
               }
