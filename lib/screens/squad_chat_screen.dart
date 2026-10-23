@@ -16,6 +16,9 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  // Local cache for instantly hiding deleted conversations
+  final Set<String> _deletedChatIds = {};
+
   // Futuristic Gaming Colors
   static const Color darkBg = Color(0xFF0A0F1D);
   static const Color cardBg = Color(0xFF131B2E);
@@ -42,6 +45,98 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
         return const Color(0xFFE11D48);
       default:
         return const Color(0xFF00E5FF);
+    }
+  }
+
+  Future<void> _handleDeleteChat(String chatId, String title) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: cardBorder),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_sweep_rounded, color: Color(0xFFFF4655), size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Delete Conversation?',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete your conversation with "$title"? All messages in this chat will be permanently removed.',
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // 0ms Optimistic local removal
+    setState(() {
+      _deletedChatIds.add(chatId);
+    });
+
+    try {
+      // 1. Delete associated messages first if present
+      try {
+        await SupabaseService.client
+            .from('messages')
+            .delete()
+            .eq('chat_id', chatId);
+      } catch (_) {}
+
+      // 2. Delete the conversation record from chats table
+      await SupabaseService.client
+          .from('chats')
+          .delete()
+          .eq('id', chatId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Conversation deleted'),
+            backgroundColor: Color(0xFF2E7D32),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[DirectMessages] Error deleting chat: $e');
+      if (mounted) {
+        setState(() {
+          _deletedChatIds.remove(chatId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete chat: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
     }
   }
 
@@ -127,6 +222,9 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
 
                 final rawChats = snapshot.data ?? [];
                 final userChats = rawChats.where((chat) {
+                  final chatId = chat['id']?.toString() ?? '';
+                  if (_deletedChatIds.contains(chatId)) return false;
+
                   final members = List<dynamic>.from(chat['members'] ?? []);
                   if (currentUid.isNotEmpty && !members.contains(currentUid)) {
                     if (members.isNotEmpty) return false;
@@ -174,7 +272,6 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
                     final lastMessage = chat['lastMessage'] ?? 'Tap to chat';
                     final avatarUrl = (chat['avatarUrl'] ?? '').toString();
                     
-                    // Fixed: Don't fallback to 'PUBG' if game or mode is null
                     final dynamic rawGame = chat['game'] ?? chat['mode'];
                     final String gameTag = (rawGame != null && rawGame.toString().trim().isNotEmpty)
                         ? rawGame.toString().trim()
@@ -203,6 +300,8 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
                               ),
                             );
                           },
+                          // Long press activates conversation deletion
+                          onLongPress: () => _handleDeleteChat(chatId, title.toString()),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: Row(
