@@ -1,10 +1,13 @@
 // ===============================================================================
-// TOURNAMENTS SCREEN — Tournament Feed & Navigation to Details
+// TOURNAMENTS SCREEN — Tournament Feed, 10-Min Hook & Rewards Vault Connected
 // File: lib/screens/tournaments_screen.dart
 // ===============================================================================
 
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/gamer_growth_hub_dialog.dart';
 import 'tournament_detail_screen.dart';
 
 class TournamentsScreen extends StatefulWidget {
@@ -21,11 +24,22 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
   List<Map<String, dynamic>> _tournaments = [];
   final Set<String> _registeredTournamentIds = {};
   String? _myTeamId;
+  Timer? _countdownRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchTournaments();
+    // Har 30 second baad match countdown recalculate karne ke liye
+    _countdownRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownRefreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchTournaments() async {
@@ -109,8 +123,8 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Squad Registered Successfully!'),
-          backgroundColor: Colors.green,
+          content: Text('Squad Registered Successfully! 🎉'),
+          backgroundColor: Color(0xFF00FF88),
         ),
       );
 
@@ -123,6 +137,15 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     }
   }
 
+  void _openRewardsVault() {
+    showDialog(
+      context: context,
+      builder: (_) => const GamerGrowthHubDialog(),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -131,9 +154,30 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         backgroundColor: const Color(0xFF161A22),
         elevation: 0,
         title: const Text(
-          'Tournaments',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          'Tournaments 🏆',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFFFFD700).withOpacity(0.15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.4)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              ),
+              icon: const Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 18),
+              label: const Text(
+                'Rewards & UC',
+                style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+              onPressed: _openRewardsVault,
+            ),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _fetchTournaments,
@@ -148,10 +192,15 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _tournaments.length,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    itemCount: _tournaments.length + 1,
                     itemBuilder: (context, index) {
-                      final item = _tournaments[index];
+                      // Top Banner: Daily 10-Min Stay & Earn shortcut
+                      if (index == 0) {
+                        return _buildTopEngagementBanner();
+                      }
+
+                      final item = _tournaments[index - 1];
                       final tId = item['id'].toString();
                       final maxTeams = (item['max_teams'] ?? 16) as int;
                       final currentTeams = (item['current_teams'] ?? 0) as int;
@@ -227,7 +276,12 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                   _badge(Icons.monetization_on, 'Fee: ${item['entry_fee'] ?? 0}'),
                                 ],
                               ),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 12),
+
+                              // Match timing and Room ID hook
+                              _buildRoomHookCard(item, isRegistered),
+
+                              const SizedBox(height: 12),
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(6),
                                 child: LinearProgressIndicator(
@@ -308,6 +362,147 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                       );
                     },
                   ),
+      ),
+    );
+  }
+
+  Widget _buildTopEngagementBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFFFD700).withOpacity(0.15),
+            const Color(0xFF00FF88).withOpacity(0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFD700).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.alarm_on_rounded, color: Color(0xFFFFD700), size: 22),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Daily 10-Min Stay Bonus',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Spend 10 mins in app = Earn +50 Coins & Redeem 60 UC',
+                  style: TextStyle(color: Colors.white70, fontSize: 10.5),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFD700),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: _openRewardsVault,
+            child: const Text('Open Vault', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoomHookCard(Map<String, dynamic> item, bool isRegistered) {
+    final matchTimeStr = item['match_time']?.toString();
+    final roomId = (item['room_id'] ?? '').toString();
+    final roomPass = (item['room_password'] ?? '').toString();
+
+    DateTime? matchTime;
+    if (matchTimeStr != null) {
+      try {
+        matchTime = DateTime.parse(matchTimeStr).toLocal();
+      } catch (_) {}
+    }
+
+    final now = DateTime.now();
+    final difference = matchTime != null ? matchTime.difference(now) : null;
+    final bool isWithin10Mins = difference != null && difference.inMinutes <= 10 && difference.inMinutes >= -90;
+    final String formattedDate = matchTime != null ? DateFormat('dd MMM, hh:mm a').format(matchTime) : 'Scheduled';
+
+    // Room ID is revealed ONLY if registered AND within 10 mins of match
+    final bool canReveal = isRegistered && isWithin10Mins && roomId.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: canReveal
+            ? const Color(0xFF00FF88).withOpacity(0.12)
+            : const Color(0xFFFF8A00).withOpacity(0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: canReveal
+              ? const Color(0xFF00FF88).withOpacity(0.4)
+              : const Color(0xFFFF8A00).withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            canReveal ? Icons.vpn_key_rounded : Icons.lock_clock_rounded,
+            size: 16,
+            color: canReveal ? const Color(0xFF00FF88) : const Color(0xFFFF8A00),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Match Time: $formattedDate',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+                const SizedBox(height: 2),
+                if (canReveal) ...[
+                  Text(
+                    'Room ID: $roomId • Pass: $roomPass',
+                    style: const TextStyle(
+                      color: Color(0xFF00FF88),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ] else if (!isRegistered) ...[
+                  const Text(
+                    'Register squad to view Room Credentials',
+                    style: TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                ] else ...[
+                  Text(
+                    difference != null && difference.inMinutes > 0
+                        ? '🔒 Room ID unlocks 10m before match (${difference.inMinutes}m left)'
+                        : '🔒 Waiting for Admin to drop Room ID',
+                    style: const TextStyle(
+                      color: Color(0xFFFF8A00),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
