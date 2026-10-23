@@ -87,6 +87,15 @@ class _TeamsScreenState extends State<TeamsScreen>
     super.dispose();
   }
 
+  void _handleTeamsRefresh() {
+    if (mounted) {
+      setState(() {
+        _teamsRetryKey++;
+        _cachedTeams = null;
+      });
+    }
+  }
+
   void _showCoinRequirementDialog({required String title, required String message}) {
     showDialog(
       context: context,
@@ -176,8 +185,8 @@ class _TeamsScreenState extends State<TeamsScreen>
   }) async {
     if (isMyTeamFrozen) {
       _showCoinRequirementDialog(
-        title: 'Team Frozen',
-        message: 'Your team balance is below 1,000 coins. Top up to accept challenges.',
+        title: 'team_frozen_title'.tr(),
+        message: 'team_frozen_desc'.tr(),
       );
       return;
     }
@@ -260,8 +269,8 @@ class _TeamsScreenState extends State<TeamsScreen>
       final wallet = await CoinWalletService().getOrCreateWallet(currentUid);
       if (wallet.coins < 1000) {
         _showCoinRequirementDialog(
-          title: 'Insufficient Balance',
-          message: 'You need at least 1,000 coins to create or maintain a team. Current: ${wallet.coins} coins',
+          title: 'dialog_insufficient_balance_title'.tr(),
+          message: 'dialog_team_create_balance_msg'.tr(namedArgs: {'coins': '${wallet.coins}'}),
         );
         return;
       }
@@ -272,7 +281,7 @@ class _TeamsScreenState extends State<TeamsScreen>
       actionName: "Team Create",
       onConfirm: () async {
         final created = await CreateTeamDialog.show(context);
-        if (created == true && mounted) setState(() {});
+        if (created == true && mounted) _handleTeamsRefresh();
       },
     );
   }
@@ -354,7 +363,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                         backgroundColor: ThemeService.appBarBg,
                         elevation: 0,
                         title: Text(
-                          'Teams',
+                          'nav_teams'.tr(),
                           style: TextStyle(
                             color: ThemeService.textPrimary,
                             fontWeight: FontWeight.w900,
@@ -387,8 +396,12 @@ class _TeamsScreenState extends State<TeamsScreen>
                               unselectedLabelColor: ThemeService.textSecondary,
                               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                               tabs: [
-                                const Tab(text: 'Teams'),
-                                Tab(text: liveCount > 0 ? "Live 🔴 $liveCount" : "Live"),
+                                Tab(text: 'tab_teams'.tr()),
+                                Tab(
+                                  text: liveCount > 0
+                                      ? 'tab_live_active'.tr(namedArgs: {'count': '$liveCount'})
+                                      : 'tab_live'.tr(),
+                                ),
                               ],
                             ),
                           ),
@@ -440,22 +453,22 @@ class _TeamsScreenState extends State<TeamsScreen>
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFFFF4655), width: 1.2),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 22),
-                SizedBox(width: 8),
+                const Icon(Icons.lock_clock_rounded, color: Color(0xFFFF4655), size: 22),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Team Frozen',
-                        style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 12),
+                        'team_frozen_title'.tr(),
+                        style: const TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.w900, fontSize: 12),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
-                        'Your balance is below 1000 coins. Team features are frozen.',
-                        style: TextStyle(color: Colors.white70, fontSize: 10.5),
+                        'team_frozen_desc'.tr(),
+                        style: const TextStyle(color: Colors.white70, fontSize: 10.5),
                       ),
                     ],
                   ),
@@ -484,7 +497,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                         controller: _searchController,
                         style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: 'Search teams by name or tag',
+                          hintText: 'search_teams_hint'.tr(),
                           hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.7), fontSize: 12),
                           prefixIcon: Icon(Icons.search, size: 18, color: ThemeService.textSecondary),
                           suffixIcon: _searchQuery.isNotEmpty
@@ -515,12 +528,12 @@ class _TeamsScreenState extends State<TeamsScreen>
                       elevation: 2,
                     ),
                     icon: const Icon(Icons.add_rounded, size: 16),
-                    label: const Text('Create Team', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    label: Text('btn_create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              
+
               // Filter Chips
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -602,12 +615,12 @@ class _TeamsScreenState extends State<TeamsScreen>
                           Icon(Icons.shield_rounded, size: 44, color: ThemeService.textSecondary.withOpacity(0.4)),
                           const SizedBox(height: 10),
                           Text(
-                            'No Teams Found',
+                            'no_teams_found_title'.tr(),
                             style: TextStyle(color: ThemeService.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Be the first to create a team and compete!',
+                            'no_teams_found_desc'.tr(),
                             style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                           ),
                           const SizedBox(height: 14),
@@ -620,59 +633,64 @@ class _TeamsScreenState extends State<TeamsScreen>
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             icon: const Icon(Icons.add, color: Colors.white, size: 16),
-                            label: const Text('Create Team', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            label: Text('btn_create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                           ),
                         ],
                       ),
                     );
                   }
 
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    itemCount: displayTeams.length,
-                    itemBuilder: (context, index) {
-                      final team = displayTeams[index];
+                  return RefreshIndicator(
+                    onRefresh: () async => _handleTeamsRefresh(),
+                    color: neonCyan,
+                    backgroundColor: ThemeService.card,
+                    child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      itemCount: displayTeams.length,
+                      itemBuilder: (context, index) {
+                        final team = displayTeams[index];
 
-                      // Check if there is an active/pending challenge between myTeam and this team
-                      Map<String, dynamic>? pendingChallenge;
-                      if (myTeamId.isNotEmpty && allChallenges.isNotEmpty) {
-                        final myIdLower = myTeamId.toLowerCase();
-                        final myUuidLower = myTeamUuid.toLowerCase();
-                        final oppIdLower = team.id.toLowerCase();
-                        final oppUuidLower = SupabaseService.toUuid(team.id).toLowerCase();
+                        Map<String, dynamic>? pendingChallenge;
+                        if (myTeamId.isNotEmpty && allChallenges.isNotEmpty) {
+                          final myIdLower = myTeamId.toLowerCase();
+                          final myUuidLower = myTeamUuid.toLowerCase();
+                          final oppIdLower = team.id.toLowerCase();
+                          final oppUuidLower = SupabaseService.toUuid(team.id).toLowerCase();
 
-                        for (final c in allChallenges) {
-                          final cId = c["id"]?.toString() ?? "";
-                          if (_cancelledChallengeIds.contains(cId)) continue;
+                          for (final c in allChallenges) {
+                            final cId = c["id"]?.toString() ?? "";
+                            if (_cancelledChallengeIds.contains(cId)) continue;
 
-                          final status = (c["status"] ?? "").toString().toLowerCase();
-                          if (status != "pending") continue;
+                            final status = (c["status"] ?? "").toString().toLowerCase();
+                            if (status != "pending") continue;
 
-                          final fromId = (c["from_team_id"] ?? "").toString().toLowerCase();
-                          final toId = (c["to_team_id"] ?? "").toString().toLowerCase();
+                            final fromId = (c["from_team_id"] ?? "").toString().toLowerCase();
+                            final toId = (c["to_team_id"] ?? "").toString().toLowerCase();
 
-                          final isFromMe = fromId == myIdLower || fromId == myUuidLower;
-                          final isToOpp = toId == oppIdLower || toId == oppUuidLower;
+                            final isFromMe = fromId == myIdLower || fromId == myUuidLower;
+                            final isToOpp = toId == oppIdLower || toId == oppUuidLower;
 
-                          final isFromOpp = fromId == oppIdLower || fromId == oppUuidLower;
-                          final isToMe = toId == myIdLower || toId == myUuidLower;
+                            final isFromOpp = fromId == oppIdLower || fromId == oppUuidLower;
+                            final isToMe = toId == myIdLower || toId == myUuidLower;
 
-                          if ((isFromMe && isToOpp) || (isFromOpp && isToMe)) {
-                            pendingChallenge = c;
-                            break;
+                            if ((isFromMe && isToOpp) || (isFromOpp && isToMe)) {
+                              pendingChallenge = c;
+                              break;
+                            }
                           }
                         }
-                      }
 
-                      return TeamCard(
-                        team: team,
-                        myTeamId: myTeamId,
-                        myTeamName: myTeamName,
-                        isMyTeamFrozen: isMyTeamFrozen,
-                        pendingChallenge: pendingChallenge,
-                        onCancelChallenge: _handleCancelChallenge,
-                      );
-                    },
+                        return TeamCard(
+                          team: team,
+                          myTeamId: myTeamId,
+                          myTeamName: myTeamName,
+                          isMyTeamFrozen: isMyTeamFrozen,
+                          pendingChallenge: pendingChallenge,
+                          onCancelChallenge: _handleCancelChallenge,
+                        );
+                      },
+                    ),
                   );
                 },
               );
@@ -711,7 +729,7 @@ class _TeamsScreenState extends State<TeamsScreen>
               ),
               const SizedBox(height: 14),
               Text(
-                'No Live Matches',
+                'no_live_matches_title'.tr(),
                 style: TextStyle(
                   color: ThemeService.textPrimary,
                   fontSize: 16,
@@ -720,7 +738,7 @@ class _TeamsScreenState extends State<TeamsScreen>
               ),
               const SizedBox(height: 6),
               Text(
-                "Challenge other teams from the Teams tab to start live matches and win rewards.",
+                "no_live_matches_desc".tr(),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, height: 1.4),
               ),
@@ -841,7 +859,7 @@ class _ActiveMatchBothTeamsBannerState
         : t1;
 
     final myTeamDisplay = _myTeam?.name ?? widget.myTeamName;
-    final oppTeamDisplay = _oppTeam?.name ?? match["opponent_name"]?.toString() ?? 'Opponent Team';
+    final oppTeamDisplay = _oppTeam?.name ?? match["opponent_name"]?.toString() ?? 'team_default_name'.tr();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -855,9 +873,9 @@ class _ActiveMatchBothTeamsBannerState
         children: [
           const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF4655), size: 18),
           const SizedBox(width: 6),
-          const Text(
-            "LIVE BATTLE",
-            style: TextStyle(
+          Text(
+            "live_battle_badge".tr(),
+            style: const TextStyle(
               color: Color(0xFFFF4655),
               fontWeight: FontWeight.w900,
               fontSize: 12,
@@ -888,7 +906,7 @@ class _ActiveMatchBothTeamsBannerState
               elevation: 0,
             ),
             icon: const Icon(Icons.forum_rounded, size: 13),
-            label: const Text('Match Room', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5)),
+            label: Text('btn_match_room'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5)),
           ),
         ],
       ),
