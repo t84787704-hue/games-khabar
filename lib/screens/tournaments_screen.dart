@@ -1,0 +1,271 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class TournamentsScreen extends StatefulWidget {
+  const TournamentsScreen({super.key});
+
+  @override
+  State<TournamentsScreen> createState() => _TournamentsScreenState();
+}
+
+class _TournamentsScreenState extends State<TournamentsScreen> {
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _tournaments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTournaments();
+  }
+
+  Future<void> _fetchTournaments() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await _supabase
+          .from('tournaments')
+          .select()
+          .order('match_time', ascending: true);
+
+      if (mounted) {
+        setState(() {
+          _tournaments = List<Map<String, dynamic>>.from(res);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading tournaments: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _registerTeam(String tournamentId, int entryFee) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in first')),
+      );
+      return;
+    }
+
+    try {
+      // 1. Leader check
+      final teamRes = await _supabase
+          .from('teams')
+          .select('id, leader_id')
+          .eq('leader_id', user.id)
+          .maybeSingle();
+
+      if (teamRes == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Only Team Leaders can register a squad!')),
+        );
+        return;
+      }
+
+      final teamId = teamRes['id'];
+
+      // 2. Duplicate registration check
+      final checkRegistration = await _supabase
+          .from('tournament_registrations')
+          .select('id')
+          .eq('tournament_id', tournamentId)
+          .eq('team_id', teamId)
+          .maybeSingle();
+
+      if (checkRegistration != null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Your team is already registered!')),
+        );
+        return;
+      }
+
+      // 3. Register Squad
+      await _supabase.from('tournament_registrations').insert({
+        'tournament_id': tournamentId,
+        'team_id': teamId,
+        'leader_id': user.id,
+      });
+
+      // 4. Update count in Supabase
+      await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Squad Registered Successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      _fetchTournaments();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Registration failed: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E293B),
+        elevation: 0,
+        title: const Text(
+          'Tournaments',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _fetchTournaments,
+        color: const Color(0xFF00FF88),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))
+            : _tournaments.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No tournaments available right now',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(14),
+                    itemCount: _tournaments.length,
+                    itemBuilder: (context, index) {
+                      final item = _tournaments[index];
+                      final maxTeams = (item['max_teams'] ?? 16) as int;
+                      final currentTeams = (item['current_teams'] ?? 0) as int;
+                      final isFull = currentTeams >= maxTeams;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF161A22),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFF00FF88).withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item['title'] ?? 'Tournament',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00FF88).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    'Prize: ${item['prize_pool']} Coins',
+                                    style: const TextStyle(
+                                      color: Color(0xFF00FF88),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                _badge(Icons.sports_esports, item['game_mode'] ?? 'Squad (4v4)'),
+                                const SizedBox(width: 8),
+                                _badge(Icons.map, item['map_name'] ?? 'Erangel'),
+                                const SizedBox(width: 8),
+                                _badge(Icons.monetization_on, 'Fee: ${item['entry_fee'] ?? 0}'),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: maxTeams > 0 ? (currentTeams / maxTeams) : 0,
+                                backgroundColor: Colors.white10,
+                                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00FF88)),
+                                minHeight: 6,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Slots: $currentTeams / $maxTeams Teams Registered',
+                              style: const TextStyle(color: Colors.white54, fontSize: 12),
+                            ),
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 44,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isFull
+                                      ? Colors.white24
+                                      : const Color(0xFF00FF88),
+                                  foregroundColor: isFull ? Colors.white54 : Colors.black,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: isFull
+                                    ? null
+                                    : () => _registerTeam(
+                                          item['id'].toString(),
+                                          item['entry_fee'] ?? 0,
+                                        ),
+                                child: Text(
+                                  isFull ? 'Slots Full' : 'Register Squad',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+      ),
+    );
+  }
+
+  Widget _badge(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.white70),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
