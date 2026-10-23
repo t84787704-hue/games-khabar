@@ -129,18 +129,17 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
 
     await _saveUidForGame(_cardGame, enteredUid);
 
-    final currentGamer = _authService.currentGamer;
-    final String uid = authUser!.uid;
-    final String email = authUser.email ?? '';
+    final String uid = authUser?.uid ?? currentGamer!.userId;
+    final String email = authUser?.email ?? currentGamer?.email ?? '';
     final String gamerName = (currentGamer?.displayName.isNotEmpty == true)
         ? currentGamer!.displayName
-        : (authUser.displayName ?? 'squad_leader'.tr());
+        : (authUser?.displayName ?? 'squad_leader'.tr());
     final String gamerTag = (currentGamer?.username.isNotEmpty == true)
         ? currentGamer!.username
         : 'user_gamer'.tr();
     final String avatar = (currentGamer?.photoUrl.isNotEmpty == true)
         ? currentGamer!.photoUrl
-        : (authUser.photoURL ?? '');
+        : (authUser?.photoURL ?? '');
 
     setState(() => _isPosting = true);
 
@@ -186,8 +185,8 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       'membersCount': 1,
       'requestedCount': 0,
       'joinRequests': <String>[],
-      'createdAt': DateTime.now().toIso8601String(),
-      'updatedAt': DateTime.now().toIso8601String(),
+      'createdAt': DateTime.now().toUtc().toIso8601String(),
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
     };
 
     try {
@@ -204,7 +203,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
           'leaderUid': enteredUid,
           'gameUid': enteredUid,
           'hostEmail': email,
-          'createdAt': DateTime.now().toIso8601String(),
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
           'members': [uid],
           'isActive': true,
           'title': gamerName,
@@ -337,12 +336,12 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) => Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).padding.bottom + MediaQuery.of(ctx).viewInsets.bottom + 20,
-              left: 20,
-              right: 20,
-              top: 20,
-            ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).padding.bottom + MediaQuery.of(ctx).viewInsets.bottom + 20,
+            left: 20,
+            right: 20,
+            top: 20,
+          ),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -546,8 +545,8 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                       _isPosting = true;
 
                       final currentUser = _authService.currentUser;
-                      final currentGamer = _authService.currentGamer;
-                      if (currentUser == null && currentGamer == null) {
+                      final gamer = _authService.currentGamer;
+                      if (currentUser == null && gamer == null) {
                         _isPosting = false;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('squad_login_to_post'.tr())),
@@ -564,7 +563,7 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                         return;
                       }
 
-                      final currentUid = currentUser?.id ?? currentGamer!.userId;
+                      final currentUid = currentUser?.id ?? gamer!.userId;
                       try {
                         final existing = await SupabaseService.client
                             .from('lfg_posts')
@@ -572,7 +571,6 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
                             .eq('userId', currentUid)
                             .maybeSingle();
                         if (existing != null && (existing['isActive'] == true || existing['is_active'] == true)) {
-                          // Already has active squad, don't create new
                           _isPosting = false;
                           if (ctx.mounted) Navigator.pop(ctx);
                           if (mounted) {
@@ -589,17 +587,17 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
 
                       Navigator.pop(ctx);
                       final String uid = currentUid;
-                      final String email = currentUser?.email ?? currentGamer!.email;
+                      final String email = currentUser?.email ?? gamer!.email;
 
-                      final String bgmiName = currentGamer.displayName.isNotEmpty
-                          ? currentGamer.displayName
+                      final String bgmiName = gamer!.displayName.isNotEmpty
+                          ? gamer.displayName
                           : 'squad_leader'.tr();
-                      final String tag = currentGamer.username.isNotEmpty
-                          ? currentGamer.username
+                      final String tag = gamer.username.isNotEmpty
+                          ? gamer.username
                           : 'user_gamer'.tr();
-                      final String avatar = currentGamer.photoUrl;
+                      final String avatar = gamer.photoUrl;
 
-                      final nowIso = DateTime.now().toIso8601String();
+                      final nowIso = DateTime.now().toUtc().toIso8601String();
                       final postData = {
                         'id': uid,
                         'postId': uid,
@@ -785,677 +783,677 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
         top: true,
         bottom: true,
         child: RefreshIndicator(
-        color: const Color(0xFFFF6B00),
-        backgroundColor: GamerTheme.cardDark,
-        onRefresh: () async {
-          debugPrint('[SquadFinderScreen] Pull-to-refresh triggered');
-          final fetched = await _squadService.fetchSquadsOnce();
-          if (mounted) {
-            setState(() {
-              for (final p in fetched) {
-                if (!_localSquads.any((item) => item.id == p.id)) {
-                  _localSquads.add(p);
+          color: const Color(0xFFFF6B00),
+          backgroundColor: GamerTheme.cardDark,
+          onRefresh: () async {
+            debugPrint('[SquadFinderScreen] Pull-to-refresh triggered');
+            final fetched = await _squadService.fetchSquadsOnce();
+            if (mounted) {
+              setState(() {
+                for (final p in fetched) {
+                  if (!_localSquads.any((item) => item.id == p.id)) {
+                    _localSquads.add(p);
+                  }
                 }
-              }
-            });
-          }
-        },
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-          slivers: [
-            // Top Team vs Team Action Bar
-            SliverToBoxAdapter(
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-                color: GamerTheme.bgDark,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const MyTeamMatchesScreen()),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF261928), Color(0xFF1B2032)],
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('⚔️', style: TextStyle(fontSize: 14)),
-                              const SizedBox(width: 6),
-                              Text(
-                                'squad_team_matches'.tr(),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const TeamLeaderboardScreen()),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF242217), Color(0xFF1B2032)],
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('🏆', style: TextStyle(fontSize: 14)),
-                              const SizedBox(width: 6),
-                              Text(
-                                'squad_leaderboard'.tr(),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Top FILTERS Bar with 4 dropdown pills
-            SliverToBoxAdapter(
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                color: GamerTheme.bgDark,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
+              });
+            }
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            slivers: [
+              // Top Team vs Team Action Bar
+              SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                  color: GamerTheme.bgDark,
                   child: Row(
                     children: [
-                      _buildFilterPill(
-                        label: '${'squad_filter_game'.tr()}: $_filterGame',
-                        value: _filterGame,
-                        items: _gameFilterOptions,
-                        onChanged: (v) => setState(() => _filterGame = v ?? 'All'),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterPill(
-                        label: '${'squad_filter_mode'.tr()}: $_filterMode',
-                        value: _filterMode,
-                        items: _modeFilterOptions,
-                        onChanged: (v) => setState(() => _filterMode = v ?? 'All'),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterPill(
-                        label: '${'squad_filter_tier'.tr()}: $_filterTier',
-                        value: _filterTier,
-                        items: _tierFilterOptions,
-                        onChanged: (v) => setState(() => _filterTier = v ?? 'All'),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterPill(
-                        label: '${'squad_filter_kd'.tr()}: $_filterKd',
-                        value: _filterKd,
-                        items: _kdFilterOptions,
-                        onChanged: (v) => setState(() => _filterKd = v ?? 'Any'),
-                      ),
-                      if (_filterGame != 'All' || _filterMode != 'All' || _filterTier != 'All' || _filterKd != 'Any') ...[
-                        const SizedBox(width: 8),
-                        GestureDetector(
+                      Expanded(
+                        child: InkWell(
                           onTap: () {
-                            setState(() {
-                              _filterGame = 'All';
-                              _filterMode = 'All';
-                              _filterTier = 'All';
-                              _filterKd = 'Any';
-                            });
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const MyTeamMatchesScreen()),
+                            );
                           },
+                          borderRadius: BorderRadius.circular(10),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF6B00).withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text('squad_reset'.tr(), style: const TextStyle(color: Color(0xFFFF6B00), fontSize: 11, fontWeight: FontWeight.w900)),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Card: "Create Squad - PUBG Mobile"
-            SliverToBoxAdapter(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(14, 6, 14, 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: GamerTheme.cardDark,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: GamerTheme.borderDark, width: 1.2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: ThemeService.isDarkMode ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Card Title
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(7),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF6B00).withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.shield_rounded, color: Color(0xFFFF6B00), size: 18),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'squad_create_squad_game'.tr(args: [_cardGame]),
-                          style: const TextStyle(
-                            color: GamerTheme.textWhite,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Game Dropdown & Tier Dropdown
-                    Row(
-                      children: [
-                        // Game dropdown
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'squad_game'.tr(),
-                                style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF261928), Color(0xFF1B2032)],
                               ),
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: GamerTheme.cardElevated,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: GamerTheme.borderDark),
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _cardGame,
-                                    isExpanded: true,
-                                    dropdownColor: GamerTheme.cardElevated,
-                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 18),
-                                    style: const TextStyle(color: GamerTheme.textWhite, fontSize: 12.5, fontWeight: FontWeight.bold),
-                                    items: _cardGameOptions.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                                    onChanged: (v) {
-                                      if (v != null) {
-                                        setState(() => _cardGame = v);
-                                        _loadSavedUidForGame(v);
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Tier dropdown
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'squad_tier'.tr(),
-                                style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-                              ),
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: GamerTheme.cardElevated,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: GamerTheme.borderDark),
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _cardTier,
-                                    isExpanded: true,
-                                    dropdownColor: GamerTheme.cardElevated,
-                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 18),
-                                    style: const TextStyle(color: GamerTheme.textWhite, fontSize: 12.5, fontWeight: FontWeight.bold),
-                                    items: _cardTierOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                                    onChanged: (v) => setState(() => _cardTier = v ?? _cardTier),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Mode buttons: TPP / FPP
-                    Text(
-                      'squad_mode'.tr(),
-                      style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: ['TPP', 'FPP'].map((mode) {
-                        final isSel = _cardMode == mode;
-                        return Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.only(right: mode == 'TPP' ? 8 : 0),
-                            child: InkWell(
-                              onTap: () => setState(() => _cardMode = mode),
                               borderRadius: BorderRadius.circular(10),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                alignment: Alignment.center,
-                                padding: const EdgeInsets.symmetric(vertical: 9),
-                                decoration: BoxDecoration(
-                                  color: isSel ? const Color(0xFFFF6B00) : GamerTheme.cardElevated,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: isSel ? const Color(0xFFFF6B00) : GamerTheme.borderDark,
-                                  ),
-                                ),
-                                child: Text(
-                                  mode,
-                                  style: TextStyle(
-                                    color: isSel ? Colors.white : GamerTheme.textWhite,
-                                    fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
-                                    fontSize: 12.5,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Role buttons: Entry Fragger / IGL / Support
-                    Text(
-                      'squad_role'.tr(),
-                      style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: ['Entry Fragger', 'IGL', 'Support'].map((role) {
-                        final isSel = _cardRole == role;
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 2.5),
-                            child: InkWell(
-                              onTap: () => setState(() => _cardRole = role),
-                              borderRadius: BorderRadius.circular(10),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                alignment: Alignment.center,
-                                padding: const EdgeInsets.symmetric(vertical: 9),
-                                decoration: BoxDecoration(
-                                  color: isSel ? const Color(0xFFFF6B00) : GamerTheme.cardElevated,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: isSel ? const Color(0xFFFF6B00) : GamerTheme.borderDark,
-                                  ),
-                                ),
-                                child: Text(
-                                  role,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: isSel ? Colors.white : GamerTheme.textWhite,
-                                    fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
-                                    fontSize: 11.5,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Mic Required switch & Language dropdown
-                    Row(
-                      children: [
-                        // Mic Required switch
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: GamerTheme.cardElevated,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: GamerTheme.borderDark),
+                              border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.mic_rounded, color: Color(0xFFFF6B00), size: 17),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      'squad_mic_required'.tr(),
-                                      style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 11.5),
-                                    ),
-                                  ],
-                                ),
-                                Switch(
-                                  value: _cardMicRequired,
-                                  activeColor: const Color(0xFFFF6B00),
-                                  activeTrackColor: const Color(0xFFFF6B00).withOpacity(0.4),
-                                  inactiveThumbColor: Colors.grey,
-                                  inactiveTrackColor: GamerTheme.borderDark,
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  onChanged: (v) => setState(() => _cardMicRequired = v),
+                                const Text('⚔️', style: TextStyle(fontSize: 14)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'squad_team_matches'.tr(),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        // Language dropdown
-                        Expanded(
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const TeamLeaderboardScreen()),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(10),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             decoration: BoxDecoration(
-                              color: GamerTheme.cardElevated,
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF242217), Color(0xFF1B2032)],
+                              ),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: GamerTheme.borderDark),
+                              border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
                             ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _cardLanguage,
-                                isExpanded: true,
-                                dropdownColor: GamerTheme.cardElevated,
-                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 18),
-                                style: const TextStyle(color: GamerTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold),
-                                items: _cardLangOptions.map((l) => DropdownMenuItem(value: l, child: Text('${'squad_lang'.tr()}: $l'))).toList(),
-                                onChanged: (v) => setState(() => _cardLanguage = v ?? _cardLanguage),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('🏆', style: TextStyle(fontSize: 14)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'squad_leaderboard'.tr(),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Top FILTERS Bar with 4 dropdown pills
+              SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                  color: GamerTheme.bgDark,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        _buildFilterPill(
+                          label: '${'squad_filter_game'.tr()}: $_filterGame',
+                          value: _filterGame,
+                          items: _gameFilterOptions,
+                          onChanged: (v) => setState(() => _filterGame = v ?? 'All'),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                          label: '${'squad_filter_mode'.tr()}: $_filterMode',
+                          value: _filterMode,
+                          items: _modeFilterOptions,
+                          onChanged: (v) => setState(() => _filterMode = v ?? 'All'),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                          label: '${'squad_filter_tier'.tr()}: $_filterTier',
+                          value: _filterTier,
+                          items: _tierFilterOptions,
+                          onChanged: (v) => setState(() => _filterTier = v ?? 'All'),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterPill(
+                          label: '${'squad_filter_kd'.tr()}: $_filterKd',
+                          value: _filterKd,
+                          items: _kdFilterOptions,
+                          onChanged: (v) => setState(() => _filterKd = v ?? 'Any'),
+                        ),
+                        if (_filterGame != 'All' || _filterMode != 'All' || _filterTier != 'All' || _filterKd != 'Any') ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _filterGame = 'All';
+                                _filterMode = 'All';
+                                _filterTier = 'All';
+                                _filterKd = 'Any';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF6B00).withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text('squad_reset'.tr(), style: const TextStyle(color: Color(0xFFFF6B00), fontSize: 11, fontWeight: FontWeight.w900)),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Card: "Create Squad - PUBG Mobile"
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(14, 6, 14, 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: GamerTheme.cardDark,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: GamerTheme.borderDark, width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: ThemeService.isDarkMode ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Card Title
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF6B00).withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.shield_rounded, color: Color(0xFFFF6B00), size: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'squad_create_squad_game'.tr(args: [_cardGame]),
+                            style: const TextStyle(
+                              color: GamerTheme.textWhite,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Game Dropdown & Tier Dropdown
+                      Row(
+                        children: [
+                          // Game dropdown
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'squad_game'.tr(),
+                                  style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                                ),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: GamerTheme.cardElevated,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: GamerTheme.borderDark),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _cardGame,
+                                      isExpanded: true,
+                                      dropdownColor: GamerTheme.cardElevated,
+                                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 18),
+                                      style: const TextStyle(color: GamerTheme.textWhite, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                      items: _cardGameOptions.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+                                      onChanged: (v) {
+                                        if (v != null) {
+                                          setState(() => _cardGame = v);
+                                          _loadSavedUidForGame(v);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Tier dropdown
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'squad_tier'.tr(),
+                                  style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                                ),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: GamerTheme.cardElevated,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: GamerTheme.borderDark),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _cardTier,
+                                      isExpanded: true,
+                                      dropdownColor: GamerTheme.cardElevated,
+                                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 18),
+                                      style: const TextStyle(color: GamerTheme.textWhite, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                      items: _cardTierOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                                      onChanged: (v) => setState(() => _cardTier = v ?? _cardTier),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Mode buttons: TPP / FPP
+                      Text(
+                        'squad_mode'.tr(),
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: ['TPP', 'FPP'].map((mode) {
+                          final isSel = _cardMode == mode;
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(right: mode == 'TPP' ? 8 : 0),
+                              child: InkWell(
+                                onTap: () => setState(() => _cardMode = mode),
+                                borderRadius: BorderRadius.circular(10),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 150),
+                                  alignment: Alignment.center,
+                                  padding: const EdgeInsets.symmetric(vertical: 9),
+                                  decoration: BoxDecoration(
+                                    color: isSel ? const Color(0xFFFF6B00) : GamerTheme.cardElevated,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isSel ? const Color(0xFFFF6B00) : GamerTheme.borderDark,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    mode,
+                                    style: TextStyle(
+                                      color: isSel ? Colors.white : GamerTheme.textWhite,
+                                      fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
+                          );
+                        }).toList(),
+                      ),
 
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    // Editable Game UID Input Field
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'squad_your_uid'.tr(args: [_cardGame, _cardGame == 'BGMI' ? 'BGMI UID' : '${_cardGame} UID']),
-                          style: const TextStyle(
-                            color: GamerTheme.textMuted,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: _uidController,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(
-                            color: GamerTheme.textWhite,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.8,
-                          ),
-                          onChanged: (val) {
-                            _saveUidForGame(_cardGame, val.trim());
-                            if (_uidErrorText != null && val.trim().length >= 4) {
-                              setState(() => _uidErrorText = null);
-                            }
-                          },
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: GamerTheme.cardElevated,
-                            hintText: 'squad_uid_hint'.tr(),
-                            hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12.5),
-                            errorText: _uidErrorText,
-                            errorStyle: const TextStyle(color: Color(0xFFFF4D4D), fontSize: 11, fontWeight: FontWeight.w600),
-                            prefixIcon: const Icon(Icons.tag_rounded, color: Color(0xFFFF6B00), size: 18),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: GamerTheme.borderDark),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: GamerTheme.borderDark),
-                            ),
-                            focusedBorder: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(10)),
-                              borderSide: BorderSide(color: Color(0xFFFF6B00), width: 1.5),
-                            ),
-                            errorBorder: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(10)),
-                              borderSide: BorderSide(color: Color(0xFFFF4D4D), width: 1.2),
-                            ),
-                            focusedErrorBorder: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(10)),
-                              borderSide: BorderSide(color: Color(0xFFFF4D4D), width: 1.5),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Big orange button: "CREATE SQUAD"
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: _isPosting ? null : _createSquadFromCard,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF6B00),
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                          shadowColor: const Color(0xFFFF6B00).withOpacity(0.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: _isPosting
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.flash_on_rounded, color: Colors.white, size: 19),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'squad_create_squad_caps'.tr(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 14.5,
-                                      letterSpacing: 1.0,
+                      // Role buttons: Entry Fragger / IGL / Support
+                      Text(
+                        'squad_role'.tr(),
+                        style: const TextStyle(color: GamerTheme.textMuted, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: ['Entry Fragger', 'IGL', 'Support'].map((role) {
+                          final isSel = _cardRole == role;
+                          return Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                              child: InkWell(
+                                onTap: () => setState(() => _cardRole = role),
+                                borderRadius: BorderRadius.circular(10),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 150),
+                                  alignment: Alignment.center,
+                                  padding: const EdgeInsets.symmetric(vertical: 9),
+                                  decoration: BoxDecoration(
+                                    color: isSel ? const Color(0xFFFF6B00) : GamerTheme.cardElevated,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isSel ? const Color(0xFFFF6B00) : GamerTheme.borderDark,
                                     ),
+                                  ),
+                                  child: Text(
+                                    role,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: isSel ? Colors.white : GamerTheme.textWhite,
+                                      fontWeight: isSel ? FontWeight.w900 : FontWeight.w600,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Mic Required switch & Language dropdown
+                      Row(
+                        children: [
+                          // Mic Required switch
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: GamerTheme.cardElevated,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: GamerTheme.borderDark),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.mic_rounded, color: Color(0xFFFF6B00), size: 17),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'squad_mic_required'.tr(),
+                                        style: const TextStyle(color: GamerTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 11.5),
+                                      ),
+                                    ],
+                                  ),
+                                  Switch(
+                                    value: _cardMicRequired,
+                                    activeColor: const Color(0xFFFF6B00),
+                                    activeTrackColor: const Color(0xFFFF6B00).withOpacity(0.4),
+                                    inactiveThumbColor: Colors.grey,
+                                    inactiveTrackColor: GamerTheme.borderDark,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    onChanged: (v) => setState(() => _cardMicRequired = v),
                                   ),
                                 ],
                               ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Section Header
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.stream_rounded, color: Color(0xFFFF6B00), size: 16),
-                    const SizedBox(width: 6),
-                    Text(
-                      'squad_active_squads_lfg'.tr(),
-                      style: const TextStyle(
-                        color: Color(0xFF8E95A5),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Squad Stream List
-            StreamBuilder<List<SquadPost>>(
-              stream: _squadService.getActiveSquadsStream(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && _localSquads.isEmpty) {
-                  return const SliverFillRemaining(
-                    child: Center(
-                      child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
-                    ),
-                  );
-                }
-
-                final streamSquads = snapshot.data ?? [];
-                final squads = _combineSquads(streamSquads);
-
-                // Filter in-memory for smooth instant feedback
-                final filtered = squads.where((s) {
-                  if (_filterGame != 'All' &&
-                      !s.game.toLowerCase().contains(_filterGame.toLowerCase())) {
-                    return false;
-                  }
-                  if (_filterMode != 'All' &&
-                      !s.mode.toLowerCase().contains(_filterMode.toLowerCase())) {
-                    return false;
-                  }
-                  if (_filterTier != 'All' &&
-                      !s.tierNeeded.toLowerCase().contains(_filterTier.toLowerCase()) &&
-                      s.tierNeeded != 'Any Tier') {
-                    return false;
-                  }
-                  if (_filterKd != 'Any') {
-                    final minVal = double.tryParse(_filterKd.replaceAll('+', '').trim()) ?? 0.0;
-                    if (s.kdNeeded < minVal) {
-                      return false;
-                    }
-                  }
-                  return true;
-                }).toList();
-
-                debugPrint('[SquadFinderScreen] Filtered squads count: ${filtered.length}');
-
-                if (filtered.isEmpty) {
-                  return SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(20),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Language dropdown
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: GamerTheme.cardDark,
-                                shape: BoxShape.circle,
+                                color: GamerTheme.cardElevated,
+                                borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: GamerTheme.borderDark),
                               ),
-                              child: const Text('🛡️', style: TextStyle(fontSize: 40)),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'squad_no_posts_found'.tr(),
-                              style: const TextStyle(
-                                color: GamerTheme.textWhite,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _cardLanguage,
+                                  isExpanded: true,
+                                  dropdownColor: GamerTheme.cardElevated,
+                                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: GamerTheme.textWhite, size: 18),
+                                  style: const TextStyle(color: GamerTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold),
+                                  items: _cardLangOptions.map((l) => DropdownMenuItem(value: l, child: Text('${'squad_lang'.tr()}: $l'))).toList(),
+                                  onChanged: (v) => setState(() => _cardLanguage = v ?? _cardLanguage),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'squad_no_posts_desc'.tr(),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13, height: 1.4),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Editable Game UID Input Field
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'squad_your_uid'.tr(args: [_cardGame, _cardGame == 'BGMI' ? 'BGMI UID' : '${_cardGame} UID']),
+                            style: const TextStyle(
+                              color: GamerTheme.textMuted,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
                             ),
-                            const SizedBox(height: 20),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: GamerTheme.accentOrange,
-                                foregroundColor: GamerTheme.bgDark,
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: _uidController,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(
+                              color: GamerTheme.textWhite,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.8,
+                            ),
+                            onChanged: (val) {
+                              _saveUidForGame(_cardGame, val.trim());
+                              if (_uidErrorText != null && val.trim().length >= 4) {
+                                setState(() => _uidErrorText = null);
+                              }
+                            },
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: GamerTheme.cardElevated,
+                              hintText: 'squad_uid_hint'.tr(),
+                              hintStyle: const TextStyle(color: GamerTheme.textMuted, fontSize: 12.5),
+                              errorText: _uidErrorText,
+                              errorStyle: const TextStyle(color: Color(0xFFFF4D4D), fontSize: 11, fontWeight: FontWeight.w600),
+                              prefixIcon: const Icon(Icons.tag_rounded, color: Color(0xFFFF6B00), size: 18),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: GamerTheme.borderDark),
                               ),
-                              icon: const Icon(Icons.add_rounded, color: GamerTheme.bgDark),
-                              label: Text('squad_post_requirement_now'.tr(), style: const TextStyle(fontWeight: FontWeight.w900)),
-                              onPressed: _openCreateSquadSheet,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: GamerTheme.borderDark),
+                              ),
+                              focusedBorder: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(Radius.circular(10)),
+                                borderSide: BorderSide(color: Color(0xFFFF6B00), width: 1.5),
+                              ),
+                              errorBorder: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(Radius.circular(10)),
+                                borderSide: BorderSide(color: Color(0xFFFF4D4D), width: 1.2),
+                              ),
+                              focusedErrorBorder: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(Radius.circular(10)),
+                                borderSide: BorderSide(color: Color(0xFFFF4D4D), width: 1.5),
+                              ),
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Big orange button: "CREATE SQUAD"
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _isPosting ? null : _createSquadFromCard,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF6B00),
+                            foregroundColor: Colors.white,
+                            elevation: 4,
+                            shadowColor: const Color(0xFFFF6B00).withOpacity(0.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: _isPosting
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.flash_on_rounded, color: Colors.white, size: 19),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'squad_create_squad_caps'.tr(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14.5,
+                                        letterSpacing: 1.0,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Section Header
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.stream_rounded, color: Color(0xFFFF6B00), size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        'squad_active_squads_lfg'.tr(),
+                        style: const TextStyle(
+                          color: Color(0xFF8E95A5),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Squad Stream List
+              StreamBuilder<List<SquadPost>>(
+                stream: _squadService.getActiveSquadsStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting && _localSquads.isEmpty) {
+                    return const SliverFillRemaining(
+                      child: Center(
+                        child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
+                      ),
+                    );
+                  }
+
+                  final streamSquads = snapshot.data ?? [];
+                  final squads = _combineSquads(streamSquads);
+
+                  // Filter in-memory for smooth instant feedback
+                  final filtered = squads.where((s) {
+                    if (_filterGame != 'All' &&
+                        !s.game.toLowerCase().contains(_filterGame.toLowerCase())) {
+                      return false;
+                    }
+                    if (_filterMode != 'All' &&
+                        !s.mode.toLowerCase().contains(_filterMode.toLowerCase())) {
+                      return false;
+                    }
+                    if (_filterTier != 'All' &&
+                        !s.tierNeeded.toLowerCase().contains(_filterTier.toLowerCase()) &&
+                        s.tierNeeded != 'Any Tier') {
+                      return false;
+                    }
+                    if (_filterKd != 'Any') {
+                      final minVal = double.tryParse(_filterKd.replaceAll('+', '').trim()) ?? 0.0;
+                      if (s.kdNeeded < minVal) {
+                        return false;
+                      }
+                    }
+                    return true;
+                  }).toList();
+
+                  debugPrint('[SquadFinderScreen] Filtered squads count: ${filtered.length}');
+
+                  if (filtered.isEmpty) {
+                    return SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: GamerTheme.cardDark,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: GamerTheme.borderDark),
+                                ),
+                                child: const Text('🛡️', style: TextStyle(fontSize: 40)),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'squad_no_posts_found'.tr(),
+                                style: const TextStyle(
+                                  color: GamerTheme.textWhite,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'squad_no_posts_desc'.tr(),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13, height: 1.4),
+                              ),
+                              const SizedBox(height: 20),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: GamerTheme.accentOrange,
+                                  foregroundColor: GamerTheme.bgDark,
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                icon: const Icon(Icons.add_rounded, color: GamerTheme.bgDark),
+                                label: Text('squad_post_requirement_now'.tr(), style: const TextStyle(fontWeight: FontWeight.w900)),
+                                onPressed: _openCreateSquadSheet,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        return SquadCard(squad: filtered[index]);
+                      },
+                      childCount: filtered.length,
                     ),
                   );
-                }
+                },
+              ),
 
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      return SquadCard(squad: filtered[index]);
-                    },
-                    childCount: filtered.length,
-                  ),
-                );
-              },
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 80)),
-          ],
+              const SliverToBoxAdapter(child: SizedBox(height: 80)),
+            ],
+          ),
         ),
-      ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFFFF6B00),
