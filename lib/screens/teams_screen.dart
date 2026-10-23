@@ -441,6 +441,8 @@ class _TeamsScreenState extends State<TeamsScreen>
     required String myTeamName,
     required bool isMyTeamFrozen,
   }) {
+    final currentUserId = SupabaseService.client.auth.currentUser?.id ?? '';
+
     return Column(
       children: [
         if (isMyTeamFrozen)
@@ -640,6 +642,16 @@ class _TeamsScreenState extends State<TeamsScreen>
                     );
                   }
 
+                  // Priority Sorting: Current user's own/joined teams are prioritized at index 0+
+                  final sortedTeams = List<TeamModel>.from(displayTeams)..sort((a, b) {
+                    final bool aIsMyTeam = currentUserId.isNotEmpty && (a.isLeader(currentUserId) || a.isMember(currentUserId));
+                    final bool bIsMyTeam = currentUserId.isNotEmpty && (b.isLeader(currentUserId) || b.isMember(currentUserId));
+
+                    if (aIsMyTeam && !bIsMyTeam) return -1; // 'a' stays at top
+                    if (!aIsMyTeam && bIsMyTeam) return 1;  // 'b' stays at top
+                    return 0; // Maintain relative ordering for remaining teams
+                  });
+
                   return RefreshIndicator(
                     onRefresh: () async => _handleTeamsRefresh(),
                     color: neonCyan,
@@ -647,9 +659,9 @@ class _TeamsScreenState extends State<TeamsScreen>
                     child: ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      itemCount: displayTeams.length,
+                      itemCount: sortedTeams.length,
                       itemBuilder: (context, index) {
-                        final team = displayTeams[index];
+                        final team = sortedTeams[index];
 
                         Map<String, dynamic>? pendingChallenge;
                         if (myTeamId.isNotEmpty && allChallenges.isNotEmpty) {
