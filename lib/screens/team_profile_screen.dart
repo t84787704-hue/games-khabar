@@ -32,6 +32,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final TeamService _teamService = TeamService();
   bool _isActionLoading = false;
   bool _hasRequestedLocally = false;
+  final Set<String> _processingRequestUids = {};
   final Set<String> _cancelledChallengeIds = {};
   final Set<String> _acceptingChallengeIds = {};
   final Set<String> _acceptedChallengeIds = {};
@@ -109,6 +110,65 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     };
     _profileCache[cleanUid] = result;
     return result;
+  }
+
+  Future<void> _handleAcceptJoin(TeamModel team, String targetUid, String userName) async {
+    if (_processingRequestUids.contains(targetUid)) return;
+    setState(() => _processingRequestUids.add(targetUid));
+
+    try {
+      final ok = await _teamService.acceptJoinRequest(
+        teamId: team.id,
+        userId: targetUid,
+        userName: userName,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? '$userName accepted into squad!' : 'Failed to accept request'),
+            backgroundColor: ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processingRequestUids.remove(targetUid));
+    }
+  }
+
+  Future<void> _handleRejectJoin(TeamModel team, String targetUid) async {
+    if (_processingRequestUids.contains(targetUid)) return;
+    setState(() => _processingRequestUids.add(targetUid));
+
+    try {
+      final ok = await _teamService.rejectJoinRequest(
+        teamId: team.id,
+        userId: targetUid,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? 'Join request rejected' : 'Failed to reject request'),
+            backgroundColor: ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processingRequestUids.remove(targetUid));
+    }
   }
 
   Future<void> _handleAcceptChallenge({
@@ -570,6 +630,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         ],
                       ),
                       body: SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -657,13 +718,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                                 children: [
-                                  _buildRecordStat('Wins', '${team.wins}', const Color(0xFF00FF88)),
+                                  _buildRecordStat('Wins', '${team.wins}', const Color(0xFF00FF88)), _buildDivider(), _buildRecordStat('Losses', '${team.losses}', const Color(0xFFFF4655)),
                                   _buildDivider(),
-                                  _buildRecordStat('Losses', '${team.losses}', const Color(0xFFFF4655)),
-                                  _buildDivider(),
-                                  _buildRecordStat('Draws', '${team.draws}', const Color(0xFFFFB020)),
-                                  _buildDivider(),
-                                  _buildRecordStat('Points', '${team.points}', const Color(0xFFFF6B00)),
+                                  _buildRecordStat('Draws', '${team.draws}', const Color(0xFFFFB020)), _buildDivider(), _buildRecordStat('Points', '${team.points}', const Color(0xFFFF6B00)),
                                 ],
                               ),
                             ),
@@ -701,7 +758,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // PENDING REQUESTS BLOCK (Fixed localization label)
+                            // PENDING REQUESTS (Fixed vibration & working action buttons)
                             if (isLeader && team.pendingJoinRequests.isNotEmpty) ...[
                               _buildSectionHeader('Pending Requests (${team.pendingJoinRequests.length})'),
                               Container(
@@ -713,13 +770,18 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 ),
                                 child: Column(
                                   children: team.pendingJoinRequests.map((uid) {
+                                    final isProcessing = _processingRequestUids.contains(uid);
+
                                     return FutureBuilder<Map<String, String>>(
                                       future: _fetchUserProfile(uid),
                                       builder: (context, snap) {
                                         final userData = snap.data;
-                                        final isLoading = snap.connectionState == ConnectionState.waiting;
-                                        final displayUsername = userData?['username'] ?? 'Player';
-                                        final gamerId = userData?['gamerId'] ?? 'ID not set';
+                                        final displayUsername = (userData?['username'] != null && userData!['username'] != 'Player')
+                                            ? userData['username']!
+                                            : 'Player';
+                                        final gamerId = (userData?['gamerId'] != null && userData!['gamerId'] != 'ID not set')
+                                            ? userData['gamerId']!
+                                            : (uid.length > 8 ? uid.substring(0, 8) : uid);
 
                                         return Padding(
                                           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -736,7 +798,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
-                                                      isLoading ? 'Loading...' : displayUsername,
+                                                      displayUsername,
                                                       style: TextStyle(
                                                         color: ThemeService.textPrimary,
                                                         fontWeight: FontWeight.bold,
@@ -745,24 +807,28 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                     ),
                                                     const SizedBox(height: 2),
                                                     Text(
-                                                      gamerId != 'ID not set' ? 'Game ID: $gamerId' : 'UID: ${uid.length > 8 ? uid.substring(0, 8) : uid}',
+                                                      'ID: $gamerId',
                                                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                                                     ),
                                                   ],
                                                 ),
                                               ),
-                                              IconButton(
-                                                icon: const Icon(Icons.close_rounded, color: Color(0xFFFF4655), size: 20),
-                                                onPressed: () => _teamService.rejectJoinRequest(teamId: team.id, userId: uid),
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(Icons.check_rounded, color: Color(0xFF00FF88), size: 22),
-                                                onPressed: () => _teamService.acceptJoinRequest(
-                                                  teamId: team.id,
-                                                  userId: uid,
-                                                  userName: displayUsername,
+                                              if (isProcessing) ...[
+                                                const SizedBox(
+                                                  width: 22,
+                                                  height: 22,
+                                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FF88)),
                                                 ),
-                                              ),
+                                              ] else ...[
+                                                IconButton(
+                                                  icon: const Icon(Icons.close_rounded, color: Color(0xFFFF4655), size: 22),
+                                                  onPressed: () => _handleRejectJoin(team, uid),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.check_rounded, color: Color(0xFF00FF88), size: 24),
+                                                  onPressed: () => _handleAcceptJoin(team, uid, displayUsername),
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         );
@@ -774,7 +840,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               const SizedBox(height: 16),
                             ],
 
-                            // TEAM MEMBERS (Squad limit indicator: 1 / 4)
+                            // Team Members List
                             _buildSectionHeader('Team Members (${team.memberCount} / 4)'),
                             Container(
                               decoration: BoxDecoration(
@@ -844,7 +910,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // MATCH & TOURNAMENT HISTORY SECTION
+                            // Stable Match History
                             _buildCombinedHistorySection(team),
                             const SizedBox(height: 20),
                           ],
@@ -967,119 +1033,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     return Container(height: 24, width: 1, color: ThemeService.border);
   }
 
-  // Combines Tournament Wins & Match Battles
   Widget _buildCombinedHistorySection(TeamModel team) {
     final tId = widget.teamId;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader('Match & Tournament History'),
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: SupabaseService.client
-              .from('tournaments')
-              .select('id, title, winner_team_id, prize_pool, match_time, status')
-              .eq('status', 'completed')
-              .eq('winner_team_id', tId)
-              .order('match_time', ascending: false),
-          builder: (context, tourSnap) {
-            final wonTournaments = tourSnap.data ?? [];
-
-            if (wonTournaments.isEmpty) {
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                decoration: BoxDecoration(
-                  color: ThemeService.card,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: ThemeService.border),
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.history_rounded, color: ThemeService.textSecondary.withOpacity(0.4), size: 36),
-                    const SizedBox(height: 8),
-                    Text(
-                      'No Matches Played Yet',
-                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Completed team battles and tournament matches will appear here',
-                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return Column(
-              children: wonTournaments.map((t) {
-                final title = t['title'] ?? 'Tournament Match';
-                final prize = t['prize_pool'] ?? 0;
-                String dateStr = 'Recent';
-                if (t['match_time'] != null) {
-                  try {
-                    dateStr = DateFormat('dd MMM yyyy').format(DateTime.parse(t['match_time'].toString()).toLocal());
-                  } catch (_) {}
-                }
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: ThemeService.card,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFD700).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFD700), size: 24),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Won $prize Coins • $dateStr',
-                              style: const TextStyle(color: Color(0xFF00FF88), fontSize: 11, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00FF88).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF00FF88)),
-                        ),
-                        child: const Text(
-                          'WON #1',
-                          style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
+      crossAxisAlignment:
