@@ -1,5 +1,5 @@
 // ===============================================================================
-// GAMER ADMIN DASHBOARD SCREEN — Real-time Counts, Dual Proofs & Theme Adaptive
+// GAMER ADMIN DASHBOARD SCREEN — Real-time Counts, Dual Proofs & Auto Leaderboard
 // File: lib/screens/gamer_admin_dashboard_screen.dart
 // ===============================================================================
 
@@ -3187,7 +3187,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
   void _openDeclareWinnerDialog(String tournamentId, int prizePool) async {
     final regRes = await _supabase
         .from('tournament_registrations')
-        .select('team_id, teams:teams(id, name, leader_id)')
+        .select('team_id, teams:teams(id, name, leader_id, points, wins)')
         .eq('tournament_id', tournamentId);
 
     if (regRes.isEmpty) {
@@ -3221,6 +3221,9 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
               children: [
                 Text('Total Prize: $prizePool Coins',
                     style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 6),
+                const Text('+25 Leaderboard Points & +1 Win will be credited.',
+                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
                 const Text('Select Winning Team:', style: TextStyle(color: Colors.white70, fontSize: 12)),
                 const SizedBox(height: 6),
@@ -3245,11 +3248,79 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                 onPressed: () async {
                   if (selectedTeamId == null) return;
                   try {
-                    await _supabase.rpc('distribute_match_reward', params: {
-                      'p_team_id': selectedTeamId,
-                      'p_total_prize': prizePool,
-                    });
+                    // 1. Fetch current team stats to increment points & wins for Leaderboard
+                    final currentTeamData = await _supabase
+                        .from('teams')
+                        .select('id, leader_id, points, wins')
+                        .eq('id', selectedTeamId!)
+                        .maybeSingle();
 
+                    final int currentPoints = (currentTeamData?['points'] as num?)?.toInt() ?? 0;
+                    final int currentWins = (currentTeamData?['wins'] as num?)?.toInt() ?? 0;
+                    final String? leaderId = currentTeamData?['leader_id']?.toString();
+
+                    // Update Team: +25 Points & +1 Win (Yeh team ko Top Leaderboard par show karega)
+                    await _supabase.from('teams').update({
+                      'points': currentPoints + 25,
+                      'wins': currentWins + 1,
+                    }).eq('id', selectedTeamId!);
+
+                    // 2. Fetch all members of this squad to distribute coins
+                    final members = await _supabase
+                        .from('team_members')
+                        .select('user_id')
+                        .eq('team_id', selectedTeamId!);
+
+                    final List<String> memberUserIds = [];
+                    if (members.isNotEmpty) {
+                      for (final m in members) {
+                        final uId = m['user_id']?.toString();
+                        if (uId != null && uId.isNotEmpty) memberUserIds.add(uId);
+                      }
+                    } else if (leaderId != null && leaderId.isNotEmpty) {
+                      memberUserIds.add(leaderId);
+                    }
+
+                    // Distribute Coins equally or full to leader
+                    final int share = memberUserIds.isNotEmpty
+                        ? (prizePool / memberUserIds.length).floor()
+                        : prizePool;
+
+                    for (final uId in memberUserIds) {
+                      // Credit in gamers/users balance
+                      try {
+                        final userRes = await _supabase.from('gamers').select('coins').eq('id', uId).maybeSingle();
+                        final int existing = (userRes?['coins'] as num?)?.toInt() ?? 0;
+                        await _supabase.from('gamers').update({'coins': existing + share}).eq('id', uId);
+                      } catch (_) {
+                        try {
+                          final userRes = await _supabase.from('users').select('coins').eq('id', uId).maybeSingle();
+                          final int existing = (userRes?['coins'] as num?)?.toInt() ?? 0;
+                          await _supabase.from('users').update({'coins': existing + share}).eq('id', uId);
+                        } catch (_) {}
+                      }
+
+                      // Save coin transaction log
+                      try {
+                        await _supabase.from('coin_transactions').insert({
+                          'user_id': uId,
+                          'amount': share,
+                          'type': 'tournament_prize',
+                          'description': 'Won tournament prize pool reward',
+                          'created_at': DateTime.now().toIso8601String(),
+                        });
+                      } catch (_) {}
+                    }
+
+                    // Optional fallback RPC if installed in your DB
+                    try {
+                      await _supabase.rpc('distribute_match_reward', params: {
+                        'p_team_id': selectedTeamId,
+                        'p_total_prize': prizePool,
+                      });
+                    } catch (_) {}
+
+                    // 3. Mark tournament as completed
                     await _supabase.from('tournaments').update({
                       'status': 'completed',
                       'winner_team_id': selectedTeamId,
@@ -3261,7 +3332,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Winner Declared & Prize Coins Distributed to Squad Members! 🏆'),
+                          content: Text('Winner Declared! +25 Points added & Coins Distributed! 🏆'),
                           backgroundColor: Color(0xFF00FF88),
                         ),
                       );
@@ -3279,6 +3350,58 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  void _showProofViewer(String url, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF161A22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+              child: InteractiveViewer(
+                maxScale: 4.0,
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                  ),
+                  errorWidget: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 40),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3345,6 +3468,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                     final status = (item['status'] ?? 'upcoming').toString();
                     final roomId = (item['room_id'] ?? '').toString();
                     final roomPass = (item['room_password'] ?? '').toString();
+                    final proofUrl = (item['proof_url'] ?? '').toString().trim();
 
                     return Container(
                       padding: const EdgeInsets.all(14),
@@ -3406,6 +3530,31 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                             roomId.isNotEmpty ? 'Room ID: $roomId • Pass: $roomPass' : 'Room ID: Not assigned yet',
                             style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontFamily: 'monospace'),
                           ),
+                          if (proofUrl.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            InkWell(
+                              onTap: () => _showProofViewer(proofUrl, '$title • Win Proof'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF8A00).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.4)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.image_search_rounded, color: Color(0xFFFF8A00), size: 16),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Victory Screenshot Submitted (Tap to View)',
+                                      style: TextStyle(color: Color(0xFFFF8A00), fontSize: 11.5, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           Divider(color: ThemeService.border, height: 1),
                           const SizedBox(height: 8),
@@ -3789,7 +3938,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                     labelText: 'Target Username or UID',
                     hintText: 'e.g. fua, @user, UID, or email',
                     hintStyle: TextStyle(
-                        color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
+                        color: ThemeService.textSecondary, fontSize: 13),
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                     prefixIcon: const Icon(Icons.person_search_rounded,
                         color: Color(0xFF38BDF8)),
