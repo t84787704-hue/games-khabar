@@ -1,5 +1,5 @@
 // ===============================================================================
-// GAMER MESSAGES SCREEN — Adaptive Day/Night Theme with Dynamic Presence
+// GAMER MESSAGES SCREEN — Adaptive Day/Night Theme with Dynamic Presence & Delete
 // File: lib/screens/gamer_messages_screen.dart
 // ===============================================================================
 
@@ -13,6 +13,7 @@ import '../models/gamer_user_model.dart';
 import '../services/direct_message_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
+import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import 'gamer_chat_screen.dart';
 
@@ -62,6 +63,94 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
       _conversations = list;
       _loading = false;
     });
+  }
+
+  Future<void> _deleteConversation(ChatConversation c) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.delete_forever_rounded, color: Color(0xFFFF4655)),
+            const SizedBox(width: 8),
+            Text(
+              'Delete Conversation?',
+              style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete all messages with ${c.otherUserName}?',
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final myAuthUid = _authService.currentUid ?? '';
+      final myGamerUid = _authService.currentGamer?.uid ?? '';
+      final effectiveUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+      final myId = await _dmService.resolveToTableId(effectiveUid);
+      final otherId = c.otherUserId;
+
+      // 1. Delete all messages between these two users
+      await SupabaseService.client
+          .from('direct_messages')
+          .delete()
+          .or('and(sender_id.eq.$myId,receiver_id.eq.$otherId),and(sender_id.eq.$otherId,receiver_id.eq.$myId)');
+
+      // Try alternate table if app uses 'messages'
+      try {
+        await SupabaseService.client
+            .from('messages')
+            .delete()
+            .or('and(sender_id.eq.$myId,receiver_id.eq.$otherId),and(sender_id.eq.$otherId,receiver_id.eq.$myId)');
+      } catch (_) {}
+
+      // 2. Remove locally
+      setState(() {
+        _conversations.removeWhere((item) => item.otherUserId == c.otherUserId);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Conversation with ${c.otherUserName} deleted'),
+            backgroundColor: const Color(0xFFFF4655),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[GamerMessagesScreen] Error deleting conversation: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting chat: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _openUserSearch() async {
@@ -296,171 +385,190 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
     final gameColor = _getGameBadgeColor(gameTag);
     final isDark = ThemeService.isDarkMode;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: c.unreadCount > 0 ? neonBlue.withOpacity(0.5) : ThemeService.border,
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
+    return Dismissible(
+      key: Key(c.otherUserId),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        await _deleteConversation(c);
+        return false; // Handled manually
+      },
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF4655),
           borderRadius: BorderRadius.circular(16),
-          onTap: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => GamerChatScreen(
-                  otherUserId: c.otherUserId,
-                  otherUserName: c.otherUserName,
-                  otherUserPhoto: c.otherUserPhoto,
-                  otherUserVerified: c.isVerified,
-                ),
-              ),
-            );
-            _loadConversations();
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                // Avatar with Theme-aware Container
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: ThemeService.cardSecondary,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: ThemeService.border, width: 1.5),
+        ),
+        alignment: Alignment.centerRight,
+        child: const Icon(Icons.delete_sweep_rounded, color: Colors.white, size: 28),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: ThemeService.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: c.unreadCount > 0 ? neonBlue.withOpacity(0.5) : ThemeService.border,
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => GamerChatScreen(
+                    otherUserId: c.otherUserId,
+                    otherUserName: c.otherUserName,
+                    otherUserPhoto: c.otherUserPhoto,
+                    otherUserVerified: c.isVerified,
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: c.otherUserPhoto.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: c.otherUserPhoto,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => const Center(
-                              child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: neonCyan,
+                ),
+              );
+              _loadConversations();
+            },
+            onLongPress: () => _deleteConversation(c),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  // Avatar with Theme-aware Container
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: ThemeService.cardSecondary,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: ThemeService.border, width: 1.5),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: c.otherUserPhoto.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: c.otherUserPhoto,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => const Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: neonCyan,
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (_, __, ___) => _buildInitials(c.otherUserName, 50),
+                            )
+                          : _buildInitials(c.otherUserName, 50),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Name, Game Badge, Last Message
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                c.otherUserName,
+                                style: TextStyle(
+                                  color: ThemeService.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: gameColor.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                gameTag,
+                                style: TextStyle(
+                                  color: gameColor,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
-                            errorWidget: (_, __, ___) => _buildInitials(c.otherUserName, 50),
-                          )
-                        : _buildInitials(c.otherUserName, 50),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Name, Game Badge, Last Message
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              c.otherUserName,
-                              style: TextStyle(
-                                color: ThemeService.textPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: gameColor.withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              gameTag,
-                              style: TextStyle(
-                                color: gameColor,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        c.lastMessage.isNotEmpty ? c.lastMessage : 'Tap to chat',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: c.unreadCount > 0 ? ThemeService.textPrimary : ThemeService.textSecondary,
-                          fontSize: 13,
-                          fontWeight: c.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Timestamp & Glowing Unread Badge
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      _formatTime(c.lastMessageTime),
-                      style: TextStyle(
-                        color: c.unreadCount > 0 ? neonCyan : ThemeService.textSecondary.withOpacity(0.7),
-                        fontSize: 11,
-                        fontWeight: c.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    if (c.unreadCount > 0) ...[
-                      const SizedBox(height: 5),
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: neonBlue,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: neonBlue.withOpacity(0.5),
-                              blurRadius: 6,
-                            ),
                           ],
                         ),
-                        child: Text(
-                          '${c.unreadCount}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
+                        const SizedBox(height: 4),
+                        Text(
+                          c.lastMessage.isNotEmpty ? c.lastMessage : 'Tap to chat',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: c.unreadCount > 0 ? ThemeService.textPrimary : ThemeService.textSecondary,
+                            fontSize: 13,
+                            fontWeight: c.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+
+                  // Timestamp & Glowing Unread Badge
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        _formatTime(c.lastMessageTime),
+                        style: TextStyle(
+                          color: c.unreadCount > 0 ? neonCyan : ThemeService.textSecondary.withOpacity(0.7),
+                          fontSize: 11,
+                          fontWeight: c.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
+                      if (c.unreadCount > 0) ...[
+                        const SizedBox(height: 5),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: neonBlue,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: neonBlue.withOpacity(0.5),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            '${c.unreadCount}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
