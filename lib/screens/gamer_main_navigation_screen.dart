@@ -14,6 +14,7 @@ import '../services/language_service.dart';
 import '../services/streak_service.dart';
 import '../widgets/daily_streak_dialog.dart';
 import 'gamer_feed_screen.dart';
+import 'tournaments_screen.dart'; // Naya Tournaments Screen Import
 import 'teams_screen.dart';
 import 'gamer_messages_screen.dart';
 import 'gamer_rooms_screen.dart';
@@ -47,7 +48,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   void _checkDailyLoginStreak() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // 1.5 seconds wait karein taake UI render ho jaye
       await Future.delayed(const Duration(milliseconds: 1500));
       if (!mounted) return;
 
@@ -85,7 +85,8 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
           if (isDocAdmin != _isAdmin) {
             setState(() {
               _isAdmin = isDocAdmin;
-              if (!_isAdmin && _currentIndex > 4) {
+              // Tournaments add hone ke baad admin tab index 6 banta hai
+              if (!_isAdmin && _currentIndex > 5) {
                 _currentIndex = 0;
               }
             });
@@ -120,8 +121,17 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Index mapping:
+    // 0: Feed
+    // 1: Tournaments
+    // 2: Teams
+    // 3: Messages
+    // 4: Rooms
+    // 5: Profile
+    // 6: Admin (if admin)
     final screens = <Widget>[
       const GamerFeedScreen(),
+      const TournamentsScreen(),
       const TeamsScreen(),
       const GamerMessagesScreen(),
       const GamerRoomsScreen(),
@@ -169,6 +179,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
+                        // 0: Feed
                         _buildNavItem(
                           index: 0,
                           icon: Icons.home_rounded,
@@ -176,40 +187,53 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 0,
                           isDark: isDark,
                         ),
+                        // 1: Tournaments (Feed aur Teams ke darmiyan)
                         _buildNavItem(
                           index: 1,
-                          icon: Icons.shield_rounded,
-                          label: 'nav_teams'.tr(),
+                          icon: Icons.emoji_events_rounded,
+                          label: 'Tournaments',
                           isSelected: _currentIndex == 1,
                           isDark: isDark,
                         ),
+                        // 2: Teams
                         _buildNavItem(
                           index: 2,
-                          icon: Icons.chat_bubble_rounded,
-                          label: 'nav_messages'.tr(),
+                          icon: Icons.shield_rounded,
+                          label: 'nav_teams'.tr(),
                           isSelected: _currentIndex == 2,
                           isDark: isDark,
                         ),
+                        // 3: Messages
                         _buildNavItem(
                           index: 3,
-                          icon: Icons.military_tech_rounded,
-                          label: 'nav_rooms'.tr(),
+                          icon: Icons.chat_bubble_rounded,
+                          label: 'nav_messages'.tr(),
                           isSelected: _currentIndex == 3,
                           isDark: isDark,
                         ),
+                        // 4: Rooms
                         _buildNavItem(
                           index: 4,
-                          icon: Icons.person_rounded,
-                          label: 'nav_profile'.tr(),
+                          icon: Icons.military_tech_rounded,
+                          label: 'nav_rooms'.tr(),
                           isSelected: _currentIndex == 4,
                           isDark: isDark,
                         ),
+                        // 5: Profile
+                        _buildNavItem(
+                          index: 5,
+                          icon: Icons.person_rounded,
+                          label: 'nav_profile'.tr(),
+                          isSelected: _currentIndex == 5,
+                          isDark: isDark,
+                        ),
+                        // 6: Admin
                         if (_isAdmin)
                           _buildNavItem(
-                            index: 5,
+                            index: 6,
                             icon: Icons.admin_panel_settings_rounded,
                             label: 'nav_admin'.tr(),
-                            isSelected: _currentIndex == 5,
+                            isSelected: _currentIndex == 6,
                             activeColor: const Color(0xFF1877F2),
                             isDark: isDark,
                           ),
@@ -245,14 +269,13 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
       onTap: () => _onTabTapped(index),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: EdgeInsets.symmetric(
-            horizontal: _isAdmin ? 6 : 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 22,
+              size: 21,
               color: isSelected ? activeColor : unselectedColor,
             ),
             const SizedBox(height: 3),
@@ -260,7 +283,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
               label,
               style: TextStyle(
                 color: isSelected ? activeColor : unselectedColor,
-                fontSize: 10,
+                fontSize: 9.5,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
               ),
             ),
