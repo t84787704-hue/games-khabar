@@ -1,4 +1,8 @@
 {
+  "verified_admin": "Verified Admin",
+  "official_verified_gamer": "Official Verified Gamer",
+  "blue_tick_active_desc": "Blue tick badge is active on your profile",
+  "admin_panel_desc": "Manage tournaments, reports, and app settings",
 "msg_daily_streak_claimed": "Daily login reward claimed successfully! 🎉",
   "daily_bonus_available_now": "Your daily bonus is ready to claim!",
   "btn_claim_50": "Claim +50 Coins", "err_referral_already_linked_or_invalid": "Referral code is invalid or already used.",
