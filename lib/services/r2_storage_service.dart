@@ -17,34 +17,39 @@ class R2StorageService {
     endPoint: '$_accountId.r2.cloudflarestorage.com',
     accessKey: _accessKey,
     secretKey: _secretKey,
+    region: 'auto', // Cloudflare R2 requires region 'auto'
     useSSL: true,
   );
 
   /// Image upload karke Cloudflare R2 ka direct public link dega
-  Future<String?> uploadImage({
+  Future<String> uploadImage({
     required File file,
     required String userId,
   }) async {
     try {
       final fileName = 'posts/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final fileBytes = await file.readAsBytes();
-      final stream = Stream.value(fileBytes);
+      final fileLength = await file.length();
+      final stream = file.openRead();
+
+      debugPrint('[R2 Storage] Uploading $fileName (${fileLength} bytes)...');
 
       await _minioClient.putObject(
         _bucketName,
         fileName,
         stream,
-        size: fileBytes.length,
+        size: fileLength,
         metadata: {
-          'Content-Type': 'image/jpeg',
+          'content-type': 'image/jpeg',
         },
       );
 
       final publicUrl = '$_publicBaseUrl/$fileName';
+      debugPrint('[R2 Storage] Upload Success! Public URL: $publicUrl');
       return publicUrl;
     } catch (e) {
       debugPrint('[R2 Storage Error]: $e');
-      return null;
+      // Throw so that post creation catches it and warns user instead of faking success
+      throw Exception('Image upload failed: $e');
     }
   }
 }
