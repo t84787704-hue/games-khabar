@@ -11,7 +11,7 @@ class DailyStreakDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
@@ -56,19 +56,21 @@ class DailyStreakDialog extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // 7 Days Visual Box Tracker
+            // 7 Days Visual Box Tracker (Showing Coins per Day)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: List.generate(7, (index) {
                 final dayNumber = index + 1;
                 final bool isCompleted = dayNumber <= result.streakDays;
                 final bool isCurrent = dayNumber == result.streakDays;
+                final int dayCoins = 50 + (index * 10); // Day 1 = 50, Day 2 = 60, Day 3 = 70 ... Day 7 = 110
 
                 return Column(
                   children: [
                     Container(
-                      width: 36,
-                      height: 48,
+                      width: 40,
+                      height: 58,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
                         color: isCompleted
                             ? GamerTheme.accentOrange
@@ -78,14 +80,26 @@ class DailyStreakDialog extends StatelessWidget {
                             ? Border.all(color: Colors.white, width: 2)
                             : null,
                       ),
-                      child: Center(
-                        child: Icon(
-                          isCompleted
-                              ? Icons.check_rounded
-                              : Icons.lock_outline_rounded,
-                          size: 18,
-                          color: isCompleted ? Colors.black : Colors.white38,
-                        ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            isCompleted
+                                ? Icons.check_rounded
+                                : Icons.lock_outline_rounded,
+                            size: 16,
+                            color: isCompleted ? Colors.black : Colors.white54,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '+$dayCoins',
+                            style: TextStyle(
+                              color: isCompleted ? Colors.black87 : Colors.amber,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 4),
