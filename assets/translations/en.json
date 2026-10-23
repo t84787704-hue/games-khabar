@@ -1,4 +1,10 @@
 {
+  "heading_incoming_challenges": "Incoming Challenges",
+  "badge_new_count": "{} New",
+  "msg_team_challenged_you": "Team challenged you to a match!",
+  "btn_reject_caps": "DECLINE",
+  "btn_accept_caps": "ACCEPT",
+  "heading_pending_requests_count": "Pending Requests ({})",
   "verified_admin": "Verified Admin",
   "official_verified_gamer": "Official Verified Gamer",
   "blue_tick_active_desc": "Blue tick badge is active on your profile",
