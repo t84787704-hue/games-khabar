@@ -118,8 +118,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
           backgroundColor: const Color(0xFFFF4655),
           content: Text(
             _isEarlyBirdUser
-                ? 'Aapko verification ke liye kam az kam 2 doston ko refer karna zaroori hai (${_referralCount}/2 Completed)!'
-                : 'Pehle tamam requirements aur minimum 2 Referrals poore karein!',
+                ? 'snack_early_bird_referral_req'.tr(namedArgs: {'current': '$_referralCount'})
+                : 'snack_standard_requirements_req'.tr(),
           ),
         ),
       );
@@ -501,8 +501,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
               Expanded(
                 child: Text(
                   _isEarlyBirdUser
-                      ? 'Early Bird VIP: First 1200 Users! 🎉'
-                      : 'First 1200 Users Offer Ended',
+                      ? 'early_bird_vip_tier_title'.tr()
+                      : 'early_bird_quota_ended_title'.tr(),
                   style: TextStyle(
                     color: _isEarlyBirdUser ? const Color(0xFF00FF88) : const Color(0xFFFF8A00),
                     fontWeight: FontWeight.w900,
@@ -515,8 +515,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
           const SizedBox(height: 8),
           Text(
             _isEarlyBirdUser
-                ? 'Mubarak ho! Aap app ke pehle 1,200 users mein shamil hain (#$_userRegistrationRank). Aapke liye baqi tamam requirements exempted hain — sirf 2 Friends ko refer karein aur Blue Tick unlock karein!'
-                : 'Pehle 1,200 users ka quota mukammal ho chuka hai. Regular users ko Blue Tick ke liye neeche diye gaye tamam strict rules poore karne honge.',
+                ? 'early_bird_vip_tier_desc'.tr(namedArgs: {'rank': '$_userRegistrationRank'})
+                : 'early_bird_quota_ended_desc'.tr(),
             style: TextStyle(color: ThemeService.textPrimary, fontSize: 12.5, height: 1.4),
           ),
         ],
@@ -551,11 +551,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Invite & Refer 2 Active Gamers',
+                      'invite_refer_two_gamers_title'.tr(),
                       style: TextStyle(color: ThemeService.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w900),
                     ),
                     Text(
-                      'Aapke referral link/code se kam az kam 2 doston ka join hona lazmi hai.',
+                      'invite_refer_two_gamers_desc'.tr(),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                     ),
                   ],
@@ -583,16 +583,16 @@ class _VerificationScreenState extends State<VerificationScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '$_referralCount Joined',
+                'joined_count_label'.tr(namedArgs: {'count': '$_referralCount'}),
                 style: TextStyle(
                   color: isMet ? const Color(0xFF00FF88) : ThemeService.textPrimary,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const Text(
-                'Target: 2 Referrals',
-                style: TextStyle(color: Color(0xFF65676B), fontSize: 10.5),
+              Text(
+                'target_referrals_label'.tr(),
+                style: const TextStyle(color: Color(0xFF65676B), fontSize: 10.5),
               ),
             ],
           ),
@@ -670,7 +670,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Admin review jari hai. Jald verification status update ho jayega.',
+              'status_under_review_note'.tr(),
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
               textAlign: TextAlign.center,
             ),
@@ -704,7 +704,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     ),
                     Text(
                       _isEarlyBirdUser
-                          ? 'Early Bird VIP: Just 2 Referrals Needed'
+                          ? 'vip_two_referrals_needed_sub'.tr()
                           : 'meet_all_requirements_sub'.tr(),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                     ),
@@ -735,7 +735,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             children: [
               Text(
                 _isEarlyBirdUser
-                    ? 'Referrals: $_referralCount / 2'
+                    ? 'referrals_progress_label'.tr(namedArgs: {'current': '$_referralCount', 'target': '2'})
                     : 'completed_of_total'.tr(args: ['$metCount', '$totalCount']),
                 style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
               ),
@@ -840,15 +840,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
           color: const Color(0xFF1877F2).withOpacity(0.15),
           border: Border.all(color: const Color(0xFF1877F2), width: 1.5),
         ),
-        child: const Center(
+        child: Center(
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 20),
-              SizedBox(width: 8),
+              const Icon(Icons.verified_rounded, color: Color(0xFF1877F2), size: 20),
+              const SizedBox(width: 8),
               Text(
-                'Official Verified Gamer',
-                style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w900, fontSize: 14),
+                'official_verified_gamer_label'.tr(),
+                style: const TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.w900, fontSize: 14),
               ),
             ],
           ),
@@ -892,7 +892,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
         icon: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Icon(allMet ? Icons.verified_rounded : Icons.lock_outline_rounded, size: 18),
         label: Text(
           allMet
-              ? 'Apply for Official Verification'
+              ? 'btn_apply_for_official_verification'.tr()
               : 'btn_apply_locked'.tr(),
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
         ),
@@ -977,9 +977,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   icon: const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF1877F2), size: 15),
-                  label: const Text(
-                    'Post Picture',
-                    style: TextStyle(color: Color(0xFF1877F2), fontSize: 11, fontWeight: FontWeight.bold),
+                  label: Text(
+                    'btn_post_picture'.tr(),
+                    style: const TextStyle(color: Color(0xFF1877F2), fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatePostScreen())).then((_) => _refreshData());
