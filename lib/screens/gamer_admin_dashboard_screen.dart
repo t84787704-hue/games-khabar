@@ -1833,7 +1833,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         allUsersSorted.sort((a, b) {
           final tA = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2020);
           final tB = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2020);
-          return tA.compareTo(tB);
+          return tA.compareTo(b['created_at']?.toString() ?? '');
         });
 
         final List<Map<String, dynamic>> requestsWithIndex = [];
@@ -2940,13 +2940,27 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
 
   void _openCreateTournamentDialog() {
     final titleController = TextEditingController();
-    final mapController = TextEditingController(text: 'Erangel');
+    final customMapController = TextEditingController();
     final feeController = TextEditingController(text: '50');
     final prizeController = TextEditingController(text: '500');
     final roomController = TextEditingController();
     final passController = TextEditingController();
     int maxTeams = 4;
     String mode = 'Squad (4v4)';
+    String selectedMap = 'Erangel';
+
+    final List<String> availableMaps = [
+      'Erangel',
+      'Livik',
+      'Miramar',
+      'Sanhok',
+      'Vikendi',
+      'Bermuda (Free Fire)',
+      'Purgatory (Free Fire)',
+      'Kalahari (Free Fire)',
+      'Alpine (Free Fire)',
+      'Custom / Other',
+    ];
 
     showDialog(
       context: context,
@@ -2994,14 +3008,32 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                     },
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: mapController,
+                  DropdownButtonFormField<String>(
+                    value: selectedMap,
+                    dropdownColor: const Color(0xFF161A22),
                     style: const TextStyle(color: Colors.white, fontSize: 13),
                     decoration: const InputDecoration(
-                      labelText: 'Map Name (Erangel, Livik, etc.)',
+                      labelText: 'Select Map',
                       labelStyle: TextStyle(color: Colors.white60),
                     ),
+                    items: availableMaps.map((m) {
+                      return DropdownMenuItem(value: m, child: Text(m));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDState(() => selectedMap = val);
+                    },
                   ),
+                  if (selectedMap == 'Custom / Other') ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: customMapController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: const InputDecoration(
+                        labelText: 'Enter Custom Map Name',
+                        labelStyle: TextStyle(color: Colors.white60),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -3096,11 +3128,16 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                   final fee = int.tryParse(feeController.text.trim()) ?? 0;
                   final prize = int.tryParse(prizeController.text.trim()) ?? 0;
 
+                  String finalMapName = selectedMap;
+                  if (selectedMap == 'Custom / Other') {
+                    finalMapName = customMapController.text.trim().isEmpty ? 'Erangel' : customMapController.text.trim();
+                  }
+
                   try {
                     await _supabase.from('tournaments').insert({
                       'title': title,
                       'game_mode': mode,
-                      'map_name': mapController.text.trim().isEmpty ? 'Erangel' : mapController.text.trim(),
+                      'map_name': finalMapName,
                       'entry_fee': fee,
                       'prize_pool': prize,
                       'max_teams': maxTeams,
@@ -3938,7 +3975,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                     labelText: 'Target Username or UID',
                     hintText: 'e.g. fua, @user, UID, or email',
                     hintStyle: TextStyle(
-                        color: ThemeService.textSecondary, fontSize: 13),
+                        color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
                     labelStyle: TextStyle(color: ThemeService.textSecondary),
                     prefixIcon: const Icon(Icons.person_search_rounded,
                         color: Color(0xFF38BDF8)),
