@@ -1,4 +1,7 @@
 {
+"title_blocked_users": "Blocked Users",
+"no_blocked_users_title": "No Blocked Users",
+"no_blocked_users_desc": "You haven't blocked anyone yet",
 "nav_feed": "Feed",
 "nav_messages": "Messages",
 "nav_profile": "Profile",
