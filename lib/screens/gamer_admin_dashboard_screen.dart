@@ -3368,7 +3368,16 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
       return;
     }
 
-    String? selectedTeamId = regRes.first['team_id']?.toString();
+    // Auto select submitted team if proof was uploaded
+    final currentTourney = _tournaments.firstWhere((t) => t['id'].toString() == tournamentId, orElse: () => {});
+    final proofTeamId = (currentTourney['proof_team_id'] ?? currentTourney['submitted_team_id'])?.toString();
+
+    String? selectedTeamId;
+    if (proofTeamId != null && regRes.any((r) => r['team_id']?.toString() == proofTeamId)) {
+      selectedTeamId = proofTeamId;
+    } else {
+      selectedTeamId = regRes.first['team_id']?.toString();
+    }
 
     if (!mounted) return;
     showDialog(
@@ -3647,6 +3656,8 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                     final roomId = (item['room_id'] ?? '').toString();
                     final roomPass = (item['room_password'] ?? '').toString();
                     final proofUrl = (item['proof_url'] ?? '').toString().trim();
+                    final proofTeamName = (item['proof_team_name'] ?? item['submitted_team_name'] ?? '').toString().trim();
+                    final proofLeaderName = (item['proof_leader_name'] ?? '').toString().trim();
 
                     return Container(
                       padding: const EdgeInsets.all(14),
@@ -3709,25 +3720,62 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                             style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontFamily: 'monospace'),
                           ),
                           if (proofUrl.isNotEmpty) ...[
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 10),
                             InkWell(
-                              onTap: () => _showProofViewer(proofUrl, '$title • Win Proof'),
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () => _showProofViewer(
+                                proofUrl,
+                                '$title • Proof by: ${proofTeamName.isNotEmpty ? proofTeamName : "Registered Squad"}',
+                              ),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFF8A00).withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.4)),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.5)),
                                 ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
+                                child: Row(
                                   children: [
-                                    Icon(Icons.image_search_rounded, color: Color(0xFFFF8A00), size: 16),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'Victory Screenshot Submitted (Tap to View)',
-                                      style: TextStyle(color: Color(0xFFFF8A00), fontSize: 11.5, fontWeight: FontWeight.bold),
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF8A00).withOpacity(0.25),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(Icons.shield_rounded, color: Color(0xFFFF8A00), size: 20),
                                     ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Text(
+                                                'Win Proof by: ',
+                                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                                              ),
+                                              Text(
+                                                proofTeamName.isNotEmpty ? proofTeamName : 'Registered Squad',
+                                                style: const TextStyle(
+                                                  color: Color(0xFFFF8A00),
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            proofLeaderName.isNotEmpty
+                                                ? 'Leader: $proofLeaderName • (Tap to View)'
+                                                : 'Tap to inspect victory screenshot',
+                                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFFF8A00), size: 13),
                                   ],
                                 ),
                               ),
