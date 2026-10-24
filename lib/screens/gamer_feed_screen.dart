@@ -49,6 +49,62 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     await _loadFeed();
   }
 
+  void _openImagePreview(BuildContext context, String imageUrl) {
+    if (imageUrl.isEmpty) return;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.92),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx),
+              child: Container(
+                color: Colors.transparent,
+                width: double.infinity,
+                height: double.infinity,
+              ),
+            ),
+            InteractiveViewer(
+              panEnabled: true,
+              minScale: 0.8,
+              maxScale: 4.0,
+              child: Center(
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF1877F2)),
+                  ),
+                  errorWidget: (_, __, ___) => const Center(
+                    child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 16,
+              child: SafeArea(
+                child: CircleAvatar(
+                  backgroundColor: Colors.black54,
+                  radius: 20,
+                  child: IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadCurrentUserInfo() async {
     try {
       String? sbId = SupabaseService.client.auth.currentUser?.id;
@@ -1021,39 +1077,42 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                             if (imageUrl.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
-                                child: Container(
-                                  width: double.infinity,
-                                  constraints: const BoxConstraints(minHeight: 180, maxHeight: 420),
-                                  color: ThemeService.cardSecondary,
-                                  child: CachedNetworkImage(
-                                    imageUrl: imageUrl,
+                                child: GestureDetector(
+                                  onTap: () => _openImagePreview(context, imageUrl),
+                                  child: Container(
                                     width: double.infinity,
-                                    fit: BoxFit.contain,
-                                    filterQuality: FilterQuality.high,
-                                    placeholder: (context, url) => Container(
-                                      height: 220,
-                                      color: ThemeService.cardSecondary,
-                                      child: const Center(
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Color(0xFF1877F2),
+                                    constraints: const BoxConstraints(minHeight: 180, maxHeight: 420),
+                                    color: ThemeService.cardSecondary,
+                                    child: CachedNetworkImage(
+                                      imageUrl: imageUrl,
+                                      width: double.infinity,
+                                      fit: BoxFit.contain,
+                                      filterQuality: FilterQuality.high,
+                                      placeholder: (context, url) => Container(
+                                        height: 220,
+                                        color: ThemeService.cardSecondary,
+                                        child: const Center(
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFF1877F2),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    errorWidget: (context, url, error) => Container(
-                                      height: 180,
-                                      color: ThemeService.cardSecondary,
-                                      child: Center(
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 36),
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              'Image loading error',
-                                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
-                                            ),
-                                          ],
+                                      errorWidget: (context, url, error) => Container(
+                                        height: 180,
+                                        color: ThemeService.cardSecondary,
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 36),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                'Image loading error',
+                                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
