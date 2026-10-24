@@ -187,11 +187,15 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       final teamId = myRegisteredTeam?['id']?.toString() ??
           (_registeredTeams.isNotEmpty ? _registeredTeams.first['team_id']?.toString() : null);
 
-      final teamName = myRegisteredTeam?['name']?.toString() ??
-          (_registeredTeams.isNotEmpty
-              ? (_registeredTeams.first['teams'] as Map<String, dynamic>?)?['name']?.toString()
-              : null) ??
-          'Registered Squad';
+      String teamName = 'Registered Squad';
+      if (myRegisteredTeam != null && myRegisteredTeam['name'] != null) {
+        teamName = myRegisteredTeam['name'].toString();
+      } else if (_registeredTeams.isNotEmpty) {
+        final firstTeam = _registeredTeams.first['teams'];
+        if (firstTeam is Map && firstTeam['name'] != null) {
+          teamName = firstTeam['name'].toString();
+        }
+      }
 
       final leaderIdentifier = _supabase.auth.currentUser?.email ?? 'Leader';
 
