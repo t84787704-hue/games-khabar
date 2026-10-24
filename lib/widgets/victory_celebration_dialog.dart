@@ -1,3 +1,8 @@
+// ===============================================================================
+// VICTORY CELEBRATION DIALOG — Confetti, Flying Coins & Podium Ceremony
+// File: lib/widgets/victory_celebration_dialog.dart
+// ===============================================================================
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
@@ -44,19 +49,58 @@ class VictoryCelebrationDialog extends StatefulWidget {
   State<VictoryCelebrationDialog> createState() => _VictoryCelebrationDialogState();
 }
 
-class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
+class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog>
+    with TickerProviderStateMixin {
   late ConfettiController _confettiController;
+  late AnimationController _coinAnimController;
+  late Animation<double> _coinFlyProgress;
+  late Animation<int> _coinCounterAnim;
+
+  // Har coin ka random curve & angle
+  final List<Offset> _coinStartOffsets = List.generate(
+    14,
+    (index) => Offset(
+      (Random().nextDouble() - 0.5) * 160,
+      -Random().nextDouble() * 120 - 40,
+    ),
+  );
 
   @override
   void initState() {
     super.initState();
+    // 1. Confetti Setup
     _confettiController = ConfettiController(duration: const Duration(seconds: 4));
     _confettiController.play();
+
+    // 2. Flying Coins Animation Setup
+    _coinAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    );
+
+    _coinFlyProgress = CurvedAnimation(
+      parent: _coinAnimController,
+      curve: Curves.easeInOutCubic,
+    );
+
+    // 3. Live Coins Count-Up Counter
+    _coinCounterAnim = IntTween(begin: 0, end: widget.prizeCoins).animate(
+      CurvedAnimation(
+        parent: _coinAnimController,
+        curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
+      ),
+    );
+
+    // Dialog khulte hi coins uddna start honge
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _coinAnimController.forward();
+    });
   }
 
   @override
   void dispose() {
     _confettiController.dispose();
+    _coinAnimController.dispose();
     super.dispose();
   }
 
@@ -71,7 +115,7 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
   @override
   Widget build(BuildContext context) {
     return Stack(
-      alignment: Alignment.topCenter,
+      alignment: Alignment.center,
       children: [
         Dialog(
           backgroundColor: Colors.transparent,
@@ -98,6 +142,7 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Glowing Crown & Header
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -132,6 +177,7 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Winning Team Highlight Card with Live Flying Coin Target
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
@@ -152,29 +198,47 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
                             letterSpacing: 1,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFD700).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFFFD700)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.monetization_on_rounded, color: Color(0xFFFFD700), size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                '+${widget.prizeCoins} Coins Won',
-                                style: const TextStyle(
-                                  color: Color(0xFFFFD700),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 14,
+                        const SizedBox(height: 10),
+
+                        // Animated Coin Counter Box (Target Wallet)
+                        AnimatedBuilder(
+                          animation: _coinAnimController,
+                          builder: (context, _) {
+                            final scale = 1.0 + (sin(_coinFlyProgress.value * pi * 4) * 0.08).abs();
+                            return Transform.scale(
+                              scale: scale,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFD700).withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: const Color(0xFFFFD700), width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFFD700).withOpacity(0.35),
+                                      blurRadius: 16,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text('🪙', style: TextStyle(fontSize: 20)),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '+${_coinCounterAnim.value} Coins Awarded',
+                                      style: const TextStyle(
+                                        color: Color(0xFFFFD700),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -182,10 +246,12 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
 
                   const SizedBox(height: 18),
 
+                  // Top 2 Podium (Winner + Runner Up)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      // 2nd Place
                       Expanded(
                         child: Column(
                           children: [
@@ -214,6 +280,7 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      // 1st Place Podium
                       Expanded(
                         child: Column(
                           children: [
@@ -259,6 +326,7 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
                     ],
                   ),
 
+                  // MVP Highlight Badge
                   if (widget.mvpPlayerName != null && widget.mvpPlayerName!.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     Container(
@@ -288,6 +356,7 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
 
                   const SizedBox(height: 20),
 
+                  // Action Buttons
                   Row(
                     children: [
                       Expanded(
@@ -313,7 +382,7 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: const Text('Awesome!', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                          child: const Text('Claim & Close', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
                         ),
                       ),
                     ],
@@ -324,21 +393,67 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog> {
           ),
         ),
 
-        ConfettiWidget(
-          confettiController: _confettiController,
-          blastDirection: pi / 2,
-          maxBlastForce: 5,
-          minBlastForce: 2,
-          emissionFrequency: 0.05,
-          numberOfParticles: 25,
-          gravity: 0.2,
-          colors: const [
-            Color(0xFFFFD700),
-            Color(0xFF00FF88),
-            Color(0xFF38BDF8),
-            Color(0xFFFF4655),
-            Colors.white,
-          ],
+        // Flying Coins Particle Stream
+        AnimatedBuilder(
+          animation: _coinAnimController,
+          builder: (context, _) {
+            final t = _coinFlyProgress.value;
+            if (t == 0.0 || t == 1.0) return const SizedBox.shrink();
+
+            return IgnorePointer(
+              child: Stack(
+                children: List.generate(_coinStartOffsets.length, (i) {
+                  final start = _coinStartOffsets[i];
+                  // Start se le kar target (center card) ki taraf curved flight
+                  final currentX = start.dx * (1.0 - t);
+                  final currentY = start.dy * (1.0 - t) - (sin(t * pi) * 60);
+                  final scale = 0.8 + (sin(t * pi) * 0.5);
+                  final opacity = (1.0 - (t * 0.85)).clamp(0.0, 1.0);
+
+                  return Align(
+                    alignment: Alignment.center,
+                    child: Transform.translate(
+                      offset: Offset(currentX, currentY),
+                      child: Transform.scale(
+                        scale: scale,
+                        child: Opacity(
+                          opacity: opacity,
+                          child: const Text(
+                            '🪙',
+                            style: TextStyle(
+                              fontSize: 26,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            );
+          },
+        ),
+
+        // Top Down Confetti
+        Align(
+          alignment: Alignment.topCenter,
+          child: ConfettiWidget(
+            confettiController: _confettiController,
+            blastDirection: pi / 2,
+            maxBlastForce: 5,
+            minBlastForce: 2,
+            emissionFrequency: 0.05,
+            numberOfParticles: 25,
+            gravity: 0.2,
+            colors: const [
+              Color(0xFFFFD700),
+              Color(0xFF00FF88),
+              Color(0xFF38BDF8),
+              Color(0xFFFF4655),
+              Colors.white,
+            ],
+          ),
         ),
       ],
     );
