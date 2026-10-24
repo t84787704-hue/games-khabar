@@ -282,49 +282,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                       const SizedBox(height: 20),
                     ],
 
-                    // REFERRAL CODE INPUT (OPTIONAL ACCORDION)
-                    if (!_showReferralField) ...[
-                      TextButton.icon(
-                        onPressed: () => setState(() => _showReferralField = true),
-                        icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFF00FF88), size: 16),
-                        label: const Text(
-                          'Have a Referral Code?',
-                          style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ] else ...[
-                      Container(
-                        decoration: BoxDecoration(
-                          color: ThemeService.card,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
-                        ),
-                        child: TextField(
-                          controller: _referralController,
-                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-                          decoration: InputDecoration(
-                            hintText: 'Enter Friend\'s Username (e.g. @fua)',
-                            hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 12),
-                            labelText: 'Referral Code (Optional)',
-                            labelStyle: const TextStyle(color: Color(0xFF00FF88), fontSize: 12),
-                            prefixIcon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFF00FF88), size: 18),
-                            suffixIcon: IconButton(
-                              icon: Icon(Icons.clear, color: ThemeService.textSecondary, size: 16),
-                              onPressed: () {
-                                _referralController.clear();
-                                setState(() => _showReferralField = false);
-                              },
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            border: InputBorder.none,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // CONTINUE WITH GOOGLE BUTTON
+                    // CONTINUE WITH GOOGLE BUTTON (Primary Action First)
                     SizedBox(
                       width: double.infinity,
                       height: 52,
@@ -424,6 +382,47 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 20),
+
+                    // REFERRAL CODE INPUT (Moved Down as Optional Option)
+                    if (!_showReferralField) ...[
+                      TextButton.icon(
+                        onPressed: () => setState(() => _showReferralField = true),
+                        icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFF00FF88), size: 16),
+                        label: const Text(
+                          'Have a Referral Code?',
+                          style: TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ] else ...[
+                      Container(
+                        decoration: BoxDecoration(
+                          color: ThemeService.card,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+                        ),
+                        child: TextField(
+                          controller: _referralController,
+                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'Enter Friend\'s Username (e.g. @fua)',
+                            hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 12),
+                            labelText: 'Referral Code (Optional)',
+                            labelStyle: const TextStyle(color: Color(0xFF00FF88), fontSize: 12),
+                            prefixIcon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFF00FF88), size: 18),
+                            suffixIcon: IconButton(
+                              icon: Icon(Icons.clear, color: ThemeService.textSecondary, size: 16),
+                              onPressed: () {
+                                _referralController.clear();
+                                setState(() => _showReferralField = false);
+                              },
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 18),
 
                     Text(
