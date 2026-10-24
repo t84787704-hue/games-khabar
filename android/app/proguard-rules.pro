@@ -12,3 +12,8 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn com.google.android.gms.**
+
+# Google ML Kit Text Recognition
+-dontwarn com.google.mlkit.vision.text.**
+-dontwarn com.google.mlkit.**
+-keep class com.google.mlkit.** { *; }
