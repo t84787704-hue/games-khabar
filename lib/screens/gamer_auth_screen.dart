@@ -65,7 +65,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     }
 
     try {
-      // 1. Agar user ne referral code dala hai to referrer dhoond kar link karein
       final rawRefCode = _referralController.text.trim().toLowerCase().replaceAll('@', '');
       if (rawRefCode.isNotEmpty) {
         try {
@@ -89,7 +88,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
         }
       }
 
-      // 2. Profile fetch karein
       Map<String, dynamic>? profile;
       try {
         profile = await SupabaseService.client
@@ -171,8 +169,8 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
-      builder: (context, _, __) {
-        final isDayMode = ThemeService.isLight;
+      builder: (context, themeMode, __) {
+        final isDayMode = themeMode == ThemeMode.light;
 
         return Scaffold(
           backgroundColor: ThemeService.bg,
@@ -257,7 +255,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                       const SizedBox(height: 20),
                     ],
 
-                    // CONTINUE WITH GOOGLE BUTTON (Primary Action First)
+                    // CONTINUE WITH GOOGLE BUTTON
                     SizedBox(
                       width: double.infinity,
                       height: 52,
@@ -313,7 +311,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // REFERRAL CODE INPUT (Moved Down as Optional Option)
+                    // REFERRAL CODE INPUT
                     if (!_showReferralField) ...[
                       TextButton.icon(
                         onPressed: () => setState(() => _showReferralField = true),
