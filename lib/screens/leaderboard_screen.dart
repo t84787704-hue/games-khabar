@@ -68,33 +68,34 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
 
     return Container(
-      width: 44,
-      height: 36,
-      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: rank <= 3 ? rankColor.withOpacity(0.15) : const Color(0xFF161F2E),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: rank <= 3 ? rankColor.withOpacity(0.5) : const Color(0xFF2A3447),
         ),
       ),
-      child: rank <= 3
-          ? Text(
-              '$rankEmoji #$rank',
-              style: TextStyle(
-                color: rankColor,
-                fontWeight: FontWeight.w900,
-                fontSize: 11,
-              ),
-            )
-          : Text(
-              '#$rank',
-              style: TextStyle(
-                color: rankColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (rank <= 3) ...[
+            Text(
+              rankEmoji,
+              style: const TextStyle(fontSize: 12),
             ),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            '#$rank',
+            style: TextStyle(
+              color: rankColor,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -231,7 +232,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                 ),
                                 const SizedBox(width: 10),
                                 Text(
-                                  '$wins Wins 🏆', // ✅ Yahan ab direct wins ka number aur icon show hoga
+                                  '$wins Wins 🏆',
                                   style: const TextStyle(
                                     color: Color(0xFF00FF88),
                                     fontWeight: FontWeight.w900,
