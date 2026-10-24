@@ -50,8 +50,8 @@ android {
         release {
             def hasKey = keystorePropertiesFile.exists() && keystoreProperties['storeFile'] && file(keystoreProperties['storeFile']).exists()
             signingConfig = hasKey ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
