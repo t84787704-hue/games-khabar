@@ -111,20 +111,51 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     }
 
     try {
-      // Register Squad
+      final currentTourney = _tournaments.firstWhere(
+        (t) => t['id'].toString() == tournamentId,
+        orElse: () => {},
+      );
+      final tourneyTitle = currentTourney['title']?.toString() ?? 'Tournament';
+
+      // 1. Register Squad
       await _supabase.from('tournament_registrations').insert({
         'tournament_id': tournamentId,
         'team_id': _myTeamId,
         'leader_id': user.id,
       });
 
-      // Update count
+      // 2. Update count
       await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
+
+      // 3. Send notification to all team members
+      final membersRes = await _supabase
+          .from('team_members')
+          .select('user_id')
+          .eq('team_id', _myTeamId!);
+
+      final List<Map<String, dynamic>> notifInserts = [];
+      for (final m in membersRes) {
+        final memberUid = m['user_id']?.toString();
+        if (memberUid != null && memberUid != user.id) {
+          notifInserts.add({
+            'user_id': memberUid,
+            'title': 'Tournament Registered! 🎮',
+            'body': 'Your squad leader registered the team for "$tourneyTitle". Be ready for the match!',
+            'type': 'tournament',
+            'created_at': DateTime.now().toIso8601String(),
+            'is_read': false,
+          });
+        }
+      }
+
+      if (notifInserts.isNotEmpty) {
+        await _supabase.from('notifications').insert(notifInserts);
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Squad Registered Successfully! 🎉'),
+          content: Text('Squad Registered & Team Notified! 🎉'),
           backgroundColor: Color(0xFF00FF88),
         ),
       );
