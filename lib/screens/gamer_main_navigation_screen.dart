@@ -15,7 +15,7 @@ import '../services/streak_service.dart';
 import '../services/app_stay_timer_service.dart';
 import '../widgets/daily_streak_dialog.dart';
 import 'gamer_feed_screen.dart';
-import 'tournaments_screen.dart' hide GamerFeedScreen;
+import 'tournaments_screen.dart';
 import 'teams_screen.dart';
 import 'gamer_messages_screen.dart';
 import 'gamer_profile_screen.dart';
@@ -94,7 +94,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
           if (isDocAdmin != _isAdmin) {
             setState(() {
               _isAdmin = isDocAdmin;
-              // Rooms nikalne ke baad regular tabs 0 se 4 hain, admin tab 5 banta hai
               if (!_isAdmin && _currentIndex > 4) {
                 _currentIndex = 0;
               }
@@ -130,20 +129,13 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Index mapping (Rooms removed):
-    // 0: Feed
-    // 1: Tournaments
-    // 2: Teams
-    // 3: Messages
-    // 4: Profile
-    // 5: Admin (if admin)
     final screens = <Widget>[
       GamerFeedScreen(),
       TournamentsScreen(),
-      const TeamsScreen(),
-      const GamerMessagesScreen(),
-      const GamerProfileScreen(),
-      if (_isAdmin) const GamerAdminDashboardScreen(),
+      TeamsScreen(),
+      GamerMessagesScreen(),
+      GamerProfileScreen(),
+      if (_isAdmin) GamerAdminDashboardScreen(),
     ];
 
     return ValueListenableBuilder<ThemeMode>(
@@ -186,7 +178,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        // 0: Feed
                         _buildNavItem(
                           index: 0,
                           icon: Icons.home_rounded,
@@ -194,7 +185,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 0,
                           isDark: isDark,
                         ),
-                        // 1: Tournaments
                         _buildNavItem(
                           index: 1,
                           icon: Icons.emoji_events_rounded,
@@ -202,7 +192,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 1,
                           isDark: isDark,
                         ),
-                        // 2: Teams
                         _buildNavItem(
                           index: 2,
                           icon: Icons.shield_rounded,
@@ -210,7 +199,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 2,
                           isDark: isDark,
                         ),
-                        // 3: Messages
                         _buildNavItem(
                           index: 3,
                           icon: Icons.chat_bubble_rounded,
@@ -218,7 +206,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 3,
                           isDark: isDark,
                         ),
-                        // 4: Profile
                         _buildNavItem(
                           index: 4,
                           icon: Icons.person_rounded,
@@ -226,7 +213,6 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 4,
                           isDark: isDark,
                         ),
-                        // 5: Admin
                         if (_isAdmin)
                           _buildNavItem(
                             index: 5,
