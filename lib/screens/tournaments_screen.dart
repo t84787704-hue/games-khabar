@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/theme_service.dart';
 import '../widgets/gamer_growth_hub_dialog.dart';
 import 'tournament_detail_screen.dart';
 
@@ -148,221 +149,246 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0E17),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF161A22),
-        elevation: 0,
-        title: const Text(
-          'Tournaments 🏆',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton.icon(
-              style: TextButton.styleFrom(
-                backgroundColor: const Color(0xFFFFD700).withOpacity(0.15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.4)),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            backgroundColor: ThemeService.appBarBg,
+            elevation: 0,
+            title: Text(
+              'Tournaments 🏆',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: ThemeService.textPrimary,
+                fontSize: 18,
               ),
-              icon: const Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 18),
-              label: const Text(
-                'Rewards & UC',
-                style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 12),
-              ),
-              onPressed: _openRewardsVault,
             ),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _fetchTournaments,
-        color: const Color(0xFF00FF88),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))
-            : _tournaments.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No tournaments available right now',
-                      style: TextStyle(color: Colors.white70),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFD700).withOpacity(0.15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.4)),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                    itemCount: _tournaments.length + 1,
-                    itemBuilder: (context, index) {
-                      // Top Banner: Daily 10-Min Stay & Earn shortcut
-                      if (index == 0) {
-                        return _buildTopEngagementBanner();
-                      }
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  ),
+                  icon: const Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 18),
+                  label: const Text(
+                    'Rewards & UC',
+                    style: TextStyle(
+                      color: Color(0xFFFFD700),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  onPressed: _openRewardsVault,
+                ),
+              ),
+            ],
+          ),
+          body: RefreshIndicator(
+            onRefresh: _fetchTournaments,
+            color: const Color(0xFF00FF88),
+            backgroundColor: ThemeService.card,
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))
+                : _tournaments.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No tournaments available right now',
+                          style: TextStyle(color: ThemeService.textSecondary),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                        itemCount: _tournaments.length + 1,
+                        itemBuilder: (context, index) {
+                          // Top Banner: Daily 10-Min Stay & Earn shortcut
+                          if (index == 0) {
+                            return _buildTopEngagementBanner();
+                          }
 
-                      final item = _tournaments[index - 1];
-                      final tId = item['id'].toString();
-                      final maxTeams = (item['max_teams'] ?? 16) as int;
-                      final currentTeams = (item['current_teams'] ?? 0) as int;
-                      final isFull = currentTeams >= maxTeams;
-                      final isRegistered = _registeredTournamentIds.contains(tId);
+                          final item = _tournaments[index - 1];
+                          final tId = item['id'].toString();
+                          final maxTeams = (item['max_teams'] ?? 16) as int;
+                          final currentTeams = (item['current_teams'] ?? 0) as int;
+                          final isFull = currentTeams >= maxTeams;
+                          final isRegistered = _registeredTournamentIds.contains(tId);
 
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => TournamentDetailScreen(
-                                tournament: item,
-                                isRegistered: isRegistered,
-                              ),
-                            ),
-                          ).then((_) => _fetchTournaments());
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF161A22),
+                          return InkWell(
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isRegistered
-                                  ? const Color(0xFF00FF88).withOpacity(0.5)
-                                  : Colors.white10,
-                              width: 1,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      item['title'] ?? 'Tournament',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => TournamentDetailScreen(
+                                    tournament: item,
+                                    isRegistered: isRegistered,
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF00FF88).withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      'Prize: ${item['prize_pool']} Coins',
-                                      style: const TextStyle(
-                                        color: Color(0xFF00FF88),
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  _badge(Icons.sports_esports, item['game_mode'] ?? 'Squad (4v4)'),
-                                  const SizedBox(width: 8),
-                                  _badge(Icons.map, item['map_name'] ?? 'Erangel'),
-                                  const SizedBox(width: 8),
-                                  _badge(Icons.monetization_on, 'Fee: ${item['entry_fee'] ?? 0}'),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-
-                              // Match timing and Room ID hook
-                              _buildRoomHookCard(item, isRegistered),
-
-                              const SizedBox(height: 12),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: LinearProgressIndicator(
-                                  value: maxTeams > 0 ? (currentTeams / maxTeams) : 0,
-                                  backgroundColor: Colors.white10,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    isRegistered ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
-                                  ),
-                                  minHeight: 6,
+                                ),
+                              ).then((_) => _fetchTournaments());
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: ThemeService.card,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isRegistered
+                                      ? const Color(0xFF00FF88).withOpacity(0.5)
+                                      : ThemeService.border,
+                                  width: 1,
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'Slots: $currentTeams / $maxTeams Teams Registered',
-                                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                                  ),
-                                  const Row(
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(
-                                        'View Details',
-                                        style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                                      Expanded(
+                                        child: Text(
+                                          item['title'] ?? 'Tournament',
+                                          style: TextStyle(
+                                            color: ThemeService.textPrimary,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ),
-                                      SizedBox(width: 2),
-                                      Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF38BDF8), size: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF00FF88).withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          'Prize: ${item['prize_pool']} Coins',
+                                          style: const TextStyle(
+                                            color: Color(0xFF00FF88),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                   ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      _badge(Icons.sports_esports, item['game_mode'] ?? 'Squad (4v4)'),
+                                      const SizedBox(width: 8),
+                                      _badge(Icons.map, item['map_name'] ?? 'Erangel'),
+                                      const SizedBox(width: 8),
+                                      _badge(Icons.monetization_on, 'Fee: ${item['entry_fee'] ?? 0}'),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  // Match timing and Room ID hook
+                                  _buildRoomHookCard(item, isRegistered),
+
+                                  const SizedBox(height: 12),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: LinearProgressIndicator(
+                                      value: maxTeams > 0 ? (currentTeams / maxTeams) : 0,
+                                      backgroundColor: ThemeService.border.withOpacity(0.4),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        isRegistered ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
+                                      ),
+                                      minHeight: 6,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Slots: $currentTeams / $maxTeams Teams Registered',
+                                        style: TextStyle(
+                                          color: ThemeService.textSecondary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const Row(
+                                        children: [
+                                          Text(
+                                            'View Details',
+                                            style: TextStyle(
+                                              color: Color(0xFF38BDF8),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          SizedBox(width: 2),
+                                          Icon(
+                                            Icons.arrow_forward_ios_rounded,
+                                            color: Color(0xFF38BDF8),
+                                            size: 10,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 44,
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: isRegistered
+                                            ? const Color(0xFF00FF88).withOpacity(0.15)
+                                            : (isFull ? ThemeService.cardSecondary : const Color(0xFF00FF88)),
+                                        foregroundColor: isRegistered
+                                            ? const Color(0xFF00FF88)
+                                            : (isFull ? ThemeService.textSecondary : Colors.black),
+                                        disabledBackgroundColor: isRegistered
+                                            ? const Color(0xFF00FF88).withOpacity(0.15)
+                                            : ThemeService.cardSecondary,
+                                        disabledForegroundColor: isRegistered
+                                            ? const Color(0xFF00FF88)
+                                            : ThemeService.textSecondary,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                          side: isRegistered
+                                              ? const BorderSide(color: Color(0xFF00FF88), width: 1.2)
+                                              : BorderSide.none,
+                                        ),
+                                      ),
+                                      onPressed: (isFull || isRegistered)
+                                          ? null
+                                          : () => _registerTeam(tId, item['entry_fee'] ?? 0),
+                                      child: Text(
+                                        isRegistered
+                                            ? '✓ Already Registered'
+                                            : (isFull ? 'Slots Full' : 'Register Squad'),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: isRegistered
+                                              ? const Color(0xFF00FF88)
+                                              : (isFull ? ThemeService.textSecondary : Colors.black),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
-                              const SizedBox(height: 14),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 44,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isRegistered
-                                        ? const Color(0xFF00FF88).withOpacity(0.15)
-                                        : (isFull ? Colors.white12 : const Color(0xFF00FF88)),
-                                    foregroundColor: isRegistered
-                                        ? const Color(0xFF00FF88)
-                                        : (isFull ? Colors.white38 : Colors.black),
-                                    disabledBackgroundColor: isRegistered
-                                        ? const Color(0xFF00FF88).withOpacity(0.15)
-                                        : Colors.white12,
-                                    disabledForegroundColor: isRegistered
-                                        ? const Color(0xFF00FF88)
-                                        : Colors.white38,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      side: isRegistered
-                                          ? const BorderSide(color: Color(0xFF00FF88), width: 1.2)
-                                          : BorderSide.none,
-                                    ),
-                                  ),
-                                  onPressed: (isFull || isRegistered)
-                                      ? null
-                                      : () => _registerTeam(tId, item['entry_fee'] ?? 0),
-                                  child: Text(
-                                    isRegistered
-                                        ? '✓ Already Registered'
-                                        : (isFull ? 'Slots Full' : 'Register Squad'),
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: isRegistered
-                                          ? const Color(0xFF00FF88)
-                                          : (isFull ? Colors.white38 : Colors.black),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-      ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        );
+      },
     );
   }
 
@@ -371,14 +397,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFFFFD700).withOpacity(0.15),
-            const Color(0xFF00FF88).withOpacity(0.08),
-          ],
-        ),
+        color: ThemeService.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.35)),
+        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
       ),
       child: Row(
         children: [
@@ -391,18 +412,25 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             child: const Icon(Icons.alarm_on_rounded, color: Color(0xFFFFD700), size: 22),
           ),
           const SizedBox(width: 10),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Daily 10-Min Stay Bonus',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
                   'Spend 10 mins in app = Earn +50 Coins & Redeem 60 UC',
-                  style: TextStyle(color: Colors.white70, fontSize: 10.5),
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
+                    fontSize: 10.5,
+                  ),
                 ),
               ],
             ),
@@ -439,7 +467,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     final bool isWithin10Mins = difference != null && difference.inMinutes <= 10 && difference.inMinutes >= -90;
     final String formattedDate = matchTime != null ? DateFormat('dd MMM, hh:mm a').format(matchTime) : 'Scheduled';
 
-    // Room ID is revealed ONLY if registered AND within 10 mins of match
     final bool canReveal = isRegistered && isWithin10Mins && roomId.isNotEmpty;
 
     return Container(
@@ -469,7 +496,10 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
               children: [
                 Text(
                   'Match Time: $formattedDate',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
+                    fontSize: 11,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 if (canReveal) ...[
@@ -483,9 +513,12 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                     ),
                   ),
                 ] else if (!isRegistered) ...[
-                  const Text(
+                  Text(
                     'Register squad to view Room Credentials',
-                    style: TextStyle(color: Colors.white54, fontSize: 11),
+                    style: TextStyle(
+                      color: ThemeService.textSecondary.withOpacity(0.8),
+                      fontSize: 11,
+                    ),
                   ),
                 ] else ...[
                   Text(
@@ -511,15 +544,16 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: ThemeService.cardSecondary,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ThemeService.border.withOpacity(0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: Colors.white70),
+          Icon(icon, size: 13, color: ThemeService.textSecondary),
           const SizedBox(width: 4),
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+          Text(label, style: TextStyle(color: ThemeService.textSecondary, fontSize: 11)),
         ],
       ),
     );
