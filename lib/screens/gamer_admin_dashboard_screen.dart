@@ -1800,7 +1800,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(
-                mainAxisAlignment: ChangeTheme(context),
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(Icons.error_outline_rounded,
                       color: Color(0xFFFF4655), size: 48),
@@ -1907,8 +1907,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
       },
     );
   }
-
-  static MainAxisAlignment ChangeTheme(BuildContext context) => MainAxisAlignment.center;
 
   Widget _buildVerificationRequestCard(
     GamerUser user, {
@@ -2082,7 +2080,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: () => _rejectVerification(user),
+                    onPressed: () => _rejectBlueTick(user),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFFF4655),
                       side: const BorderSide(color: Color(0xFFFF4655)),
@@ -2097,7 +2095,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   ),
                   const SizedBox(width: 10),
                   ElevatedButton.icon(
-                    onPressed: () => _approveVerification(user),
+                    onPressed: () => _approveBlueTick(user),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1D9BF0),
                       foregroundColor: Colors.white,
@@ -3299,14 +3297,12 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       : 'Proof rejected due to invalid match outcome.';
 
                   try {
-                    // Update tournament proof status to rejected
                     await _supabase.from('tournaments').update({
                       'proof_status': 'rejected',
                       'rejection_reason': finalReason,
                       'proof_url': null,
                     }).eq('id', tournamentId);
 
-                    // Notify Squad Leader if team is known
                     if (selectedTeamId != null && selectedTeamId.isNotEmpty) {
                       final teamData = await _supabase
                           .from('teams')
@@ -3437,7 +3433,6 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                 onPressed: () async {
                   if (selectedTeamId == null) return;
                   try {
-                    // 1. Fetch current team stats to increment points & wins for Leaderboard
                     final currentTeamData = await _supabase
                         .from('teams')
                         .select('id, leader_id, points, wins')
@@ -3448,13 +3443,11 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                     final int currentWins = (currentTeamData?['wins'] as num?)?.toInt() ?? 0;
                     final String? leaderId = currentTeamData?['leader_id']?.toString();
 
-                    // Update Team: +25 Points & +1 Win (Yeh team ko Top Leaderboard par show karega)
                     await _supabase.from('teams').update({
                       'points': currentPoints + 25,
                       'wins': currentWins + 1,
                     }).eq('id', selectedTeamId!);
 
-                    // 2. Fetch all members of this squad to distribute coins
                     final members = await _supabase
                         .from('team_members')
                         .select('user_id')
@@ -3470,13 +3463,11 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       memberUserIds.add(leaderId);
                     }
 
-                    // Distribute Coins equally or full to leader
                     final int share = memberUserIds.isNotEmpty
                         ? (prizePool / memberUserIds.length).floor()
                         : prizePool;
 
                     for (final uId in memberUserIds) {
-                      // Credit in users balance
                       try {
                         final userRes = await _supabase.from('users').select('coins').eq('id', uId).maybeSingle();
                         final int existing = (userRes?['coins'] as num?)?.toInt() ?? 0;
@@ -3489,7 +3480,6 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                         } catch (_) {}
                       }
 
-                      // Save coin transaction log
                       try {
                         await _supabase.from('coin_transactions').insert({
                           'user_id': uId,
@@ -3501,7 +3491,6 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       } catch (_) {}
                     }
 
-                    // Optional fallback RPC if installed in DB
                     try {
                       await _supabase.rpc('distribute_match_reward', params: {
                         'p_team_id': selectedTeamId,
@@ -3509,7 +3498,6 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       });
                     } catch (_) {}
 
-                    // 3. Mark tournament as completed
                     await _supabase.from('tournaments').update({
                       'status': 'completed',
                       'winner_team_id': selectedTeamId,
@@ -4179,12 +4167,12 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                           child: CircularProgressIndicator(
                               color: Color(0xFF38BDF8), strokeWidth: 2),
                         )
-                      : Column(
-                          mainAxisAlignment: ChangeTheme(context),
+                      : const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.search_rounded, size: 20),
-                            Text('search'.tr(),
-                                style: const TextStyle(
+                            Icon(Icons.search_rounded, size: 20),
+                            Text('Search',
+                                style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold)),
                           ],
