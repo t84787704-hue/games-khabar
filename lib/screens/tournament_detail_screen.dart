@@ -61,10 +61,10 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         _tournamentData = Map<String, dynamic>.from(tRes);
       }
 
-      // 2. Fetch registered teams
+      // 2. Fetch registered teams along with squad members
       final regRes = await _supabase
           .from('tournament_registrations')
-          .select('id, registered_at, team_id, teams:teams(id, name, logo_url, leader_id)')
+          .select('id, registered_at, team_id, teams:teams(id, name, logo_url, leader_id, team_members(user_id))')
           .eq('tournament_id', tId)
           .order('registered_at', ascending: true);
 
@@ -224,6 +224,30 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, _, __) {
+        final currentUserId = _supabase.auth.currentUser?.id;
+
+        // Check if user is Leader or Member in any registered team & assign slot
+        bool isUserInRegisteredSquad = false;
+        int assignedSlotNumber = 0;
+
+        for (int i = 0; i < _registeredTeams.length; i++) {
+          final reg = _registeredTeams[i];
+          final team = reg['teams'] as Map<String, dynamic>?;
+          if (team != null) {
+            final leaderId = team['leader_id']?.toString();
+            final membersList = (team['team_members'] as List?) ?? [];
+            final isMember = membersList.any((m) => m['user_id']?.toString() == currentUserId);
+
+            if (leaderId == currentUserId || isMember) {
+              isUserInRegisteredSquad = true;
+              assignedSlotNumber = i + 2; // Slot 1 host/spectator ka hota hai
+              break;
+            }
+          }
+        }
+
+        final bool hasSquadAccess = widget.isRegistered || isUserInRegisteredSquad;
+
         final t = _tournamentData ?? widget.tournament;
         final title = (t['title'] ?? 'Tournament Match').toString();
         final gameMode = (t['game_mode'] ?? 'Squad (4v4)').toString();
@@ -390,7 +414,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  if (!widget.isRegistered)
+                  if (!hasSquadAccess)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -405,7 +429,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Room ID & Password will be unlocked once you register your squad.',
+                              'Room ID & Password will be unlocked once your squad is registered.',
                               style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                             ),
                           ),
@@ -444,6 +468,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -497,6 +522,49 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 ),
                             ],
                           ),
+
+                          // Assigned Slot Number Banner
+                          if (assignedSlotNumber > 0) ...[
+                            Divider(color: ThemeService.border, height: 16),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00FF88).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.35)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.pin_drop_rounded, color: Color(0xFF00FF88), size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: RichText(
+                                      text: TextSpan(
+                                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 12),
+                                        children: [
+                                          const TextSpan(text: 'Assigned Spot: '),
+                                          TextSpan(
+                                            text: 'SLOT #$assignedSlotNumber',
+                                            style: const TextStyle(
+                                              color: Color(0xFF00FF88),
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text: ' (Room me poori squad yahan baithe)',
+                                            style: TextStyle(
+                                              color: ThemeService.textSecondary,
+                                              fontSize: 10.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -592,7 +660,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                             style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                           ),
                           const SizedBox(height: 12),
-                          if (widget.isRegistered)
+                          if (hasSquadAccess)
                             SizedBox(
                               width: double.infinity,
                               height: 42,
@@ -638,7 +706,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                   ),
                                 ],
                               ),
-                              if (widget.isRegistered)
+                              if (hasSquadAccess)
                                 TextButton.icon(
                                   onPressed: _isUploadingProof ? null : _handleUploadWinProof,
                                   icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF38BDF8)),
@@ -671,7 +739,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         ],
                       ),
                     )
-                  else if (widget.isRegistered)
+                  else if (hasSquadAccess)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
@@ -782,6 +850,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         final team = item['teams'] as Map<String, dynamic>?;
                         final teamName = team?['name']?.toString() ?? 'Squad #${index + 1}';
                         final isThisWinner = isCompleted && team?['id']?.toString() == _tournamentData?['winner_team_id']?.toString();
+                        final slotForThisSquad = index + 2;
 
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -815,13 +884,26 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: Text(
-                                  teamName,
-                                  style: TextStyle(
-                                    color: isThisWinner ? const Color(0xFFFFD700) : ThemeService.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      teamName,
+                                      style: TextStyle(
+                                        color: isThisWinner ? const Color(0xFFFFD700) : ThemeService.textPrimary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Slot: #$slotForThisSquad',
+                                      style: TextStyle(
+                                        color: ThemeService.textSecondary,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               if (isThisWinner)
