@@ -553,7 +553,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           final tRaw = t.id.toLowerCase();
                           return tUuid == targetUuid || tRaw == targetRawId;
                         });
-                    final bool isMyOwnTeam = isUserInThisTeam;
                     final bool isViewedMyTeam = isUserInThisTeam;
 
                     TeamModel? userMatchTeam;
@@ -568,14 +567,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
                     final bool isCurrentUserInMatch = hasActiveMatch && userMatchTeam != null;
                     final bool isMatchOpponent = hasActiveMatch && !isUserInThisTeam && isCurrentUserInMatch;
-                    final bool canAccessMatch = hasActiveMatch && (isUserInThisTeam || isMatchOpponent);
-
                     final int privacyLevel = isUserInThisTeam ? 1 : (isMatchOpponent ? 3 : 2);
-                    final String userMatchTeamId = userMatchTeam?.id ?? myTeamId;
-                    final String userMatchTeamUuid = userMatchTeamId.isNotEmpty ? SupabaseService.toUuid(userMatchTeamId).toLowerCase() : '';
-                    final bool isUserT1 = userMatchTeamUuid.isNotEmpty && (t1.toLowerCase() == userMatchTeamUuid || t1.toLowerCase() == userMatchTeamId.toLowerCase());
-                    final String myTeamIdInMatch = isUserT1 ? t1 : t2;
-                    final String opponentTeamId = isUserT1 ? t2 : t1;
 
                     return Scaffold(
                       backgroundColor: ThemeService.bg,
@@ -696,9 +688,28 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           ),
                                         ),
                                         const SizedBox(height: 6),
-                                        Text(
-                                          'Leader: ${team.leaderName}',
-                                          style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                                        // Leader display with dynamic resolution
+                                        FutureBuilder<Map<String, String>>(
+                                          future: _fetchUserProfile(team.leaderId),
+                                          builder: (context, leaderSnap) {
+                                            String leaderName = team.leaderName;
+                                            if (leaderName.isEmpty ||
+                                                leaderName == 'team_leader_fallback' ||
+                                                leaderName.toLowerCase() == 'member' ||
+                                                leaderName.toLowerCase() == 'leader') {
+                                              final fetched = leaderSnap.data?['username'];
+                                              if (fetched != null && fetched.isNotEmpty && fetched != 'Player') {
+                                                leaderName = fetched;
+                                              } else {
+                                                leaderName = 'team_leader_fallback'.tr();
+                                              }
+                                            }
+
+                                            return Text(
+                                              'Leader: $leaderName',
+                                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                                            );
+                                          },
                                         ),
                                       ],
                                     ),
@@ -859,105 +870,81 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 separatorBuilder: (c, i) => Divider(color: ThemeService.border, height: 1),
                                 itemBuilder: (context, index) {
                                   String memberId = '';
-                                  String initialName = 'Member';
+                                  String initialName = '';
                                   String memberAvatar = '';
                                   String role = 'Member';
 
                                   if (team.memberDetails.isNotEmpty && index < team.memberDetails.length) {
                                     final d = team.memberDetails[index];
                                     memberId = (d['id'] ?? '').toString();
-                                    initialName = (d['name'] ?? 'Member').toString();
+                                    initialName = (d['name'] ?? '').toString();
                                     memberAvatar = (d['avatar'] ?? '').toString();
                                     role = (d['role'] ?? 'Member').toString();
                                   } else {
                                     memberId = team.members[index];
-                                    initialName = memberId == team.leaderId ? team.leaderName : 'Member';
+                                    initialName = memberId == team.leaderId ? team.leaderName : '';
                                     role = memberId == team.leaderId ? 'Leader' : 'Member';
                                   }
 
                                   final isThisLeader = memberId == team.leaderId;
 
-                                  // Agar naam default 'Member' ya khali hai, to database se fetch karein
-                                  if ((initialName == 'Member' || initialName.isEmpty) && memberId.isNotEmpty) {
-                                    return FutureBuilder<Map<String, String>>(
-                                      future: _fetchUserProfile(memberId),
-                                      builder: (context, snap) {
-                                        final userProfile = snap.data;
-                                        final fetchedName = (userProfile?['username'] != null && userProfile!['username'] != 'Player')
-                                            ? userProfile['username']!
-                                            : (memberId.length > 8 ? memberId.substring(0, 8) : memberId);
-                                        final fetchedAvatar = (userProfile?['avatar'] != null && userProfile!['avatar']!.isNotEmpty)
-                                            ? userProfile['avatar']!
-                                            : memberAvatar;
+                                  return FutureBuilder<Map<String, String>>(
+                                    future: _fetchUserProfile(memberId),
+                                    builder: (context, snap) {
+                                      final userProfile = snap.data;
+                                      String displayName = initialName;
 
-                                        return ListTile(
-                                          leading: CircleAvatar(
-                                            radius: 18,
-                                            backgroundColor: ThemeService.cardSecondary,
-                                            backgroundImage: fetchedAvatar.isNotEmpty ? NetworkImage(fetchedAvatar) : null,
-                                            child: fetchedAvatar.isEmpty
-                                                ? Text(
-                                                    fetchedName.isNotEmpty ? fetchedName[0].toUpperCase() : 'M',
-                                                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
-                                                  )
-                                                : null,
-                                          ),
-                                          title: Text(
-                                            fetchedName,
-                                            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
-                                          ),
-                                          trailing: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                            decoration: BoxDecoration(
-                                              color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : ThemeService.cardSecondary,
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: Text(
-                                              isThisLeader ? 'LEADER' : role.toUpperCase(),
-                                              style: TextStyle(
-                                                color: isThisLeader ? const Color(0xFFFF6B00) : ThemeService.textSecondary,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 10.5,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    );
-                                  }
+                                      if (displayName.isEmpty ||
+                                          displayName == 'Member' ||
+                                          displayName == 'team_leader_fallback' ||
+                                          displayName == 'Leader') {
+                                        final fetched = userProfile?['username'];
+                                        if (fetched != null && fetched.isNotEmpty && fetched != 'Player') {
+                                          displayName = fetched;
+                                        } else if (isThisLeader) {
+                                          displayName = 'team_leader_fallback'.tr();
+                                        } else {
+                                          displayName = memberId.length > 8 ? memberId.substring(0, 8) : 'Member';
+                                        }
+                                      }
 
-                                  // Agar naam pehle se available hai
-                                  return ListTile(
-                                    leading: CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: ThemeService.cardSecondary,
-                                      backgroundImage: memberAvatar.isNotEmpty ? NetworkImage(memberAvatar) : null,
-                                      child: memberAvatar.isEmpty
-                                          ? Text(
-                                              initialName.isNotEmpty ? initialName[0].toUpperCase() : 'M',
-                                              style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
-                                            )
-                                          : null,
-                                    ),
-                                    title: Text(
-                                      initialName,
-                                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
-                                    ),
-                                    trailing: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : ThemeService.cardSecondary,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        isThisLeader ? 'LEADER' : role.toUpperCase(),
-                                        style: TextStyle(
-                                          color: isThisLeader ? const Color(0xFFFF6B00) : ThemeService.textSecondary,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 10.5,
+                                      final fetchedAvatar = (userProfile?['avatar'] != null && userProfile!['avatar']!.isNotEmpty)
+                                          ? userProfile['avatar']!
+                                          : memberAvatar;
+
+                                      return ListTile(
+                                        leading: CircleAvatar(
+                                          radius: 18,
+                                          backgroundColor: ThemeService.cardSecondary,
+                                          backgroundImage: fetchedAvatar.isNotEmpty ? NetworkImage(fetchedAvatar) : null,
+                                          child: fetchedAvatar.isEmpty
+                                              ? Text(
+                                                  displayName.isNotEmpty ? displayName[0].toUpperCase() : 'M',
+                                                  style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
+                                                )
+                                              : null,
                                         ),
-                                      ),
-                                    ),
+                                        title: Text(
+                                          displayName,
+                                          style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
+                                        ),
+                                        trailing: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : ThemeService.cardSecondary,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            isThisLeader ? 'LEADER' : role.toUpperCase(),
+                                            style: TextStyle(
+                                              color: isThisLeader ? const Color(0xFFFF6B00) : ThemeService.textSecondary,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 10.5,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   );
                                 },
                               ),
