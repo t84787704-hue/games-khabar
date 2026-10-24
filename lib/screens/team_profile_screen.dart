@@ -619,7 +619,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     child: const Row(
                                       children: [
                                         Icon(Icons.delete_forever_rounded, color: Color(0xFFFF4655), size: 18),
-                                        SizedBox(width: 8),
+                                        const SizedBox(width: 8),
                                         Text('Delete Team', style: TextStyle(color: Color(0xFFFF4655))),
                                       ],
                                     ),
@@ -762,7 +762,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // PENDING REQUESTS (Fixed vibration & working action buttons)
+                            // PENDING REQUESTS
                             if (isLeader && team.pendingJoinRequests.isNotEmpty) ...[
                               _buildSectionHeader('Pending Requests (${team.pendingJoinRequests.length})'),
                               Container(
@@ -844,7 +844,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               const SizedBox(height: 16),
                             ],
 
-                            // Team Members List
+                            // Team Members List (Real names fetched via FutureBuilder)
                             _buildSectionHeader('Team Members (${team.memberCount} / 4)'),
                             Container(
                               decoration: BoxDecoration(
@@ -859,24 +859,74 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 separatorBuilder: (c, i) => Divider(color: ThemeService.border, height: 1),
                                 itemBuilder: (context, index) {
                                   String memberId = '';
-                                  String memberName = 'Member';
+                                  String initialName = 'Member';
                                   String memberAvatar = '';
                                   String role = 'Member';
 
                                   if (team.memberDetails.isNotEmpty && index < team.memberDetails.length) {
                                     final d = team.memberDetails[index];
                                     memberId = (d['id'] ?? '').toString();
-                                    memberName = (d['name'] ?? 'Member').toString();
+                                    initialName = (d['name'] ?? 'Member').toString();
                                     memberAvatar = (d['avatar'] ?? '').toString();
                                     role = (d['role'] ?? 'Member').toString();
                                   } else {
                                     memberId = team.members[index];
-                                    memberName = memberId == team.leaderId ? team.leaderName : 'Member';
+                                    initialName = memberId == team.leaderId ? team.leaderName : 'Member';
                                     role = memberId == team.leaderId ? 'Leader' : 'Member';
                                   }
 
                                   final isThisLeader = memberId == team.leaderId;
 
+                                  // Agar naam default 'Member' ya khali hai, to database se fetch karein
+                                  if ((initialName == 'Member' || initialName.isEmpty) && memberId.isNotEmpty) {
+                                    return FutureBuilder<Map<String, String>>(
+                                      future: _fetchUserProfile(memberId),
+                                      builder: (context, snap) {
+                                        final userProfile = snap.data;
+                                        final fetchedName = (userProfile?['username'] != null && userProfile!['username'] != 'Player')
+                                            ? userProfile['username']!
+                                            : (memberId.length > 8 ? memberId.substring(0, 8) : memberId);
+                                        final fetchedAvatar = (userProfile?['avatar'] != null && userProfile!['avatar']!.isNotEmpty)
+                                            ? userProfile['avatar']!
+                                            : memberAvatar;
+
+                                        return ListTile(
+                                          leading: CircleAvatar(
+                                            radius: 18,
+                                            backgroundColor: ThemeService.cardSecondary,
+                                            backgroundImage: fetchedAvatar.isNotEmpty ? NetworkImage(fetchedAvatar) : null,
+                                            child: fetchedAvatar.isEmpty
+                                                ? Text(
+                                                    fetchedName.isNotEmpty ? fetchedName[0].toUpperCase() : 'M',
+                                                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
+                                                  )
+                                                : null,
+                                          ),
+                                          title: Text(
+                                            fetchedName,
+                                            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
+                                          ),
+                                          trailing: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : ThemeService.cardSecondary,
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              isThisLeader ? 'LEADER' : role.toUpperCase(),
+                                              style: TextStyle(
+                                                color: isThisLeader ? const Color(0xFFFF6B00) : ThemeService.textSecondary,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 10.5,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  }
+
+                                  // Agar naam pehle se available hai
                                   return ListTile(
                                     leading: CircleAvatar(
                                       radius: 18,
@@ -884,13 +934,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       backgroundImage: memberAvatar.isNotEmpty ? NetworkImage(memberAvatar) : null,
                                       child: memberAvatar.isEmpty
                                           ? Text(
-                                              memberName.isNotEmpty ? memberName[0].toUpperCase() : 'M',
+                                              initialName.isNotEmpty ? initialName[0].toUpperCase() : 'M',
                                               style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
                                             )
                                           : null,
                                     ),
                                     title: Text(
-                                      memberName,
+                                      initialName,
                                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
                                     ),
                                     trailing: Container(
