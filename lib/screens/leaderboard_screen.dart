@@ -27,16 +27,39 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         _errorMessage = null;
       });
 
+      // Points aur Wins ke hisaab se descending order mein fetch karein
       final res = await SupabaseService.client
           .from('teams')
-          .select('id, name, tag, wins')
-          .gt('wins', 0)
+          .select('id, name, tag, wins, points')
+          .order('points', ascending: false)
           .order('wins', ascending: false)
           .limit(100);
 
       if (mounted) {
+        final List<Map<String, dynamic>> loadedTeams =
+            List<Map<String, dynamic>>.from(res as List);
+
+        // Filter: Sirf woh teams jinke paas points > 0 ya wins > 0 hon
+        final filteredTeams = loadedTeams.where((t) {
+          final pts = (t['points'] as num?)?.toInt() ?? 0;
+          final w = (t['wins'] as num?)?.toInt() ?? 0;
+          return pts > 0 || w > 0;
+        }).toList();
+
+        // Local double-check sort for accurate ranking
+        filteredTeams.sort((a, b) {
+          final ptsA = (a['points'] as num?)?.toInt() ?? 0;
+          final ptsB = (b['points'] as num?)?.toInt() ?? 0;
+          final comp = ptsB.compareTo(ptsA);
+          if (comp != 0) return comp;
+
+          final winsA = (a['wins'] as num?)?.toInt() ?? 0;
+          final winsB = (b['wins'] as num?)?.toInt() ?? 0;
+          return winsB.compareTo(winsA);
+        });
+
         setState(() {
-          _topTeams = List<Map<String, dynamic>>.from(res as List);
+          _topTeams = filteredTeams;
           _isLoading = false;
         });
       }
@@ -211,6 +234,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                           final tag = team['tag']?.toString() ?? '';
                           final displayName = tag.isNotEmpty ? '$teamName [$tag]' : teamName;
                           final wins = (team['wins'] as num?)?.toInt() ?? 0;
+                          final points = (team['points'] as num?)?.toInt() ?? 0;
 
                           return Container(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
@@ -231,13 +255,53 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 10),
-                                Text(
-                                  '$wins Wins 🏆',
-                                  style: const TextStyle(
-                                    color: Color(0xFF00FF88),
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 14,
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '$wins Wins',
+                                          style: const TextStyle(
+                                            color: Color(0xFF00FF88),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Text('🏆', style: TextStyle(fontSize: 12)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF6B00).withOpacity(0.18),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: const Color(0xFFFF6B00).withOpacity(0.4),
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text('🪙', style: TextStyle(fontSize: 10)),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            '$points Pts',
+                                            style: const TextStyle(
+                                              color: Color(0xFFFF6B00),
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
