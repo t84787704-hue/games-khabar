@@ -167,31 +167,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     }
   }
 
-  Future<void> _continueAsGuest() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      await GamerAuthService().signInAnonymouslyOrGuest();
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
-      );
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'err_guest_login'.tr(args: [e.toString()]);
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
@@ -334,52 +309,6 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
                                   ),
                                 ],
                               ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    Row(
-                      children: [
-                        Expanded(child: Divider(color: ThemeService.border)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(
-                            'or_divider'.tr(),
-                            style: TextStyle(
-                              color: ThemeService.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Expanded(child: Divider(color: ThemeService.border)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // PLAY AS GUEST BUTTON
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: OutlinedButton.icon(
-                        onPressed: _isLoading ? null : _continueAsGuest,
-                        icon: const Icon(Icons.flash_on_rounded, color: GamerTheme.accentOrange, size: 20),
-                        label: Text(
-                          'play_as_guest'.tr(),
-                          style: TextStyle(
-                            color: ThemeService.textPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: isDayMode ? Colors.white : Colors.transparent,
-                          side: BorderSide(
-                            color: GamerTheme.accentOrange.withOpacity(isDayMode ? 0.7 : 0.6),
-                            width: 1.5,
-                          ),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
