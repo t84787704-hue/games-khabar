@@ -6,6 +6,10 @@
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }
 
+# Flutter Play Core / Deferred Components (Fix for play.core missing classes)
+-dontwarn com.google.android.play.core.**
+-dontwarn io.flutter.embedding.engine.deferredcomponents.**
+
 # Supabase / Network / OkHttp Rules
 -keep class okhttp3.** { *; }
 -keep interface okhttp3.** { *; }
