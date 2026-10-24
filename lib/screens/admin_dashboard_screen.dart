@@ -225,7 +225,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               body: TabBarView(
                 controller: _tabController,
                 children: [
-                  _AdminTournamentsTab(),
+                  const _AdminTournamentsTab(),
                   _buildUsersTab(),
                   _buildRankVerifyTab(),
                   _buildBlueTickRequestsTab(),
@@ -2653,6 +2653,208 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
     }
   }
 
+  Future<void> _approveProof(String tournamentId) async {
+    try {
+      await _supabase.from('tournaments').update({
+        'proof_status': 'approved',
+      }).eq('id', tournamentId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Victory proof approved successfully! 🎉'),
+            backgroundColor: Color(0xFF00FF88),
+          ),
+        );
+      }
+      _loadTournaments();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error approving proof: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectProof(String tournamentId, String reason) async {
+    try {
+      await _supabase.from('tournaments').update({
+        'proof_status': 'rejected',
+        'proof_reject_reason': reason,
+        'proof_url': null,
+      }).eq('id', tournamentId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Proof rejected and reason saved. User can re-upload.'),
+            backgroundColor: Color(0xFFFF8A00),
+          ),
+        );
+      }
+      _loadTournaments();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error rejecting proof: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    }
+  }
+
+  void _showProofReviewDialog(Map<String, dynamic> tournament) {
+    final tournamentId = tournament['id'].toString();
+    final proofUrl = (tournament['proof_url'] ?? '').toString();
+    final proofStatus = (tournament['proof_status'] ?? 'pending').toString().toUpperCase();
+    final reasonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161A22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.verified_rounded, color: Color(0xFFFF8A00), size: 20),
+            const SizedBox(width: 8),
+            const Text('Review Victory Proof',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF8A00).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                proofStatus,
+                style: const TextStyle(color: Color(0xFFFF8A00), fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (proofUrl.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: InteractiveViewer(
+                    maxScale: 3.5,
+                    child: CachedNetworkImage(
+                      imageUrl: proofUrl,
+                      height: 220,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(
+                        height: 220,
+                        color: Colors.black26,
+                        child: const Center(
+                          child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        height: 220,
+                        color: Colors.black26,
+                        child: const Center(
+                          child: Icon(Icons.broken_image_rounded, color: Colors.white38, size: 40),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  height: 100,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text('No screenshot uploaded yet', style: TextStyle(color: Colors.white54)),
+                ),
+              const SizedBox(height: 16),
+              const Text('Rejection Reason (if rejecting):',
+                  style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: reasonController,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'e.g. Screenshot blurry, match time mismatch, not winner...',
+                  hintStyle: const TextStyle(color: Colors.white30, fontSize: 11),
+                  filled: true,
+                  fillColor: const Color(0xFF0A0E17),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Colors.white12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  'Screenshot unclear/blurry',
+                  'Game ID mismatch',
+                  'Not winner screenshot',
+                  'Already distributed',
+                ].map((reason) {
+                  return InkWell(
+                    onTap: () {
+                      reasonController.text = reason;
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        reason,
+                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              final reason = reasonController.text.trim().isNotEmpty
+                  ? reasonController.text.trim()
+                  : 'Screenshot was not accepted. Please upload a clear end-game score screenshot.';
+              _rejectProof(tournamentId, reason);
+            },
+            icon: const Icon(Icons.close_rounded, color: Color(0xFFFF4655), size: 16),
+            label: const Text('Reject Proof', style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00FF88),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _approveProof(tournamentId);
+            },
+            icon: const Icon(Icons.check_rounded, size: 16),
+            label: const Text('Approve Proof', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openCreateTournamentDialog() {
     final titleController = TextEditingController();
     final mapController = TextEditingController(text: 'Erangel');
@@ -3060,6 +3262,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                     final status = (item['status'] ?? 'upcoming').toString();
                     final roomId = (item['room_id'] ?? '').toString();
                     final roomPass = (item['room_password'] ?? '').toString();
+                    final proofUrl = (item['proof_url'] ?? '').toString().trim();
 
                     return Container(
                       padding: const EdgeInsets.all(14),
@@ -3121,6 +3324,37 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                             roomId.isNotEmpty ? 'Room ID: $roomId • Pass: $roomPass' : 'Room ID: Not assigned yet',
                             style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontFamily: 'monospace'),
                           ),
+                          if (proofUrl.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            InkWell(
+                              onTap: () => _showProofReviewDialog(item),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF8A00).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.4)),
+                                ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.image_search_rounded, color: Color(0xFFFF8A00), size: 16),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Victory Screenshot Submitted (Tap to View)',
+                                      style: TextStyle(
+                                        color: Color(0xFFFF8A00),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           Divider(color: ThemeService.border, height: 1),
                           const SizedBox(height: 8),
