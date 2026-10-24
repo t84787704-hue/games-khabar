@@ -1,4 +1,7 @@
 {
+"nav_feed": "Feed",
+"nav_messages": "Messages",
+"nav_profile": "Profile",
   "coins_added_desc": "Coins Added Successfully",
   "coins_label": "Coins",
   "reason_label": "Reason",
