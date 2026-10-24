@@ -231,11 +231,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                                 ),
                                 const SizedBox(width: 10),
                                 Text(
-                                  'wins_count'.tr(args: ['$wins']),
+                                  '$wins Wins 🏆', // ✅ Yahan ab direct wins ka number aur icon show hoga
                                   style: const TextStyle(
                                     color: Color(0xFF00FF88),
                                     fontWeight: FontWeight.w900,
-                                    fontSize: 15,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ],
