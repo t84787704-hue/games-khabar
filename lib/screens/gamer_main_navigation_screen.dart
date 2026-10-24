@@ -15,7 +15,7 @@ import '../services/streak_service.dart';
 import '../services/app_stay_timer_service.dart';
 import '../widgets/daily_streak_dialog.dart';
 import 'gamer_feed_screen.dart';
-import 'tournaments_screen.dart';
+import 'tournaments_screen.dart' hide GamerFeedScreen;
 import 'teams_screen.dart';
 import 'gamer_messages_screen.dart';
 import 'gamer_profile_screen.dart';
@@ -138,8 +138,8 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     // 4: Profile
     // 5: Admin (if admin)
     final screens = <Widget>[
-      const GamerFeedScreen(),
-      const TournamentsScreen(),
+      GamerFeedScreen(),
+      TournamentsScreen(),
       const TeamsScreen(),
       const GamerMessagesScreen(),
       const GamerProfileScreen(),
