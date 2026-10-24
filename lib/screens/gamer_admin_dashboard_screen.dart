@@ -2120,7 +2120,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  Future<void> _approveVerification(GamerUser user) async {
+  Future<void> _approveBlueTick(GamerUser user) async {
     try {
       final ok = await SupabaseService.approveBlueTick(user.uid);
 
@@ -2152,7 +2152,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     }
   }
 
-  Future<void> _rejectVerification(GamerUser user) async {
+  Future<void> _rejectBlueTick(GamerUser user) async {
     try {
       final ok = await SupabaseService.rejectBlueTick(user.uid);
 
@@ -3221,6 +3221,143 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
     );
   }
 
+  void _openRejectProofDialog(String tournamentId, String? selectedTeamId) {
+    final reasonController = TextEditingController();
+    final List<String> quickReasons = [
+      'Fake Victory Screenshot',
+      'Match Time Mismatch',
+      'Wrong Room/Lobby',
+      'Blurry / Incomplete Proof',
+      'Rules Violation Detected',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF161A22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.cancel_rounded, color: Color(0xFFFF4655)),
+                SizedBox(width: 8),
+                Text('Reject Win Proof', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Select or write a clear rejection reason for the squad leader:',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: quickReasons.map((r) {
+                      final isSelected = reasonController.text == r;
+                      return ActionChip(
+                        label: Text(r, style: TextStyle(color: isSelected ? Colors.black : Colors.white70, fontSize: 11)),
+                        backgroundColor: isSelected ? const Color(0xFFFF4655) : const Color(0xFF262C38),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        onPressed: () {
+                          setDState(() => reasonController.text = r);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Enter custom rejection explanation...',
+                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                      filled: true,
+                      fillColor: const Color(0xFF262C38),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655), foregroundColor: Colors.white),
+                onPressed: () async {
+                  final finalReason = reasonController.text.trim().isNotEmpty
+                      ? reasonController.text.trim()
+                      : 'Proof rejected due to invalid match outcome.';
+
+                  try {
+                    // Update tournament proof status to rejected
+                    await _supabase.from('tournaments').update({
+                      'proof_status': 'rejected',
+                      'rejection_reason': finalReason,
+                      'proof_url': null,
+                    }).eq('id', tournamentId);
+
+                    // Notify Squad Leader if team is known
+                    if (selectedTeamId != null && selectedTeamId.isNotEmpty) {
+                      final teamData = await _supabase
+                          .from('teams')
+                          .select('leader_id, name')
+                          .eq('id', selectedTeamId)
+                          .maybeSingle();
+
+                      final leaderId = teamData?['leader_id']?.toString();
+                      if (leaderId != null && leaderId.isNotEmpty) {
+                        try {
+                          await _supabase.from('notifications').insert({
+                            'user_id': leaderId,
+                            'title': 'Match Proof Rejected ⚠️',
+                            'body': 'Your tournament win proof was rejected: "$finalReason". Please contact support if this is a mistake.',
+                            'type': 'tournament_proof_rejected',
+                            'data': {'tournament_id': tournamentId},
+                            'created_at': DateTime.now().toIso8601String(),
+                            'is_read': false,
+                          });
+                        } catch (_) {}
+                      }
+                    }
+
+                    if (context.mounted) Navigator.pop(ctx);
+                    _loadTournaments();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Proof Rejected & Leader Notified! ⚠️'),
+                          backgroundColor: Color(0xFFFF4655),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Reject failed: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Confirm Reject', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _openDeclareWinnerDialog(String tournamentId, int prizePool) async {
     final regRes = await _supabase
         .from('tournament_registrations')
@@ -3279,7 +3416,22 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.white60))),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFF4655),
+                  side: const BorderSide(color: Color(0xFFFF4655)),
+                ),
+                icon: const Icon(Icons.close_rounded, size: 14),
+                label: const Text('Reject Proof', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _openRejectProofDialog(tournamentId, selectedTeamId);
+                },
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+              ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black),
                 onPressed: () async {
@@ -3324,7 +3476,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                         : prizePool;
 
                     for (final uId in memberUserIds) {
-                      // Credit in users balance ('gamers' ki jagah 'users' table use kiya gaya hai)
+                      // Credit in users balance
                       try {
                         final userRes = await _supabase.from('users').select('coins').eq('id', uId).maybeSingle();
                         final int existing = (userRes?['coins'] as num?)?.toInt() ?? 0;
@@ -3349,7 +3501,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       } catch (_) {}
                     }
 
-                    // Optional fallback RPC if installed in your DB
+                    // Optional fallback RPC if installed in DB
                     try {
                       await _supabase.rpc('distribute_match_reward', params: {
                         'p_team_id': selectedTeamId,
@@ -3361,6 +3513,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                     await _supabase.from('tournaments').update({
                       'status': 'completed',
                       'winner_team_id': selectedTeamId,
+                      'proof_status': 'approved',
                     }).eq('id', tournamentId);
 
                     if (context.mounted) Navigator.pop(ctx);
@@ -4027,7 +4180,7 @@ class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
                               color: Color(0xFF38BDF8), strokeWidth: 2),
                         )
                       : Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisAlignment: ChangeTheme(context),
                           children: [
                             const Icon(Icons.search_rounded, size: 20),
                             Text('search'.tr(),
