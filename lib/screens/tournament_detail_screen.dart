@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'admin_bracket_screen.dart';
+import '../widgets/victory_celebration_dialog.dart';
 
 class TournamentDetailScreen extends StatefulWidget {
   final Map<String, dynamic> tournament;
@@ -30,8 +31,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   bool _isLoading = true;
   bool _isUploadingProof = false;
+  bool _hasShownCelebration = false;
   List<Map<String, dynamic>> _registeredTeams = [];
   Map<String, dynamic>? _tournamentData;
+  String _winnerTeamName = 'Champions Squad';
+  String _runnerUpTeamName = 'Finalist Squad';
 
   @override
   void initState() {
@@ -63,11 +67,42 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           .eq('tournament_id', tId)
           .order('registered_at', ascending: true);
 
+      final registeredList = List<Map<String, dynamic>>.from(regRes);
+
+      // Determine Winner Squad Name if completed
+      final winnerId = _tournamentData?['winner_team_id']?.toString();
+      String resolvedWinner = 'Champions Squad';
+      String resolvedRunnerUp = 'Finalist Squad';
+
+      if (winnerId != null && winnerId.isNotEmpty) {
+        for (final reg in registeredList) {
+          final team = reg['teams'] as Map<String, dynamic>?;
+          if (team != null) {
+            if (team['id']?.toString() == winnerId) {
+              resolvedWinner = team['name']?.toString() ?? 'Champions Squad';
+            } else if (resolvedRunnerUp == 'Finalist Squad') {
+              resolvedRunnerUp = team['name']?.toString() ?? 'Finalist Squad';
+            }
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
-          _registeredTeams = List<Map<String, dynamic>>.from(regRes);
+          _registeredTeams = registeredList;
+          _winnerTeamName = resolvedWinner;
+          _runnerUpTeamName = resolvedRunnerUp;
           _isLoading = false;
         });
+
+        // Auto trigger celebration dialog if tournament is completed
+        final status = (_tournamentData?['status'] ?? '').toString().toLowerCase();
+        if (status == 'completed' && !_hasShownCelebration) {
+          _hasShownCelebration = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showCelebrationPopup();
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -77,6 +112,21 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         );
       }
     }
+  }
+
+  void _showCelebrationPopup() {
+    final t = _tournamentData ?? widget.tournament;
+    final title = (t['title'] ?? 'Tournament Match').toString();
+    final prize = (t['prize_pool'] as num?)?.toInt() ?? 500;
+
+    VictoryCelebrationDialog.show(
+      context,
+      tournamentTitle: title,
+      winningTeamName: _winnerTeamName,
+      prizeCoins: prize,
+      runnerUpTeamName: _runnerUpTeamName,
+      mvpPlayerName: 'Top Fragger',
+    );
   }
 
   void _copyToClipboard(String text, String label) {
@@ -141,6 +191,8 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       // Update tournament proof info
       await _supabase.from('tournaments').update({
         'proof_url': publicUrl,
+        'proof_status': 'pending',
+        'proof_reject_reason': null,
         'submitted_team_id': teamId,
         'submitted_at': DateTime.now().toIso8601String(),
       }).eq('id', tId);
@@ -183,6 +235,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     final roomId = (t['room_id'] ?? '').toString().trim();
     final roomPass = (t['room_password'] ?? '').toString().trim();
     final proofUrl = (t['proof_url'] ?? '').toString().trim();
+    final proofRejectReason = (t['proof_reject_reason'] ?? '').toString().trim();
     final isCompleted = status.toLowerCase() == 'completed';
 
     String matchTimeStr = 'TBD';
@@ -448,7 +501,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
               const SizedBox(height: 24),
 
-              // ================= WIN PROOF SUBMISSION BLOCK =================
+              // ================= WIN PROOF SUBMISSION & CELEBRATION BLOCK =================
               const Text(
                 'Match Result & Win Proof',
                 style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
@@ -464,26 +517,97 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
                   ),
-                  child: const Row(
+                  child: Column(
                     children: [
-                      Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700), size: 28),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Tournament Completed 🏆',
-                              style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14),
+                      Row(
+                        children: [
+                          const Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700), size: 28),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Tournament Completed 🏆',
+                                  style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Champion: $_winnerTeamName • $prize Coins Awarded',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                                ),
+                              ],
                             ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Winner has been declared and prize coins distributed!',
-                              style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFFD700),
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: const Icon(Icons.celebration_rounded, color: Colors.black, size: 20),
+                          label: const Text(
+                            'View Champions Ceremony 👑',
+                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                          ),
+                          onPressed: _showCelebrationPopup,
                         ),
                       ),
+                    ],
+                  ),
+                )
+              else if (proofRejectReason.isNotEmpty && proofUrl.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF161A22),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.5)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.cancel_rounded, color: Color(0xFFFF4655), size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            'Proof Rejected by Admin',
+                            style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Reason: $proofRejectReason',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 12),
+                      if (widget.isRegistered)
+                        SizedBox(
+                          width: double.infinity,
+                          height: 42,
+                          child: ElevatedButton.icon(
+                            onPressed: _isUploadingProof ? null : _handleUploadWinProof,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFF4655),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.upload_file_rounded, size: 16),
+                            label: const Text(
+                              'Re-upload Valid Screenshot',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 )
@@ -655,13 +779,16 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     final item = _registeredTeams[index];
                     final team = item['teams'] as Map<String, dynamic>?;
                     final teamName = team?['name']?.toString() ?? 'Squad #${index + 1}';
+                    final isThisWinner = isCompleted && team?['id']?.toString() == _tournamentData?['winner_team_id']?.toString();
 
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
                         color: const Color(0xFF161A22),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white10),
+                        border: Border.all(
+                          color: isThisWinner ? const Color(0xFFFFD700).withOpacity(0.6) : Colors.white10,
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -670,15 +797,17 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                             height: 28,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF00FF88).withOpacity(0.12),
+                              color: isThisWinner
+                                  ? const Color(0xFFFFD700).withOpacity(0.2)
+                                  : const Color(0xFF00FF88).withOpacity(0.12),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              '#${index + 1}',
-                              style: const TextStyle(
-                                color: Color(0xFF00FF88),
+                              isThisWinner ? '👑' : '#${index + 1}',
+                              style: TextStyle(
+                                color: isThisWinner ? const Color(0xFFFFD700) : const Color(0xFF00FF88),
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: isThisWinner ? 14 : 12,
                               ),
                             ),
                           ),
@@ -686,14 +815,32 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                           Expanded(
                             child: Text(
                               teamName,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: isThisWinner ? const Color(0xFFFFD700) : Colors.white,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
                             ),
                           ),
-                          const Icon(Icons.shield_outlined, color: Colors.white38, size: 18),
+                          if (isThisWinner)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFD700).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFFFD700)),
+                              ),
+                              child: const Text(
+                                'CHAMPION',
+                                style: TextStyle(
+                                  color: Color(0xFFFFD700),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            )
+                          else
+                            const Icon(Icons.shield_outlined, color: Colors.white38, size: 18),
                         ],
                       ),
                     );
