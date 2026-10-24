@@ -3324,11 +3324,11 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                         : prizePool;
 
                     for (final uId in memberUserIds) {
-                      // Credit in gamers/users balance
+                      // Credit in users balance ('gamers' ki jagah 'users' table use kiya gaya hai)
                       try {
-                        final userRes = await _supabase.from('gamers').select('coins').eq('id', uId).maybeSingle();
+                        final userRes = await _supabase.from('users').select('coins').eq('id', uId).maybeSingle();
                         final int existing = (userRes?['coins'] as num?)?.toInt() ?? 0;
-                        await _supabase.from('gamers').update({'coins': existing + share}).eq('id', uId);
+                        await _supabase.from('users').update({'coins': existing + share}).eq('id', uId);
                       } catch (_) {
                         try {
                           final userRes = await _supabase.from('users').select('coins').eq('id', uId).maybeSingle();
