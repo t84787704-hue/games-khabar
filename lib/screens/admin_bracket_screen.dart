@@ -20,7 +20,7 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
     fetchMatches();
   }
 
-  // 1. Matches load karne ka function
+  // 1. Matches load karne ka function (Updated with explicit foreign keys)
   Future<void> fetchMatches() async {
     setState(() => isLoading = true);
     try {
@@ -29,11 +29,10 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
           .select('''
             id, round_name, match_number, status, room_id, room_password,
             winner_team_id,
-            team1:team_1_id(id, name),
-            team2:team_2_id(id, name)
+            team1:teams!matches_team_1_id_fkey(id, name),
+            team2:teams!matches_team_2_id_fkey(id, name)
           ''')
           .eq('tournament_id', widget.tournamentId)
-          .order('round_name', ascending: false)
           .order('match_number', ascending: true);
 
       setState(() {
@@ -42,9 +41,11 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
       });
     } catch (e) {
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading matches: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading matches: $e')),
+        );
+      }
     }
   }
 
@@ -54,14 +55,18 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
       await supabase.rpc('generate_quarter_finals', params: {
         'target_tournament_id': widget.tournamentId,
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Quarter Finals successfully generated!')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quarter Finals successfully generated!')),
+        );
+      }
       fetchMatches();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     }
   }
 
@@ -74,14 +79,18 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
         'status': 'ongoing',
       }).eq('id', matchId);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Room Credentials Saved!')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Room Credentials Saved!')),
+        );
+      }
       fetchMatches();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving credentials: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving credentials: $e')),
+        );
+      }
     }
   }
 
@@ -92,14 +101,18 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
         'target_match_id': matchId,
         'winning_team_id': winnerTeamId,
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Winner updated! Next round generated if ready.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Winner updated! Next round generated if ready.')),
+        );
+      }
       fetchMatches();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating winner: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating winner: $e')),
+        );
+      }
     }
   }
 
