@@ -1,4 +1,11 @@
 {
+  "coins_added_desc": "Coins Added Successfully",
+  "coins_label": "Coins",
+  "reason_label": "Reason",
+  "type_label": "Type",
+  "date_and_time_label": "Date & Time",
+  "status_label": "Status",
+  "transaction_id_label": "Transaction ID",
   "btn_apply_locked": "Complete Requirements to Unlock",  
 "notif_team_approved_title": "Team Request Approved! 🎉",
   "notif_team_approved_body": "Your request to join the squad has been approved.",
