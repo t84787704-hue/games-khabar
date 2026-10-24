@@ -1,6 +1,6 @@
 // ===============================================================================
 // File: lib/services/app_stay_timer_service.dart
-// 10-Min Active Stay Tracker with 2-Second Auto-Dismiss Banner
+// 10-Min Active Stay Tracker — Global & Unstoppable
 // ===============================================================================
 
 import 'dart:async';
@@ -17,14 +17,19 @@ class AppStayTimerService with WidgetsBindingObserver {
   int secondsPassed = 0;
   final int targetSeconds = 600; // 10 Minutes = 600 Seconds
   bool isRewardClaimedToday = false;
-  bool isRunning = false;
+  bool isRunning = true;
+  bool _isInitialized = false;
 
   final ValueNotifier<int> secondsNotifier = ValueNotifier<int>(0);
 
   void init(BuildContext context) async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
     WidgetsBinding.instance.addObserver(this);
     await _checkTodayStatus();
-    if (context.mounted) {
+
+    if (!isRewardClaimedToday && (_timer == null || !_timer!.isActive)) {
       startTimer(context);
     }
   }
@@ -32,16 +37,15 @@ class AppStayTimerService with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _isInitialized = false;
   }
 
   // App Minimize / Resume hone par check
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // User app ke samne wapas aa gaya
       isRunning = true;
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      // User ne app minimize ki ya notification panel khola - TIMER FREEZE
       isRunning = false;
     }
   }
@@ -71,9 +75,9 @@ class AppStayTimerService with WidgetsBindingObserver {
   }
 
   void startTimer(BuildContext context) {
-    if (isRewardClaimedToday || _timer != null) return;
-    isRunning = true;
+    if (isRewardClaimedToday) return;
 
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!isRunning || isRewardClaimedToday) return;
 
