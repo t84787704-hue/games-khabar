@@ -335,14 +335,7 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
               onTap: () => _showRedeemPrompt('100 Free Fire Diamonds', 1200),
             ),
             const SizedBox(height: 8),
-            _buildRedeemItem(
-              title: '₹50 Google Play Card',
-              tag: 'Play Store Redeem',
-              cost: 1800,
-              icon: Icons.card_giftcard_rounded,
-              color: const Color(0xFF00FF88),
-              onTap: () => _showRedeemPrompt('₹50 Google Play Card', 1800),
-            ),
+ 
           ],
         ),
       ),
