@@ -1,4 +1,8 @@
 {
+  "notif_team_approved_title": "Team Request Approved! 🎉",
+  "notif_team_approved_body": "Your request to join the squad has been approved.",
+  "proof_rejected_notif_title": "Match Proof Rejected ❌",
+  "proof_rejected_notif_body": "Your victory proof was reviewed and rejected by Admin.",
 "team_leader_fallback": "Leader",
 "btn_create_gamer_id": "Create Gamer ID",
 "can_create_team_desc":"You can create or join  an  eSports team",
