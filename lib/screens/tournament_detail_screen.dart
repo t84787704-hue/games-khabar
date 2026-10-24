@@ -187,11 +187,23 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       final teamId = myRegisteredTeam?['id']?.toString() ??
           (_registeredTeams.isNotEmpty ? _registeredTeams.first['team_id']?.toString() : null);
 
+      final teamName = myRegisteredTeam?['name']?.toString() ??
+          (_registeredTeams.isNotEmpty
+              ? (_registeredTeams.first['teams'] as Map<String, dynamic>?)?['name']?.toString()
+              : null) ??
+          'Registered Squad';
+
+      final leaderIdentifier = _supabase.auth.currentUser?.email ?? 'Leader';
+
       await _supabase.from('tournaments').update({
         'proof_url': publicUrl,
         'proof_status': 'pending',
         'proof_reject_reason': null,
+        'rejection_reason': null,
         'submitted_team_id': teamId,
+        'proof_team_id': teamId,
+        'proof_team_name': teamName,
+        'proof_leader_name': leaderIdentifier,
         'submitted_at': DateTime.now().toIso8601String(),
       }).eq('id', tId);
 
@@ -260,7 +272,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         final roomId = (t['room_id'] ?? '').toString().trim();
         final roomPass = (t['room_password'] ?? '').toString().trim();
         final proofUrl = (t['proof_url'] ?? '').toString().trim();
-        final proofRejectReason = (t['proof_reject_reason'] ?? '').toString().trim();
+        final proofRejectReason = (t['rejection_reason'] ?? t['proof_reject_reason'] ?? '').toString().trim();
         final isCompleted = status.toLowerCase() == 'completed';
 
         String matchTimeStr = 'TBD';
