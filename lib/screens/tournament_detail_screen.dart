@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'admin_bracket_screen.dart';
 
 class TournamentDetailScreen extends StatefulWidget {
   final Map<String, dynamic> tournament;
@@ -201,6 +202,21 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           title,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.account_tree_rounded, color: Color(0xFF00FF88)),
+            tooltip: 'Manage Tournament Bracket',
+            onPressed: () {
+              final tId = (_tournamentData?['id'] ?? widget.tournament['id']).toString();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AdminBracketScreen(tournamentId: tId),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _fetchDetails,
