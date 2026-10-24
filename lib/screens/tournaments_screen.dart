@@ -1,181 +1,885 @@
-// ===============================================================================
-// TOURNAMENTS SCREEN — Tournament Feed, 10-Min Hook & Rewards Vault Connected
-// File: lib/screens/tournaments_screen.dart
-// ===============================================================================
+// ═══════════════════════════════════════════════════════════════════════════════
+// GAMER FEED SCREEN — With Cloudflare R2 Image Upload & Feed View
+// File: lib/screens/gamer_feed_screen.dart
+// ═══════════════════════════════════════════════════════════════════════════════
 
-import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
+import 'package:share_plus/share_plus.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../services/supabase_service.dart';
+import '../services/r2_storage_service.dart';
+import 'gamer_profile_screen.dart';
+import 'user_search_screen.dart';
+import '../services/notification_service.dart';
+import 'notifications_screen.dart';
+import '../widgets/gamer_avatar.dart';
 import '../services/theme_service.dart';
-import '../widgets/gamer_growth_hub_dialog.dart';
-import 'tournament_detail_screen.dart';
 
-class TournamentsScreen extends StatefulWidget {
-  const TournamentsScreen({super.key});
+class GamerFeedScreen extends StatefulWidget {
+  const GamerFeedScreen({super.key});
 
   @override
-  State<TournamentsScreen> createState() => _TournamentsScreenState();
+  State<GamerFeedScreen> createState() => _GamerFeedScreenState();
 }
 
-class _TournamentsScreenState extends State<TournamentsScreen> {
-  final SupabaseClient _supabase = Supabase.instance.client;
+class _GamerFeedScreenState extends State<GamerFeedScreen> {
+  List<Map<String, dynamic>> posts = [];
+  Map<String, Map<String, dynamic>> userProfiles = {};
+  Set<String> likedPostIds = {};
+  bool isLoading = true;
+  String currentUserId = '';
+  String currentUsername = 'user_gamer'.tr();
+  String currentAvatarUrl = '';
 
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _tournaments = [];
-  final Set<String> _registeredTournamentIds = {};
-  String? _myTeamId;
-  Timer? _countdownRefreshTimer;
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
 
   @override
   void initState() {
     super.initState();
-    _fetchTournaments();
-    // Har 30 second baad match countdown recalculate karne ke liye
-    _countdownRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() {});
-    });
+    _initScreen();
   }
 
-  @override
-  void dispose() {
-    _countdownRefreshTimer?.cancel();
-    super.dispose();
+  Future<void> _initScreen() async {
+    await _loadCurrentUserInfo();
+    await _loadFeed();
   }
 
-  Future<void> _fetchTournaments() async {
-    setState(() => _isLoading = true);
-    final user = _supabase.auth.currentUser;
+  void _openImagePreview(BuildContext context, String imageUrl) {
+    if (imageUrl.isEmpty) return;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.92),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx),
+              child: Container(
+                color: Colors.transparent,
+                width: double.infinity,
+                height: double.infinity,
+              ),
+            ),
+            InteractiveViewer(
+              panEnabled: true,
+              minScale: 0.8,
+              maxScale: 4.0,
+              child: Center(
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF1877F2)),
+                  ),
+                  errorWidget: (_, __, ___) => const Center(
+                    child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 16,
+              child: SafeArea(
+                child: CircleAvatar(
+                  backgroundColor: Colors.black54,
+                  radius: 20,
+                  child: IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
+  Future<void> _loadCurrentUserInfo() async {
     try {
-      // 1. Get leader's team
-      if (user != null) {
-        final teamRes = await _supabase
-            .from('teams')
-            .select('id')
-            .eq('leader_id', user.id)
-            .maybeSingle();
+      String? sbId = SupabaseService.client.auth.currentUser?.id;
+      if (sbId == null || sbId.isEmpty) {
+        sbId = await SupabaseService.getCurrentUserId();
+      }
 
-        _myTeamId = teamRes?['id']?.toString();
+      if (sbId != null && sbId.isNotEmpty && _uuidRegex.hasMatch(sbId)) {
+        currentUserId = sbId;
 
-        // 2. Fetch all registered tournaments for this team
-        if (_myTeamId != null) {
-          final regRes = await _supabase
-              .from('tournament_registrations')
-              .select('tournament_id')
-              .eq('team_id', _myTeamId!);
-
-          _registeredTournamentIds.clear();
-          for (var r in regRes) {
-            _registeredTournamentIds.add(r['tournament_id'].toString());
+        try {
+          final res = await SupabaseService.client
+              .from('users')
+              .select('id, username, avatar_url')
+              .eq('id', sbId)
+              .maybeSingle();
+          if (res != null) {
+            currentUsername =
+                (res['username'] ?? '').toString().isNotEmpty
+                    ? res['username'].toString()
+                    : 'user_gamer'.tr();
+            currentAvatarUrl = (res['avatar_url'] ?? '').toString();
           }
+        } catch (_) {}
+      }
+
+      if (currentUserId.isEmpty) {
+        final sbEmail = SupabaseService.client.auth.currentUser?.email;
+        if (sbEmail != null && sbEmail.isNotEmpty) {
+          try {
+            final res = await SupabaseService.client
+                .from('users')
+                .select('id, username, avatar_url')
+                .eq('email', sbEmail)
+                .maybeSingle();
+            if (res != null && res['id'] != null) {
+              final idStr = res['id'].toString();
+              if (_uuidRegex.hasMatch(idStr)) {
+                currentUserId = idStr;
+                currentUsername = (res['username'] ?? '').toString().isNotEmpty
+                    ? res['username'].toString()
+                    : sbEmail.split('@').first;
+                currentAvatarUrl = (res['avatar_url'] ?? '').toString();
+              }
+            }
+          } catch (_) {}
         }
       }
 
-      // 3. Fetch tournaments
-      final res = await _supabase
-          .from('tournaments')
-          .select()
-          .order('match_time', ascending: true);
+      if (currentUserId.isEmpty) {
+        try {
+          final anyUser = await SupabaseService.client
+              .from('users')
+              .select('id, username, avatar_url')
+              .limit(1)
+              .maybeSingle();
+          if (anyUser != null && anyUser['id'] != null) {
+            final idStr = anyUser['id'].toString();
+            if (_uuidRegex.hasMatch(idStr)) {
+              currentUserId = idStr;
+              currentUsername = (anyUser['username'] ?? 'user_gamer'.tr()).toString();
+              currentAvatarUrl = (anyUser['avatar_url'] ?? '').toString();
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (currentUsername.trim().isEmpty) {
+        currentUsername = 'user_gamer'.tr();
+      }
+    } catch (e) {
+      debugPrint('User info resolve error: $e');
+    }
+  }
+
+  Future<void> _loadFeed() async {
+    if (mounted && posts.isEmpty) setState(() => isLoading = true);
+
+    if (currentUserId.isEmpty) {
+      await _loadCurrentUserInfo();
+    }
+
+    try {
+      final data = await SupabaseService.client
+          .from('posts')
+          .select('*')
+          .order('created_at', ascending: false)
+          .limit(30);
+
+      final fetchedPosts = List<Map<String, dynamic>>.from(data as List);
+
+      final userIds = fetchedPosts
+          .map((p) => p['user_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
+          .toSet()
+          .toList();
+
+      if (userIds.isNotEmpty) {
+        try {
+          final usersData = await SupabaseService.client
+              .from('users')
+              .select('id, username, avatar_url')
+              .inFilter('id', userIds);
+
+          final profiles = <String, Map<String, dynamic>>{};
+          for (final u in (usersData as List)) {
+            if (u is Map<String, dynamic> && u['id'] != null) {
+              profiles[u['id'].toString()] = u;
+            }
+          }
+          userProfiles = profiles;
+        } catch (e) {
+          debugPrint('Users fetch warning (ignored): $e');
+        }
+      }
+
+      if (currentUserId.isNotEmpty && _uuidRegex.hasMatch(currentUserId)) {
+        try {
+          final likesData = await SupabaseService.client
+              .from('likes')
+              .select('post_id')
+              .eq('user_id', currentUserId);
+
+          likedPostIds = (likesData as List)
+              .map((e) => e['post_id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet();
+        } catch (e) {
+          debugPrint('Likes fetch warning (ignored): $e');
+        }
+      }
 
       if (mounted) {
         setState(() {
-          _tournaments = List<Map<String, dynamic>>.from(res);
-          _isLoading = false;
+          posts = fetchedPosts;
+          isLoading = false;
         });
       }
     } catch (e) {
+      debugPrint('Feed error: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => isLoading = false);
+        final errText = e.toString();
+        final snackMsg = errText.contains('521')
+            ? 'err_server_unavailable'.tr()
+            : (errText.contains('PGRST200')
+                ? 'err_db_schema_updated'.tr()
+                : 'err_could_not_load_feed'.tr(args: ['$e']));
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text(snackMsg),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(label: 'retry'.tr(), onPressed: _loadFeed),
+          ),
         );
       }
     }
   }
 
-  Future<void> _registerTeam(String tournamentId, int entryFee) async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) {
+  void _openUserProfile(String userId, String username) {
+    if (userId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in first')),
+        SnackBar(content: Text('user_not_found'.tr())),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GamerProfileScreen(userId: userId),
+      ),
+    );
+  }
+
+  Future<void> _handleLike(Map<String, dynamic> post) async {
+    final postId = post['id']?.toString() ?? '';
+    if (postId.isEmpty) return;
+
+    if (currentUserId.isEmpty || !_uuidRegex.hasMatch(currentUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('err_login_to_like'.tr())),
       );
       return;
     }
 
-    if (_myTeamId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Only Team Leaders can register a squad!')),
-      );
-      return;
-    }
+    final isLiked = likedPostIds.contains(postId);
+    final rawCount = post['likes_count'];
+    final currentLikes = (rawCount is int)
+        ? rawCount
+        : int.tryParse(rawCount?.toString() ?? '0') ?? 0;
+    final updatedLikes = isLiked
+        ? (currentLikes > 0 ? currentLikes - 1 : 0)
+        : currentLikes + 1;
+
+    final previousLikes = currentLikes;
+
+    setState(() {
+      if (isLiked) {
+        likedPostIds.remove(postId);
+      } else {
+        likedPostIds.add(postId);
+      }
+      post['likes_count'] = updatedLikes;
+    });
+
+    bool success = false;
 
     try {
-      final currentTourney = _tournaments.firstWhere(
-        (t) => t['id'].toString() == tournamentId,
-        orElse: () => {},
-      );
-      final tourneyTitle = currentTourney['title']?.toString() ?? 'Tournament';
-
-      // 1. Register Squad
-      await _supabase.from('tournament_registrations').insert({
-        'tournament_id': tournamentId,
-        'team_id': _myTeamId,
-        'leader_id': user.id,
-      });
-
-      // 2. Update count
-      await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
-
-      // 3. Send notification to all team members
-      final membersRes = await _supabase
-          .from('team_members')
-          .select('user_id')
-          .eq('team_id', _myTeamId!);
-
-      final List<Map<String, dynamic>> notifInserts = [];
-      for (final m in membersRes) {
-        final memberUid = m['user_id']?.toString();
-        if (memberUid != null && memberUid != user.id) {
-          notifInserts.add({
-            'user_id': memberUid,
-            'title': 'Tournament Registered! 🎮',
-            'body': 'Your squad leader registered the team for "$tourneyTitle". Be ready for the match!',
-            'type': 'tournament',
-            'created_at': DateTime.now().toIso8601String(),
-            'is_read': false,
-          });
-        }
+      if (isLiked) {
+        await SupabaseService.client
+            .from('likes')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', currentUserId);
+      } else {
+        await SupabaseService.client.from('likes').insert({
+          'post_id': postId,
+          'user_id': currentUserId,
+        });
       }
-
-      if (notifInserts.isNotEmpty) {
-        await _supabase.from('notifications').insert(notifInserts);
-      }
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Squad Registered & Team Notified! 🎉'),
-          backgroundColor: Color(0xFF00FF88),
-        ),
-      );
-
-      _fetchTournaments();
+      success = true;
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Registration failed: $e')),
-      );
+      debugPrint('Likes table update error: $e');
+    }
+
+    if (success) {
+      try {
+        await SupabaseService.client
+            .from('posts')
+            .update({'likes_count': updatedLikes})
+            .eq('id', postId);
+      } catch (e) {
+        debugPrint('Posts likes_count update error: $e');
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          if (isLiked) {
+            likedPostIds.add(postId);
+          } else {
+            likedPostIds.remove(postId);
+          }
+          post['likes_count'] = previousLikes;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('err_could_not_update_like'.tr()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  void _openRewardsVault() {
-    showDialog(
+  Future<void> _handleShare(Map<String, dynamic> post) async {
+    final content = (post['content'] ?? '').toString();
+    final postUserId = post['user_id']?.toString() ?? '';
+    final userProfile = userProfiles[postUserId];
+    final username = userProfile?['username'] ?? post['username'] ?? 'user_gamer'.tr();
+
+    final headerText = 'share_post_header'.tr(args: [username]);
+    final postedByText = 'label_posted_by'.tr();
+    final ctaText = 'share_post_cta'.tr();
+    final downloadAppText = 'share_download_app'.tr();
+
+    final shareText = '''
+$headerText
+
+"$content"
+
+$postedByText: $username
+
+$ctaText
+
+$downloadAppText:
+https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
+
+#GamersID #PUBG #BGMI #FreeFire #Esports
+''';
+
+    try {
+      await Share.share(shareText.trim(), subject: 'share_subject'.tr(args: [username]));
+    } catch (e) {
+      debugPrint('Share error: $e');
+    }
+  }
+
+  void _showComments(String postId) {
+    showModalBottomSheet(
       context: context,
-      builder: (_) => const GamerGrowthHubDialog(),
-    ).then((_) {
-      if (mounted) setState(() {});
+      isScrollControlled: true,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => CommentSheet(
+        postId: postId,
+        currentUserId: currentUserId,
+        currentUsername: currentUsername,
+      ),
+    ).then((newCount) {
+      if (newCount is int && mounted) {
+        setState(() {
+          final idx = posts.indexWhere((p) => p['id'].toString() == postId);
+          if (idx != -1) {
+            posts[idx]['comments_count'] = newCount;
+          }
+        });
+      }
     });
+  }
+
+  Future<void> _reportPost(String postId, String postContent, String postOwnerId) async {
+    if (postOwnerId == currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('err_cannot_report_own_post'.tr())),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('report_post_title'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text('report_post_desc'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: Text('cancel'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(c, true),
+            child: Text('btn_report'.tr(), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await SupabaseService.client.from('reports').insert({
+        'reporter_id': currentUserId.isNotEmpty ? currentUserId : null,
+        'reporter_username': currentUsername,
+        'target_type': 'post',
+        'target_id': postId,
+        'target_content': postContent.length > 200
+            ? postContent.substring(0, 200)
+            : postContent,
+        'reason': 'reported_by_user'.tr(),
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('msg_post_reported_success'.tr()),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[Feed] Report error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('err_report_failed'.tr(args: ['$e'])),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showPostOptions(BuildContext context, String postId, String ownerId) {
+    final isMyPost = ownerId == currentUserId;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: ThemeService.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (isMyPost) ...[
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: Text(
+                  'delete_post'.tr(),
+                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      backgroundColor: ThemeService.card,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      title: Text(
+                        'delete_post_dialog_title'.tr().contains('delete_post_') 
+                            ? 'Delete Post' 
+                            : 'delete_post_dialog_title'.tr(),
+                        style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
+                      ),
+                      content: Text(
+                        'delete_post_dialog_content'.tr().contains('delete_post_') 
+                            ? 'Are you sure you want to delete this post? This action cannot be undone.' 
+                            : 'delete_post_dialog_content'.tr(),
+                        style: TextStyle(color: ThemeService.textSecondary),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(c, false),
+                          child: Text('cancel'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                          onPressed: () => Navigator.pop(c, true),
+                          child: Text('delete'.tr(), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    try {
+                      try {
+                        await SupabaseService.client.from('likes').delete().eq('post_id', postId);
+                      } catch (e) {
+                        debugPrint('Likes delete warning: $e');
+                      }
+                      try {
+                        await SupabaseService.client.from('comments').delete().eq('post_id', postId);
+                      } catch (e) {
+                        debugPrint('Comments delete warning: $e');
+                      }
+
+                      await SupabaseService.client.from('posts').delete().eq('id', postId);
+
+                      if (mounted) {
+                        setState(() {
+                          posts.removeWhere((p) => p['id'].toString() == postId);
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('msg_post_deleted'.tr()), backgroundColor: Colors.green),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('err_delete_failed'.tr(args: ['$e'])), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  }
+                },
+              ),
+            ] else ...[
+              ListTile(
+                leading: Icon(Icons.flag_outlined, color: ThemeService.textSecondary),
+                title: Text('btn_report_post'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600)),
+                onTap: () {
+                  final targetPost = posts.firstWhere(
+                    (p) => p['id'].toString() == postId,
+                    orElse: () => <String, dynamic>{},
+                  );
+                  final content = (targetPost['content'] ?? '').toString();
+                  Navigator.pop(ctx);
+                  _reportPost(postId, content, ownerId);
+                },
+              ),
+            ],
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCreatePost() {
+    final textController = TextEditingController();
+    File? selectedImage;
+    bool isPosting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          Future<void> pickImage(ImageSource source) async {
+            try {
+              final picker = ImagePicker();
+              final picked = await picker.pickImage(
+                source: source,
+                maxWidth: 1440,
+                maxHeight: 1440,
+                imageQuality: 85,
+              );
+              if (picked != null) {
+                setSheetState(() {
+                  selectedImage = File(picked.path);
+                });
+              }
+            } catch (e) {
+              debugPrint('Error picking image: $e');
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      GamerAvatar(
+                        photoUrl: currentAvatarUrl,
+                        displayName: currentUsername,
+                        radius: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          currentUsername,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: ThemeService.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1877F2),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        ),
+                        onPressed: isPosting
+                            ? null
+                            : () async {
+                                final text = textController.text.trim();
+                                if (text.isEmpty && selectedImage == null) return;
+
+                                if (currentUserId.isEmpty || !_uuidRegex.hasMatch(currentUserId)) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('err_login_required_post'.tr()),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setSheetState(() => isPosting = true);
+
+                                try {
+                                  String? uploadedImageUrl;
+
+                                  // Upload image to Cloudflare R2
+                                  if (selectedImage != null) {
+                                    uploadedImageUrl = await R2StorageService().uploadImage(
+                                      file: selectedImage!,
+                                      userId: currentUserId,
+                                    );
+
+                                    if (uploadedImageUrl == null || uploadedImageUrl.isEmpty) {
+                                      throw Exception('Image upload failed: Empty URL returned');
+                                    }
+                                  }
+
+                                  final nowIso = DateTime.now().toIso8601String();
+                                  final insertPayload = {
+                                    'content': text,
+                                    'user_id': currentUserId,
+                                    'username': currentUsername,
+                                    'image_url': uploadedImageUrl,
+                                    'likes_count': 0,
+                                    'comments_count': 0,
+                                    'created_at': nowIso,
+                                  };
+
+                                  // Insert into Supabase
+                                  final insertedRecord = await SupabaseService.client
+                                      .from('posts')
+                                      .insert(insertPayload)
+                                      .select()
+                                      .maybeSingle();
+
+                                  final Map<String, dynamic> newPost =
+                                      insertedRecord != null
+                                          ? Map<String, dynamic>.from(insertedRecord)
+                                          : {
+                                              ...insertPayload,
+                                              'id': 'temp_${DateTime.now().millisecondsSinceEpoch}',
+                                            };
+
+                                  if (sheetCtx.mounted) {
+                                    Navigator.pop(sheetCtx);
+                                  }
+
+                                  if (mounted) {
+                                    // Instantly show at top of feed
+                                    setState(() {
+                                      posts.removeWhere((p) => p['id'] == newPost['id']);
+                                      posts.insert(0, newPost);
+                                      userProfiles[currentUserId] = {
+                                        'id': currentUserId,
+                                        'username': currentUsername,
+                                        'avatar_url': currentAvatarUrl,
+                                      };
+                                    });
+
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('msg_post_created'.tr()),
+                                        backgroundColor: const Color(0xFF1877F2),
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  debugPrint('Error creating post: $e');
+                                  if (sheetCtx.mounted) {
+                                    setSheetState(() => isPosting = false);
+                                  }
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('err_publish_failed'.tr(args: ['$e'])),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        child: isPosting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text('btn_post'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: textController,
+                    autofocus: true,
+                    maxLines: 4,
+                    minLines: 2,
+                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 16),
+                    decoration: InputDecoration(
+                      hintText: 'hint_whats_on_your_mind'.tr().contains('hint_') ? "What's on your mind?" : 'hint_whats_on_your_mind'.tr(),
+                      hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 16),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                  if (selectedImage != null) ...[
+                    const SizedBox(height: 10),
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            selectedImage!,
+                            width: double.infinity,
+                            height: 220,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: GestureDetector(
+                            onTap: () => setSheetState(() => selectedImage = null),
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close, color: Colors.white, size: 18),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Divider(color: ThemeService.border, height: 1),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        'Add to your post',
+                        style: TextStyle(
+                          color: ThemeService.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.photo_library_rounded, color: Color(0xFF00C853)),
+                        tooltip: 'Gallery',
+                        onPressed: isPosting ? null : () => pickImage(ImageSource.gallery),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.camera_alt_rounded, color: Color(0xFF1877F2)),
+                        tooltip: 'Camera',
+                        onPressed: isPosting ? null : () => pickImage(ImageSource.camera),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _formatTimeAgo(dynamic raw) {
+    if (raw == null) return 'time_just_now'.tr();
+    DateTime? dt;
+    if (raw is DateTime) {
+      dt = raw;
+    } else if (raw is String) {
+      dt = DateTime.tryParse(raw);
+    }
+    if (dt == null) return 'time_just_now'.tr();
+
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'time_just_now'.tr();
+    if (diff.inMinutes < 60) return 'time_minutes_ago'.tr(args: ['${diff.inMinutes}']);
+    if (diff.inHours < 24) return 'time_hours_ago'.tr(args: ['${diff.inHours}']);
+    if (diff.inDays < 7) return 'time_days_ago'.tr(args: ['${diff.inDays}']);
+    return '${dt.day}/${dt.month}/${dt.year}';
   }
 
   @override
@@ -187,406 +891,792 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           backgroundColor: ThemeService.bg,
           appBar: AppBar(
             backgroundColor: ThemeService.appBarBg,
-            elevation: 0,
+            elevation: ThemeService.isDarkMode ? 0 : 1,
             title: Text(
-              'Tournaments 🏆',
-              style: TextStyle(
+              'app_name'.tr(),
+              style: const TextStyle(
+                color: Color(0xFF1877F2),
                 fontWeight: FontWeight.bold,
-                color: ThemeService.textPrimary,
-                fontSize: 18,
+                fontSize: 22,
               ),
             ),
             actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFD700).withOpacity(0.15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.4)),
+              IconButton(
+                icon: const Icon(Icons.search_rounded,
+                    color: Color(0xFF1877F2), size: 26),
+                tooltip: 'tooltip_search_gamers'.tr(),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const UserSearchScreen(),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  ),
-                  icon: const Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 18),
-                  label: const Text(
-                    'Rewards & UC',
-                    style: TextStyle(
-                      color: Color(0xFFFFD700),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                  onPressed: _openRewardsVault,
-                ),
+                  );
+                },
               ),
+              ValueListenableBuilder<int>(
+                valueListenable: NotificationService().unreadCountNotifier,
+                builder: (context, unreadCount, _) {
+                  return IconButton(
+                    tooltip: 'tooltip_notifications'.tr(),
+                    icon: Badge(
+                      isLabelVisible: unreadCount > 0,
+                      label: Text(
+                        '$unreadCount',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      backgroundColor: const Color(0xFFFF2D55),
+                      child: Icon(
+                        Icons.notifications_outlined,
+                        color: ThemeService.textPrimary,
+                        size: 26,
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationsScreen(),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+              const SizedBox(width: 8),
             ],
           ),
           body: RefreshIndicator(
-            onRefresh: _fetchTournaments,
-            color: const Color(0xFF00FF88),
-            backgroundColor: ThemeService.card,
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))
-                : _tournaments.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No tournaments available right now',
-                          style: TextStyle(color: ThemeService.textSecondary),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                        itemCount: _tournaments.length + 1,
-                        itemBuilder: (context, index) {
-                          // Top Banner: Daily 10-Min Stay & Earn shortcut
-                          if (index == 0) {
-                            return _buildTopEngagementBanner();
-                          }
-
-                          final item = _tournaments[index - 1];
-                          final tId = item['id'].toString();
-                          final maxTeams = (item['max_teams'] ?? 16) as int;
-                          final currentTeams = (item['current_teams'] ?? 0) as int;
-                          final isFull = currentTeams >= maxTeams;
-                          final isRegistered = _registeredTournamentIds.contains(tId);
-
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TournamentDetailScreen(
-                                    tournament: item,
-                                    isRegistered: isRegistered,
+            onRefresh: _loadFeed,
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: posts.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return InkWell(
+                          onTap: _showCreatePost,
+                          borderRadius: BorderRadius.circular(10),
+                          child: Card(
+                            margin: const EdgeInsets.all(8),
+                            elevation: 0,
+                            color: ThemeService.card,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(color: ThemeService.border),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  GamerAvatar(
+                                    photoUrl: currentAvatarUrl,
+                                    displayName: currentUsername,
+                                    radius: 20,
                                   ),
-                                ),
-                              ).then((_) => _fetchTournaments());
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: ThemeService.card,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isRegistered
-                                      ? const Color(0xFF00FF88).withOpacity(0.5)
-                                      : ThemeService.border,
-                                  width: 1,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: ThemeService.cardSecondary,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        'hint_whats_on_your_mind'.tr().contains('hint_') ? "What's on your mind?" : 'hint_whats_on_your_mind'.tr(),
+                                        style: TextStyle(color: ThemeService.textSecondary, fontSize: 14),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.photo_library_rounded, color: Color(0xFF00C853), size: 22),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final post = posts[index - 1];
+                      final postUserId = post['user_id']?.toString() ?? '';
+                      final userProfile = userProfiles[postUserId];
+
+                      final username = userProfile?['username'] ?? post['username'] ?? 'user_gamer'.tr();
+                      final avatarUrl =
+                          (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
+                      final postId = post['id']?.toString() ?? '';
+                      final isLiked = likedPostIds.contains(postId);
+                      
+                      // Support both image_url and media_url columns if present
+                      final imageUrl = (post['image_url'] ?? post['media_url'] ?? '').toString().trim();
+                      final content = (post['content'] ?? '').toString();
+                      final likesCount = post['likes_count'] ?? 0;
+                      final int commentsCount = (post['comments_count'] is num)
+                          ? (post['comments_count'] as num).toInt()
+                          : int.tryParse(post['comments_count']?.toString() ?? '0') ?? 0;
+
+                      final String commentLabel = commentsCount > 0
+                          ? '$commentsCount ${commentsCount == 1 ? "comment" : "comments"}'
+                          : 'No comments';
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+                        elevation: 0,
+                        color: ThemeService.card,
+                        shape: Border(
+                          top: BorderSide(color: ThemeService.border, width: 0.5),
+                          bottom: BorderSide(color: ThemeService.border, width: 0.5),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              leading: GestureDetector(
+                                onTap: () => _openUserProfile(postUserId, username.toString()),
+                                child: GamerAvatar(
+                                  photoUrl: avatarUrl,
+                                  displayName: username.toString(),
+                                  radius: 20,
                                 ),
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              title: GestureDetector(
+                                onTap: () => _openUserProfile(postUserId, username.toString()),
+                                child: Text(
+                                  username.toString(),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: ThemeService.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              subtitle: Text(
+                                _formatTimeAgo(post['created_at']),
+                                style: TextStyle(fontSize: 12, color: ThemeService.textSecondary),
+                              ),
+                              trailing: IconButton(
+                                icon: Icon(Icons.more_horiz, color: ThemeService.textSecondary),
+                                onPressed: () => _showPostOptions(context, postId, postUserId),
+                              ),
+                            ),
+                            if (content.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                child: Text(
+                                  content,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: ThemeService.textPrimary,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ),
+                            if (imageUrl.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: GestureDetector(
+                                  onTap: () => _openImagePreview(context, imageUrl),
+                                  child: Container(
+                                    width: double.infinity,
+                                    constraints: const BoxConstraints(minHeight: 180, maxHeight: 420),
+                                    color: ThemeService.cardSecondary,
+                                    child: CachedNetworkImage(
+                                      imageUrl: imageUrl,
+                                      width: double.infinity,
+                                      fit: BoxFit.contain,
+                                      filterQuality: FilterQuality.high,
+                                      placeholder: (context, url) => Container(
+                                        height: 220,
+                                        color: ThemeService.cardSecondary,
+                                        child: const Center(
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFF1877F2),
+                                          ),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) => Container(
+                                        height: 180,
+                                        color: ThemeService.cardSecondary,
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 36),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                'Image loading error',
+                                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Expanded(
-                                        child: Text(
-                                          item['title'] ?? 'Tournament',
-                                          style: TextStyle(
-                                            color: ThemeService.textPrimary,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF00FF88).withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(20),
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF1877F2),
+                                          shape: BoxShape.circle,
                                         ),
-                                        child: Text(
-                                          'Prize: ${item['prize_pool']} Coins',
-                                          style: const TextStyle(
-                                            color: Color(0xFF00FF88),
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12,
-                                          ),
-                                        ),
+                                        child: const Icon(Icons.thumb_up, size: 11, color: Colors.white),
                                       ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    children: [
-                                      _badge(Icons.sports_esports, item['game_mode'] ?? 'Squad (4v4)'),
-                                      const SizedBox(width: 8),
-                                      _badge(Icons.map, item['map_name'] ?? 'Erangel'),
-                                      const SizedBox(width: 8),
-                                      _badge(Icons.monetization_on, 'Fee: ${item['entry_fee'] ?? 0}'),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-
-                                  // Match timing and Room ID hook
-                                  _buildRoomHookCard(item, isRegistered),
-
-                                  const SizedBox(height: 12),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: LinearProgressIndicator(
-                                      value: maxTeams > 0 ? (currentTeams / maxTeams) : 0,
-                                      backgroundColor: ThemeService.border.withOpacity(0.4),
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        isRegistered ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
-                                      ),
-                                      minHeight: 6,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
+                                      const SizedBox(width: 6),
                                       Text(
-                                        'Slots: $currentTeams / $maxTeams Teams Registered',
-                                        style: TextStyle(
-                                          color: ThemeService.textSecondary,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      const Row(
-                                        children: [
-                                          Text(
-                                            'View Details',
-                                            style: TextStyle(
-                                              color: Color(0xFF38BDF8),
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          SizedBox(width: 2),
-                                          Icon(
-                                            Icons.arrow_forward_ios_rounded,
-                                            color: Color(0xFF38BDF8),
-                                            size: 10,
-                                          ),
-                                        ],
+                                        '$likesCount',
+                                        style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 14),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 44,
-                                    child: ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: isRegistered
-                                            ? const Color(0xFF00FF88).withOpacity(0.15)
-                                            : (isFull ? ThemeService.cardSecondary : const Color(0xFF00FF88)),
-                                        foregroundColor: isRegistered
-                                            ? const Color(0xFF00FF88)
-                                            : (isFull ? ThemeService.textSecondary : Colors.black),
-                                        disabledBackgroundColor: isRegistered
-                                            ? const Color(0xFF00FF88).withOpacity(0.15)
-                                            : ThemeService.cardSecondary,
-                                        disabledForegroundColor: isRegistered
-                                            ? const Color(0xFF00FF88)
-                                            : ThemeService.textSecondary,
-                                        elevation: 0,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          side: isRegistered
-                                              ? const BorderSide(color: Color(0xFF00FF88), width: 1.2)
-                                              : BorderSide.none,
-                                        ),
-                                      ),
-                                      onPressed: (isFull || isRegistered)
-                                          ? null
-                                          : () => _registerTeam(tId, item['entry_fee'] ?? 0),
-                                      child: Text(
-                                        isRegistered
-                                            ? '✓ Already Registered'
-                                            : (isFull ? 'Slots Full' : 'Register Squad'),
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                          color: isRegistered
-                                              ? const Color(0xFF00FF88)
-                                              : (isFull ? ThemeService.textSecondary : Colors.black),
-                                        ),
-                                      ),
-                                    ),
+                                  Text(
+                                    commentLabel,
+                                    style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
                                   ),
                                 ],
                               ),
                             ),
-                          );
-                        },
-                      ),
+                            Divider(height: 1, color: ThemeService.border),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => _handleLike(post),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                                            size: 18,
+                                            color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'btn_like'.tr().contains('btn_') ? 'Like' : 'btn_like'.tr(),
+                                            style: TextStyle(
+                                              color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
+                                              fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => _showComments(postId),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.chat_bubble_outline, size: 18, color: ThemeService.textSecondary),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'btn_comment'.tr().contains('btn_') ? 'Comment' : 'btn_comment'.tr(),
+                                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => _handleShare(post),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.share_outlined, size: 18, color: ThemeService.textSecondary),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'btn_share'.tr().contains('btn_') ? 'Share' : 'btn_share'.tr(),
+                                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
         );
       },
     );
   }
+}
 
-  Widget _buildTopEngagementBanner() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFD700).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.alarm_on_rounded, color: Color(0xFFFFD700), size: 22),
+// ─────────────────────────── CommentSheet ───────────────────────────
+
+class CommentSheet extends StatefulWidget {
+  final String postId;
+  final String currentUserId;
+  final String currentUsername;
+
+  const CommentSheet({
+    super.key,
+    required this.postId,
+    required this.currentUserId,
+    required this.currentUsername,
+  });
+
+  @override
+  State<CommentSheet> createState() => _CommentSheetState();
+}
+
+class _CommentSheetState extends State<CommentSheet> {
+  List<Map<String, dynamic>> comments = [];
+  final TextEditingController _ctrl = TextEditingController();
+  bool _loading = true;
+  bool _isPosting = false;
+  int _commentsCount = 0;
+
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _loadComments();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadComments() async {
+    try {
+      final data = await SupabaseService.client
+          .from('comments')
+          .select('*')
+          .eq('post_id', widget.postId)
+          .order('created_at', ascending: true);
+
+      final list = List<Map<String, dynamic>>.from(data as List);
+
+      final missingUserIds = list
+          .where((c) => c['username'] == null || c['username'].toString().isEmpty)
+          .map((c) => c['user_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
+          .toSet()
+          .toList();
+
+      if (missingUserIds.isNotEmpty) {
+        try {
+          final usersData = await SupabaseService.client
+              .from('users')
+              .select('id, username')
+              .inFilter('id', missingUserIds);
+
+          final userMap = <String, String>{};
+          for (final u in (usersData as List)) {
+            if (u is Map<String, dynamic> && u['id'] != null) {
+              userMap[u['id'].toString()] = (u['username'] ?? 'user_gamer'.tr()).toString();
+            }
+          }
+
+          for (final c in list) {
+            if (c['username'] == null || c['username'].toString().isEmpty) {
+              final uid = c['user_id']?.toString();
+              if (uid != null && userMap.containsKey(uid)) {
+                c['username'] = userMap[uid];
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Comments user lookup error: $e');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          comments = list;
+          _commentsCount = list.length;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Comments fetch error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _submitComment() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty || _isPosting) return;
+
+    if (widget.currentUserId.isEmpty || !_uuidRegex.hasMatch(widget.currentUserId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('err_login_to_comment'.tr())),
+      );
+      return;
+    }
+
+    setState(() => _isPosting = true);
+    _ctrl.clear();
+
+    try {
+      bool inserted = false;
+      try {
+        await SupabaseService.client.from('comments').insert({
+          'post_id': widget.postId,
+          'user_id': widget.currentUserId,
+          'content': text,
+          'username': widget.currentUsername,
+        });
+        inserted = true;
+      } catch (e) {
+        debugPrint('Insert with username failed ($e), trying without...');
+      }
+
+      if (!inserted) {
+        await SupabaseService.client.from('comments').insert({
+          'post_id': widget.postId,
+          'user_id': widget.currentUserId,
+          'content': text,
+        });
+      }
+
+      await _loadComments();
+
+      try {
+        await SupabaseService.client
+            .from('posts')
+            .update({'comments_count': _commentsCount})
+            .eq('id', widget.postId);
+      } catch (e) {
+        debugPrint('Post comments_count update error: $e');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('msg_comment_posted'.tr()),
+            duration: const Duration(seconds: 2),
+            backgroundColor: const Color(0xFF1877F2),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Daily 10-Min Stay Bonus',
-                  style: TextStyle(
-                    color: ThemeService.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Spend 10 mins in app = Earn +50 Coins & Redeem 60 UC',
-                  style: TextStyle(
-                    color: ThemeService.textSecondary,
-                    fontSize: 10.5,
-                  ),
-                ),
-              ],
-            ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Comment insert error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('err_could_not_post_comment'.tr(args: ['$e']))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPosting = false);
+    }
+  }
+
+  Future<void> _reportComment(String commentId, String commentContent) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('report_comment_dialog_title'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text('report_comment_dialog_content'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: Text('cancel'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFD700),
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: _openRewardsVault,
-            child: const Text('Open Vault', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(c, true),
+            child: Text('btn_report'.tr(), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
+
+    if (confirm != true) return;
+
+    try {
+      await SupabaseService.client.from('reports').insert({
+        'reporter_id': widget.currentUserId.isNotEmpty ? widget.currentUserId : null,
+        'reporter_username': widget.currentUsername,
+        'target_type': 'comment',
+        'target_id': commentId,
+        'target_content': commentContent.length > 200
+            ? commentContent.substring(0, 200)
+            : commentContent,
+        'reason': 'reported_by_user'.tr(),
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('msg_comment_reported_success'.tr()),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[Comment] Report error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('err_report_failed'.tr(args: ['$e'])),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  Widget _buildRoomHookCard(Map<String, dynamic> item, bool isRegistered) {
-    final matchTimeStr = item['match_time']?.toString();
-    final roomId = (item['room_id'] ?? '').toString();
-    final roomPass = (item['room_password'] ?? '').toString();
+  void _openCommentUserProfile(String userId) {
+    if (userId.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GamerProfileScreen(userId: userId),
+      ),
+    );
+  }
 
-    DateTime? matchTime;
-    if (matchTimeStr != null) {
-      try {
-        matchTime = DateTime.parse(matchTimeStr).toLocal();
-      } catch (_) {}
-    }
-
-    final now = DateTime.now();
-    final difference = matchTime != null ? matchTime.difference(now) : null;
-    final bool isWithin10Mins = difference != null && difference.inMinutes <= 10 && difference.inMinutes >= -90;
-    final String formattedDate = matchTime != null ? DateFormat('dd MMM, hh:mm a').format(matchTime) : 'Scheduled';
-
-    final bool canReveal = isRegistered && isWithin10Mins && roomId.isNotEmpty;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: canReveal
-            ? const Color(0xFF00FF88).withOpacity(0.12)
-            : const Color(0xFFFF8A00).withOpacity(0.10),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: canReveal
-              ? const Color(0xFF00FF88).withOpacity(0.4)
-              : const Color(0xFFFF8A00).withOpacity(0.3),
+  void _showCommentOptions(Map<String, dynamic> comment, bool isMyComment) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: ThemeService.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (isMyComment) ...[
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: Text(
+                  'btn_delete_comment'.tr(),
+                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final commentId = (comment['id'] ?? '').toString();
+                  if (commentId.isEmpty) return;
+                  try {
+                    await SupabaseService.client
+                        .from('comments')
+                        .delete()
+                        .eq('id', commentId);
+                    await _loadComments();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('msg_comment_deleted'.tr()), backgroundColor: Colors.green),
+                      );
+                    }
+                  } catch (e) {
+                    debugPrint('[Comment] Delete error: $e');
+                  }
+                },
+              ),
+            ] else ...[
+              ListTile(
+                leading: Icon(Icons.flag_outlined, color: ThemeService.textSecondary),
+                title: Text('btn_report_comment'.tr(), style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  final commentId = (comment['id'] ?? '').toString();
+                  final commentContent = (comment['content'] ?? '').toString();
+                  _reportComment(commentId, commentContent);
+                },
+              ),
+            ],
+            const SizedBox(height: 12),
+          ],
         ),
       ),
-      child: Row(
-        children: [
-          Icon(
-            canReveal ? Icons.vpn_key_rounded : Icons.lock_clock_rounded,
-            size: 16,
-            color: canReveal ? const Color(0xFF00FF88) : const Color(0xFFFF8A00),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Match Time: $formattedDate',
-                  style: TextStyle(
-                    color: ThemeService.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                if (canReveal) ...[
-                  Text(
-                    'Room ID: $roomId • Pass: $roomPass',
-                    style: const TextStyle(
-                      color: Color(0xFF00FF88),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      fontFamily: 'monospace',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Container(
+          color: ThemeService.card,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: SizedBox(
+              height: 500,
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: ThemeService.border,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ] else if (!isRegistered) ...[
+                  const SizedBox(height: 12),
                   Text(
-                    'Register squad to view Room Credentials',
+                    'sheet_comments_title'.tr(),
                     style: TextStyle(
-                      color: ThemeService.textSecondary.withOpacity(0.8),
-                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: ThemeService.textPrimary,
                     ),
                   ),
-                ] else ...[
-                  Text(
-                    difference != null && difference.inMinutes > 0
-                        ? '🔒 Room ID unlocks 10m before match (${difference.inMinutes}m left)'
-                        : '🔒 Waiting for Admin to drop Room ID',
-                    style: const TextStyle(
-                      color: Color(0xFFFF8A00),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                  Divider(color: ThemeService.border),
+                  Expanded(
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : comments.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'no_comments_yet'.tr(),
+                                  style: TextStyle(color: ThemeService.textSecondary),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: comments.length,
+                                itemBuilder: (_, i) {
+                                  final c = comments[i];
+                                  final username = (c['username'] ?? 'user_gamer'.tr()).toString();
+                                  final content = (c['content'] ?? '').toString();
+                                  final commentUserId = (c['user_id'] ?? '').toString();
+                                  final isMyComment = commentUserId == widget.currentUserId;
+
+                                  return InkWell(
+                                    onLongPress: () => _showCommentOptions(c, isMyComment),
+                                    child: ListTile(
+                                      leading: GestureDetector(
+                                        onTap: () => _openCommentUserProfile(commentUserId),
+                                        child: CircleAvatar(
+                                          radius: 16,
+                                          backgroundColor: ThemeService.cardSecondary,
+                                          child: Icon(Icons.person, size: 18, color: ThemeService.textPrimary),
+                                        ),
+                                      ),
+                                      title: GestureDetector(
+                                        onTap: () => _openCommentUserProfile(commentUserId),
+                                        child: Text(
+                                          username,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: ThemeService.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        content,
+                                        style: TextStyle(
+                                          color: ThemeService.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      trailing: IconButton(
+                                        icon: Icon(
+                                          Icons.flag_outlined,
+                                          size: 16,
+                                          color: ThemeService.textSecondary,
+                                        ),
+                                        onPressed: () => _reportComment(
+                                          (c['id'] ?? '').toString(),
+                                          content,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _ctrl,
+                            enabled: !_isPosting,
+                            style: TextStyle(color: ThemeService.textPrimary),
+                            decoration: InputDecoration(
+                              hintText: 'write_comment_hint'.tr(),
+                              hintStyle: TextStyle(color: ThemeService.textSecondary),
+                              filled: true,
+                              fillColor: ThemeService.cardSecondary,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _isPosting
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF1877F2),
+                                  ),
+                                ),
+                              )
+                            : IconButton(
+                                icon: const Icon(Icons.send, color: Color(0xFF1877F2)),
+                                onPressed: _submitComment,
+                              ),
+                      ],
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _badge(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: ThemeService.cardSecondary,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: ThemeService.border.withOpacity(0.5)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: ThemeService.textSecondary),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: ThemeService.textSecondary, fontSize: 11)),
-        ],
-      ),
+        );
+      },
     );
   }
 }
