@@ -13,6 +13,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'admin_bracket_screen.dart';
 import '../widgets/victory_celebration_dialog.dart';
 import '../services/theme_service.dart';
+import '../utils/admin_security.dart';
 
 class TournamentDetailScreen extends StatefulWidget {
   final Map<String, dynamic> tournament;
@@ -53,6 +54,12 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     if (currentUserId == null) return;
 
     try {
+      final isSecAdmin = await AdminSecurity.isAdmin();
+      if (isSecAdmin && mounted) {
+        setState(() => _isAdmin = true);
+        return;
+      }
+
       final userRes = await _supabase
           .from('users')
           .select('role')
@@ -66,7 +73,13 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         });
       }
     } catch (_) {
-      // Ignore or handle silently
+      final user = _supabase.auth.currentUser;
+      if (user != null && mounted) {
+        final email = user.email?.toLowerCase() ?? '';
+        setState(() {
+          _isAdmin = email.contains('admin');
+        });
+      }
     }
   }
 
