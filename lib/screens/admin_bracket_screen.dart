@@ -13,7 +13,7 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
   final supabase = Supabase.instance.client;
   List<Map<String, dynamic>> matches = [];
   bool isLoading = true;
-  bool showFullHistory = false; // By default sirf ongoing active round dikhega
+  bool showFullHistory = false;
 
   @override
   void initState() {
@@ -121,37 +121,34 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
   List<Map<String, dynamic>> _getActiveMatches() {
     if (showFullHistory) return matches;
 
-    // Check agar Final bana hua hai aur pending/ongoing hai
+    // 1. Agar Final match ban chuka hai (2 teams), toh screen par sirf Final aayega
     final finalMatches = matches.where((m) {
       final round = (m['round_name'] ?? '').toString().toLowerCase();
       return round.contains('final') && !round.contains('semi') && !round.contains('quarter');
     }).toList();
 
     if (finalMatches.isNotEmpty) {
-      return finalMatches; // Sirf Final ki 2 teams dikhao
+      return finalMatches;
     }
 
-    // Check agar Semi-Finals bane hue hain aur pending/ongoing hain
+    // 2. Agar Semi-Finals ban chuke hain (4 teams), toh Quarter-Finals gayab, sirf Semi-Finals aayenge
     final semiMatches = matches.where((m) {
       final round = (m['round_name'] ?? '').toString().toLowerCase();
       return round.contains('semi');
     }).toList();
 
     if (semiMatches.isNotEmpty) {
-      final bool semiAllDone = semiMatches.every((m) => m['status'] == 'completed');
-      if (!semiAllDone) {
-        return semiMatches; // Sirf Semi-Finals ki 4 teams dikhao
-      }
+      return semiMatches;
     }
 
-    // Agar na Final bana hai na Semi, toh Quarter-Finals dikhao
+    // 3. Shuru mein jab tak agla round nahi banta, sirf Quarter-Finals (8 teams) aayenge
     final quarterMatches = matches.where((m) {
       final round = (m['round_name'] ?? '').toString().toLowerCase();
       return round.contains('quarter');
     }).toList();
 
     if (quarterMatches.isNotEmpty) {
-      return quarterMatches; // Sirf Quarter-Finals ki 8 teams dikhao
+      return quarterMatches;
     }
 
     return matches;
@@ -262,7 +259,7 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
                     final team1Id = match['team1']?['id']?.toString();
                     final team2Id = match['team2']?['id']?.toString();
                     final winnerId = match['winner_team_id']?.toString();
-                    final isCompleted = match['status'] == 'completed' || winnerId != null;
+                    final isCompleted = (winnerId != null && winnerId.isNotEmpty) || match['status'] == 'completed';
 
                     String winnerName = '';
                     if (winnerId != null) {
@@ -335,7 +332,7 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
                             ),
                             const SizedBox(height: 12),
 
-                            // Agar match finish ho gaya toh winner batayein, warna buttons dikhayein
+                            // Agar match mukammal ho gaya toh sirf Winner ka badge aayega, Set Room Details nahi
                             if (isCompleted)
                               Container(
                                 width: double.infinity,
