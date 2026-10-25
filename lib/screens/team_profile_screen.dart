@@ -653,7 +653,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               builder: (context, userTeamsSnap) {
                 final userTeams = userTeamsSnap.data ?? [];
                 final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
-                final myTeamId = myLeaderTeams.isNotEmpty ? myLeaderTeams.first.id : (userTeams.isNotEmpty ? userTeams.first.id : '');
 
                 return StreamBuilder<List<Map<String, dynamic>>>(
                   stream: SupabaseService.client.from('active_matches').stream(primaryKey: ['id']),
@@ -1107,7 +1106,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                 ),
                                               ),
                                             ),
-                                            // Owner Kick Option
                                             if (isLeader && !isThisLeader) ...[
                                               const SizedBox(width: 4),
                                               if (isProcessingKick)
