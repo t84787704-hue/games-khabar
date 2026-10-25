@@ -50,7 +50,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 11, vsync: this);
+    _tabController = TabController(length: 13, vsync: this);
     _ensureSampleQueueExists();
   }
 
@@ -210,6 +210,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           const Tab(text: 'Users'),
                           _buildRankVerifyTabTitle(),
                           _buildBlueTickTabTitle(),
+                          const Tab(text: 'UC Requests ⚡'),
+                          const Tab(text: 'UC History 📜'),
                           const Tab(text: 'Posts Moderation'),
                           const Tab(text: 'Team Matches ⚔️'),
                           const Tab(text: 'Reports'),
@@ -230,6 +232,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   _buildUsersTab(),
                   _buildRankVerifyTab(),
                   _buildBlueTickRequestsTab(),
+                  const _AdminUcRequestsTab(),
+                  const _AdminUcHistoryTab(),
                   _buildPostsModerationTab(),
                   const AdminTeamMatchesScreen(),
                   _buildReportsTab(),
@@ -2884,6 +2888,500 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                         }),
                       ],
                     ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ===================== TAB: UC REQUESTS (PENDING) =====================
+class _AdminUcRequestsTab extends StatefulWidget {
+  const _AdminUcRequestsTab();
+
+  @override
+  State<_AdminUcRequestsTab> createState() => _AdminUcRequestsTabState();
+}
+
+class _AdminUcRequestsTabState extends State<_AdminUcRequestsTab> {
+  Future<void> _completeUcRequest(Map<String, dynamic> req) async {
+    final reqId = req['id']?.toString() ?? '';
+    final userId = (req['user_id'] ?? '').toString();
+    final ucAmount = req['uc_amount'] ?? req['amount'] ?? 'UC';
+    final playerId = (req['player_id'] ?? req['character_id'] ?? req['game_id'] ?? 'N/A').toString();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161A22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.bolt_rounded, color: Color(0xFF00FF88)),
+            SizedBox(width: 8),
+            Text('Complete UC Order?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Aapne $ucAmount UC player ID ($playerId) par send kar di hai? Confirm karne par yeh request complete mark ho kar History mein chali jayegi.',
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00FF88),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Sent & Complete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await SupabaseService.client.from('uc_requests').update({
+        'status': 'completed',
+        'completed_at': DateTime.now().toIso8601String(),
+      }).eq('id', reqId);
+
+      if (userId.isNotEmpty) {
+        try {
+          await NotificationService().createNotification(
+            userId: userId,
+            title: 'UC Delivered! ⚡🎉',
+            body: 'Aapki $ucAmount UC aapke PUBG/BGMI account ($playerId) par bhej di gayi hai! Check your in-game mailbox.',
+            type: 'uc_delivered',
+          );
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('UC request ($ucAmount UC) marked Completed & moved to History! 🚀'),
+            backgroundColor: const Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error completing UC request: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.client
+          .from('uc_requests')
+          .stream(primaryKey: ['id']),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+        }
+
+        final all = snapshot.data ?? [];
+        final pending = all.where((r) {
+          final st = (r['status'] ?? 'pending').toString().toLowerCase();
+          return st == 'pending' || st == 'processing';
+        }).toList();
+
+        pending.sort((a, b) {
+          final tA = a['created_at']?.toString() ?? '';
+          final tB = b['created_at']?.toString() ?? '';
+          return tB.compareTo(tA);
+        });
+
+        if (pending.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00FF88).withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.bolt_rounded, color: Color(0xFF00FF88), size: 40),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'No Pending UC Requests',
+                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Sari UC requests complete ho chuki hain!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
+          itemCount: pending.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final req = pending[index];
+            final userName = (req['user_name'] ?? req['username'] ?? 'Player').toString();
+            final playerId = (req['player_id'] ?? req['character_id'] ?? req['game_id'] ?? 'N/A').toString();
+            final ucAmount = req['uc_amount'] ?? req['amount'] ?? 60;
+            final coinsCost = req['coins_cost'] ?? req['coins'] ?? 0;
+            final createdAt = req['created_at']?.toString() ?? '';
+
+            String formattedTime = '';
+            if (createdAt.isNotEmpty) {
+              try {
+                final dt = DateTime.parse(createdAt).toLocal();
+                formattedTime = DateFormat('dd MMM, hh:mm a').format(dt);
+              } catch (_) {
+                formattedTime = createdAt;
+              }
+            }
+
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: ThemeService.card,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFFB800).withOpacity(0.5)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFB800).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.bolt_rounded, color: Color(0xFFFFB800), size: 20),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$ucAmount UC Request',
+                            style: const TextStyle(
+                              color: Color(0xFFFFB800),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFB800).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'PENDING',
+                          style: TextStyle(color: Color(0xFFFFB800), fontWeight: FontWeight.w900, fontSize: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Divider(color: ThemeService.border, height: 1),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text('Player: ', style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
+                      Text(userName, style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 12.5)),
+                      if (formattedTime.isNotEmpty) ...[
+                        const Spacer(),
+                        Text(formattedTime, style: TextStyle(color: ThemeService.textSecondary, fontSize: 11)),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: ThemeService.cardSecondary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.badge_rounded, color: Color(0xFF38BDF8), size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Character ID: ',
+                          style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                        ),
+                        SelectableText(
+                          playerId,
+                          style: const TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontWeight: FontWeight.w900,
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (coinsCost > 0)
+                          Text('$coinsCost 🪙', style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 11.5)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 40,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00FF88),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.check_circle_rounded, size: 18),
+                      label: const Text('Send UC / Mark Complete', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      onPressed: () => _completeUcRequest(req),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ===================== TAB: UC HISTORY (COMPLETED + DELETE) =====================
+class _AdminUcHistoryTab extends StatefulWidget {
+  const _AdminUcHistoryTab();
+
+  @override
+  State<_AdminUcHistoryTab> createState() => _AdminUcHistoryTabState();
+}
+
+class _AdminUcHistoryTabState extends State<_AdminUcHistoryTab> {
+  Future<void> _deleteUcRecord(String reqId, String ucAmount, String playerId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161A22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
+            SizedBox(width: 8),
+            Text('Delete UC Record?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Kya aap is $ucAmount UC (Player ID: $playerId) ke record ko history se permanently delete karna chahte hain?',
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await SupabaseService.client.from('uc_requests').delete().eq('id', reqId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('UC request deleted from history.'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting record: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: SupabaseService.client
+          .from('uc_requests')
+          .stream(primaryKey: ['id']),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+        }
+
+        final all = snapshot.data ?? [];
+        final completed = all.where((r) {
+          final st = (r['status'] ?? '').toString().toLowerCase();
+          return st == 'completed' || st == 'sent';
+        }).toList();
+
+        completed.sort((a, b) {
+          final tA = a['completed_at'] ?? a['created_at'] ?? '';
+          final tB = b['completed_at'] ?? b['created_at'] ?? '';
+          return tB.toString().compareTo(tA.toString());
+        });
+
+        if (completed.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: ThemeService.cardSecondary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.history_rounded, color: ThemeService.textSecondary, size: 40),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'No Completed UC History',
+                    style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Jab aap requests complete karenge to yahan save hongi.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
+          itemCount: completed.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final req = completed[index];
+            final reqId = req['id']?.toString() ?? '';
+            final userName = (req['user_name'] ?? req['username'] ?? 'Player').toString();
+            final playerId = (req['player_id'] ?? req['character_id'] ?? req['game_id'] ?? 'N/A').toString();
+            final ucAmount = req['uc_amount'] ?? req['amount'] ?? 60;
+            final compAt = req['completed_at']?.toString() ?? req['created_at']?.toString() ?? '';
+
+            String formattedTime = '';
+            if (compAt.isNotEmpty) {
+              try {
+                final dt = DateTime.parse(compAt).toLocal();
+                formattedTime = DateFormat('dd MMM, hh:mm a').format(dt);
+              } catch (_) {
+                formattedTime = compAt;
+              }
+            }
+
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: ThemeService.card,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: ThemeService.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$ucAmount UC Completed',
+                            style: const TextStyle(
+                              color: Color(0xFF00FF88),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655), size: 20),
+                        tooltip: 'Delete Record',
+                        onPressed: () => _deleteUcRecord(reqId, '$ucAmount', playerId),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Divider(color: ThemeService.border, height: 1),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text('Player: ', style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
+                      Text(userName, style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+                      const Spacer(),
+                      if (formattedTime.isNotEmpty)
+                        Text(formattedTime, style: TextStyle(color: ThemeService.textSecondary, fontSize: 11)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text('Character ID: ', style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
+                      SelectableText(
+                        playerId,
+                        style: const TextStyle(
+                          color: Color(0xFF38BDF8),
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'monospace',
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             );
