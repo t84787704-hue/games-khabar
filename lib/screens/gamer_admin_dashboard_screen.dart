@@ -3237,8 +3237,7 @@ class _AdminUcHistoryTabState extends State<_AdminUcHistoryTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error deleting record: $e'),
-            backgroundColor: const Color(0xFFFF4655),
-          ),
+            backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
@@ -3695,7 +3694,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       'prize_pool': prize,
                       'max_teams': maxTeams,
                       'current_teams': 0,
-                      'match_time': selectedMatchDateTime.toIso8601String(),
+                      'match_time': selectedMatchDateTime.toUtc().toIso8601String(),
                       'room_id': roomController.text.trim(),
                       'room_password': passController.text.trim(),
                       'status': 'upcoming',
@@ -3721,6 +3720,280 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                   }
                 },
                 child: const Text('Publish Tournament', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ===================== TOURNAMENT EDIT FUNCTION =====================
+  void _openEditTournamentDialog(Map<String, dynamic> item) {
+    final tId = item['id'].toString();
+    final titleController = TextEditingController(text: item['title']?.toString() ?? '');
+    final feeController = TextEditingController(text: (item['entry_fee'] ?? 0).toString());
+    final prizeController = TextEditingController(text: (item['prize_pool'] ?? 0).toString());
+    
+    int maxTeams = (item['max_teams'] is num) ? (item['max_teams'] as num).toInt() : 4;
+    String mode = (item['game_mode'] ?? 'Squad (4v4)').toString();
+    String currentMap = (item['map_name'] ?? 'Erangel').toString();
+    
+    DateTime selectedMatchDateTime;
+    try {
+      selectedMatchDateTime = DateTime.parse(item['match_time'].toString()).toLocal();
+    } catch (_) {
+      selectedMatchDateTime = DateTime.now().add(const Duration(hours: 2));
+    }
+
+    final List<String> availableMaps = [
+      'Erangel',
+      'Livik',
+      'Miramar',
+      'Sanhok',
+      'Vikendi',
+      'Bermuda (Free Fire)',
+      'Purgatory (Free Fire)',
+      'Kalahari (Free Fire)',
+      'Alpine (Free Fire)',
+      'Custom / Other',
+    ];
+
+    String selectedMap = availableMaps.contains(currentMap) ? currentMap : 'Custom / Other';
+    final customMapController = TextEditingController(text: selectedMap == 'Custom / Other' ? currentMap : '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF161A22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.edit_note_rounded, color: Color(0xFF38BDF8)),
+                SizedBox(width: 8),
+                Text('Edit Tournament',
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Tournament Title',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: mode,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Match Mode',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Squad (4v4)', child: Text('Squad (4v4)')),
+                      DropdownMenuItem(value: 'Duo (2v2)', child: Text('Duo (2v2)')),
+                      DropdownMenuItem(value: 'Solo', child: Text('Solo')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDState(() => mode = val);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: selectedMap,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Select Map',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: availableMaps.map((m) {
+                      return DropdownMenuItem(value: m, child: Text(m));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDState(() => selectedMap = val);
+                    },
+                  ),
+                  if (selectedMap == 'Custom / Other') ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: customMapController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: const InputDecoration(
+                        labelText: 'Enter Custom Map Name',
+                        labelStyle: TextStyle(color: Colors.white60),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  InkWell(
+                    onTap: () async {
+                      final pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: selectedMatchDateTime,
+                        firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (pickedDate != null && context.mounted) {
+                        final pickedTime = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(selectedMatchDateTime),
+                        );
+                        if (pickedTime != null) {
+                          setDState(() {
+                            selectedMatchDateTime = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                          });
+                        }
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF262C38),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Match Date & Time', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  DateFormat('dd MMM yyyy, hh:mm a').format(selectedMatchDateTime),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: feeController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Entry Fee 🪙',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: prizeController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Prize Pool 🪙',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<int>(
+                    value: [2, 4, 8, 16, 25].contains(maxTeams) ? maxTeams : 4,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Max Slots / Teams',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 2, child: Text('2 Teams (Final Match)')),
+                      DropdownMenuItem(value: 4, child: Text('4 Teams (Fast Tournament)')),
+                      DropdownMenuItem(value: 8, child: Text('8 Teams')),
+                      DropdownMenuItem(value: 16, child: Text('16 Teams (Classic Squad)')),
+                      DropdownMenuItem(value: 25, child: Text('25 Teams (Full Lobby)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDState(() => maxTeams = val);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF38BDF8),
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: () async {
+                  final title = titleController.text.trim();
+                  if (title.isEmpty) return;
+
+                  final fee = int.tryParse(feeController.text.trim()) ?? 0;
+                  final prize = int.tryParse(prizeController.text.trim()) ?? 0;
+
+                  String finalMapName = selectedMap;
+                  if (selectedMap == 'Custom / Other') {
+                    finalMapName = customMapController.text.trim().isEmpty ? currentMap : customMapController.text.trim();
+                  }
+
+                  try {
+                    await _supabase.from('tournaments').update({
+                      'title': title,
+                      'game_mode': mode,
+                      'map_name': finalMapName,
+                      'entry_fee': fee,
+                      'prize_pool': prize,
+                      'max_teams': maxTeams,
+                      'match_time': selectedMatchDateTime.toUtc().toIso8601String(),
+                    }).eq('id', tId);
+
+                    if (context.mounted) Navigator.pop(ctx);
+                    _loadTournaments();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Tournament Updated Successfully! ✏️'),
+                          backgroundColor: Color(0xFF00FF88),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error updating tournament: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -4346,6 +4619,18 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                                 onPressed: () => _deleteTournament(tId),
                               ),
                               const Spacer(),
+                              // EDIT TOURNAMENT BUTTON
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF00FF88),
+                                  side: const BorderSide(color: Color(0xFF00FF88)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                ),
+                                icon: const Icon(Icons.edit_rounded, size: 14),
+                                label: const Text('Edit', style: TextStyle(fontSize: 11)),
+                                onPressed: () => _openEditTournamentDialog(item),
+                              ),
+                              const SizedBox(width: 8),
                               OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFF38BDF8),
