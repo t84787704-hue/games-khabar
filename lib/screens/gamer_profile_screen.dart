@@ -367,7 +367,7 @@ ${'share_msg_download'.tr(args: [appLink])}
   Widget build(BuildContext context) {
     final currentUid = _authService.currentUid ?? '';
     final targetUid = widget.userId ?? currentUid;
-    final isOwnProfile = currentUid == targetUid;
+    final isOwnProfile = currentUid.isNotEmpty && currentUid == targetUid;
 
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
@@ -544,9 +544,11 @@ ${'share_msg_download'.tr(args: [appLink])}
                               EarlyBirdBannerWidget(userId: user.uid),
                             ],
 
-                            const SizedBox(height: 14),
-
-                            _buildTeamEligibilityCard(user.coins),
+                            // Leader & Member Eligibility Banner sirf apni profile par dikhega
+                            if (isOwnProfile) ...[
+                              const SizedBox(height: 14),
+                              _buildTeamEligibilityCard(user.coins),
+                            ],
 
                             const SizedBox(height: 14),
 
@@ -677,7 +679,7 @@ ${'share_msg_download'.tr(args: [appLink])}
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
-                          // 1. Main Game & Claimed Rank
+                          // 1. Main Game & Claimed Rank (Public)
                           _buildAboutTile(
                             icon: Icons.sports_esports_rounded,
                             iconColor: const Color(0xFF1877F2),
@@ -701,59 +703,57 @@ ${'share_msg_download'.tr(args: [appLink])}
                             ),
                           ),
 
-                          // 2. Character ID / In-game UID
-                          _buildAboutTile(
-                            icon: Icons.badge_outlined,
-                            iconColor: const Color(0xFF00FF88),
-                            title: 'game_uid_label'.tr(),
-                            subtitle: user.gameId.isNotEmpty ? user.gameId : 'Not set',
-                            trailing: IconButton(
-                              icon: const Icon(Icons.copy_rounded, size: 18),
-                              color: ThemeService.textSecondary,
-                              tooltip: 'Copy ID',
-                              onPressed: () {
-                                final text = user.gameId.isNotEmpty ? user.gameId : user.uid;
-                                Clipboard.setData(ClipboardData(text: text));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('ID copied: $text'),
-                                    backgroundColor: const Color(0xFF00FF88),
-                                    duration: const Duration(seconds: 2),
-                                  ),
+                          // 2. Character ID / In-game UID (Locked: Sirf profile owner ko dikhega)
+                          if (isOwnProfile)
+                            _buildAboutTile(
+                              icon: Icons.badge_outlined,
+                              iconColor: const Color(0xFF00FF88),
+                              title: 'game_uid_label'.tr(),
+                              subtitle: user.gameId.isNotEmpty ? user.gameId : 'Not set',
+                              trailing: IconButton(
+                                icon: const Icon(Icons.copy_rounded, size: 18),
+                                color: ThemeService.textSecondary,
+                                tooltip: 'Copy ID',
+                                onPressed: () {
+                                  final text = user.gameId.isNotEmpty ? user.gameId : user.uid;
+                                  Clipboard.setData(ClipboardData(text: text));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('ID copied: $text'),
+                                      backgroundColor: const Color(0xFF00FF88),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+
+                          // 3. G-Coins Balance (Locked: Sirf profile owner ko dikhega)
+                          if (isOwnProfile)
+                            _buildAboutTile(
+                              icon: Icons.monetization_on_rounded,
+                              iconColor: const Color(0xFFFFD700),
+                              title: 'g_coins_label'.tr(),
+                              subtitle: '${NumberFormat('#,###').format(user.coins)} Coins',
+                              trailing: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: ThemeService.cardSecondary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.history_rounded, size: 18, color: Color(0xFFFFD700)),
+                              ),
+                              onTap: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (_) => CoinHistorySheet(userId: user.uid),
                                 );
                               },
                             ),
-                          ),
 
-                          // 3. G-Coins Balance
-                          _buildAboutTile(
-                            icon: Icons.monetization_on_rounded,
-                            iconColor: const Color(0xFFFFD700),
-                            title: 'g_coins_label'.tr(),
-                            subtitle: '${NumberFormat('#,###').format(user.coins)} Coins',
-                            trailing: isOwnProfile
-                                ? Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: ThemeService.cardSecondary,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(Icons.history_rounded, size: 18, color: Color(0xFFFFD700)),
-                                  )
-                                : null,
-                            onTap: isOwnProfile
-                                ? () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      backgroundColor: Colors.transparent,
-                                      builder: (_) => CoinHistorySheet(userId: user.uid),
-                                    );
-                                  }
-                                : null,
-                          ),
-
-                          // 4. eSports Team Eligibility
+                          // 4. eSports Team Eligibility (Public Status)
                           _buildAboutTile(
                             icon: user.coins >= 1000
                                 ? Icons.verified_user_rounded
@@ -773,30 +773,31 @@ ${'share_msg_download'.tr(args: [appLink])}
                                     : 'esports_status_ineligible'.tr(),
                           ),
 
-                          // 5. Squad Referral Code (Invite Code)
-                          _buildAboutTile(
-                            icon: Icons.group_add_rounded,
-                            iconColor: const Color(0xFF38BDF8),
-                            title: 'Squad Invite Code',
-                            subtitle: referralCode,
-                            trailing: IconButton(
-                              icon: const Icon(Icons.copy_rounded, size: 18),
-                              color: const Color(0xFF38BDF8),
-                              tooltip: 'Copy Invite Code',
-                              onPressed: () {
-                                Clipboard.setData(ClipboardData(text: referralCode));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Squad Invite Code copied: $referralCode'),
-                                    backgroundColor: const Color(0xFF38BDF8),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
-                              },
+                          // 5. Squad Referral Code (Locked: Sirf profile owner ko dikhega)
+                          if (isOwnProfile)
+                            _buildAboutTile(
+                              icon: Icons.group_add_rounded,
+                              iconColor: const Color(0xFF38BDF8),
+                              title: 'Squad Invite Code',
+                              subtitle: referralCode,
+                              trailing: IconButton(
+                                icon: const Icon(Icons.copy_rounded, size: 18),
+                                color: const Color(0xFF38BDF8),
+                                tooltip: 'Copy Invite Code',
+                                onPressed: () {
+                                  Clipboard.setData(ClipboardData(text: referralCode));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Squad Invite Code copied: $referralCode'),
+                                      backgroundColor: const Color(0xFF38BDF8),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
 
-                          // 6. Member Since
+                          // 6. Member Since (Public)
                           _buildAboutTile(
                             icon: Icons.calendar_month_rounded,
                             iconColor: Colors.purpleAccent,
