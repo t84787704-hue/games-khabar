@@ -33,7 +33,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   bool _isLoading = true;
   bool _isUploadingProof = false;
   bool _hasShownCelebration = false;
-  bool _isAdmin = false; // Admin check variable
+  bool _isAdmin = false;
   List<Map<String, dynamic>> _registeredTeams = [];
   Map<String, dynamic>? _tournamentData;
   String _winnerTeamName = 'Champions Squad';
@@ -47,7 +47,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     _fetchDetails();
   }
 
-  // Check if the current logged-in user is an Admin
   Future<void> _checkAdminStatus() async {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) return;
@@ -60,37 +59,39 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           .maybeSingle();
 
       if (userRes != null && mounted) {
-        final role = (userRes['role'] ?? '').toString().toLowerCase();
+        final role = (userRes['role'] ?? '').toString().toLowerCase().trim();
         if (role == 'admin') {
-          setState(() {
-            _isAdmin = true;
-          });
+          setState(() => _isAdmin = true);
           return;
         }
       }
 
       final email = currentUser.email?.toLowerCase() ?? '';
       if (email.contains('admin') && mounted) {
-        setState(() {
-          _isAdmin = true;
-        });
+        setState(() => _isAdmin = true);
       }
     } catch (_) {
       final email = currentUser.email?.toLowerCase() ?? '';
       if (email.contains('admin') && mounted) {
-        setState(() {
-          _isAdmin = true;
-        });
+        setState(() => _isAdmin = true);
       }
     }
   }
 
   Future<void> _fetchDetails() async {
+    final tId = (_tournamentData?['id'] ?? widget.tournament['id'] ?? '').toString().trim();
+
+    // Safe check: Agar ID khali ya invalid hai to query na chalayein taake UUID error na aaye
+    if (tId.isEmpty || tId == 'null' || tId.length < 10) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
+
     setState(() => _isLoading = true);
-    final tId = _tournamentData!['id'].toString();
 
     try {
-      // 1. Fetch fresh tournament data
       final tRes = await _supabase
           .from('tournaments')
           .select()
@@ -101,7 +102,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         _tournamentData = Map<String, dynamic>.from(tRes);
       }
 
-      // 2. Fetch registered teams along with squad members
       final regRes = await _supabase
           .from('tournament_registrations')
           .select('id, registered_at, team_id, teams:teams(id, name, logo_url, leader_id, team_members(user_id))')
@@ -110,7 +110,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
       final registeredList = List<Map<String, dynamic>>.from(regRes);
 
-      // Determine Winner Squad Name if completed
       final winnerId = _tournamentData?['winner_team_id']?.toString();
       String resolvedWinner = 'Champions Squad';
       String resolvedRunnerUp = 'Finalist Squad';
@@ -136,7 +135,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           _isLoading = false;
         });
 
-        // Auto trigger celebration dialog if tournament is completed
         final status = (_tournamentData?['status'] ?? '').toString().toLowerCase();
         if (status == 'completed' && !_hasShownCelebration) {
           _hasShownCelebration = true;
@@ -148,9 +146,8 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading details: $e')),
-        );
+        // Error ko quietly handle karein ya snackbar dikhayein
+        debugPrint('Error loading details: $e');
       }
     }
   }
@@ -211,7 +208,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     setState(() => _isUploadingProof = true);
 
     try {
-      final tId = _tournamentData!['id'].toString();
+      final tId = (_tournamentData?['id'] ?? widget.tournament['id']).toString();
       final bytes = await File(picked.path).readAsBytes();
       final ext = picked.path.split('.').last;
       final fileName = 'proof_${tId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
@@ -282,7 +279,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       builder: (context, _, __) {
         final currentUserId = _supabase.auth.currentUser?.id;
 
-        // Check if user is Leader or Member in any registered team & assign slot
         bool isUserInRegisteredSquad = false;
         int assignedSlotNumber = 0;
 
@@ -296,7 +292,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
             if (leaderId == currentUserId || isMember) {
               isUserInRegisteredSquad = true;
-              assignedSlotNumber = i + 2; // Slot 1 host/spectator ka hota hai
+              assignedSlotNumber = i + 2;
               break;
             }
           }
@@ -320,11 +316,13 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         final isCompleted = status.toLowerCase() == 'completed';
 
         String matchTimeStr = 'TBD';
-        if (t['match_time'] != null) {
+        if (t['match_time'] != null && t['match_time'].toString().isNotEmpty) {
           try {
             final parsed = DateTime.parse(t['match_time'].toString()).toLocal();
             matchTimeStr = DateFormat('dd MMM yyyy, hh:mm a').format(parsed);
-          } catch (_) {}
+          } catch (_) {
+            matchTimeStr = t['match_time'].toString();
+          }
         }
 
         return Scaffold(
@@ -341,7 +339,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: ThemeService.textPrimary),
             ),
             actions: [
-              // SIRF ADMIN KO HI BRACKET MANAGE KA ICON DIKHEGA
               if (_isAdmin)
                 IconButton(
                   icon: const Icon(Icons.account_tree_rounded, color: Color(0xFF00FF88)),
@@ -368,7 +365,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header Card
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -444,10 +440,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Match Info Grid
                   Row(
                     children: [
                       Expanded(child: _buildInfoTile(Icons.sports_esports_rounded, 'Mode', gameMode)),
@@ -463,10 +456,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                       Expanded(child: _buildInfoTile(Icons.groups_rounded, 'Slots', '$currentTeams / $maxTeams Teams')),
                     ],
                   ),
-
                   const SizedBox(height: 20),
-
-                  // Room Credentials Section
                   Text(
                     'Custom Room Credentials',
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
@@ -580,8 +570,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 ),
                             ],
                           ),
-
-                          // Assigned Slot Number Banner
                           if (assignedSlotNumber > 0) ...[
                             Divider(color: ThemeService.border, height: 16),
                             Container(
@@ -626,16 +614,12 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         ],
                       ),
                     ),
-
                   const SizedBox(height: 24),
-
-                  // ================= WIN PROOF SUBMISSION & CELEBRATION BLOCK =================
                   Text(
                     'Match Result & Win Proof',
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-
                   if (isCompleted)
                     Container(
                       width: double.infinity,
@@ -859,10 +843,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                       ),
                     ),
-
                   const SizedBox(height: 24),
-
-                  // Registered Squads
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -877,7 +858,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-
                   if (_isLoading)
                     const Center(
                       child: Padding(
