@@ -48,31 +48,33 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
     try {
       if (user != null) {
-        final teamRes = await _supabase
-            .from('teams')
-            .select('id')
-            .eq('leader_id', user.id)
-            .maybeSingle();
+        try {
+          final teamRes = await _supabase
+              .from('teams')
+              .select('id')
+              .eq('leader_id', user.id)
+              .maybeSingle();
 
-        _myTeamId = teamRes?['id']?.toString();
+          _myTeamId = teamRes?['id']?.toString();
 
-        if (_myTeamId != null) {
-          final regRes = await _supabase
-              .from('tournament_registrations')
-              .select('tournament_id')
-              .eq('team_id', _myTeamId!);
+          if (_myTeamId != null) {
+            final regRes = await _supabase
+                .from('tournament_registrations')
+                .select('tournament_id')
+                .eq('team_id', _myTeamId!);
 
-          _registeredTournamentIds.clear();
-          for (var r in regRes) {
-            _registeredTournamentIds.add(r['tournament_id'].toString());
+            _registeredTournamentIds.clear();
+            for (var r in regRes) {
+              _registeredTournamentIds.add(r['tournament_id'].toString());
+            }
           }
-        }
+        } catch (_) {}
       }
 
       final res = await _supabase
           .from('tournaments')
           .select()
-          .order('match_time', ascending: true);
+          .order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
