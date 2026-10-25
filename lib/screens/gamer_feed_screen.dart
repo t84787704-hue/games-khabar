@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// GAMER FEED SCREEN — With Cloudflare R2 Image Upload & Feed View
+// GAMER FEED SCREEN — With Cloudflare R2 Image Upload, Feed View & Live Banner
 // File: lib/screens/gamer_feed_screen.dart
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -34,6 +34,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   String currentUsername = 'user_gamer'.tr();
   String currentAvatarUrl = '';
 
+  // Announcement Banner Data
+  Map<String, dynamic>? _announcement;
+
   static final RegExp _uuidRegex = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
@@ -46,7 +49,28 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
   Future<void> _initScreen() async {
     await _loadCurrentUserInfo();
-    await _loadFeed();
+    await Future.wait([
+      _loadFeed(),
+      _loadAnnouncement(),
+    ]);
+  }
+
+  Future<void> _loadAnnouncement() async {
+    try {
+      final res = await SupabaseService.client
+          .from('app_announcements')
+          .select()
+          .eq('id', 'home_banner')
+          .maybeSingle();
+
+      if (mounted) {
+        setState(() {
+          _announcement = res;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching announcement banner: $e');
+    }
   }
 
   void _openImagePreview(BuildContext context, String imageUrl) {
@@ -739,7 +763,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                   }
 
                                   if (mounted) {
-                                    // Instantly show at top of feed
                                     setState(() {
                                       posts.removeWhere((p) => p['id'] == newPost['id']);
                                       posts.insert(0, newPost);
@@ -864,6 +887,112 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
     );
   }
 
+  // ═══════════════ UPCOMING TOURNAMENT BANNER WIDGET ═══════════════
+  Widget _buildTournamentAnnouncementBanner() {
+    if (_announcement == null) return const SizedBox.shrink();
+
+    final bool isActive = _announcement!['is_active'] == true;
+    if (!isActive) return const SizedBox.shrink();
+
+    final title = (_announcement!['title'] ?? 'Upcoming Tournament!').toString();
+    final message = (_announcement!['message'] ?? '').toString();
+
+    if (title.isEmpty && message.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF161A22),
+            const Color(0xFF00FF88).withOpacity(0.12),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF00FF88).withOpacity(0.5),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00FF88).withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00FF88).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.campaign_rounded,
+              color: Color(0xFF00FF88),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFD700).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.6)),
+                      ),
+                      child: const Text(
+                        'ANNOUNCEMENT 🏆',
+                        style: TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (message.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    message,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.85),
+                      fontSize: 13,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatTimeAgo(dynamic raw) {
     if (raw == null) return 'time_just_now'.tr();
     DateTime? dt;
@@ -949,13 +1078,24 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
             ],
           ),
           body: RefreshIndicator(
-            onRefresh: _loadFeed,
+            onRefresh: () async {
+              await Future.wait([
+                _loadFeed(),
+                _loadAnnouncement(),
+              ]);
+            },
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
-                    itemCount: posts.length + 1,
+                    itemCount: posts.length + 2,
                     itemBuilder: (context, index) {
+                      // Index 0: Announcement Banner
                       if (index == 0) {
+                        return _buildTournamentAnnouncementBanner();
+                      }
+
+                      // Index 1: Create Post Input Card
+                      if (index == 1) {
                         return InkWell(
                           onTap: _showCreatePost,
                           borderRadius: BorderRadius.circular(10),
@@ -999,7 +1139,8 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                         );
                       }
 
-                      final post = posts[index - 1];
+                      // Index 2+: Feed Posts
+                      final post = posts[index - 2];
                       final postUserId = post['user_id']?.toString() ?? '';
                       final userProfile = userProfiles[postUserId];
 
@@ -1009,7 +1150,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                       final postId = post['id']?.toString() ?? '';
                       final isLiked = likedPostIds.contains(postId);
                       
-                      // Support both image_url and media_url columns if present
                       final imageUrl = (post['image_url'] ?? post['media_url'] ?? '').toString().trim();
                       final content = (post['content'] ?? '').toString();
                       final likesCount = post['likes_count'] ?? 0;
