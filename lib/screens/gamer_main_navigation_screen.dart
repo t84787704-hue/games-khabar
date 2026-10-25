@@ -181,7 +181,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                         _buildNavItem(
                           index: 0,
                           icon: Icons.home_rounded,
-                          label: 'nav_feed'.tr(),
+                          label: 'Feed',
                           isSelected: _currentIndex == 0,
                           isDark: isDark,
                         ),
@@ -195,21 +195,21 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                         _buildNavItem(
                           index: 2,
                           icon: Icons.shield_rounded,
-                          label: 'nav_teams'.tr(),
+                          label: 'Teams',
                           isSelected: _currentIndex == 2,
                           isDark: isDark,
                         ),
                         _buildNavItem(
                           index: 3,
                           icon: Icons.chat_bubble_rounded,
-                          label: 'nav_messages'.tr(),
+                          label: 'Messages',
                           isSelected: _currentIndex == 3,
                           isDark: isDark,
                         ),
                         _buildNavItem(
                           index: 4,
                           icon: Icons.person_rounded,
-                          label: 'nav_profile'.tr(),
+                          label: 'Profile',
                           isSelected: _currentIndex == 4,
                           isDark: isDark,
                         ),
@@ -217,7 +217,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           _buildNavItem(
                             index: 5,
                             icon: Icons.admin_panel_settings_rounded,
-                            label: 'nav_admin'.tr(),
+                            label: 'Admin',
                             isSelected: _currentIndex == 5,
                             activeColor: const Color(0xFF1877F2),
                             isDark: isDark,
