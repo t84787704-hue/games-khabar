@@ -219,13 +219,28 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
     setState(() => _processingKickUids.add(memberId));
     try {
-      final ok = await _teamService.removeMember(teamId: team.id, memberId: memberId);
+      final teamUuid = SupabaseService.toUuid(team.id);
+
+      await SupabaseService.client
+          .from('team_members')
+          .delete()
+          .eq('team_id', teamUuid)
+          .eq('user_id', memberId);
+
+      final updatedMembers = List<String>.from(team.members)..remove(memberId);
+      await SupabaseService.client
+          .from('teams')
+          .update({
+            'members': updatedMembers,
+            'member_count': updatedMembers.length,
+          })
+          .eq('id', teamUuid);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok ? '$memberName has been removed from the team' : 'Failed to kick member'),
-            backgroundColor: ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
+            content: Text('$memberName has been removed from the team'),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
       }
@@ -278,12 +293,28 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
     setState(() => _isActionLoading = true);
     try {
-      final ok = await _teamService.removeMember(teamId: team.id, memberId: currentUid);
+      final teamUuid = SupabaseService.toUuid(team.id);
+
+      await SupabaseService.client
+          .from('team_members')
+          .delete()
+          .eq('team_id', teamUuid)
+          .eq('user_id', currentUid);
+
+      final updatedMembers = List<String>.from(team.members)..remove(currentUid);
+      await SupabaseService.client
+          .from('teams')
+          .update({
+            'members': updatedMembers,
+            'member_count': updatedMembers.length,
+          })
+          .eq('id', teamUuid);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok ? 'You have left ${team.name}' : 'Failed to leave team'),
-            backgroundColor: ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
+            content: Text('You have left ${team.name}'),
+            backgroundColor: const Color(0xFFFF4655),
           ),
         );
         Navigator.pop(context);
