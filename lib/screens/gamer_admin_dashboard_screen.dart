@@ -2438,7 +2438,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: ChangeTracker.center,
                 children: [
                   const Icon(Icons.error_outline_rounded,
                       color: Color(0xFFFF4655), size: 48),
@@ -2455,9 +2455,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           color: ThemeService.textSecondary, fontSize: 12)),
                 ],
               ),
-            ),
-          );
-        }
+            );
+          }
 
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -3694,7 +3693,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       'prize_pool': prize,
                       'max_teams': maxTeams,
                       'current_teams': 0,
-                      'match_time': selectedMatchDateTime.toUtc().toIso8601String(),
+                      'match_time': selectedMatchDateTime.toIso8601String(),
                       'room_id': roomController.text.trim(),
                       'room_password': passController.text.trim(),
                       'status': 'upcoming',
@@ -3971,7 +3970,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       'entry_fee': fee,
                       'prize_pool': prize,
                       'max_teams': maxTeams,
-                      'match_time': selectedMatchDateTime.toUtc().toIso8601String(),
+                      'match_time': selectedMatchDateTime.toIso8601String(),
                     }).eq('id', tId);
 
                     if (context.mounted) Navigator.pop(ctx);
