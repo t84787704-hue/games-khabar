@@ -2946,6 +2946,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
     int maxTeams = 4;
     String mode = 'Squad (4v4)';
     String selectedMap = 'Erangel';
+    DateTime selectedMatchDateTime = DateTime.now().add(const Duration(hours: 2));
 
     final List<String> availableMaps = [
       'Erangel',
@@ -3032,6 +3033,62 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 10),
+                  InkWell(
+                    onTap: () async {
+                      final pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: selectedMatchDateTime,
+                        firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (pickedDate != null && context.mounted) {
+                        final pickedTime = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(selectedMatchDateTime),
+                        );
+                        if (pickedTime != null) {
+                          setDState(() {
+                            selectedMatchDateTime = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                          });
+                        }
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF262C38),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF00FF88), size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Match Date & Time', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  DateFormat('dd MMM yyyy, hh:mm a').format(selectedMatchDateTime),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -3140,7 +3197,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       'prize_pool': prize,
                       'max_teams': maxTeams,
                       'current_teams': 0,
-                      'match_time': DateTime.now().add(const Duration(hours: 24)).toIso8601String(),
+                      'match_time': selectedMatchDateTime.toIso8601String(),
                       'room_id': roomController.text.trim(),
                       'room_password': passController.text.trim(),
                       'status': 'upcoming',
@@ -3368,7 +3425,6 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
       return;
     }
 
-    // Auto select submitted team if proof was uploaded
     final currentTourney = _tournaments.firstWhere((t) => t['id'].toString() == tournamentId, orElse: () => {});
     final proofTeamId = (currentTourney['proof_team_id'] ?? currentTourney['submitted_team_id'])?.toString();
 
