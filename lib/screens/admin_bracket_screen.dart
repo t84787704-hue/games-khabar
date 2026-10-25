@@ -13,6 +13,7 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
   final supabase = Supabase.instance.client;
   List<Map<String, dynamic>> matches = [];
   bool isLoading = true;
+  bool showFullHistory = false; // By default sirf ongoing active round dikhega
 
   @override
   void initState() {
@@ -20,7 +21,7 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
     fetchMatches();
   }
 
-  // 1. Matches load karne ka function (Updated with explicit foreign keys)
+  // 1. Matches load karne ka function
   Future<void> fetchMatches() async {
     setState(() => isLoading = true);
     try {
@@ -116,7 +117,46 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
     }
   }
 
-  // Credentials input karne ka dialog
+  // Active Stage Filter: Quarter -> Semi -> Final
+  List<Map<String, dynamic>> _getActiveMatches() {
+    if (showFullHistory) return matches;
+
+    // Check agar Final bana hua hai aur pending/ongoing hai
+    final finalMatches = matches.where((m) {
+      final round = (m['round_name'] ?? '').toString().toLowerCase();
+      return round.contains('final') && !round.contains('semi') && !round.contains('quarter');
+    }).toList();
+
+    if (finalMatches.isNotEmpty) {
+      return finalMatches; // Sirf Final ki 2 teams dikhao
+    }
+
+    // Check agar Semi-Finals bane hue hain aur pending/ongoing hain
+    final semiMatches = matches.where((m) {
+      final round = (m['round_name'] ?? '').toString().toLowerCase();
+      return round.contains('semi');
+    }).toList();
+
+    if (semiMatches.isNotEmpty) {
+      final bool semiAllDone = semiMatches.every((m) => m['status'] == 'completed');
+      if (!semiAllDone) {
+        return semiMatches; // Sirf Semi-Finals ki 4 teams dikhao
+      }
+    }
+
+    // Agar na Final bana hai na Semi, toh Quarter-Finals dikhao
+    final quarterMatches = matches.where((m) {
+      final round = (m['round_name'] ?? '').toString().toLowerCase();
+      return round.contains('quarter');
+    }).toList();
+
+    if (quarterMatches.isNotEmpty) {
+      return quarterMatches; // Sirf Quarter-Finals ki 8 teams dikhao
+    }
+
+    return matches;
+  }
+
   void showRoomDialog(String matchId, String? currentRoom, String? currentPass) {
     final roomController = TextEditingController(text: currentRoom ?? '');
     final passController = TextEditingController(text: currentPass ?? '');
@@ -124,31 +164,46 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Set Free Fire Room Details'),
+        backgroundColor: const Color(0xFF161A22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Set Match Room Details', style: TextStyle(color: Colors.white, fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: roomController,
-              decoration: const InputDecoration(labelText: 'Room ID'),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Room ID',
+                labelStyle: TextStyle(color: Colors.white60),
+              ),
             ),
+            const SizedBox(height: 10),
             TextField(
               controller: passController,
-              decoration: const InputDecoration(labelText: 'Room Password'),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Room Password',
+                labelStyle: TextStyle(color: Colors.white60),
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00FF88),
+              foregroundColor: Colors.black,
+            ),
             onPressed: () {
               Navigator.pop(ctx);
               updateRoomCredentials(matchId, roomController.text.trim(), passController.text.trim());
             },
-            child: const Text('Save'),
+            child: const Text('Save Room', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -157,71 +212,184 @@ class _AdminBracketScreenState extends State<AdminBracketScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final displayMatches = _getActiveMatches();
+
     return Scaffold(
+      backgroundColor: const Color(0xFF0B0F14),
       appBar: AppBar(
-        title: const Text('Tournament Bracket Admin'),
+        backgroundColor: const Color(0xFF161A22),
+        elevation: 0,
+        title: const Text('Tournament Bracket Admin', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(
+              showFullHistory ? Icons.visibility_off_rounded : Icons.history_rounded,
+              color: const Color(0xFF38BDF8),
+            ),
+            tooltip: showFullHistory ? 'Hide Previous Rounds' : 'View Full Bracket History',
+            onPressed: () {
+              setState(() => showFullHistory = !showFullHistory);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF00FF88)),
             onPressed: fetchMatches,
           )
         ],
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))
           : matches.isEmpty
               ? Center(
-                  child: ElevatedButton(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00FF88),
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    icon: const Icon(Icons.sports_esports_rounded),
                     onPressed: generateQuarterFinals,
-                    child: const Text('Generate 8-Team Quarter Finals'),
+                    label: const Text('Generate 8-Team Quarter Finals', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 )
               : ListView.builder(
-                  itemCount: matches.length,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  itemCount: displayMatches.length,
                   itemBuilder: (ctx, index) {
-                    final match = matches[index];
+                    final match = displayMatches[index];
                     final team1 = match['team1']?['name'] ?? 'TBD';
                     final team2 = match['team2']?['name'] ?? 'TBD';
-                    final team1Id = match['team1']?['id'];
-                    final team2Id = match['team2']?['id'];
-                    final winnerId = match['winner_team_id'];
+                    final team1Id = match['team1']?['id']?.toString();
+                    final team2Id = match['team2']?['id']?.toString();
+                    final winnerId = match['winner_team_id']?.toString();
+                    final isCompleted = match['status'] == 'completed' || winnerId != null;
+
+                    String winnerName = '';
+                    if (winnerId != null) {
+                      if (winnerId == team1Id) winnerName = team1;
+                      if (winnerId == team2Id) winnerName = team2;
+                    }
 
                     return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      color: const Color(0xFF161A22),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color: isCompleted ? Colors.white10 : const Color(0xFF00FF88).withOpacity(0.4),
+                        ),
+                      ),
+                      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       child: Padding(
-                        padding: const EdgeInsets.all(12.0),
+                        padding: const EdgeInsets.all(14.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '${match['round_name']} - Match ${match['match_number']}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            const Divider(),
-                            Text('Team 1: $team1', style: TextStyle(color: winnerId == team1Id ? Colors.green : Colors.black)),
-                            Text('Team 2: $team2', style: TextStyle(color: winnerId == team2Id ? Colors.green : Colors.black)),
-                            const SizedBox(height: 8),
-                            Text('Room ID: ${match['room_id'] ?? 'Not Set'} | Pass: ${match['room_password'] ?? 'Not Set'}'),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                ElevatedButton(
-                                  onPressed: () => showRoomDialog(match['id'], match['room_id'], match['room_password']),
-                                  child: const Text('Set Room Details'),
+                                Text(
+                                  '${match['round_name']} - Match ${match['match_number']}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                  ),
                                 ),
-                                if (match['status'] != 'completed' && team1Id != null && team2Id != null) ...[
-                                  OutlinedButton(
-                                    onPressed: () => declareWinner(match['id'], team1Id),
-                                    child: Text('$team1 Won'),
+                                if (isCompleted)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00FF88).withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
+                                    ),
+                                    child: const Text(
+                                      'FINISHED',
+                                      style: TextStyle(color: Color(0xFF00FF88), fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
                                   ),
-                                  OutlinedButton(
-                                    onPressed: () => declareWinner(match['id'], team2Id),
-                                    child: Text('$team2 Won'),
-                                  ),
-                                ],
                               ],
-                            )
+                            ),
+                            const Divider(color: Colors.white12, height: 16),
+                            Text(
+                              'Team 1: $team1',
+                              style: TextStyle(
+                                color: winnerId == team1Id ? const Color(0xFF00FF88) : Colors.white70,
+                                fontWeight: winnerId == team1Id ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Team 2: $team2',
+                              style: TextStyle(
+                                color: winnerId == team2Id ? const Color(0xFF00FF88) : Colors.white70,
+                                fontWeight: winnerId == team2Id ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Room ID: ${match['room_id'] ?? 'Not Set'} | Pass: ${match['room_password'] ?? 'Not Set'}',
+                              style: const TextStyle(color: Colors.white54, fontSize: 12, fontFamily: 'monospace'),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Agar match finish ho gaya toh winner batayein, warna buttons dikhayein
+                            if (isCompleted)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.04),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Winner: $winnerName',
+                                  style: const TextStyle(
+                                    color: Color(0xFF00FF88),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              )
+                            else
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: [
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF38BDF8),
+                                      foregroundColor: Colors.black,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    ),
+                                    icon: const Icon(Icons.vpn_key_rounded, size: 14),
+                                    onPressed: () => showRoomDialog(match['id'], match['room_id'], match['room_password']),
+                                    label: const Text('Set Room Details', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ),
+                                  if (team1Id != null)
+                                    OutlinedButton(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF00FF88),
+                                        side: const BorderSide(color: Color(0xFF00FF88)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      ),
+                                      onPressed: () => declareWinner(match['id'], team1Id),
+                                      child: Text('$team1 Won', style: const TextStyle(fontSize: 11)),
+                                    ),
+                                  if (team2Id != null)
+                                    OutlinedButton(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF00FF88),
+                                        side: const BorderSide(color: Color(0xFF00FF88)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      ),
+                                      onPressed: () => declareWinner(match['id'], team2Id),
+                                      child: Text('$team2 Won', style: const TextStyle(fontSize: 11)),
+                                    ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
