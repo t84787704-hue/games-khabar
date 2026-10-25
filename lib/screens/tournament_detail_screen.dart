@@ -33,6 +33,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   bool _isLoading = true;
   bool _isUploadingProof = false;
   bool _hasShownCelebration = false;
+  bool _isAdmin = false; // Admin check variable
   List<Map<String, dynamic>> _registeredTeams = [];
   Map<String, dynamic>? _tournamentData;
   String _winnerTeamName = 'Champions Squad';
@@ -42,7 +43,31 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   void initState() {
     super.initState();
     _tournamentData = widget.tournament;
+    _checkAdminStatus();
     _fetchDetails();
+  }
+
+  // Check if the current logged-in user is an Admin
+  Future<void> _checkAdminStatus() async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) return;
+
+    try {
+      final userRes = await _supabase
+          .from('users')
+          .select('role')
+          .eq('id', currentUserId)
+          .maybeSingle();
+
+      if (userRes != null && mounted) {
+        final role = (userRes['role'] ?? '').toString().toLowerCase();
+        setState(() {
+          _isAdmin = role == 'admin';
+        });
+      }
+    } catch (_) {
+      // Ignore or handle silently
+    }
   }
 
   Future<void> _fetchDetails() async {
@@ -301,19 +326,21 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: ThemeService.textPrimary),
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.account_tree_rounded, color: Color(0xFF00FF88)),
-                tooltip: 'Manage Tournament Bracket',
-                onPressed: () {
-                  final tId = (_tournamentData?['id'] ?? widget.tournament['id']).toString();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AdminBracketScreen(tournamentId: tId),
-                    ),
-                  );
-                },
-              ),
+              // SIRF ADMIN KO HI BRACKET MANAGE KA ICON DIKHEGA
+              if (_isAdmin)
+                IconButton(
+                  icon: const Icon(Icons.account_tree_rounded, color: Color(0xFF00FF88)),
+                  tooltip: 'Manage Tournament Bracket',
+                  onPressed: () {
+                    final tId = (_tournamentData?['id'] ?? widget.tournament['id']).toString();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AdminBracketScreen(tournamentId: tId),
+                      ),
+                    );
+                  },
+                ),
             ],
           ),
           body: RefreshIndicator(
