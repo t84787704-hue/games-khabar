@@ -228,7 +228,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               body: TabBarView(
                 controller: _tabController,
                 children: [
-                  const _AdminTournamentsTab(),
+                  _AdminTournamentsTab(),
                   _buildUsersTab(),
                   _buildRankVerifyTab(),
                   _buildBlueTickRequestsTab(),
@@ -2717,7 +2717,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
 
   // ===================== TAB 7: COINS =====================
   Widget _buildCoinsTab() {
-    return const _AdminCoinsVaultTab();
+    return _AdminCoinsVaultTab();
   }
 
   // ===================== TAB 8: REFERRALS TRACKER =====================
@@ -3387,6 +3387,2073 @@ class _AdminUcHistoryTabState extends State<_AdminUcHistoryTab> {
           },
         );
       },
+    );
+  }
+}
+
+// ===================== TAB 0: TOURNAMENTS ADMIN CONTROLLER =====================
+class _AdminTournamentsTab extends StatefulWidget {
+  const _AdminTournamentsTab();
+
+  @override
+  State<_AdminTournamentsTab> createState() => _AdminTournamentsTabState();
+}
+
+class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
+  final SupabaseClient _supabase = SupabaseService.client;
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _tournaments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTournaments();
+  }
+
+  Future<void> _loadTournaments() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await _supabase
+          .from('tournaments')
+          .select()
+          .order('created_at', ascending: false);
+      if (mounted) {
+        setState(() {
+          _tournaments = List<Map<String, dynamic>>.from(res);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading tournaments: $e')),
+        );
+      }
+    }
+  }
+
+  void _openCreateTournamentDialog() {
+    final titleController = TextEditingController();
+    final customMapController = TextEditingController();
+    final feeController = TextEditingController(text: '50');
+    final prizeController = TextEditingController(text: '500');
+    final roomController = TextEditingController();
+    final passController = TextEditingController();
+    int maxTeams = 4;
+    String mode = 'Squad (4v4)';
+    String selectedMap = 'Erangel';
+    DateTime selectedMatchDateTime = DateTime.now().add(const Duration(hours: 2));
+
+    final List<String> availableMaps = [
+      'Erangel',
+      'Livik',
+      'Miramar',
+      'Sanhok',
+      'Vikendi',
+      'Bermuda (Free Fire)',
+      'Purgatory (Free Fire)',
+      'Kalahari (Free Fire)',
+      'Alpine (Free Fire)',
+      'Custom / Other',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF161A22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.emoji_events_rounded, color: Color(0xFF00FF88)),
+                SizedBox(width: 8),
+                Text('Create Tournament',
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Tournament Title',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: mode,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Match Mode',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Squad (4v4)', child: Text('Squad (4v4)')),
+                      DropdownMenuItem(value: 'Duo (2v2)', child: Text('Duo (2v2)')),
+                      DropdownMenuItem(value: 'Solo', child: Text('Solo')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDState(() => mode = val);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: selectedMap,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Select Map',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: availableMaps.map((m) {
+                      return DropdownMenuItem(value: m, child: Text(m));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDState(() => selectedMap = val);
+                    },
+                  ),
+                  if (selectedMap == 'Custom / Other') ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: customMapController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: const InputDecoration(
+                        labelText: 'Enter Custom Map Name',
+                        labelStyle: TextStyle(color: Colors.white60),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  InkWell(
+                    onTap: () async {
+                      final pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: selectedMatchDateTime,
+                        firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (pickedDate != null && context.mounted) {
+                        final pickedTime = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(selectedMatchDateTime),
+                        );
+                        if (pickedTime != null) {
+                          setDState(() {
+                            selectedMatchDateTime = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                          });
+                        }
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF262C38),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF00FF88), size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Match Date & Time', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  DateFormat('dd MMM yyyy, hh:mm a').format(selectedMatchDateTime),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: feeController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Entry Fee 🪙',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: prizeController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Prize Pool 🪙',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<int>(
+                    value: maxTeams,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Max Slots / Teams',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 2, child: Text('2 Teams (Final Match)')),
+                      DropdownMenuItem(value: 4, child: Text('4 Teams (Fast Tournament)')),
+                      DropdownMenuItem(value: 8, child: Text('8 Teams')),
+                      DropdownMenuItem(value: 16, child: Text('16 Teams (Classic Squad)')),
+                      DropdownMenuItem(value: 25, child: Text('25 Teams (Full Lobby)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDState(() => maxTeams = val);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: roomController,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Room ID (optional)',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: passController,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Room Pass (optional)',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00FF88),
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: () async {
+                  final title = titleController.text.trim();
+                  if (title.isEmpty) return;
+
+                  final fee = int.tryParse(feeController.text.trim()) ?? 0;
+                  final prize = int.tryParse(prizeController.text.trim()) ?? 0;
+
+                  String finalMapName = selectedMap;
+                  if (selectedMap == 'Custom / Other') {
+                    finalMapName = customMapController.text.trim().isEmpty ? 'Erangel' : customMapController.text.trim();
+                  }
+
+                  try {
+                    await _supabase.from('tournaments').insert({
+                      'title': title,
+                      'game_mode': mode,
+                      'map_name': finalMapName,
+                      'entry_fee': fee,
+                      'prize_pool': prize,
+                      'max_teams': maxTeams,
+                      'current_teams': 0,
+                      'match_time': selectedMatchDateTime.toIso8601String(),
+                      'room_id': roomController.text.trim(),
+                      'room_password': passController.text.trim(),
+                      'status': 'upcoming',
+                    });
+
+                    if (context.mounted) Navigator.pop(ctx);
+                    _loadTournaments();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Tournament Created Successfully! 🎉'),
+                          backgroundColor: Color(0xFF00FF88),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error creating tournament: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Publish Tournament', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ===================== TOURNAMENT EDIT FUNCTION =====================
+  void _openEditTournamentDialog(Map<String, dynamic> item) {
+    final tId = item['id'].toString();
+    final titleController = TextEditingController(text: item['title']?.toString() ?? '');
+    final feeController = TextEditingController(text: (item['entry_fee'] ?? 0).toString());
+    final prizeController = TextEditingController(text: (item['prize_pool'] ?? 0).toString());
+    
+    int maxTeams = (item['max_teams'] is num) ? (item['max_teams'] as num).toInt() : 4;
+    String mode = (item['game_mode'] ?? 'Squad (4v4)').toString();
+    String currentMap = (item['map_name'] ?? 'Erangel').toString();
+    
+    DateTime selectedMatchDateTime;
+    try {
+      selectedMatchDateTime = DateTime.parse(item['match_time'].toString()).toLocal();
+    } catch (_) {
+      selectedMatchDateTime = DateTime.now().add(const Duration(hours: 2));
+    }
+
+    final List<String> availableMaps = [
+      'Erangel',
+      'Livik',
+      'Miramar',
+      'Sanhok',
+      'Vikendi',
+      'Bermuda (Free Fire)',
+      'Purgatory (Free Fire)',
+      'Kalahari (Free Fire)',
+      'Alpine (Free Fire)',
+      'Custom / Other',
+    ];
+
+    String selectedMap = availableMaps.contains(currentMap) ? currentMap : 'Custom / Other';
+    final customMapController = TextEditingController(text: selectedMap == 'Custom / Other' ? currentMap : '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF161A22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.edit_note_rounded, color: Color(0xFF38BDF8)),
+                SizedBox(width: 8),
+                Text('Edit Tournament',
+                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Tournament Title',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: mode,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Match Mode',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Squad (4v4)', child: Text('Squad (4v4)')),
+                      DropdownMenuItem(value: 'Duo (2v2)', child: Text('Duo (2v2)')),
+                      DropdownMenuItem(value: 'Solo', child: Text('Solo')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDState(() => mode = val);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: selectedMap,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Select Map',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: availableMaps.map((m) {
+                      return DropdownMenuItem(value: m, child: Text(m));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDState(() => selectedMap = val);
+                    },
+                  ),
+                  if (selectedMap == 'Custom / Other') ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: customMapController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: const InputDecoration(
+                        labelText: 'Enter Custom Map Name',
+                        labelStyle: TextStyle(color: Colors.white60),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  InkWell(
+                    onTap: () async {
+                      final pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: selectedMatchDateTime,
+                        firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (pickedDate != null && context.mounted) {
+                        final pickedTime = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(selectedMatchDateTime),
+                        );
+                        if (pickedTime != null) {
+                          setDState(() {
+                            selectedMatchDateTime = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                          });
+                        }
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF262C38),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Match Date & Time', style: TextStyle(color: Colors.white60, fontSize: 10.5)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  DateFormat('dd MMM yyyy, hh:mm a').format(selectedMatchDateTime),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: feeController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Entry Fee 🪙',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: prizeController,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: const InputDecoration(
+                            labelText: 'Prize Pool 🪙',
+                            labelStyle: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<int>(
+                    value: [2, 4, 8, 16, 25].contains(maxTeams) ? maxTeams : 4,
+                    dropdownColor: const Color(0xFF161A22),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: 'Max Slots / Teams',
+                      labelStyle: TextStyle(color: Colors.white60),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 2, child: Text('2 Teams (Final Match)')),
+                      DropdownMenuItem(value: 4, child: Text('4 Teams (Fast Tournament)')),
+                      DropdownMenuItem(value: 8, child: Text('8 Teams')),
+                      DropdownMenuItem(value: 16, child: Text('16 Teams (Classic Squad)')),
+                      DropdownMenuItem(value: 25, child: Text('25 Teams (Full Lobby)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDState(() => maxTeams = val);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF38BDF8),
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: () async {
+                  final title = titleController.text.trim();
+                  if (title.isEmpty) return;
+
+                  final fee = int.tryParse(feeController.text.trim()) ?? 0;
+                  final prize = int.tryParse(prizeController.text.trim()) ?? 0;
+
+                  String finalMapName = selectedMap;
+                  if (selectedMap == 'Custom / Other') {
+                    finalMapName = customMapController.text.trim().isEmpty ? currentMap : customMapController.text.trim();
+                  }
+
+                  try {
+                    await _supabase.from('tournaments').update({
+                      'title': title,
+                      'game_mode': mode,
+                      'map_name': finalMapName,
+                      'entry_fee': fee,
+                      'prize_pool': prize,
+                      'max_teams': maxTeams,
+                      'match_time': selectedMatchDateTime.toIso8601String(),
+                    }).eq('id', tId);
+
+                    if (context.mounted) Navigator.pop(ctx);
+                    _loadTournaments();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Tournament Updated Successfully! ✏️'),
+                          backgroundColor: Color(0xFF00FF88),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error updating tournament: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _openRoomCredentialsDialog(String tournamentId, String oldId, String oldPass) {
+    final idController = TextEditingController(text: oldId);
+    final passController = TextEditingController(text: oldPass);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161A22),
+        title: const Text('Update Room Credentials', style: TextStyle(color: Colors.white, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: idController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Custom Room ID', labelStyle: TextStyle(color: Colors.white70)),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: passController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Room Password', labelStyle: TextStyle(color: Colors.white70)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.white60))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF88), foregroundColor: Colors.black),
+            onPressed: () async {
+              await _supabase.from('tournaments').update({
+                'room_id': idController.text.trim(),
+                'room_password': passController.text.trim(),
+              }).eq('id', tournamentId);
+
+              if (context.mounted) Navigator.pop(ctx);
+              _loadTournaments();
+            },
+            child: const Text('Save Credentials'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openRejectProofDialog(String tournamentId, String? selectedTeamId) {
+    final reasonController = TextEditingController();
+    final List<String> quickReasons = [
+      'Fake Victory Screenshot',
+      'Match Time Mismatch',
+      'Wrong Room/Lobby',
+      'Blurry / Incomplete Proof',
+      'Rules Violation Detected',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF161A22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.cancel_rounded, color: Color(0xFFFF4655)),
+                SizedBox(width: 8),
+                Text('Reject Win Proof', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Select or write a clear rejection reason for the squad leader:',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: quickReasons.map((r) {
+                      final isSelected = reasonController.text == r;
+                      return ActionChip(
+                        label: Text(r, style: TextStyle(color: isSelected ? Colors.black : Colors.white70, fontSize: 11)),
+                        backgroundColor: isSelected ? const Color(0xFFFF4655) : const Color(0xFF262C38),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        onPressed: () {
+                          setDState(() => reasonController.text = r);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Enter custom rejection explanation...',
+                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                      filled: true,
+                      fillColor: const Color(0xFF262C38),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655), foregroundColor: Colors.white),
+                onPressed: () async {
+                  final finalReason = reasonController.text.trim().isNotEmpty
+                      ? reasonController.text.trim()
+                      : 'Proof rejected due to invalid match outcome.';
+
+                  try {
+                    await _supabase.from('tournaments').update({
+                      'proof_status': 'rejected',
+                      'rejection_reason': finalReason,
+                      'proof_url': null,
+                    }).eq('id', tournamentId);
+
+                    if (selectedTeamId != null && selectedTeamId.isNotEmpty) {
+                      final teamData = await _supabase
+                          .from('teams')
+                          .select('leader_id, name')
+                          .eq('id', selectedTeamId)
+                          .maybeSingle();
+
+                      final leaderId = teamData?['leader_id']?.toString();
+                      if (leaderId != null && leaderId.isNotEmpty) {
+                        try {
+                          await _supabase.from('notifications').insert({
+                            'user_id': leaderId,
+                            'title': 'Match Proof Rejected ⚠️',
+                            'body': 'Your tournament win proof was rejected: "$finalReason". Please contact support if this is a mistake.',
+                            'type': 'tournament_proof_rejected',
+                            'data': {'tournament_id': tournamentId},
+                            'created_at': DateTime.now().toIso8601String(),
+                            'is_read': false,
+                          });
+                        } catch (_) {}
+                      }
+                    }
+
+                    if (context.mounted) Navigator.pop(ctx);
+                    _loadTournaments();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Proof Rejected & Leader Notified! ⚠️'),
+                          backgroundColor: Color(0xFFFF4655),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Reject failed: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Confirm Reject', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _openDeclareWinnerDialog(String tournamentId, int prizePool) async {
+    final regRes = await _supabase
+        .from('tournament_registrations')
+        .select('team_id, teams:teams(id, name, leader_id, points, wins)')
+        .eq('tournament_id', tournamentId);
+
+    if (regRes.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No teams registered in this tournament yet!')),
+      );
+      return;
+    }
+
+    final currentTourney = _tournaments.firstWhere((t) => t['id'].toString() == tournamentId, orElse: () => {});
+    final proofTeamId = (currentTourney['proof_team_id'] ?? currentTourney['submitted_team_id'])?.toString();
+
+    String? selectedTeamId;
+    if (proofTeamId != null && regRes.any((r) => r['team_id']?.toString() == proofTeamId)) {
+      selectedTeamId = proofTeamId;
+    } else {
+      selectedTeamId = regRes.first['team_id']?.toString();
+    }
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF161A22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700)),
+                SizedBox(width: 8),
+                Text('Declare Winner & Pay', style: TextStyle(color: Colors.white, fontSize: 16)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Total Prize: $prizePool Coins',
+                    style: const TextStyle(color: Color(0xFF00FF88), fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 6),
+                const Text('+25 Leaderboard Points & +1 Win will be credited.',
+                    style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                const Text('Select Winning Team:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: selectedTeamId,
+                  dropdownColor: const Color(0xFF161A22),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  items: regRes.map<DropdownMenuItem<String>>((r) {
+                    final tName = r['teams']?['name']?.toString() ?? 'Team #${r['team_id'].toString().substring(0, 5)}';
+                    return DropdownMenuItem(value: r['team_id'].toString(), child: Text(tName));
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) setDState(() => selectedTeamId = val);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFF4655),
+                  side: const BorderSide(color: Color(0xFFFF4655)),
+                ),
+                icon: const Icon(Icons.close_rounded, size: 14),
+                label: const Text('Reject Proof', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _openRejectProofDialog(tournamentId, selectedTeamId);
+                },
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black),
+                onPressed: () async {
+                  if (selectedTeamId == null) return;
+                  try {
+                    final currentTeamData = await _supabase
+                        .from('teams')
+                        .select('id, leader_id, points, wins')
+                        .eq('id', selectedTeamId!)
+                        .maybeSingle();
+
+                    final int currentPoints = (currentTeamData?['points'] as num?)?.toInt() ?? 0;
+                    final int currentWins = (currentTeamData?['wins'] as num?)?.toInt() ?? 0;
+                    final String? leaderId = currentTeamData?['leader_id']?.toString();
+
+                    await _supabase.from('teams').update({
+                      'points': currentPoints + 25,
+                      'wins': currentWins + 1,
+                    }).eq('id', selectedTeamId!);
+
+                    final members = await _supabase
+                        .from('team_members')
+                        .select('user_id')
+                        .eq('team_id', selectedTeamId!);
+
+                    final List<String> memberUserIds = [];
+                    if (members.isNotEmpty) {
+                      for (final m in members) {
+                        final uId = m['user_id']?.toString();
+                        if (uId != null && uId.isNotEmpty) memberUserIds.add(uId);
+                      }
+                    } else if (leaderId != null && leaderId.isNotEmpty) {
+                      memberUserIds.add(leaderId);
+                    }
+
+                    final int share = memberUserIds.isNotEmpty
+                        ? (prizePool / memberUserIds.length).floor()
+                        : prizePool;
+
+                    for (final uId in memberUserIds) {
+                      try {
+                        final userRes = await _supabase.from('users').select('coins').eq('id', uId).maybeSingle();
+                        final int existing = (userRes?['coins'] as num?)?.toInt() ?? 0;
+                        await _supabase.from('users').update({'coins': existing + share}).eq('id', uId);
+                      } catch (_) {
+                        try {
+                          final userRes = await _supabase.from('users').select('coins').eq('id', uId).maybeSingle();
+                          final int existing = (userRes?['coins'] as num?)?.toInt() ?? 0;
+                          await _supabase.from('users').update({'coins': existing + share}).eq('id', uId);
+                        } catch (_) {}
+                      }
+
+                      try {
+                        await _supabase.from('coin_transactions').insert({
+                          'user_id': uId,
+                          'amount': share,
+                          'type': 'tournament_prize',
+                          'description': 'Won tournament prize pool reward',
+                          'created_at': DateTime.now().toIso8601String(),
+                        });
+                      } catch (_) {}
+                    }
+
+                    try {
+                      await _supabase.rpc('distribute_match_reward', params: {
+                        'p_team_id': selectedTeamId,
+                        'p_total_prize': prizePool,
+                      });
+                    } catch (_) {}
+
+                    await _supabase.from('tournaments').update({
+                      'status': 'completed',
+                      'winner_team_id': selectedTeamId,
+                      'proof_status': 'approved',
+                    }).eq('id', tournamentId);
+
+                    if (context.mounted) Navigator.pop(ctx);
+                    _loadTournaments();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Winner Declared! +25 Points added & Coins Distributed! 🏆'),
+                          backgroundColor: Color(0xFF00FF88),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Reward distribution failed: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Distribute Prize Now', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showProofViewer(String url, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF161A22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+              child: InteractiveViewer(
+                maxScale: 4.0,
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                  ),
+                  errorWidget: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 40),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteTournament(String id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161A22),
+        title: const Text('Delete Tournament?', style: TextStyle(color: Colors.white)),
+        content: const Text('Are you sure you want to delete this tournament?', style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _supabase.from('tournaments').delete().eq('id', id);
+      _loadTournaments();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openCreateTournamentDialog,
+        backgroundColor: const Color(0xFF00FF88),
+        foregroundColor: Colors.black,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Create Tournament', style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)))
+          : _tournaments.isEmpty
+              ? const Center(
+                  child: Text('No tournaments found. Tap + to create one.', style: TextStyle(color: Colors.white60)),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                  itemCount: _tournaments.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final item = _tournaments[index];
+                    final tId = item['id'].toString();
+                    final title = item['title'] ?? 'Tournament';
+                    final currentTeams = item['current_teams'] ?? 0;
+                    final maxTeams = item['max_teams'] ?? 16;
+                    final prize = item['prize_pool'] ?? 0;
+                    final fee = item['entry_fee'] ?? 0;
+                    final status = (item['status'] ?? 'upcoming').toString();
+                    final roomId = (item['room_id'] ?? '').toString();
+                    final roomPass = (item['room_password'] ?? '').toString();
+                    final proofUrl = (item['proof_url'] ?? '').toString().trim();
+                    final proofTeamName = (item['proof_team_name'] ?? item['submitted_team_name'] ?? '').toString().trim();
+                    final proofLeaderName = (item['proof_leader_name'] ?? '').toString().trim();
+
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: ThemeService.card,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: ThemeService.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: TextStyle(
+                                    color: ThemeService.textPrimary,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: status == 'completed'
+                                      ? Colors.white10
+                                      : const Color(0xFF00FF88).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  status.toUpperCase(),
+                                  style: TextStyle(
+                                    color: status == 'completed' ? Colors.white60 : const Color(0xFF00FF88),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Text('Prize: $prize 🪙',
+                                  style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 12)),
+                              const SizedBox(width: 12),
+                              Text('Fee: $fee 🪙',
+                                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
+                              const SizedBox(width: 12),
+                              Text('Slots: $currentTeams / $maxTeams',
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            roomId.isNotEmpty ? 'Room ID: $roomId • Pass: $roomPass' : 'Room ID: Not assigned yet',
+                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontFamily: 'monospace'),
+                          ),
+                          if (proofUrl.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () => _showProofViewer(
+                                proofUrl,
+                                '$title • Proof by: ${proofTeamName.isNotEmpty ? proofTeamName : "Registered Squad"}',
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF8A00).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.5)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF8A00).withOpacity(0.25),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(Icons.shield_rounded, color: Color(0xFFFF8A00), size: 20),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Text(
+                                                'Win Proof by: ',
+                                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                                              ),
+                                              Text(
+                                                proofTeamName.isNotEmpty ? proofTeamName : 'Registered Squad',
+                                                style: const TextStyle(
+                                                  color: Color(0xFFFF8A00),
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            proofLeaderName.isNotEmpty
+                                                ? 'Leader: $proofLeaderName • (Tap to View)'
+                                                : 'Tap to inspect victory screenshot',
+                                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFFF8A00), size: 13),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          Divider(color: ThemeService.border, height: 1),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Color(0xFFFF4655), size: 20),
+                                onPressed: () => _deleteTournament(tId),
+                              ),
+                              const Spacer(),
+                              // EDIT TOURNAMENT BUTTON
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF00FF88),
+                                  side: const BorderSide(color: Color(0xFF00FF88)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                ),
+                                icon: const Icon(Icons.edit_rounded, size: 14),
+                                label: const Text('Edit', style: TextStyle(fontSize: 11)),
+                                onPressed: () => _openEditTournamentDialog(item),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF38BDF8),
+                                  side: const BorderSide(color: Color(0xFF38BDF8)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                ),
+                                icon: const Icon(Icons.vpn_key_rounded, size: 14),
+                                label: const Text('Room ID', style: TextStyle(fontSize: 11)),
+                                onPressed: () => _openRoomCredentialsDialog(tId, roomId, roomPass),
+                              ),
+                              const SizedBox(width: 8),
+                              if (status != 'completed')
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFFFD700),
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  ),
+                                  icon: const Icon(Icons.military_tech_rounded, size: 14),
+                                  label: const Text('Declare Winner', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  onPressed: () => _openDeclareWinnerDialog(tId, prize),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
+
+class _AdminCoinsVaultTab extends StatefulWidget {
+  const _AdminCoinsVaultTab();
+
+  @override
+  State<_AdminCoinsVaultTab> createState() => _AdminCoinsVaultTabState();
+}
+
+class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
+  final TextEditingController _targetController = TextEditingController();
+  final TextEditingController _amountController =
+      TextEditingController(text: '100');
+
+  bool _isSearching = false;
+  bool _isAwarding = false;
+  Map<String, dynamic>? _foundUser;
+  String? _foundDocId;
+  String? _errorMessage;
+  String? _successMessage;
+
+  @override
+  void dispose() {
+    _targetController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<Map<String, dynamic>?> _findUser(String input) async {
+    final raw = input.trim();
+    if (raw.isEmpty) return null;
+
+    try {
+      final users =
+          await SupabaseService.query('users', select: '*', limit: 500);
+      final clean = raw.toLowerCase().replaceAll('@', '').trim();
+
+      for (final u in users) {
+        final docId = (u['id'] ?? '').toString();
+        final uUid = (u['uid'] ?? docId).toString().trim();
+        final uName = (u['username'] ?? '').toString().toLowerCase().trim();
+        final uEmail = (u['email'] ?? '').toString().toLowerCase().trim();
+        final uDisplay =
+            (u['display_name'] ?? '').toString().toLowerCase().trim();
+
+        if (docId == raw ||
+            docId.toLowerCase() == clean ||
+            uUid == raw ||
+            uUid.toLowerCase() == clean ||
+            uName == clean ||
+            uEmail == clean ||
+            uDisplay == clean ||
+            (clean.length >= 2 &&
+                (uName.contains(clean) ||
+                    uEmail.contains(clean) ||
+                    uDisplay.contains(clean) ||
+                    uUid.contains(clean)))) {
+          final d = Map<String, dynamic>.from(u);
+          d['docId'] = docId;
+          return d;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error searching user: $e');
+    }
+
+    return null;
+  }
+
+  Future<void> _handleSearch() async {
+    final target = _targetController.text.trim();
+    if (target.isEmpty) {
+      setState(() {
+        _errorMessage = 'user_not_found'.tr();
+        _successMessage = null;
+        _foundUser = null;
+        _foundDocId = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    final user = await _findUser(target);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isSearching = false;
+      if (user != null) {
+        _foundUser = user;
+        _foundDocId = user['docId'] as String?;
+        _errorMessage = null;
+      } else {
+        _foundUser = null;
+        _foundDocId = null;
+        _errorMessage = 'user_not_found'.tr();
+      }
+    });
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded,
+                  color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'user_not_found_target'.tr(args: [target]),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFFF4655),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _awardCoins() async {
+    final target = _targetController.text.trim();
+    if (target.isEmpty) {
+      setState(() => _errorMessage = 'user_not_found'.tr());
+      return;
+    }
+
+    final amountText = _amountController.text.trim();
+    final amount = int.tryParse(amountText);
+    if (amount == null || amount <= 0) {
+      setState(
+          () => _errorMessage = 'enter_valid_coin_amount'.tr());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('enter_valid_coin_amount'.tr()),
+          backgroundColor: const Color(0xFFFF4655),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isAwarding = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    try {
+      Map<String, dynamic>? user = _foundUser;
+      String? docId = _foundDocId;
+
+      if (user == null || docId == null) {
+        user = await _findUser(target);
+        if (user != null) {
+          docId = user['docId'] as String?;
+        }
+      }
+
+      if (user == null || docId == null || docId.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _isAwarding = false;
+          _foundUser = null;
+          _foundDocId = null;
+          _errorMessage = 'user_not_found'.tr();
+        });
+        return;
+      }
+
+      final targetDocId = docId;
+      final targetDisplayName = (user['display_name'] ??
+              user['displayName'] ??
+              user['username'] ?? 'user'.tr())
+          .toString();
+
+      final sbAdminId = SupabaseService.client.auth.currentUser?.id ?? '';
+
+      final ok = await SupabaseService.awardCoins(
+        userId: targetDocId,
+        amount: amount,
+        adminId: sbAdminId,
+      );
+
+      if (!ok) {
+        if (!mounted) return;
+        setState(() {
+          _isAwarding = false;
+          _errorMessage = 'err_sending_coins'.tr();
+        });
+        return;
+      }
+
+      final freshUser = await _findUser(target);
+
+      final successText = 'coins_sent_success'.tr(namedArgs: {'user': targetDisplayName, 'amount': amount.toString()});
+
+      if (!mounted) return;
+      setState(() {
+        _isAwarding = false;
+        _foundUser = freshUser ?? user;
+        _foundDocId = targetDocId;
+        _errorMessage = null;
+        _successMessage = successText;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: Colors.black, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  successText,
+                  style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF00FF88),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isAwarding = false;
+        _errorMessage = 'err_sending_coins_with_e'.tr(args: [e.toString()]);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: ThemeService.isDarkMode
+                    ? const [Color(0xFF1A1A24), Color(0xFF261D10)]
+                    : const [Color(0xFFFFF9E6), Color(0xFFFFF0CC)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border:
+                  Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD700).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.monetization_on_rounded,
+                      color: Color(0xFFFFD700), size: 32),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Gamers ID Coins Vault',
+                        style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Grant coins to players by Username, UID, or Email',
+                        style: TextStyle(
+                            color: ThemeService.textSecondary, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Grant Coins to Player',
+            style: TextStyle(
+                color: ThemeService.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 15),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'search_user_to_send_coins_desc'.tr(),
+            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _targetController,
+                  style: TextStyle(color: ThemeService.textPrimary),
+                  onChanged: (val) {
+                    if (_foundUser != null && _foundDocId != val.trim()) {
+                      setState(() {
+                        _foundUser = null;
+                        _foundDocId = null;
+                        _errorMessage = null;
+                        _successMessage = null;
+                      });
+                    }
+                  },
+                  onSubmitted: (_) => _handleSearch(),
+                  decoration: InputDecoration(
+                    labelText: 'Target Username or UID',
+                    hintText: 'e.g. fua, @user, UID, or email',
+                    hintStyle: TextStyle(
+                        color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary),
+                    prefixIcon: const Icon(Icons.person_search_rounded,
+                        color: Color(0xFF38BDF8)),
+                    suffixIcon: _targetController.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear,
+                                color: ThemeService.textSecondary, size: 18),
+                            onPressed: () {
+                              _targetController.clear();
+                              setState(() {
+                                _foundUser = null;
+                                _foundDocId = null;
+                                _errorMessage = null;
+                                _successMessage = null;
+                              });
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: ThemeService.card,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: ThemeService.border)),
+                    focusedBorder: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      borderSide:
+                          BorderSide(color: Color(0xFFFFD700)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isSearching ? null : _handleSearch,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ThemeService.cardSecondary,
+                    foregroundColor: const Color(0xFF38BDF8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  ),
+                  child: _isSearching
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              color: Color(0xFF38BDF8), strokeWidth: 2),
+                        )
+                      : const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_rounded, size: 20),
+                            Text('Search',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                ),
+              ),
+            ],
+          ),
+          if (_foundUser != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00FF88).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: const Color(0xFF00FF88).withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  GamerAvatar(
+                    photoUrl: (_foundUser!['avatar_url'] ??
+                            _foundUser!['photoUrl'] ??
+                            '')
+                        .toString(),
+                    displayName: (_foundUser!['display_name'] ??
+                            _foundUser!['displayName'] ??
+                            _foundUser!['username'] ??
+                            'User')
+                        .toString(),
+                    radius: 22,
+                    frameId: (_foundUser!['active_frame'] ?? '').toString(),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                (_foundUser!['display_name'] ??
+                                        _foundUser!['displayName'] ??
+                                        _foundUser!['username'] ??
+                                        'User')
+                                    .toString(),
+                                style: TextStyle(
+                                    color: ThemeService.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00FF88)
+                                    .withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.check_circle_rounded,
+                                      color: Color(0xFF00FF88), size: 12),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'user_found'.tr(),
+                                    style: const TextStyle(
+                                        color: Color(0xFF00FF88),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '@${_foundUser!['username'] ?? ''} • ${_foundUser!['email'] ?? _foundDocId ?? ''}',
+                          style: TextStyle(
+                              color: ThemeService.textSecondary, fontSize: 11),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(
+                              'current_balance_prefix'.tr(),
+                              style: TextStyle(
+                                  color: ThemeService.textSecondary, fontSize: 11),
+                            ),
+                            Text(
+                              '${(_foundUser!['coins'] ?? 0)} 🪙',
+                              style: const TextStyle(
+                                  color: Color(0xFFFFD700),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          TextField(
+            controller: _amountController,
+            keyboardType: TextInputType.number,
+            style: TextStyle(color: ThemeService.textPrimary),
+            decoration: InputDecoration(
+              labelText: 'Coins Amount',
+              labelStyle: TextStyle(color: ThemeService.textSecondary),
+              prefixIcon: const Icon(Icons.monetization_on_rounded,
+                  color: Color(0xFFFFD700)),
+              helperText: 'admin_unlimited_coins_desc'.tr(),
+              helperStyle: TextStyle(
+                  color: ThemeService.textSecondary, fontSize: 11),
+              filled: true,
+              fillColor: ThemeService.card,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: ThemeService.border)),
+              focusedBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+                borderSide: BorderSide(color: Color(0xFFFFD700)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [100, 500, 1000, 5000, 10000, 50000].map((amt) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ActionChip(
+                    label: Text(
+                      '+$amt 🪙',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    backgroundColor: ThemeService.cardSecondary,
+                    labelStyle:
+                        const TextStyle(color: Color(0xFFFFD700)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: ThemeService.border),
+                    ),
+                    onPressed: () {
+                      _amountController.text = amt.toString();
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (_errorMessage != null) ...[
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF4655).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: const Color(0xFFFF4655).withOpacity(0.6)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded,
+                      color: Color(0xFFFF4655), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(
+                          color: Color(0xFFFF7080),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_successMessage != null) ...[
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00FF88).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: const Color(0xFF00FF88).withOpacity(0.6)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      color: Color(0xFF00FF88), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _successMessage!,
+                      style: const TextStyle(
+                          color: Color(0xFF80FFC0),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _isAwarding ? null : _awardCoins,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFD700),
+                foregroundColor: Colors.black,
+                disabledBackgroundColor: const Color(0xFF554400),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: _isAwarding
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          color: Colors.black, strokeWidth: 2.2),
+                    )
+                  : const Icon(Icons.send_rounded, size: 20),
+              label: Text(
+                _isAwarding ? 'sending_coins_progress'.tr() : 'Award Coins Now',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900, fontSize: 15),
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Recent Coin Awards History',
+                style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD700).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.history_rounded,
+                        color: Color(0xFFFFD700), size: 12),
+                    SizedBox(width: 4),
+                    Text(
+                      'Live Logs',
+                      style: TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: SupabaseService.getRealtimeCoinTransactions(),
+            builder: (context, snap) {
+              if (snap.hasError) {
+                return Text('Error loading history: ${snap.error}',
+                    style:
+                        const TextStyle(color: Colors.red, fontSize: 12));
+              }
+              final docs = (snap.data ?? [])
+                  .where((t) =>
+                      t['type'] == 'admin_grant' ||
+                      t['type'] == 'coin_grant')
+                  .take(10)
+                  .toList();
+
+              if (docs.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: ThemeService.card,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: ThemeService.border),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'no_recent_transactions_found'.tr(),
+                      style:
+                          TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                    ),
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: docs.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final data = docs[index];
+                  final amount = (data['amount'] as num?)?.toInt() ?? 0;
+                  final description = data['description'] ??
+                      'Admin ne $amount coins diye';
+                  final date = data['created_at']?.toString() ?? '';
+                  final targetUserId =
+                      (data['user_id'] ?? '').toString();
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: ThemeService.card,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: ThemeService.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color:
+                                const Color(0xFFFFD700).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.monetization_on_rounded,
+                              color: Color(0xFFFFD700), size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                description,
+                                style: TextStyle(
+                                    color: ThemeService.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12.5),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'UID: $targetUserId ${date.isNotEmpty ? '• ${date.substring(0, 19).replaceAll('T', ' ')}' : ''}',
+                                style: TextStyle(
+                                    color: ThemeService.textSecondary,
+                                    fontSize: 10.5),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '+$amount 🪙',
+                          style: const TextStyle(
+                            color: Color(0xFF00FF88),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
     );
   }
 }
