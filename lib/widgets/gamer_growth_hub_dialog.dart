@@ -60,7 +60,6 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
 
     setState(() => _isClaiming = true);
     try {
-      // ✅ 'gamers' ko 'users' se replace kiya gaya
       final userRes = await SupabaseService.client.from('users').select('coins').eq('id', uid).maybeSingle();
       final currentCoins = (userRes?['coins'] as num?)?.toInt() ?? 0;
 
@@ -76,9 +75,7 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
           'description': '10 Minutes daily active app reward',
           'created_at': DateTime.now().toIso8601String(),
         });
-      } catch (_) {
-        // Agar coin_transactions table mojood na ho to error na de
-      }
+      } catch (_) {}
 
       setState(() {
         _hasClaimedToday = true;
@@ -89,7 +86,7 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
           const SnackBar(
             content: Text('🎉 +50 Coins Added for spending 10 minutes!'),
             backgroundColor: Color(0xFF00FF88),
-            duration: Duration(seconds: 2), // 2 seconds mein auto hide
+            duration: Duration(seconds: 2),
           ),
         );
       }
@@ -152,13 +149,13 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
               foregroundColor: Colors.black,
             ),
             onPressed: () async {
-              final playerUid = gameIdController.text.trim();
-              if (playerUid.isEmpty) return;
+              final playerGameUid = gameIdController.text.trim();
+              if (playerGameUid.isEmpty) return;
 
               try {
-                // ✅ 'gamers' ko 'users' se replace kiya gaya
-                final userRes = await SupabaseService.client.from('users').select('coins').eq('id', uid!).maybeSingle();
+                final userRes = await SupabaseService.client.from('users').select('coins, username, email').eq('id', uid!).maybeSingle();
                 final balance = (userRes?['coins'] as num?)?.toInt() ?? 0;
+                final username = (userRes?['username'] ?? 'Player').toString();
 
                 if (balance < requiredCoins) {
                   if (context.mounted) {
@@ -173,13 +170,27 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
                   return;
                 }
 
-                // Deduct coins & create order
+                // Deduct coins
                 await SupabaseService.client.from('users').update({'coins': balance - requiredCoins}).eq('id', uid);
+
+                // Transaction log
+                try {
+                  await SupabaseService.client.from('coin_transactions').insert({
+                    'user_id': uid,
+                    'amount': -requiredCoins,
+                    'type': 'redeem_purchase',
+                    'description': 'Redeemed $itemName for Game UID: $playerGameUid',
+                    'created_at': DateTime.now().toIso8601String(),
+                  });
+                } catch (_) {}
+
+                // Insert into reports as redemption request so Admin sees it
                 await SupabaseService.client.from('reports').insert({
-                  'reporter_username': playerUid,
+                  'reporter_username': username,
                   'target_type': 'redeem_request',
-                  'target_content': 'Requested $itemName for Game UID: $playerUid',
-                  'reason': 'Pending UC/Diamond Transfer',
+                  'target_id': uid,
+                  'target_content': '$itemName | Game UID: $playerGameUid | Cost: $requiredCoins Coins',
+                  'reason': 'Pending Delivery: $itemName to $playerGameUid',
                   'status': 'pending',
                   'created_at': DateTime.now().toIso8601String(),
                 });
@@ -188,9 +199,9 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Redeem request for $itemName submitted! Will be delivered in 2 hours.'),
+                      content: Text('Redeem request for $itemName submitted! Admin will deliver soon.'),
                       backgroundColor: const Color(0xFF00FF88),
-                      duration: const Duration(seconds: 2),
+                      duration: const Duration(seconds: 3),
                     ),
                   );
                 }
@@ -335,7 +346,6 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
               onTap: () => _showRedeemPrompt('100 Free Fire Diamonds', 1200),
             ),
             const SizedBox(height: 8),
- 
           ],
         ),
       ),
