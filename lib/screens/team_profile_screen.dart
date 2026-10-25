@@ -33,6 +33,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   bool _isActionLoading = false;
   bool _hasRequestedLocally = false;
   final Set<String> _processingRequestUids = {};
+  final Set<String> _processingKickUids = {};
   final Set<String> _cancelledChallengeIds = {};
   final Set<String> _acceptingChallengeIds = {};
   final Set<String> _acceptedChallengeIds = {};
@@ -113,6 +114,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Future<void> _handleAcceptJoin(TeamModel team, String targetUid, String userName) async {
+    if (team.memberCount >= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Team is already full! (4/4)'), backgroundColor: Color(0xFFFF4655)),
+      );
+      return;
+    }
+
     if (_processingRequestUids.contains(targetUid)) return;
     setState(() => _processingRequestUids.add(targetUid));
 
@@ -168,6 +176,126 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       }
     } finally {
       if (mounted) setState(() => _processingRequestUids.remove(targetUid));
+    }
+  }
+
+  Future<void> _handleKickMember(TeamModel team, String memberId, String memberName) async {
+    if (memberId == team.leaderId) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
+            const SizedBox(width: 8),
+            Text('Kick Member?', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to remove $memberName from the squad?',
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Kick', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _processingKickUids.add(memberId));
+    try {
+      final ok = await _teamService.removeMember(teamId: team.id, memberId: memberId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? '$memberName has been removed from the team' : 'Failed to kick member'),
+            backgroundColor: ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error kicking member: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processingKickUids.remove(memberId));
+    }
+  }
+
+  Future<void> _handleLeaveTeam(TeamModel team, String currentUid) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.exit_to_app_rounded, color: Color(0xFFFF4655)),
+            const SizedBox(width: 8),
+            Text('Leave Team?', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to leave ${team.name}?',
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Leave Team', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isActionLoading = true);
+    try {
+      final ok = await _teamService.removeMember(teamId: team.id, memberId: currentUid);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? 'You have left ${team.name}' : 'Failed to leave team'),
+            backgroundColor: ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error leaving team: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
     }
   }
 
@@ -284,6 +412,15 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Future<void> _handleJoinRequest(TeamModel team, String currentUid) async {
+    if (team.memberCount >= 4) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Team is already full! (4/4)'), backgroundColor: Color(0xFFFF4655)),
+        );
+      }
+      return;
+    }
+
     final effectiveUid = currentUid.trim().isNotEmpty
         ? currentUid.trim()
         : (GamerAuthService().currentUid ?? (SupabaseService.client.auth.currentUser?.id ?? ''));
@@ -509,6 +646,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
             final isLeader = team.isLeader(currentUid);
             final isMember = team.isMember(currentUid);
             final hasRequested = team.hasRequestedJoin(currentUid);
+            final bool isTeamFull = team.memberCount >= 4;
 
             return StreamBuilder<List<TeamModel>>(
               stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
@@ -854,7 +992,31 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               const SizedBox(height: 16),
                             ],
 
-                            _buildSectionHeader('Team Members (${team.memberCount} / 4)'),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildSectionHeader('Team Members (${team.memberCount} / 4)'),
+                                if (isTeamFull)
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF4655).withOpacity(0.18),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.6)),
+                                    ),
+                                    child: const Text(
+                                      'FULL',
+                                      style: TextStyle(
+                                        color: Color(0xFFFF4655),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 10.5,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                             Container(
                               decoration: BoxDecoration(
                                 color: ThemeService.card,
@@ -885,6 +1047,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   }
 
                                   final isThisLeader = memberId == team.leaderId;
+                                  final isProcessingKick = _processingKickUids.contains(memberId);
 
                                   return FutureBuilder<Map<String, String>>(
                                     future: _fetchUserProfile(memberId),
@@ -926,20 +1089,41 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           displayName,
                                           style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
                                         ),
-                                        trailing: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : ThemeService.cardSecondary,
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            isThisLeader ? 'LEADER' : role.toUpperCase(),
-                                            style: TextStyle(
-                                              color: isThisLeader ? const Color(0xFFFF6B00) : ThemeService.textSecondary,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 10.5,
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: isThisLeader ? const Color(0xFFFF6B00).withOpacity(0.2) : ThemeService.cardSecondary,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                isThisLeader ? 'LEADER' : role.toUpperCase(),
+                                                style: TextStyle(
+                                                  color: isThisLeader ? const Color(0xFFFF6B00) : ThemeService.textSecondary,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 10.5,
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                            // Owner Kick Option
+                                            if (isLeader && !isThisLeader) ...[
+                                              const SizedBox(width: 4),
+                                              if (isProcessingKick)
+                                                const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF4655)),
+                                                )
+                                              else
+                                                IconButton(
+                                                  icon: const Icon(Icons.person_remove_rounded, color: Color(0xFFFF4655), size: 20),
+                                                  tooltip: 'Kick Member',
+                                                  onPressed: () => _handleKickMember(team, memberId, displayName),
+                                                ),
+                                            ],
+                                          ],
                                         ),
                                       );
                                     },
@@ -966,28 +1150,72 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           border: Border(top: BorderSide(color: ThemeService.border, width: 1)),
                         ),
                         child: isViewedMyTeam
-                            ? Container(
-                                width: double.infinity,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1877F2).withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
-                                ),
-                                child: const Center(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                            ? (isLeader
+                                ? Container(
+                                    width: double.infinity,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1877F2).withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
+                                    ),
+                                    child: const Center(
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 18),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Your Team (Leader)',
+                                            style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : Row(
                                     children: [
-                                      Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 18),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Your Team',
-                                        style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 14),
+                                      Expanded(
+                                        child: Container(
+                                          height: 46,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF1877F2).withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: const Color(0xFF1877F2), width: 1.2),
+                                          ),
+                                          child: const Center(
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.shield_rounded, color: Color(0xFF1877F2), size: 16),
+                                                SizedBox(width: 6),
+                                                Text(
+                                                  'Your Team',
+                                                  style: TextStyle(color: Color(0xFF1877F2), fontWeight: FontWeight.bold, fontSize: 13),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      SizedBox(
+                                        height: 46,
+                                        child: ElevatedButton.icon(
+                                          onPressed: _isActionLoading ? null : () => _handleLeaveTeam(team, currentUid),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFFF4655).withOpacity(0.15),
+                                            foregroundColor: const Color(0xFFFF4655),
+                                            side: const BorderSide(color: Color(0xFFFF4655)),
+                                            elevation: 0,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          ),
+                                          icon: const Icon(Icons.exit_to_app_rounded, size: 16),
+                                          label: const Text('Leave Team', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                                        ),
                                       ),
                                     ],
-                                  ),
-                                ),
-                              )
+                                  ))
                             : Row(
                                 children: [
                                   if (!team.isMember(currentUid)) ...[
@@ -995,7 +1223,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                       child: SizedBox(
                                         height: 46,
                                         child: OutlinedButton.icon(
-                                          onPressed: (hasRequested || _hasRequestedLocally || _isActionLoading)
+                                          onPressed: (isTeamFull || hasRequested || _hasRequestedLocally || _isActionLoading)
                                               ? null
                                               : () => _handleJoinRequest(team, currentUid),
                                           style: OutlinedButton.styleFrom(
@@ -1003,15 +1231,30 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                             side: BorderSide(color: ThemeService.border),
                                             backgroundColor: ThemeService.cardSecondary,
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            disabledForegroundColor: ThemeService.textSecondary.withOpacity(0.5),
                                           ),
                                           icon: Icon(
-                                            (hasRequested || _hasRequestedLocally) ? Icons.hourglass_top_rounded : Icons.person_add_rounded,
+                                            isTeamFull
+                                                ? Icons.block_rounded
+                                                : ((hasRequested || _hasRequestedLocally)
+                                                    ? Icons.hourglass_top_rounded
+                                                    : Icons.person_add_rounded),
                                             size: 16,
-                                            color: (hasRequested || _hasRequestedLocally) ? const Color(0xFFFFB800) : const Color(0xFF00FF88),
+                                            color: isTeamFull
+                                                ? const Color(0xFFFF4655)
+                                                : ((hasRequested || _hasRequestedLocally)
+                                                    ? const Color(0xFFFFB800)
+                                                    : const Color(0xFF00FF88)),
                                           ),
                                           label: Text(
-                                            (hasRequested || _hasRequestedLocally) ? 'Requested' : 'Join Team',
-                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: ThemeService.textPrimary),
+                                            isTeamFull
+                                                ? 'Team Full'
+                                                : ((hasRequested || _hasRequestedLocally) ? 'Requested' : 'Join Team'),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                              color: isTeamFull ? const Color(0xFFFF4655) : ThemeService.textPrimary,
+                                            ),
                                           ),
                                         ),
                                       ),
