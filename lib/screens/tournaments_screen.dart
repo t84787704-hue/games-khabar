@@ -49,13 +49,25 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     try {
       if (user != null) {
         try {
-          final teamRes = await _supabase
+          // 1. Check if user is a team leader
+          final leaderTeamRes = await _supabase
               .from('teams')
               .select('id')
               .eq('leader_id', user.id)
               .maybeSingle();
 
-          _myTeamId = teamRes?['id']?.toString();
+          _myTeamId = leaderTeamRes?['id']?.toString();
+
+          // 2. If not a leader, check if user is a member of any team
+          if (_myTeamId == null) {
+            final memberRes = await _supabase
+                .from('team_members')
+                .select('team_id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+            
+            _myTeamId = memberRes?['team_id']?.toString();
+          }
 
           if (_myTeamId != null) {
             final regRes = await _supabase
@@ -139,7 +151,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           notifInserts.add({
             'user_id': memberUid,
             'title': 'Tournament Registered! 🎮',
-            'body': 'Your squad leader registered the team for "$tourneyTitle". Be ready for the match!',
+            'body': 'Your squad registered the team for "$tourneyTitle". Be ready for the match!',
             'type': 'tournament',
             'data': {'tournament_id': tournamentId},
             'created_at': DateTime.now().toIso8601String(),
@@ -395,7 +407,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                           : () => _registerTeam(tId, item['entry_fee'] ?? 0),
                                       child: Text(
                                         isRegistered
-                                            ? '✓ Already Registered'
+                                            ? '✓ Squad Registered'
                                             : (isFull ? 'Slots Full' : 'Register Squad'),
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
