@@ -103,7 +103,11 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
     if (_myTeamId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Only Team Leaders can register a squad!')),
+        const SnackBar(
+          content: Text(
+            'You need your own team to register! Please create a team with 4 members first.',
+          ),
+        ),
       );
       return;
     }
