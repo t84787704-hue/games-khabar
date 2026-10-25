@@ -688,7 +688,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           ),
                                         ),
                                         const SizedBox(height: 6),
-                                        // Leader display with dynamic resolution
                                         FutureBuilder<Map<String, String>>(
                                           future: _fetchUserProfile(team.leaderId),
                                           builder: (context, leaderSnap) {
@@ -855,7 +854,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               const SizedBox(height: 16),
                             ],
 
-                            // Team Members List (Real names fetched via FutureBuilder)
                             _buildSectionHeader('Team Members (${team.memberCount} / 4)'),
                             Container(
                               decoration: BoxDecoration(
@@ -951,7 +949,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Stable Match History
                             _buildCombinedHistorySection(team),
                             const SizedBox(height: 20),
                           ],
@@ -1075,7 +1072,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Widget _buildCombinedHistorySection(TeamModel team) {
-    final tId = widget.teamId;
+    final tId = widget.teamId.trim();
+    final tUuid = SupabaseService.toUuid(tId);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1084,10 +1082,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         FutureBuilder<List<Map<String, dynamic>>>(
           future: SupabaseService.client
               .from('tournaments')
-              .select('id, title, winner_team_id, prize_pool, match_time, status')
+              .select('id, title, winner_team_id, prize_pool, match_time, created_at, status')
               .eq('status', 'completed')
-              .eq('winner_team_id', tId)
-              .order('match_time', ascending: false),
+              .or('winner_team_id.eq.$tId,winner_team_id.eq.$tUuid')
+              .order('created_at', ascending: false),
           builder: (context, tourSnap) {
             final wonTournaments = tourSnap.data ?? [];
 
@@ -1124,9 +1122,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 final title = t['title'] ?? 'Tournament Match';
                 final prize = t['prize_pool'] ?? 0;
                 String dateStr = 'Recent';
-                if (t['match_time'] != null) {
+                final dateField = t['created_at'] ?? t['match_time'];
+                if (dateField != null) {
                   try {
-                    dateStr = DateFormat('dd MMM yyyy').format(DateTime.parse(t['match_time'].toString()).toLocal());
+                    dateStr = DateFormat('dd MMM yyyy').format(DateTime.parse(dateField.toString()).toLocal());
                   } catch (_) {}
                 }
 
