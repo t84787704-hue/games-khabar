@@ -216,12 +216,12 @@ class _AdminBlueTickTabState extends State<_AdminBlueTickTab> {
                             ),
                           ],
                         ),
-                        if (user.verificationProofUrl.isNotEmpty) ...[
+                        if (user.rankScreenshot.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: CachedNetworkImage(
-                              imageUrl: user.verificationProofUrl,
+                              imageUrl: user.rankScreenshot,
                               height: 120,
                               width: double.infinity,
                               fit: BoxFit.cover,
