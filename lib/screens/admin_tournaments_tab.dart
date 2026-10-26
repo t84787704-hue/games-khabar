@@ -1,6 +1,12 @@
 // ===============================================================================
 // CLEAN TOURNAMENT MANAGEMENT TAB — Single View with Floating/Bottom Create Button
 // ===============================================================================
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
+
 class _AdminTournamentsTab extends StatefulWidget {
   const _AdminTournamentsTab();
 
@@ -25,6 +31,64 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmDeleteTournament(String id, String title) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
+            const SizedBox(width: 8),
+            Text('Delete Tournament?', style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete "$title"? This action cannot be undone.',
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await SupabaseService.client.from('tournaments').delete().eq('id', id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tournament deleted successfully! 🗑️'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting tournament: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -309,9 +373,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
               IconButton(
                 icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655), size: 20),
                 tooltip: 'Delete Tournament',
-                onPressed: () async {
-                  await SupabaseService.client.from('tournaments').delete().eq('id', id);
-                },
+                onPressed: () => _confirmDeleteTournament(id, title),
               ),
             ],
           ),
@@ -471,14 +533,14 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                 InkWell(
                   onTap: () async {
                     final pickedDate = await showDatePicker(
-                      context: context,
+                      context: ctx,
                       initialDate: selectedDateTime,
                       firstDate: DateTime.now(),
                       lastDate: DateTime.now().add(const Duration(days: 365)),
                     );
                     if (pickedDate != null) {
                       final pickedTime = await showTimePicker(
-                        context: context,
+                        context: ctx,
                         initialTime: TimeOfDay.fromDateTime(selectedDateTime),
                       );
                       if (pickedTime != null) {
@@ -520,7 +582,12 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                   child: ElevatedButton(
                     onPressed: () async {
                       final title = titleController.text.trim();
-                      if (title.isEmpty) return;
+                      if (title.isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('Please enter a tournament title!'), backgroundColor: Color(0xFFFF4655)),
+                        );
+                        return;
+                      }
 
                       final payload = {
                         'title': title,
@@ -547,18 +614,22 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                           payload['joined_teams_count'] = 0;
                           await SupabaseService.client.from('tournaments').insert(payload);
                         }
-                        if (mounted) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(isEdit ? 'Tournament Updated! 🚀' : 'Tournament Published Successfully! 🏆'),
-                              backgroundColor: const Color(0xFF00FF88),
-                            ),
-                          );
-                        }
-                      } catch (e) {
+
+                        Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error saving tournament: $e'), backgroundColor: const Color(0xFFFF4655)),
+                          SnackBar(
+                            content: Text(isEdit ? 'Tournament Updated! 🚀' : 'Tournament Published Successfully! 🏆'),
+                            backgroundColor: const Color(0xFF00FF88),
+                          ),
+                        );
+                      } catch (e) {
+                        print('=== TOURNAMENT SAVE ERROR: $e ===');
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(
+                            content: Text('Error saving: $e'),
+                            backgroundColor: const Color(0xFFFF4655),
+                            duration: const Duration(seconds: 5),
+                          ),
                         );
                       }
                     },
