@@ -7,14 +7,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
-class _AdminUnderReviewTab extends StatefulWidget {
-  const _AdminUnderReviewTab();
+class AdminUnderReviewTab extends StatefulWidget {
+  const AdminUnderReviewTab({super.key});
 
   @override
-  State<_AdminUnderReviewTab> createState() => _AdminUnderReviewTabState();
+  State<AdminUnderReviewTab> createState() => AdminUnderReviewTabState();
 }
 
-class _AdminUnderReviewTabState extends State<_AdminUnderReviewTab> {
+class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
