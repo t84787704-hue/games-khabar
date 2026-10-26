@@ -8,14 +8,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
-class _AdminProofHistoryTab extends StatefulWidget {
-  const _AdminProofHistoryTab();
+class AdminProofHistoryTab extends StatefulWidget {
+  const AdminProofHistoryTab({super.key});
 
   @override
-  State<_AdminProofHistoryTab> createState() => _AdminProofHistoryTabState();
+  State<AdminProofHistoryTab> createState() => AdminProofHistoryTabState();
 }
 
-class _AdminProofHistoryTabState extends State<_AdminProofHistoryTab> {
+class AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
