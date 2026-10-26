@@ -131,7 +131,18 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         userName: userName,
       );
 
+      final updatedRequests = List<String>.from(team.pendingJoinRequests)..remove(targetUid);
+      final teamUuid = SupabaseService.toUuid(team.id);
+      await SupabaseService.client
+          .from('teams')
+          .update({'pending_join_requests': updatedRequests})
+          .eq('id', teamUuid);
+
       if (mounted) {
+        setState(() {
+          team.pendingJoinRequests.remove(targetUid);
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(ok ? '$userName accepted into squad!' : 'Failed to accept request'),
@@ -155,16 +166,28 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     setState(() => _processingRequestUids.add(targetUid));
 
     try {
-      final ok = await _teamService.rejectJoinRequest(
+      final updatedRequests = List<String>.from(team.pendingJoinRequests)..remove(targetUid);
+      final teamUuid = SupabaseService.toUuid(team.id);
+
+      await SupabaseService.client
+          .from('teams')
+          .update({'pending_join_requests': updatedRequests})
+          .eq('id', teamUuid);
+
+      await _teamService.rejectJoinRequest(
         teamId: team.id,
         userId: targetUid,
       );
 
       if (mounted) {
+        setState(() {
+          team.pendingJoinRequests.remove(targetUid);
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(ok ? 'Join request rejected' : 'Failed to reject request'),
-            backgroundColor: ok ? const Color(0xFFFF4655) : const Color(0xFFFF4655),
+          const SnackBar(
+            content: Text('Join request rejected'),
+            backgroundColor: Color(0xFFFF4655),
           ),
         );
       }
@@ -228,15 +251,23 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           .eq('user_id', memberId);
 
       final updatedMembers = List<String>.from(team.members)..remove(memberId);
+      final updatedRequests = List<String>.from(team.pendingJoinRequests)..remove(memberId);
+
       await SupabaseService.client
           .from('teams')
           .update({
             'members': updatedMembers,
             'member_count': updatedMembers.length,
+            'pending_join_requests': updatedRequests,
           })
           .eq('id', teamUuid);
 
       if (mounted) {
+        setState(() {
+          team.members.remove(memberId);
+          team.pendingJoinRequests.remove(memberId);
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$memberName has been removed from the team'),
@@ -1442,7 +1473,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFF00FF88).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF00FF88)),
+                          border: Border.all(color: Color(0xFF00FF88)),
                         ),
                         child: const Text(
                           'WON #1',
