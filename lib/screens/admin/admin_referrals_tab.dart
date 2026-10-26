@@ -7,14 +7,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
-class _AdminReferralsTrackerTab extends StatefulWidget {
-  const _AdminReferralsTrackerTab();
+class AdminReferralsTrackerTab extends StatefulWidget {
+  const AdminReferralsTrackerTab({super.key});
 
   @override
-  State<_AdminReferralsTrackerTab> createState() => _AdminReferralsTrackerTabState();
+  State<AdminReferralsTrackerTab> createState() => AdminReferralsTrackerTabState();
 }
 
-class _AdminReferralsTrackerTabState extends State<_AdminReferralsTrackerTab> {
+class AdminReferralsTrackerTabState extends State<AdminReferralsTrackerTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
