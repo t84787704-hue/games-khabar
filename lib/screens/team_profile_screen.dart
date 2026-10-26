@@ -131,18 +131,17 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         userName: userName,
       );
 
-      final updatedRequests = List<String>.from(team.pendingJoinRequests)..remove(targetUid);
+      team.pendingJoinRequests.remove(targetUid);
+      final updatedRequests = List<String>.from(team.pendingJoinRequests);
       final teamUuid = SupabaseService.toUuid(team.id);
+
       await SupabaseService.client
           .from('teams')
           .update({'pending_join_requests': updatedRequests})
           .eq('id', teamUuid);
 
       if (mounted) {
-        setState(() {
-          team.pendingJoinRequests.remove(targetUid);
-        });
-
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(ok ? '$userName accepted into squad!' : 'Failed to accept request'),
@@ -166,7 +165,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     setState(() => _processingRequestUids.add(targetUid));
 
     try {
-      final updatedRequests = List<String>.from(team.pendingJoinRequests)..remove(targetUid);
+      team.pendingJoinRequests.remove(targetUid);
+      final updatedRequests = List<String>.from(team.pendingJoinRequests);
       final teamUuid = SupabaseService.toUuid(team.id);
 
       await SupabaseService.client
@@ -174,15 +174,15 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           .update({'pending_join_requests': updatedRequests})
           .eq('id', teamUuid);
 
-      await _teamService.rejectJoinRequest(
-        teamId: team.id,
-        userId: targetUid,
-      );
+      try {
+        await _teamService.rejectJoinRequest(
+          teamId: team.id,
+          userId: targetUid,
+        );
+      } catch (_) {}
 
       if (mounted) {
-        setState(() {
-          team.pendingJoinRequests.remove(targetUid);
-        });
+        setState(() {});
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -250,8 +250,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           .eq('team_id', teamUuid)
           .eq('user_id', memberId);
 
-      final updatedMembers = List<String>.from(team.members)..remove(memberId);
-      final updatedRequests = List<String>.from(team.pendingJoinRequests)..remove(memberId);
+      team.members.remove(memberId);
+      team.pendingJoinRequests.remove(memberId);
+
+      final updatedMembers = List<String>.from(team.members);
+      final updatedRequests = List<String>.from(team.pendingJoinRequests);
 
       await SupabaseService.client
           .from('teams')
@@ -263,10 +266,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           .eq('id', teamUuid);
 
       if (mounted) {
-        setState(() {
-          team.members.remove(memberId);
-          team.pendingJoinRequests.remove(memberId);
-        });
+        setState(() {});
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -332,7 +332,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           .eq('team_id', teamUuid)
           .eq('user_id', currentUid);
 
-      final updatedMembers = List<String>.from(team.members)..remove(currentUid);
+      team.members.remove(currentUid);
+      final updatedMembers = List<String>.from(team.members);
       await SupabaseService.client
           .from('teams')
           .update({
@@ -1473,7 +1474,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFF00FF88).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Color(0xFF00FF88)),
+                          border: Border.all(color: const Color(0xFF00FF88)),
                         ),
                         child: const Text(
                           'WON #1',
