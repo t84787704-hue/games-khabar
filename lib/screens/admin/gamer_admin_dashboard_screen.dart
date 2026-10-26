@@ -31,22 +31,22 @@ class GamerAdminDashboardScreen extends StatefulWidget {
 class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen> {
   int _currentIndex = 0;
 
-  // Saare 14 tabs ki list
-  final List<Widget> _adminTabs = [
-    const _AdminTournamentsTab(),        // 0: Tournaments
-    const _AdminBannerControlTab(),      // 1: Banner Control
-    const _AdminUsersTab(),              // 2: Users Management
-    const _AdminRankVerifyTab(),         // 3: Rank Verification
-    const _AdminBlueTickTab(),           // 4: Blue Tick Requests
-    const _AdminUcRequestsTab(),         // 5: UC Requests
-    const _AdminUcHistoryTab(),          // 6: UC History
-    const _AdminPostsModerationTab(),    // 7: Posts Moderation
-    const _AdminTeamMatchesTab(),        // 8: Team Matches
-    const _AdminReportsTab(),            // 9: Reports Management
-    const _AdminCoinsVaultTab(),         // 10: Coins Vault
-    const _AdminReferralsTrackerTab(),   // 11: Referrals Tracker
-    const _AdminUnderReviewTab(),        // 12: Under Review
-    const _AdminProofHistoryTab(),       // 13: Proof History
+  // Saare 14 tabs ki list (Public Class Names ke sath)
+  late final List<Widget> _adminTabs = [
+    const AdminTournamentsTab(),        // 0: Tournaments
+    const AdminBannerControlTab(),      // 1: Banner Control
+    const AdminUsersTab(),              // 2: Users Management
+    const AdminRankVerifyTab(),         // 3: Rank Verification
+    const AdminBlueTickTab(),           // 4: Blue Tick Requests
+    const AdminUcRequestsTab(),         // 5: UC Requests
+    const AdminUcHistoryTab(),          // 6: UC History
+    const AdminPostsModerationTab(),    // 7: Posts Moderation
+    const AdminTeamMatchesTab(),        // 8: Team Matches
+    const AdminReportsTab(),            // 9: Reports Management
+    const AdminCoinsVaultTab(),         // 10: Coins Vault
+    const AdminReferralsTrackerTab(),   // 11: Referrals Tracker
+    const AdminUnderReviewTab(),        // 12: Under Review
+    const AdminProofHistoryTab(),       // 13: Proof History
   ];
 
   // Tabs ke naam Drawer ya AppBar ke liye
