@@ -7,14 +7,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
-class _AdminCoinsVaultTab extends StatefulWidget {
-  const _AdminCoinsVaultTab();
+class AdminCoinsVaultTab extends StatefulWidget {
+  const AdminCoinsVaultTab({super.key});
 
   @override
-  State<_AdminCoinsVaultTab> createState() => _AdminCoinsVaultTabState();
+  State<AdminCoinsVaultTab> createState() => AdminCoinsVaultTabState();
 }
 
-class _AdminCoinsVaultTabState extends State<_AdminCoinsVaultTab> {
+class AdminCoinsVaultTabState extends State<AdminCoinsVaultTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _isLoading = false;
