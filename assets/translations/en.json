@@ -1,4 +1,7 @@
 {
+"msg_post_created": "Post created successfully! 🚀",
+"notif_team_join_request_body": "%s has requested to join %s",
+"team_default_name": "Squad",
 "no_saved_news": "No Saved Articles",
 "no_saved_news_desc": "You haven't saved any articles yet",
 "explore_latest_news": "Explore Latest News",
