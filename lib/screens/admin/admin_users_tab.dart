@@ -10,14 +10,14 @@ import '../../services/theme_service.dart';
 import '../../widgets/gamer_avatar.dart';
 import '../../widgets/rank_badge_widget.dart';
 
-class _AdminUsersTab extends StatefulWidget {
-  const _AdminUsersTab();
+class AdminUsersTab extends StatefulWidget {
+  const AdminUsersTab({super.key});
 
   @override
-  State<_AdminUsersTab> createState() => _AdminUsersTabState();
+  State<AdminUsersTab> createState() => AdminUsersTabState();
 }
 
-class _AdminUsersTabState extends State<_AdminUsersTab> {
+class AdminUsersTabState extends State<AdminUsersTab> {
   final TextEditingController _searchController = TextEditingController();
   String _userSearchQuery = '';
   bool _isSeedingDemo = false;
