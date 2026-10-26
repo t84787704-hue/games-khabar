@@ -1384,12 +1384,26 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       children: [
         _buildSectionHeader('Match & Tournament History'),
         FutureBuilder<List<Map<String, dynamic>>>(
-          future: SupabaseService.client
-              .from('tournaments')
-              .select('id, title, winner_team_id, prize_pool, match_time, created_at, status')
-              .eq('status', 'completed')
-              .or('winner_team_id.eq.$tId,winner_team_id.eq.$tUuid')
-              .order('created_at', ascending: false),
+          future: Future.wait([
+            SupabaseService.client
+                .from('tournaments')
+                .select('id, title, winner_team_id, prize_pool, match_time, created_at, status')
+                .eq('status', 'completed')
+                .or('winner_team_id.eq.$tId,winner_team_id.eq.$tUuid')
+                .then((res) => List<Map<String, dynamic>>.from(res))
+                .catchError((_) => <Map<String, dynamic>>[]),
+            SupabaseService.client
+                .from('matches')
+                .select('id, title, winner_team_id, prize, created_at, status')
+                .or('winner_team_id.eq.$tId,winner_team_id.eq.$tUuid')
+                .then((res) => List<Map<String, dynamic>>.from(res))
+                .catchError((_) => <Map<String, dynamic>>[]),
+          ]).then((results) {
+            final combined = <Map<String, dynamic>>[];
+            combined.addAll(results[0]);
+            combined.addAll(results[1]);
+            return combined;
+          }),
           builder: (context, tourSnap) {
             final wonTournaments = tourSnap.data ?? [];
 
@@ -1423,8 +1437,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
             return Column(
               children: wonTournaments.map((t) {
-                final title = t['title'] ?? 'Tournament Match';
-                final prize = t['prize_pool'] ?? 0;
+                final title = t['title'] ?? t['match_title'] ?? 'Tournament Match';
+                final prize = t['prize_pool'] ?? t['prize'] ?? 0;
                 String dateStr = 'Recent';
                 final dateField = t['created_at'] ?? t['match_time'];
                 if (dateField != null) {
