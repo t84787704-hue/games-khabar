@@ -1310,7 +1310,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                 itemCount: filtered.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  return _buildRankVerificationCard(filtered[index]);
+                  return _buildVerificationRequestCard(filtered[index]);
                 },
               );
             },
