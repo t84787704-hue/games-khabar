@@ -18,6 +18,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _gameFilter = 'All';
+  late Future<List<Map<String, dynamic>>> _tournamentsFuture;
 
   final List<String> _gameList = [
     'PUBG Mobile',
@@ -26,6 +27,21 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     'COD Mobile',
     'Apex Legends',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTournaments();
+  }
+
+  void _loadTournaments() {
+    setState(() {
+      _tournamentsFuture = SupabaseService.client
+          .from('tournaments')
+          .select()
+          .order('created_at', ascending: false);
+    });
+  }
 
   @override
   void dispose() {
@@ -71,6 +87,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
 
     try {
       await SupabaseService.client.from('tournaments').delete().eq('id', id);
+      _loadTournaments();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -96,7 +113,10 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openCreateEditTournamentModal(),
+        onPressed: () async {
+          await _openCreateEditTournamentModal();
+          _loadTournaments();
+        },
         backgroundColor: const Color(0xFF00FF88),
         foregroundColor: const Color(0xFF0B0F14),
         icon: const Icon(Icons.add_rounded, size: 20),
@@ -168,67 +188,91 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               ],
             ),
           ),
-          // Tournaments List
+          // Tournaments List with RefreshIndicator
           Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: SupabaseService.client
-                  .from('tournaments')
-                  .stream(primaryKey: ['id'])
-                  .order('created_at', ascending: false),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
-                }
-
-                final list = snapshot.data ?? [];
-                var filtered = list.where((item) {
-                  final game = (item['game_name'] ?? item['game'] ?? '').toString();
-                  final title = (item['title'] ?? item['name'] ?? '').toString().toLowerCase();
-
-                  if (_gameFilter != 'All' && !game.toLowerCase().contains(_gameFilter.toLowerCase())) {
-                    return false;
+            child: RefreshIndicator(
+              color: const Color(0xFF00FF88),
+              backgroundColor: ThemeService.card,
+              onRefresh: () async => _loadTournaments(),
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _tournamentsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
                   }
-                  if (_searchQuery.isNotEmpty && !title.contains(_searchQuery)) {
-                    return false;
-                  }
-                  return true;
-                }).toList();
 
-                if (filtered.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: ThemeService.card,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: ThemeService.border),
-                            ),
-                            child: const Icon(Icons.emoji_events_outlined, color: Color(0xFFFFD700), size: 48),
-                          ),
-                          const SizedBox(height: 16),
-                          Text('No Tournaments Found', style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 6),
-                          Text('Tap the "Create Tournament" button below to launch a new match!', textAlign: TextAlign.center, style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
-                        ],
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'Error loading: ${snapshot.error}',
+                          style: const TextStyle(color: Color(0xFFFF4655), fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    ),
-                  );
-                }
+                    );
+                  }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    return _buildTournamentCard(filtered[index]);
-                  },
-                );
-              },
+                  final list = snapshot.data ?? [];
+                  var filtered = list.where((item) {
+                    final game = (item['game_name'] ?? item['game'] ?? '').toString();
+                    final title = (item['title'] ?? item['name'] ?? '').toString().toLowerCase();
+
+                    if (_gameFilter != 'All' && !game.toLowerCase().contains(_gameFilter.toLowerCase())) {
+                      return false;
+                    }
+                    if (_searchQuery.isNotEmpty && !title.contains(_searchQuery)) {
+                      return false;
+                    }
+                    return true;
+                  }).toList();
+
+                  if (filtered.isEmpty) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.5,
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: ThemeService.card,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: ThemeService.border),
+                                    ),
+                                    child: const Icon(Icons.emoji_events_outlined, color: Color(0xFFFFD700), size: 48),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text('No Tournaments Found', style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 6),
+                                  Text('Tap the "Create Tournament" button below to launch a new match!', textAlign: TextAlign.center, style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      return _buildTournamentCard(filtered[index]);
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -368,7 +412,10 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               IconButton(
                 icon: const Icon(Icons.edit_note_rounded, color: Color(0xFF38BDF8), size: 20),
                 tooltip: 'Edit Tournament',
-                onPressed: () => _openCreateEditTournamentModal(existingData: data),
+                onPressed: () async {
+                  await _openCreateEditTournamentModal(existingData: data);
+                  _loadTournaments();
+                },
               ),
               IconButton(
                 icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655), size: 20),
@@ -382,7 +429,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     );
   }
 
-  void _openCreateEditTournamentModal({Map<String, dynamic>? existingData}) {
+  Future<void> _openCreateEditTournamentModal({Map<String, dynamic>? existingData}) async {
     final isEdit = existingData != null;
     final titleController = TextEditingController(text: existingData?['title'] ?? '');
     final prizeController = TextEditingController(text: existingData?['prize_pool']?.toString() ?? '1000');
@@ -399,7 +446,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
       selectedDateTime = DateTime.tryParse(existingData!['match_time'].toString()) ?? selectedDateTime;
     }
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: ThemeService.card,
@@ -473,7 +520,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                     Expanded(
                       child: TextField(
                         controller: prizeController,
-                        keyboardType: TextInputType.number,
                         style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
                         decoration: InputDecoration(
                           labelText: 'Prize Pool (Coins)',
@@ -677,6 +723,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                 'room_id': idController.text.trim(),
                 'room_password': passController.text.trim(),
               }).eq('id', id);
+              _loadTournaments();
               if (mounted) Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF88), foregroundColor: Colors.black),
