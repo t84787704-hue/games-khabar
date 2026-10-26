@@ -582,7 +582,12 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                   child: ElevatedButton(
                     onPressed: () async {
                       final title = titleController.text.trim();
-                      if (title.isEmpty) return;
+                      if (title.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a tournament title!'), backgroundColor: Color(0xFFFF4655)),
+                        );
+                        return;
+                      }
 
                       final payload = {
                         'title': title,
@@ -609,18 +614,24 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                           payload['joined_teams_count'] = 0;
                           await SupabaseService.client.from('tournaments').insert(payload);
                         }
-                        if (mounted) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(isEdit ? 'Tournament Updated! 🚀' : 'Tournament Published Successfully! 🏆'),
-                              backgroundColor: const Color(0xFF00FF88),
-                            ),
-                          );
-                        }
-                      } catch (e) {
+
+                        if (!context.mounted) return;
+                        Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error saving tournament: $e'), backgroundColor: const Color(0xFFFF4655)),
+                          SnackBar(
+                            content: Text(isEdit ? 'Tournament Updated! 🚀' : 'Tournament Published Successfully! 🏆'),
+                            backgroundColor: const Color(0xFF00FF88),
+                          ),
+                        );
+                      } catch (e) {
+                        debugPrint('Error saving tournament: $e');
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error saving: $e'),
+                            backgroundColor: const Color(0xFFFF4655),
+                            duration: const Duration(seconds: 4),
+                          ),
                         );
                       }
                     },
