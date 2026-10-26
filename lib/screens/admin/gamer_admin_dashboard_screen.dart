@@ -70,7 +70,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: ThemeService.background,
+      backgroundColor: ThemeService.bg,
       appBar: AppBar(
         backgroundColor: ThemeService.card,
         title: Text(
