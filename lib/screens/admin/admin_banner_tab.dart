@@ -7,14 +7,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
-class _AdminBannerControlTab extends StatefulWidget {
-  const _AdminBannerControlTab();
+class AdminBannerControlTab extends StatefulWidget {
+  const AdminBannerControlTab({super.key});
 
   @override
-  State<_AdminBannerControlTab> createState() => _AdminBannerControlTabState();
+  State<AdminBannerControlTab> createState() => AdminBannerControlTabState();
 }
 
-class _AdminBannerControlTabState extends State<_AdminBannerControlTab> {
+class AdminBannerControlTabState extends State<AdminBannerControlTab> {
   final TextEditingController _titleController = TextEditingController(text: 'Upcoming Tournament! 🏆');
   final TextEditingController _messageController = TextEditingController(text: 'Date: 08:00 PM Tonight');
   bool _isActive = true;
