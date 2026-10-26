@@ -1320,578 +1320,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  Widget _buildRankVerificationCard(_RankQueueItem item) {
-    final user = item.user;
-    final game = item.game;
-    final isPending = game.status == 'pending';
-    final isApproved = game.status == 'approved' || game.isVerified;
-    final isRejected = game.status == 'rejected';
-
-    final Color statusColor = isApproved
-        ? const Color(0xFF00FF88)
-        : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
-
-    final String statusLabel = isApproved
-        ? 'Approved ✓'
-        : (isPending ? 'Pending Review ⏳' : 'Rejected ✕');
-
-    final String dateStr = game.submittedAt != null
-        ? DateFormat('dd MMM, hh:mm a').format(game.submittedAt!)
-        : 'Recently';
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isPending
-              ? const Color(0xFFFF8A00).withOpacity(0.5)
-              : ThemeService.border,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              GamerAvatar(
-                photoUrl: user.photoUrl,
-                radius: 20,
-                displayName: user.displayName.isNotEmpty
-                    ? user.displayName
-                    : user.username,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.displayName.isNotEmpty
-                          ? user.displayName
-                          : user.username,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                    Text(
-                      '@${user.username} • UID: ${user.uid.length > 8 ? user.uid.substring(0, 8) : user.uid}',
-                      style: TextStyle(
-                          color: ThemeService.textSecondary, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: statusColor.withOpacity(0.5)),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Divider(color: ThemeService.border, height: 1),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: ThemeService.cardSecondary,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: ThemeService.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.sports_esports_rounded,
-                        size: 14, color: Color(0xFF00FF88)),
-                    const SizedBox(width: 4),
-                    Text(
-                      game.gameName,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'ID: ${game.gameId}',
-                  style: const TextStyle(
-                    color: Color(0xFF38BDF8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                dateStr,
-                style:
-                    TextStyle(color: ThemeService.textSecondary, fontSize: 11),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                'Claimed Rank: ',
-                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF8A00).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                      color: const Color(0xFFFF8A00).withOpacity(0.5)),
-                ),
-                child: Text(
-                  game.claimedRank,
-                  style: const TextStyle(
-                    color: Color(0xFFFF8A00),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              if (isApproved && game.verifiedRank.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Icon(Icons.arrow_forward_rounded,
-                    size: 12, color: ThemeService.textSecondary),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00FF88).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: const Color(0xFF00FF88).withOpacity(0.5)),
-                  ),
-                  child: Text(
-                    'Verified: ${game.verifiedRank}',
-                    style: const TextStyle(
-                      color: Color(0xFF00FF88),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (game.screenshotUrl.isNotEmpty) ...[
-            GestureDetector(
-              onTap: () => _showScreenshotViewerDialog(
-                imageUrl: game.screenshotUrl,
-                title:
-                    '${user.displayName} • ${game.gameName} Rank Proof',
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: game.screenshotUrl,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        height: 140,
-                        color: ThemeService.cardSecondary,
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFF00FF88), strokeWidth: 2),
-                        ),
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        height: 140,
-                        color: ThemeService.cardSecondary,
-                        child: Center(
-                          child: Icon(Icons.broken_image_rounded,
-                              color: ThemeService.textSecondary, size: 36),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.75),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.zoom_in_rounded,
-                                size: 14, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text(
-                              'Tap to inspect proof',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: ThemeService.cardSecondary,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.image_not_supported_rounded,
-                      color: ThemeService.textSecondary, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'No screenshot uploaded',
-                    style:
-                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (isRejected &&
-              game.rejectReason != null &&
-              game.rejectReason!.isNotEmpty) ...[
-            MainAxisAlignment: MainAxisAlignment.start,
-          ],
-          if (isPending) ...[
-            const SizedBox(height: 12),
-            _AdminRankActionButtons(
-              item: item,
-              onApprove: () => _approveRankVerification(item),
-              onReject: (reason) => _rejectRankVerification(item, reason),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  void _showScreenshotViewerDialog(
-      {required String imageUrl, required String title}) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: ThemeService.card,
-        insetPadding: const EdgeInsets.all(16),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close,
-                        color: ThemeService.textSecondary, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-                child: InteractiveViewer(
-                  maxScale: 4.0,
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.contain,
-                    placeholder: (_, __) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: CircularProgressIndicator(
-                          color: Color(0xFF00FF88)),
-                    ),
-                    errorWidget: (_, __, ___) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: Icon(Icons.broken_image_rounded,
-                          color: Colors.red, size: 48),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _approveRankVerification(_RankQueueItem item) async {
-    try {
-      final targetUserId = item.game.ownerUid.isNotEmpty
-          ? item.game.ownerUid
-          : item.user.uid;
-      final currentAdmin =
-          GamerAuthService().currentGamer?.displayName ?? 'Admin';
-
-      final ok = await SupabaseService.approveRank(
-        userId: targetUserId,
-        rank: item.game.claimedRank,
-        gameName: item.game.gameName,
-        adminName: currentAdmin,
-      );
-
-      try {
-        await NotificationService().createNotification(
-          userId: targetUserId,
-          title: 'Rank Verified! 🎉',
-          body:
-              'rank_approved_notif_body'.tr(args: [item.game.claimedRank, item.game.gameName]),
-          type: 'rank_verified',
-        );
-      } catch (e) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok
-                  ? 'Approved ${item.game.gameName} rank (${item.game.claimedRank}) for @${item.user.username}!'
-                  : 'Error approving rank',
-            ),
-            backgroundColor:
-                ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error approving rank: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-        );
-      }
-    }
-  }
-
-  Future<void> _rejectRankVerification(
-      _RankQueueItem item, String reason) async {
-    try {
-      final targetUserId = item.game.ownerUid.isNotEmpty
-          ? item.game.ownerUid
-          : item.user.uid;
-      final currentAdmin =
-          GamerAuthService().currentGamer?.displayName ?? 'Admin';
-      final defaultUrduMsg = 'screenshot_invalid_reupload'.tr();
-      final finalReason =
-          reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
-
-      final ok = await SupabaseService.rejectRank(
-        userId: targetUserId,
-        reason: finalReason,
-        adminName: currentAdmin,
-      );
-
-      try {
-        await NotificationService().createNotification(
-          userId: targetUserId,
-          title: 'Rank Verification Notice ⚠️',
-          body: defaultUrduMsg,
-          type: 'rank_rejected',
-        );
-      } catch (e) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok
-                  ? 'Rejected ${item.game.gameName} rank verification for @${item.user.username}'
-                  : 'Error rejecting rank',
-            ),
-            backgroundColor:
-                ok ? const Color(0xFFFF8A00) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error rejecting rank: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-          );
-        }
-      }
-    }
-  }
-
-  // ===================== TAB 3: BLUE TICK REQUESTS =====================
-  Widget _buildBlueTickRequestsTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService.getRealtimeUsers(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline_rounded,
-                      color: Color(0xFFFF4655), size: 48),
-                  const SizedBox(height: 14),
-                  Text('Could not load blue tick requests',
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15)),
-                  const SizedBox(height: 6),
-                  Text('${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: ThemeService.textSecondary, fontSize: 12)),
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF00FF88)));
-        }
-
-        final docs = snapshot.data ?? [];
-
-        final allUsersSorted = List<Map<String, dynamic>>.from(docs);
-        allUsersSorted.sort((a, b) {
-          final tA = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2020);
-          final tB = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2020);
-          return tA.compareTo(tB);
-        });
-
-        final List<Map<String, dynamic>> requestsWithIndex = [];
-        for (final d in docs) {
-          final isVerified = d['is_verified'] == true || d['has_blue_tick'] == true;
-          final vStatus = (d['verification_status'] ?? d['blue_tick_status'] ?? '').toString().toLowerCase();
-
-          if (!isVerified && (vStatus == 'pending' || vStatus == 'under_review' || vStatus == 'submitted')) {
-            final userObj = GamerUser.fromMap(d);
-            final userIndex = allUsersSorted.indexWhere((u) => (u['id'] ?? u['uid']) == userObj.uid) + 1;
-
-            requestsWithIndex.add({
-              'user': userObj,
-              'raw': d,
-              'rankNumber': userIndex > 0 ? userIndex : 9999,
-            });
-          }
-        }
-
-        if (requestsWithIndex.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: ThemeService.card,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: ThemeService.border),
-                    ),
-                    child: const Icon(Icons.verified_outlined,
-                        color: Color(0xFF38BDF8), size: 40),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'No Blue Tick Requests',
-                    style: TextStyle(
-                        color: ThemeService.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'All verification requests have been reviewed!',
-                    textAlign: TextAlign.center,
-                    style:
-                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
-          itemCount: requestsWithIndex.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final item = requestsWithIndex[index];
-            return _buildVerificationRequestCard(
-              item['user'] as GamerUser,
-              rankNumber: item['rankNumber'] as int,
-              rawData: item['raw'] as Map<String, dynamic>,
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildVerificationRequestCard(_RankQueueItem item) {
     final user = item.user;
     final game = item.game;
@@ -5455,1678 +4883,436 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
       },
     );
   }
+}
 
-  Widget _buildVerificationRequestCard(_RankQueueItem item) {
-    final user = item.user;
-    final game = item.game;
-    final isPending = game.status == 'pending';
-    final isApproved = game.status == 'approved' || game.isVerified;
-    final isRejected = game.status == 'rejected';
+// ===================== TAB: BANNER CONTROL (HOME ANNOUNCEMENT) =====================
+class _AdminBannerControlTab extends StatefulWidget {
+  const _AdminBannerControlTab();
 
-    final Color statusColor = isApproved
-        ? const Color(0xFF00FF88)
-        : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
+  @override
+  State<_AdminBannerControlTab> createState() => _AdminBannerControlTabState();
+}
 
-    final String statusLabel = isApproved
-        ? 'Approved ✓'
-        : (isPending ? 'Pending Review ⏳' : 'Rejected ✕');
+class _AdminBannerControlTabState extends State<_AdminBannerControlTab> {
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
+  bool _isActive = true;
+  bool _isLoading = true;
+  bool _isSaving = false;
 
-    final String dateStr = game.submittedAt != null
-        ? DateFormat('dd MMM, hh:mm a').format(game.submittedAt!)
-        : 'Recently';
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentBanner();
+  }
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isPending
-              ? const Color(0xFFFF8A00).withOpacity(0.5)
-              : ThemeService.border,
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCurrentBanner() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await SupabaseService.client
+          .from('app_announcements')
+          .select()
+          .eq('id', 'home_banner')
+          .maybeSingle();
+
+      if (res != null && mounted) {
+        _titleController.text = (res['title'] ?? 'Upcoming Tournament!').toString();
+        _messageController.text = (res['message'] ?? '').toString();
+        _isActive = res['is_active'] == true;
+      } else {
+        _titleController.text = 'Upcoming Tournament!';
+        _messageController.text = 'Date: Coming Soon | Time: 08:00 PM';
+        _isActive = true;
+      }
+    } catch (e) {
+      debugPrint('Error loading announcement: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveBanner() async {
+    final title = _titleController.text.trim();
+    final message = _messageController.text.trim();
+
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a banner title!'),
+          backgroundColor: Color(0xFFFF4655),
         ),
-      ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      await SupabaseService.client.from('app_announcements').upsert({
+        'id': 'home_banner',
+        'title': title,
+        'message': message,
+        'is_active': _isActive,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Home Feed Banner updated successfully! 🚀'),
+            backgroundColor: Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update banner: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              GamerAvatar(
-                photoUrl: user.photoUrl,
-                radius: 20,
-                displayName: user.displayName.isNotEmpty
-                    ? user.displayName
-                    : user.username,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.displayName.isNotEmpty
-                          ? user.displayName
-                          : user.username,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                    Text(
-                      '@${user.username} • UID: ${user.uid.length > 8 ? user.uid.substring(0, 8) : user.uid}',
-                      style: TextStyle(
-                          color: ThemeService.textSecondary, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: statusColor.withOpacity(0.5)),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Divider(color: ThemeService.border, height: 1),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: ThemeService.cardSecondary,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: ThemeService.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.sports_esports_rounded,
-                        size: 14, color: Color(0xFF00FF88)),
-                    const SizedBox(width: 4),
-                    Text(
-                      game.gameName,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'ID: ${game.gameId}',
-                  style: const TextStyle(
-                    color: Color(0xFF38BDF8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                dateStr,
-                style:
-                    TextStyle(color: ThemeService.textSecondary, fontSize: 11),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                'Claimed Rank: ',
-                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF8A00).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                      color: const Color(0xFFFF8A00).withOpacity(0.5)),
-                ),
-                child: Text(
-                  game.claimedRank,
-                  style: const TextStyle(
-                    color: Color(0xFFFF8A00),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              if (isApproved && game.verifiedRank.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Icon(Icons.arrow_forward_rounded,
-                    size: 12, color: ThemeService.textSecondary),
-                const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: ThemeService.card,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.4)),
+            ),
+            child: Row(
+              children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00FF88).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: const Color(0xFF00FF88).withOpacity(0.5)),
+                    color: const Color(0xFF00FF88).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(
-                    'Verified: ${game.verifiedRank}',
-                    style: const TextStyle(
-                      color: Color(0xFF00FF88),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  child: const Icon(Icons.campaign_rounded, color: Color(0xFF00FF88), size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Feed Announcement Banner',
+                        style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Sabhi users ke feed screen ke top par ye announcement card show hoga.',
+                        style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                      ),
+                    ],
                   ),
                 ),
               ],
-            ],
+            ),
           ),
-          const SizedBox(height: 10),
-          if (game.screenshotUrl.isNotEmpty) ...[
-            GestureDetector(
-              onTap: () => _showScreenshotViewerDialog(
-                imageUrl: game.screenshotUrl,
-                title:
-                    '${user.displayName} • ${game.gameName} Rank Proof',
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: ThemeService.card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: ThemeService.border),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CachedNetworkImage(
-                      imageUrl: game.screenshotUrl,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        height: 140,
-                        color: ThemeService.cardSecondary,
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFF00FF88), strokeWidth: 2),
-                        ),
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        height: 140,
-                        color: ThemeService.cardSecondary,
-                        child: Center(
-                          child: Icon(Icons.broken_image_rounded,
-                              color: ThemeService.textSecondary, size: 36),
-                        ),
-                      ),
+                    Text(
+                      'Show Banner on Feed',
+                      style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
                     ),
-                    Positioned(
-                      bottom: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.75),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.zoom_in_rounded,
-                                size: 14, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text(
-                              'Tap to inspect proof',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
+                    Text(
+                      _isActive ? 'Banner is currently VISIBLE to users' : 'Banner is currently HIDDEN',
+                      style: TextStyle(
+                        color: _isActive ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
-              ),
+                Switch(
+                  value: _isActive,
+                  activeColor: const Color(0xFF00FF88),
+                  onChanged: (val) => setState(() => _isActive = val),
+                ),
+              ],
             ),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: ThemeService.cardSecondary,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.image_not_supported_rounded,
-                      color: ThemeService.textSecondary, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'No screenshot uploaded',
-                    style:
-                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Announcement Title',
+            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _titleController,
+            style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'e.g. Upcoming Tournament! 🏆',
+              hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
+              filled: true,
+              fillColor: ThemeService.card,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: ThemeService.border)),
+              focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Color(0xFF00FF88))),
             ),
-          ],
-          if (isRejected &&
-              game.rejectReason != null &&
-              game.rejectReason!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF4655).withOpacity(0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: const Color(0xFFFF4655).withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded,
-                      color: Color(0xFFFF4655), size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Reason: ${game.rejectReason}',
-                      style: const TextStyle(
-                          color: Color(0xFFFF4655), fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Match Details / Date & Time',
+            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _messageController,
+            maxLines: 3,
+            style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'e.g. Date: Coming Soon | Time: 08:00 PM',
+              hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
+              filled: true,
+              fillColor: ThemeService.card,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: ThemeService.border)),
+              focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Color(0xFF00FF88))),
             ),
-          ],
-          if (isPending) ...[
-            const SizedBox(height: 12),
-            _AdminRankActionButtons(
-              item: item,
-              onApprove: () => _approveRankVerification(item),
-              onReject: (reason) => _rejectRankVerification(item, reason),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00FF88),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: _isSaving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                  : const Icon(Icons.publish_rounded, size: 20),
+              label: Text(
+                _isSaving ? 'Updating...' : 'Publish Banner to Feed 📢',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              onPressed: _isSaving ? null : _saveBanner,
             ),
-          ],
+          ),
         ],
       ),
     );
   }
+}
 
-  void _showScreenshotViewerDialog(
-      {required String imageUrl, required String title}) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: ThemeService.card,
-        insetPadding: const EdgeInsets.all(16),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close,
-                        color: ThemeService.textSecondary, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-                child: InteractiveViewer(
-                  maxScale: 4.0,
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.contain,
-                    placeholder: (_, __) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: CircularProgressIndicator(
-                          color: Color(0xFF00FF88)),
-                    ),
-                    errorWidget: (_, __, ___) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: Icon(Icons.broken_image_rounded,
-                          color: Colors.red, size: 48),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar _tabBar;
 
-  Future<void> _approveRankVerification(_RankQueueItem item) async {
-    try {
-      final targetUserId = item.game.ownerUid.isNotEmpty
-          ? item.game.ownerUid
-          : item.user.uid;
-      final currentAdmin =
-          GamerAuthService().currentGamer?.displayName ?? 'Admin';
+  _SliverAppBarDelegate(this._tabBar);
 
-      final ok = await SupabaseService.approveRank(
-        userId: targetUserId,
-        rank: item.game.claimedRank,
-        gameName: item.game.gameName,
-        adminName: currentAdmin,
-      );
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
 
-      try {
-        await NotificationService().createNotification(
-          userId: targetUserId,
-          title: 'Rank Verified! 🎉',
-          body:
-              'rank_approved_notif_body'.tr(args: [item.game.claimedRank, item.game.gameName]),
-          type: 'rank_verified',
-        );
-      } catch (e) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok
-                  ? 'Approved ${item.game.gameName} rank (${item.game.claimedRank}) for @${item.user.username}!'
-                  : 'Error approving rank',
-            ),
-            backgroundColor:
-                ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error approving rank: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-        );
-      }
-    }
-  }
-
-  Future<void> _rejectRankVerification(
-      _RankQueueItem item, String reason) async {
-    try {
-      final targetUserId = item.game.ownerUid.isNotEmpty
-          ? item.game.ownerUid
-          : item.user.uid;
-      final currentAdmin =
-          GamerAuthService().currentGamer?.displayName ?? 'Admin';
-      final defaultUrduMsg = 'screenshot_invalid_reupload'.tr();
-      final finalReason =
-          reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
-
-      final ok = await SupabaseService.rejectRank(
-        userId: targetUserId,
-        reason: finalReason,
-        adminName: currentAdmin,
-      );
-
-      try {
-        await NotificationService().createNotification(
-          userId: targetUserId,
-          title: 'Rank Verification Notice ⚠️',
-          body: defaultUrduMsg,
-          type: 'rank_rejected',
-        );
-      } catch (e) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok
-                  ? 'Rejected ${item.game.gameName} rank verification for @${item.user.username}'
-                  : 'Error rejecting rank',
-            ),
-            backgroundColor:
-                ok ? const Color(0xFFFF8A00) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error rejecting rank: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-        );
-      }
-    }
-  }
-
-  // ===================== TAB 3: BLUE TICK REQUESTS =====================
-  Widget _buildBlueTickRequestsTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService.getRealtimeUsers(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline_rounded,
-                      color: Color(0xFFFF4655), size: 48),
-                  const SizedBox(height: 14),
-                  Text('Could not load blue tick requests',
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15)),
-                  const SizedBox(height: 6),
-                  Text('${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: ThemeService.textSecondary, fontSize: 12)),
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF00FF88)));
-        }
-
-        final docs = snapshot.data ?? [];
-
-        final allUsersSorted = List<Map<String, dynamic>>.from(docs);
-        allUsersSorted.sort((a, b) {
-          final tA = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2020);
-          final tB = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2020);
-          return tA.compareTo(tB);
-        });
-
-        final List<Map<String, dynamic>> requestsWithIndex = [];
-        for (final d in docs) {
-          final isVerified = d['is_verified'] == true || d['has_blue_tick'] == true;
-          final vStatus = (d['verification_status'] ?? d['blue_tick_status'] ?? '').toString().toLowerCase();
-
-          if (!isVerified && (vStatus == 'pending' || vStatus == 'under_review' || vStatus == 'submitted')) {
-            final userObj = GamerUser.fromMap(d);
-            final userIndex = allUsersSorted.indexWhere((u) => (u['id'] ?? u['uid']) == userObj.uid) + 1;
-
-            requestsWithIndex.add({
-              'user': userObj,
-              'raw': d,
-              'rankNumber': userIndex > 0 ? userIndex : 9999,
-            });
-          }
-        }
-
-        if (requestsWithIndex.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: ThemeService.card,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: ThemeService.border),
-                    ),
-                    child: const Icon(Icons.verified_outlined,
-                        color: Color(0xFF38BDF8), size: 40),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'No Blue Tick Requests',
-                    style: TextStyle(
-                        color: ThemeService.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'All verification requests have been reviewed!',
-                    textAlign: TextAlign.center,
-                    style:
-                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
-          itemCount: requestsWithIndex.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final item = requestsWithIndex[index];
-            return _buildVerificationRequestCard(
-              item['user'] as GamerUser,
-              rankNumber: item['rankNumber'] as int,
-              rawData: item['raw'] as Map<String, dynamic>,
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildVerificationRequestCard(_RankQueueItem item) {
-    final user = item.user;
-    final game = item.game;
-    final isPending = game.status == 'pending';
-    final isApproved = game.status == 'approved' || game.isVerified;
-    final isRejected = game.status == 'rejected';
-
-    final Color statusColor = isApproved
-        ? const Color(0xFF00FF88)
-        : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
-
-    final String statusLabel = isApproved
-        ? 'Approved ✓'
-        : (isPending ? 'Pending Review ⏳' : 'Rejected ✕');
-
-    final String dateStr = game.submittedAt != null
-        ? DateFormat('dd MMM, hh:mm a').format(game.submittedAt!)
-        : 'Recently';
-
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isPending
-              ? const Color(0xFFFF8A00).withOpacity(0.5)
-              : ThemeService.border,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              GamerAvatar(
-                photoUrl: user.photoUrl,
-                radius: 20,
-                displayName: user.displayName.isNotEmpty
-                    ? user.displayName
-                    : user.username,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.displayName.isNotEmpty
-                          ? user.displayName
-                          : user.username,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                    Text(
-                      '@${user.username} • UID: ${user.uid.length > 8 ? user.uid.substring(0, 8) : user.uid}',
-                      style: TextStyle(
-                          color: ThemeService.textSecondary, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: statusColor.withOpacity(0.5)),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+      color: ThemeService.bg,
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
+  }
+}
+
+class _RankQueueItem {
+  final GamerUser user;
+  final UserGameRank game;
+  final int gameIndex;
+
+  _RankQueueItem({
+    required this.user,
+    required this.game,
+    required this.gameIndex,
+  });
+}
+
+class _AdminRankActionButtons extends StatefulWidget {
+  final _RankQueueItem item;
+  final VoidCallback onApprove;
+  final ValueChanged<String> onReject;
+
+  const _AdminRankActionButtons({
+    required this.item,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  State<_AdminRankActionButtons> createState() =>
+      _AdminRankActionButtonsState();
+}
+
+class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
+  final TextEditingController _reasonController = TextEditingController();
+  bool _showReasonField = false;
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_showReasonField) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: ThemeService.cardSecondary,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: const Color(0xFFFF4655).withOpacity(0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _reasonController,
+                  style: TextStyle(color: ThemeService.textPrimary, fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText:
+                        'Enter rejection reason (e.g. Screenshot unclear, UID mismatch)...',
+                    hintStyle: TextStyle(
+                        color: ThemeService.textSecondary, fontSize: 11),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    border: InputBorder.none,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Divider(color: ThemeService.border, height: 1),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: ThemeService.cardSecondary,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: ThemeService.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.sports_esports_rounded,
-                        size: 14, color: Color(0xFF00FF88)),
-                    const SizedBox(width: 4),
-                    Text(
-                      game.gameName,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'ID: ${game.gameId}',
-                  style: const TextStyle(
-                    color: Color(0xFF38BDF8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                dateStr,
-                style:
-                    TextStyle(color: ThemeService.textSecondary, fontSize: 11),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                'Claimed Rank: ',
-                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF8A00).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                      color: const Color(0xFFFF8A00).withOpacity(0.5)),
-                ),
-                child: Text(
-                  game.claimedRank,
-                  style: const TextStyle(
-                    color: Color(0xFFFF8A00),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              if (isApproved && game.verifiedRank.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Icon(Icons.arrow_forward_rounded,
-                    size: 12, color: ThemeService.textSecondary),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00FF88).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: const Color(0xFF00FF88).withOpacity(0.5)),
-                  ),
-                  child: Text(
-                    'Verified: ${game.verifiedRank}',
-                    style: const TextStyle(
-                      color: Color(0xFF00FF88),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      'Screenshot blurry',
+                      'UID mismatch',
+                      'Fake rank proof',
+                      'Not profile/tier page',
+                    ].map((reason) {
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            _reasonController.text = reason;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: ThemeService.card,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            reason,
+                            style: const TextStyle(
+                                color: Color(0xFF38BDF8), fontSize: 10),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
               ],
-            ],
+            ),
           ),
-          const SizedBox(height: 10),
-          if (game.screenshotUrl.isNotEmpty) ...[
-            GestureDetector(
-              onTap: () => _showScreenshotViewerDialog(
-                imageUrl: game.screenshotUrl,
-                title:
-                    '${user.displayName} • ${game.gameName} Rank Proof',
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: game.screenshotUrl,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        height: 140,
-                        color: ThemeService.cardSecondary,
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFF00FF88), strokeWidth: 2),
-                        ),
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        height: 140,
-                        color: ThemeService.cardSecondary,
-                        child: Center(
-                          child: Icon(Icons.broken_image_rounded,
-                              color: ThemeService.textSecondary, size: 36),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.75),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.zoom_in_rounded,
-                                size: 14, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text(
-                              'Tap to inspect proof',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: ThemeService.cardSecondary,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.image_not_supported_rounded,
-                      color: ThemeService.textSecondary, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'No screenshot uploaded',
-                    style:
-                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (isRejected &&
-              game.rejectReason != null &&
-              game.rejectReason!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF4655).withOpacity(0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: const Color(0xFFFF4655).withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded,
-                      color: Color(0xFFFF4655), size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Reason: ${game.rejectReason}',
-                      style: const TextStyle(
-                          color: Color(0xFFFF4655), fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (isPending) ...[
-            const SizedBox(height: 12),
-            _AdminRankActionButtons(
-              item: item,
-              onApprove: () => _approveRankVerification(item),
-              onReject: (reason) => _rejectRankVerification(item, reason),
-            ),
-          ],
         ],
-      ),
-    );
-  }
-
-  void _showScreenshotViewerDialog(
-      {required String imageUrl, required String title}) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: ThemeService.card,
-        insetPadding: const EdgeInsets.all(16),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close,
-                        color: ThemeService.textSecondary, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  if (!_showReasonField) {
+                    setState(() => _showReasonField = true);
+                  } else {
+                    widget.onReject(_reasonController.text);
+                  }
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFFF4655)),
+                  backgroundColor:
+                      const Color(0xFFFF4655).withOpacity(0.1),
+                  foregroundColor: const Color(0xFFFF4655),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                 ),
-                child: InteractiveViewer(
-                  maxScale: 4.0,
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.contain,
-                    placeholder: (_, __) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: CircularProgressIndicator(
-                          color: Color(0xFF00FF88)),
-                    ),
-                    errorWidget: (_, __, ___) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: Icon(Icons.broken_image_rounded,
-                          color: Colors.red, size: 48),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _approveRankVerification(_RankQueueItem item) async {
-    try {
-      final targetUserId = item.game.ownerUid.isNotEmpty
-          ? item.game.ownerUid
-          : item.user.uid;
-      final currentAdmin =
-          GamerAuthService().currentGamer?.displayName ?? 'Admin';
-
-      final ok = await SupabaseService.approveRank(
-        userId: targetUserId,
-        rank: item.game.claimedRank,
-        gameName: item.game.gameName,
-        adminName: currentAdmin,
-      );
-
-      try {
-        await NotificationService().createNotification(
-          userId: targetUserId,
-          title: 'Rank Verified! 🎉',
-          body:
-              'rank_approved_notif_body'.tr(args: [item.game.claimedRank, item.game.gameName]),
-          type: 'rank_verified',
-        );
-      } catch (e) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok
-                  ? 'Approved ${item.game.gameName} rank (${item.game.claimedRank}) for @${item.user.username}!'
-                  : 'Error approving rank',
-            ),
-            backgroundColor:
-                ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error approving rank: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-        );
-      }
-    }
-  }
-
-  Future<void> _rejectRankVerification(
-      _RankQueueItem item, String reason) async {
-    try {
-      final targetUserId = item.game.ownerUid.isNotEmpty
-          ? item.game.ownerUid
-          : item.user.uid;
-      final currentAdmin =
-          GamerAuthService().currentGamer?.displayName ?? 'Admin';
-      final defaultUrduMsg = 'screenshot_invalid_reupload'.tr();
-      final finalReason =
-          reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
-
-      final ok = await SupabaseService.rejectRank(
-        userId: targetUserId,
-        reason: finalReason,
-        adminName: currentAdmin,
-      );
-
-      try {
-        await NotificationService().createNotification(
-          userId: targetUserId,
-          title: 'Rank Verification Notice ⚠️',
-          body: defaultUrduMsg,
-          type: 'rank_rejected',
-        );
-      } catch (e) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok
-                  ? 'Rejected ${item.game.gameName} rank verification for @${item.user.username}'
-                  : 'Error rejecting rank',
-            ),
-            backgroundColor:
-                ok ? const Color(0xFFFF8A00) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error rejecting rank: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-        );
-      }
-    }
-  }
-
-  // ===================== TAB 3: BLUE TICK REQUESTS =====================
-  Widget _buildBlueTickRequestsTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService.getRealtimeUsers(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline_rounded,
-                      color: Color(0xFFFF4655), size: 48),
-                  const SizedBox(height: 14),
-                  Text('Could not load blue tick requests',
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15)),
-                  const SizedBox(height: 6),
-                  Text('${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: ThemeService.textSecondary, fontSize: 12)),
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF00FF88)));
-        }
-
-        final docs = snapshot.data ?? [];
-
-        final allUsersSorted = List<Map<String, dynamic>>.from(docs);
-        allUsersSorted.sort((a, b) {
-          final tA = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2020);
-          final tB = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2020);
-          return tA.compareTo(tB);
-        });
-
-        final List<Map<String, dynamic>> requestsWithIndex = [];
-        for (final d in docs) {
-          final isVerified = d['is_verified'] == true || d['has_blue_tick'] == true;
-          final vStatus = (d['verification_status'] ?? d['blue_tick_status'] ?? '').toString().toLowerCase();
-
-          if (!isVerified && (vStatus == 'pending' || vStatus == 'under_review' || vStatus == 'submitted')) {
-            final userObj = GamerUser.fromMap(d);
-            final userIndex = allUsersSorted.indexWhere((u) => (u['id'] ?? u['uid']) == userObj.uid) + 1;
-
-            requestsWithIndex.add({
-              'user': userObj,
-              'raw': d,
-              'rankNumber': userIndex > 0 ? userIndex : 9999,
-            });
-          }
-        }
-
-        if (requestsWithIndex.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: ThemeService.card,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: ThemeService.border),
-                    ),
-                    child: const Icon(Icons.verified_outlined,
-                        color: Color(0xFF38BDF8), size: 40),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'No Blue Tick Requests',
-                    style: TextStyle(
-                        color: ThemeService.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'All verification requests have been reviewed!',
-                    textAlign: TextAlign.center,
-                    style:
-                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
-          itemCount: requestsWithIndex.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final item = requestsWithIndex[index];
-            return _buildVerificationRequestCard(
-              item['user'] as GamerUser,
-              rankNumber: item['rankNumber'] as int,
-              rawData: item['raw'] as Map<String, dynamic>,
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildVerificationRequestCard(_RankQueueItem item) {
-    final user = item.user;
-    final game = item.game;
-    final isPending = game.status == 'pending';
-    final isApproved = game.status == 'approved' || game.isVerified;
-    final isRejected = game.status == 'rejected';
-
-    final Color statusColor = isApproved
-        ? const Color(0xFF00FF88)
-        : (isPending ? const Color(0xFFFF8A00) : const Color(0xFFFF4655));
-
-    final String statusLabel = isApproved
-        ? 'Approved ✓'
-        : (isPending ? 'Pending Review ⏳' : 'Rejected ✕');
-
-    final String dateStr = game.submittedAt != null
-        ? DateFormat('dd MMM, hh:mm a').format(game.submittedAt!)
-        : 'Recently';
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isPending
-              ? const Color(0xFFFF8A00).withOpacity(0.5)
-              : ThemeService.border,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              GamerAvatar(
-                photoUrl: user.photoUrl,
-                radius: 20,
-                displayName: user.displayName.isNotEmpty
-                    ? user.displayName
-                    : user.username,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.displayName.isNotEmpty
-                          ? user.displayName
-                          : user.username,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                    Text(
-                      '@${user.username} • UID: ${user.uid.length > 8 ? user.uid.substring(0, 8) : user.uid}',
-                      style: TextStyle(
-                          color: ThemeService.textSecondary, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: statusColor.withOpacity(0.5)),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Divider(color: ThemeService.border, height: 1),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: ThemeService.cardSecondary,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: ThemeService.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.sports_esports_rounded,
-                        size: 14, color: Color(0xFF00FF88)),
-                    const SizedBox(width: 4),
-                    Text(
-                      game.gameName,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'ID: ${game.gameId}',
+                icon: const Icon(Icons.close_rounded, size: 14),
+                label: Text(
+                  _showReasonField ? 'Confirm Reject' : 'Reject',
                   style: const TextStyle(
-                    color: Color(0xFF38BDF8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                dateStr,
-                style:
-                    TextStyle(color: ThemeService.textSecondary, fontSize: 11),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                'Claimed Rank: ',
-                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF8A00).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                      color: const Color(0xFFFF8A00).withOpacity(0.5)),
-                ),
-                child: Text(
-                  game.claimedRank,
-                  style: const TextStyle(
-                    color: Color(0xFFFF8A00),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              if (isApproved && game.verifiedRank.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Icon(Icons.arrow_forward_rounded,
-                    size: 12, color: ThemeService.textSecondary),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00FF88).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: const Color(0xFF00FF88).withOpacity(0.5)),
-                  ),
-                  child: Text(
-                    'Verified: ${game.verifiedRank}',
-                    style: const TextStyle(
-                      color: Color(0xFF00FF88),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (game.screenshotUrl.isNotEmpty) ...[
-            GestureDetector(
-              onTap: () => _showScreenshotViewerDialog(
-                imageUrl: game.screenshotUrl,
-                title:
-                    '${user.displayName} • ${game.gameName} Rank Proof',
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: game.screenshotUrl,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        height: 140,
-                        color: ThemeService.cardSecondary,
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFF00FF88), strokeWidth: 2),
-                        ),
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        height: 140,
-                        color: ThemeService.cardSecondary,
-                        child: Center(
-                          child: Icon(Icons.broken_image_rounded,
-                              color: ThemeService.textSecondary, size: 36),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.75),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.zoom_in_rounded,
-                                size: 14, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text(
-                              'Tap to inspect proof',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                      fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),
             ),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: ThemeService.cardSecondary,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.image_not_supported_rounded,
-                      color: ThemeService.textSecondary, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'No screenshot uploaded',
-                    style:
-                        TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (isRejected &&
-              game.rejectReason != null &&
-              game.rejectReason!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF4655).withOpacity(0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: const Color(0xFFFF4655).withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded,
-                      color: Color(0xFFFF4655), size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Reason: ${game.rejectReason}',
-                      style: const TextStyle(
-                          color: Color(0xFFFF4655), fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (isPending) ...[
-            const SizedBox(height: 12),
-            _AdminRankActionButtons(
-              item: item,
-              onApprove: () => _approveRankVerification(item),
-              onReject: (reason) => _rejectRankVerification(item, reason),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  void _showScreenshotViewerDialog(
-      {required String imageUrl, required String title}) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: ThemeService.card,
-        insetPadding: const EdgeInsets.all(16),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                          color: ThemeService.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close,
-                        color: ThemeService.textSecondary, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: widget.onApprove,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00FF88),
+                  foregroundColor: const Color(0xFF0B0F14),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                 ),
-                child: InteractiveViewer(
-                  maxScale: 4.0,
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.contain,
-                    placeholder: (_, __) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: CircularProgressIndicator(
-                          color: Color(0xFF00FF88)),
-                    ),
-                    errorWidget: (_, __, ___) => const Padding(
-                      padding: EdgeInsets.all(48),
-                      child: Icon(Icons.broken_image_rounded,
-                          color: Colors.red, size: 48),
-                    ),
-                  ),
+                icon: const Icon(Icons.check_rounded, size: 14),
+                label: const Text(
+                  'Approve Rank',
+                  style:
+                      TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                 ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Future<void> _approveRankVerification(_RankQueueItem item) async {
-    try {
-      final targetUserId = item.game.ownerUid.isNotEmpty
-          ? item.game.ownerUid
-          : item.user.uid;
-      final currentAdmin =
-          GamerAuthService().currentGamer?.displayName ?? 'Admin';
-
-      final ok = await SupabaseService.approveRank(
-        userId: targetUserId,
-        rank: item.game.claimedRank,
-        gameName: item.game.gameName,
-        adminName: currentAdmin,
-      );
-
-      try {
-        await NotificationService().createNotification(
-          userId: targetUserId,
-          title: 'Rank Verified! 🎉',
-          body:
-              'rank_approved_notif_body'.tr(args: [item.game.claimedRank, item.game.gameName]),
-          type: 'rank_verified',
-        );
-      } catch (e) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok
-                  ? 'Approved ${item.game.gameName} rank (${item.game.claimedRank}) for @${item.user.username}!'
-                  : 'Error approving rank',
-            ),
-            backgroundColor:
-                ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error approving rank: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-        );
-      }
-    }
-  }
-
-  Future<void> _rejectRankVerification(
-      _RankQueueItem item, String reason) async {
-    try {
-      final targetUserId = item.game.ownerUid.isNotEmpty
-          ? item.game.ownerUid
-          : item.user.uid;
-      final currentAdmin =
-          GamerAuthService().currentGamer?.displayName ?? 'Admin';
-      final defaultUrduMsg = 'screenshot_invalid_reupload'.tr();
-      final finalReason =
-          reason.trim().isNotEmpty ? reason.trim() : defaultUrduMsg;
-
-      final ok = await SupabaseService.rejectRank(
-        userId: targetUserId,
-        reason: finalReason,
-        adminName: currentAdmin,
-      );
-
-      try {
-        await NotificationService().createNotification(
-          userId: targetUserId,
-          title: 'Rank Verification Notice ⚠️',
-          body: defaultUrduMsg,
-          type: 'rank_rejected',
-        );
-      } catch (e) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok
-                  ? 'Rejected ${item.game.gameName} rank verification for @${item.user.username}'
-                  : 'Error rejecting rank',
-            ),
-            backgroundColor:
-                ok ? const Color(0xFFFF8A00) : const Color(0xFFFF4655),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error rejecting rank: $e'),
-              backgroundColor: const Color(0xFFFF4655)),
-        );
-      }
-    }
-  }
-
-  // ===================== TAB 3: BLUE TICK REQUESTS =====================
-  Widget _buildBlueTickRequestsTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: SupabaseService.getRealtestUsers(),
-      builder: (context, snapshot) {
-        // ... (baki code)
-      },
+      ],
     );
   }
 }
