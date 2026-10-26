@@ -1,6 +1,12 @@
 // ===============================================================================
 // CLEAN TOURNAMENT MANAGEMENT TAB — Single View with Floating/Bottom Create Button
 // ===============================================================================
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
+
 class _AdminTournamentsTab extends StatefulWidget {
   const _AdminTournamentsTab();
 
