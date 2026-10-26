@@ -7,14 +7,14 @@ import 'package:intl/intl.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
-class _AdminTournamentsTab extends StatefulWidget {
-  const _AdminTournamentsTab();
+class AdminTournamentsTab extends StatefulWidget {
+  const AdminTournamentsTab({super.key});
 
   @override
-  State<_AdminTournamentsTab> createState() => _AdminTournamentsTabState();
+  State<AdminTournamentsTab> createState() => AdminTournamentsTabState();
 }
 
-class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
+class AdminTournamentsTabState extends State<AdminTournamentsTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _gameFilter = 'All';
