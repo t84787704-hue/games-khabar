@@ -20,7 +20,7 @@ import 'teams_screen.dart';
 import 'gamer_messages_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
-import 'gamer_admin_dashboard_screen.dart';
+import 'admin/gamer_admin_dashboard_screen.dart';
 
 class GamerMainNavigationScreen extends StatefulWidget {
   final int initialIndex;
