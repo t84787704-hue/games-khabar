@@ -7,14 +7,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
-class _AdminPostsModerationTab extends StatefulWidget {
-  const _AdminPostsModerationTab();
+class AdminPostsModerationTab extends StatefulWidget {
+  const AdminPostsModerationTab({super.key});
 
   @override
-  State<_AdminPostsModerationTab> createState() => _AdminPostsModerationTabState();
+  State<AdminPostsModerationTab> createState() => AdminPostsModerationTabState();
 }
 
-class _AdminPostsModerationTabState extends State<_AdminPostsModerationTab> {
+class AdminPostsModerationTabState extends State<AdminPostsModerationTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
