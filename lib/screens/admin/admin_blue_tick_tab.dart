@@ -10,14 +10,14 @@ import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/gamer_avatar.dart';
 
-class _AdminBlueTickTab extends StatefulWidget {
-  const _AdminBlueTickTab();
+class AdminBlueTickTab extends StatefulWidget {
+  const AdminBlueTickTab({super.key});
 
   @override
-  State<_AdminBlueTickTab> createState() => _AdminBlueTickTabState();
+  State<AdminBlueTickTab> createState() => AdminBlueTickTabState();
 }
 
-class _AdminBlueTickTabState extends State<_AdminBlueTickTab> {
+class AdminBlueTickTabState extends State<AdminBlueTickTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
