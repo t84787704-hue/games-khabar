@@ -1,9 +1,8 @@
 // ===============================================================================
-// GAMER GROWTH HUB — Daily 10-Min Timer, UC Shop & Room Countdown
+// GAMER GROWTH HUB — UC Shop & Room Countdown (10-Min Timer Removed)
 // File: lib/widgets/gamer_growth_hub_dialog.dart
 // ===============================================================================
 
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/gamer_auth_service.dart';
@@ -18,93 +17,6 @@ class GamerGrowthHubDialog extends StatefulWidget {
 }
 
 class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
-  static const int _targetSeconds = 600; // 10 minutes
-  static int _secondsSpent = 0;
-  static bool _hasClaimedToday = false;
-  Timer? _ticker;
-  bool _isClaiming = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _startTimer();
-  }
-
-  void _startTimer() {
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-      if (_secondsSpent < _targetSeconds) {
-        setState(() {
-          _secondsSpent++;
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _ticker?.cancel();
-    super.dispose();
-  }
-
-  String _formatTimer(int sec) {
-    final m = sec ~/ 60;
-    final s = sec % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
-  Future<void> _claim10MinReward() async {
-    final uid = GamerAuthService().currentUid ?? SupabaseService.client.auth.currentUser?.id;
-    if (uid == null || _hasClaimedToday || _secondsSpent < _targetSeconds) return;
-
-    setState(() => _isClaiming = true);
-    try {
-      final userRes = await SupabaseService.client.from('users').select('coins').eq('id', uid).maybeSingle();
-      final currentCoins = (userRes?['coins'] as num?)?.toInt() ?? 0;
-
-      await SupabaseService.client.from('users').update({
-        'coins': currentCoins + 50,
-      }).eq('id', uid);
-
-      try {
-        await SupabaseService.client.from('coin_transactions').insert({
-          'user_id': uid,
-          'amount': 50,
-          'type': 'daily_stay_reward',
-          'description': '10 Minutes daily active app reward',
-          'created_at': DateTime.now().toIso8601String(),
-        });
-      } catch (_) {}
-
-      setState(() {
-        _hasClaimedToday = true;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 +50 Coins Added for spending 10 minutes!'),
-            backgroundColor: Color(0xFF00FF88),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Claim failed: $e'),
-            backgroundColor: const Color(0xFFFF4655),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isClaiming = false);
-    }
-  }
-
   void _showRedeemPrompt(String itemName, int requiredCoins) {
     final uid = GamerAuthService().currentUid ?? SupabaseService.client.auth.currentUser?.id;
     final gameIdController = TextEditingController();
@@ -226,9 +138,6 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final progress = (_secondsSpent / _targetSeconds).clamp(0.0, 1.0);
-    final isDone = _secondsSpent >= _targetSeconds;
-
     return Dialog(
       backgroundColor: const Color(0xFF161A22),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -255,68 +164,6 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-
-            // 10 MINUTE LIVE TIMER CARD
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00FF88).withOpacity(0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Daily 10-Min Stay Bonus',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00FF88).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _formatTimer(_secondsSpent),
-                          style: const TextStyle(
-                              color: Color(0xFF00FF88), fontWeight: FontWeight.w900, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: Colors.white12,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00FF88)),
-                    borderRadius: BorderRadius.circular(6),
-                    minHeight: 6,
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Spend 10 mins in app = +50 Coins',
-                          style: TextStyle(color: Colors.white70, fontSize: 11)),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isDone && !_hasClaimedToday ? const Color(0xFF00FF88) : Colors.white12,
-                          foregroundColor: isDone && !_hasClaimedToday ? Colors.black : Colors.white38,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: (isDone && !_hasClaimedToday && !_isClaiming) ? _claim10MinReward : null,
-                        child: Text(_hasClaimedToday ? 'Claimed ✓' : 'Claim +50 🪙',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
             const SizedBox(height: 18),
 
