@@ -12,14 +12,14 @@ import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/gamer_avatar.dart';
 
-class _AdminRankVerifyTab extends StatefulWidget {
-  const _AdminRankVerifyTab();
+class AdminRankVerifyTab extends StatefulWidget {
+  const AdminRankVerifyTab({super.key});
 
   @override
-  State<_AdminRankVerifyTab> createState() => _AdminRankVerifyTabState();
+  State<AdminRankVerifyTab> createState() => AdminRankVerifyTabState();
 }
 
-class _AdminRankVerifyTabState extends State<_AdminRankVerifyTab> {
+class AdminRankVerifyTabState extends State<AdminRankVerifyTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _showOnlyPending = true;
