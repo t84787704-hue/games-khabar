@@ -33,6 +33,64 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     super.dispose();
   }
 
+  Future<void> _confirmDeleteTournament(String id, String title) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF4655)),
+            const SizedBox(width: 8),
+            Text('Delete Tournament?', style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete "$title"? This action cannot be undone.',
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4655),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await SupabaseService.client.from('tournaments').delete().eq('id', id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tournament deleted successfully! 🗑️'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting tournament: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -315,9 +373,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               IconButton(
                 icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655), size: 20),
                 tooltip: 'Delete Tournament',
-                onPressed: () async {
-                  await SupabaseService.client.from('tournaments').delete().eq('id', id);
-                },
+                onPressed: () => _confirmDeleteTournament(id, title),
               ),
             ],
           ),
