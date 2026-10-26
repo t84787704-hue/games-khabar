@@ -229,13 +229,13 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               body: TabBarView(
                 controller: _tabController,
                 children: [
-                  const _AdminTournamentsTab(),
+                  _AdminTournamentsTab(), // FIXED: Removed const
                   const _AdminBannerControlTab(),
                   _buildUsersTab(),
                   _buildRankVerifyTab(),
                   _buildBlueTickRequestsTab(),
-                  const _AdminUcRequestsTab(),
-                  const _AdminUcHistoryTab(),
+                  _AdminUcRequestsTab(), // FIXED: Removed const
+                  _AdminUcHistoryTab(),  // FIXED: Removed const
                   _buildPostsModerationTab(),
                   const AdminTeamMatchesScreen(),
                   _buildReportsTab(),
@@ -1903,7 +1903,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final item = requestsWithIndex[index];
-            // FIXED: Function ka naam badal diya gaya hai taaki duplicate error na aaye
             return _buildBlueTickRequestCard(
               item['user'] as GamerUser,
               rankNumber: item['rankNumber'] as int,
@@ -1915,15 +1914,14 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
     );
   }
 
-  // FIXED: Yeh function pehle _buildVerificationRequestCard tha jiski wajah se duplicate error aa raha tha
   Widget _buildBlueTickRequestCard(
     GamerUser user, {
     required int rankNumber,
     required Map<String, dynamic> rawData,
   }) {
-    final isPending = true; // Hardcoded for pending requests based on filter
-    final Color statusColor = const Color(0xFFFF8A00);
-    final String statusLabel = 'Pending Review ⏳';
+    const isPending = true;
+    const Color statusColor = Color(0xFFFF8A00);
+    const String statusLabel = 'Pending Review ⏳';
 
     final String dateStr = user.createdAt != null
         ? DateFormat('dd MMM, hh:mm a').format(user.createdAt!)
@@ -1935,9 +1933,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
         color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isPending
-              ? const Color(0xFFFF8A00).withOpacity(0.5)
-              : ThemeService.border,
+          color: const Color(0xFFFF8A00).withOpacity(0.5),
         ),
       ),
       child: Column(
@@ -1983,7 +1979,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   border:
                       Border.all(color: statusColor.withOpacity(0.5)),
                 ),
-                child: Text(
+                child: const Text(
                   statusLabel,
                   style: TextStyle(
                     color: statusColor,
@@ -2007,16 +2003,16 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: ThemeService.border),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.verified_user_rounded,
+                    Icon(Icons.verified_user_rounded,
                         size: 14, color: Color(0xFF38BDF8)),
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4),
                     Text(
                       'Blue Tick Request',
                       style: TextStyle(
-                          color: ThemeService.textPrimary,
+                          color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 12),
                     ),
@@ -2032,7 +2028,6 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             ],
           ),
           const SizedBox(height: 12),
-          // Placeholder for actual Blue Tick proof UI if needed
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -2058,9 +2053,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    // Handle rejection logic here
-                  },
+                  onPressed: () {},
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Color(0xFFFF4655)),
                     backgroundColor:
@@ -2081,9 +2074,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    // Handle approval logic here
-                  },
+                  onPressed: () {},
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00FF88),
                     foregroundColor: const Color(0xFF0B0F14),
@@ -2117,7 +2108,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   }
 
   Widget _buildCoinsTab() {
-    return const _AdminCoinsVaultTab(); // FIXED: Removed const if _AdminCoinsVaultTab is not fully const
+    return _AdminCoinsVaultTab(); // FIXED: Removed const
   }
 
   Widget _buildReferralsTrackerTab() {
@@ -2454,12 +2445,12 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
                 TextField(
                   controller: _reasonController,
                   style: TextStyle(color: ThemeService.textPrimary, fontSize: 12),
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText:
                         'Enter rejection reason (e.g. Screenshot unclear, UID mismatch)...',
                     hintStyle: TextStyle(
-                        color: ThemeService.textSecondary, fontSize: 11),
-                    contentPadding: const EdgeInsets.symmetric(
+                        color: Colors.grey, fontSize: 11),
+                    contentPadding: EdgeInsets.symmetric(
                         horizontal: 10, vertical: 8),
                     border: InputBorder.none,
                   ),
@@ -2553,6 +2544,43 @@ class _AdminRankActionButtonsState extends State<_AdminRankActionButtons> {
           ],
         ),
       ],
+    );
+  }
+}
+
+// ===================== PLACEHOLDER / MISSING TABS DEFINITIONS =====================
+class _AdminTournamentsTab extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text('Tournaments Tab', style: TextStyle(color: Colors.white)),
+    );
+  }
+}
+
+class _AdminUcRequestsTab extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text('UC Requests Tab', style: TextStyle(color: Colors.white)),
+    );
+  }
+}
+
+class _AdminUcHistoryTab extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text('UC History Tab', style: TextStyle(color: Colors.white)),
+    );
+  }
+}
+
+class _AdminCoinsVaultTab extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text('Coins Vault Tab', style: TextStyle(color: Colors.white)),
     );
   }
 }
