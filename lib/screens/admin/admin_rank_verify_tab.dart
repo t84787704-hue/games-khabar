@@ -371,7 +371,7 @@ class _AdminRankVerifyTabState extends State<_AdminRankVerifyTab> {
                                     right: 6,
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                      decoration: BoxDecoration(color: Colors.black74, borderRadius: BorderRadius.circular(4)),
+                                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
                                       child: const Text('Tap to zoom 🔍', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                                     ),
                                   ),
