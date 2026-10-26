@@ -5,7 +5,10 @@
   "main": "lib/supabase.js",
   "type": "module",
   "dependencies": {
-    "@supabase/supabase-js": "^2.116.0"
+    "@supabase/supabase-js": "^2.116.0",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "rss-parser": "^3.13.0"
   },
   "scripts": {
     "test": "node lib/supabase.js"
