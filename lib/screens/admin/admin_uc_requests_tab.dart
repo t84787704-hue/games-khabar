@@ -8,14 +8,14 @@ import '../../services/notification_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
-class _AdminUcRequestsTab extends StatefulWidget {
-  const _AdminUcRequestsTab();
+class AdminUcRequestsTab extends StatefulWidget {
+  const AdminUcRequestsTab({super.key});
 
   @override
-  State<_AdminUcRequestsTab> createState() => _AdminUcRequestsTabState();
+  State<AdminUcRequestsTab> createState() => AdminUcRequestsTabState();
 }
 
-class _AdminUcRequestsTabState extends State<_AdminUcRequestsTab> {
+class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
