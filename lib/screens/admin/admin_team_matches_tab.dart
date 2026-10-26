@@ -5,8 +5,8 @@
 import 'package:flutter/material.dart';
 import 'admin_team_matches_screen.dart';
 
-class _AdminTeamMatchesTab extends StatelessWidget {
-  const _AdminTeamMatchesTab();
+class AdminTeamMatchesTab extends StatelessWidget {
+  const AdminTeamMatchesTab({super.key});
 
   @override
   Widget build(BuildContext context) {
