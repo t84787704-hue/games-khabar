@@ -131,38 +131,43 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       );
       final tourneyTitle = currentTourney['title']?.toString() ?? 'Tournament';
 
+      // 1. Insert Registration with leader_id
       await _supabase.from('tournament_registrations').insert({
         'tournament_id': tournamentId,
         'team_id': _myTeamId,
         'leader_id': user.id,
       });
 
+      // 2. Increment Slots via RPC
       await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
 
-      final membersRes = await _supabase
-          .from('team_members')
-          .select('user_id')
-          .eq('team_id', _myTeamId!);
+      // 3. Send Notifications
+      try {
+        final membersRes = await _supabase
+            .from('team_members')
+            .select('user_id')
+            .eq('team_id', _myTeamId!);
 
-      final List<Map<String, dynamic>> notifInserts = [];
-      for (final m in membersRes) {
-        final memberUid = m['user_id']?.toString();
-        if (memberUid != null && memberUid != user.id) {
-          notifInserts.add({
-            'user_id': memberUid,
-            'title': 'Tournament Registered! 🎮',
-            'body': 'Your squad registered the team for "$tourneyTitle". Be ready for the match!',
-            'type': 'tournament',
-            'data': {'tournament_id': tournamentId},
-            'created_at': DateTime.now().toIso8601String(),
-            'is_read': false,
-          });
+        final List<Map<String, dynamic>> notifInserts = [];
+        for (final m in membersRes) {
+          final memberUid = m['user_id']?.toString();
+          if (memberUid != null && memberUid != user.id) {
+            notifInserts.add({
+              'user_id': memberUid,
+              'title': 'Tournament Registered! 🎮',
+              'body': 'Your squad registered the team for "$tourneyTitle". Be ready for the match!',
+              'type': 'tournament',
+              'data': {'tournament_id': tournamentId},
+              'created_at': DateTime.now().toIso8601String(),
+              'is_read': false,
+            });
+          }
         }
-      }
 
-      if (notifInserts.isNotEmpty) {
-        await _supabase.from('notifications').insert(notifInserts);
-      }
+        if (notifInserts.isNotEmpty) {
+          await _supabase.from('notifications').insert(notifInserts);
+        }
+      } catch (_) {}
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -174,9 +179,16 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       _fetchTournaments();
     } catch (e) {
+      debugPrint('CRITICAL REGISTRATION ERROR: $e');
       if (!mounted) return;
+      
+      // 🚨 Yeh exact error screen par dikhayega taake pata chale masla kahan hai
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Registration failed: $e')),
+        SnackBar(
+          content: Text('FAIL: $e'),
+          backgroundColor: const Color(0xFFFF4655),
+          duration: const Duration(seconds: 8),
+        ),
       );
     }
   }
