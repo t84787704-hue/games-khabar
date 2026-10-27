@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
+import 'tournament_bracket_screen.dart'; // Nayi bracket file import kar li hai
 
 class AdminTournamentsTab extends StatefulWidget {
   const AdminTournamentsTab({super.key});
@@ -409,6 +410,22 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              // 🏆 Bracket Management Button (Naya Button yahan add kar diya hai)
+              IconButton(
+                icon: const Icon(Icons.account_tree_rounded, color: Color(0xFFFFD700), size: 20),
+                tooltip: 'Manage Tournament Bracket',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TournamentBracketScreen(
+                        tournamentId: id,
+                        tournamentTitle: title,
+                      ),
+                    ),
+                  );
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.edit_note_rounded, color: Color(0xFF38BDF8), size: 20),
                 tooltip: 'Edit Tournament',
