@@ -81,7 +81,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   Future<void> _fetchDetails() async {
     final tId = (_tournamentData?['id'] ?? widget.tournament['id'] ?? '').toString().trim();
 
-    // Safe check: Agar ID khali ya invalid hai to query na chalayein taake UUID error na aaye
     if (tId.isEmpty || tId == 'null' || tId.length < 10) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -146,7 +145,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        // Error ko quietly handle karein ya snackbar dikhayein
         debugPrint('Error loading details: $e');
       }
     }
@@ -281,6 +279,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
         bool isUserInRegisteredSquad = false;
         int assignedSlotNumber = 0;
+        Map<String, dynamic>? myRegisteredTeam;
 
         for (int i = 0; i < _registeredTeams.length; i++) {
           final reg = _registeredTeams[i];
@@ -293,6 +292,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
             if (leaderId == currentUserId || isMember) {
               isUserInRegisteredSquad = true;
               assignedSlotNumber = i + 2;
+              myRegisteredTeam = team;
               break;
             }
           }
@@ -313,6 +313,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         final roomPass = (t['room_password'] ?? '').toString().trim();
         final proofUrl = (t['proof_url'] ?? '').toString().trim();
         final proofRejectReason = (t['rejection_reason'] ?? t['proof_reject_reason'] ?? '').toString().trim();
+        final submittedTeamId = (t['submitted_team_id'] ?? t['proof_team_id'] ?? '').toString();
         final isCompleted = status.toLowerCase() == 'completed';
 
         String matchTimeStr = 'TBD';
@@ -748,7 +749,8 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                   ),
                                 ],
                               ),
-                              if (hasSquadAccess)
+                              // 🔒 FIX: Sirf wahi team "Change Proof" dekh sake gi jisne upload kiya hai, ya phir Admin!
+                              if (_isAdmin || (myRegisteredTeam != null && submittedTeamId.isNotEmpty && submittedTeamId == myRegisteredTeam['id']?.toString()))
                                 TextButton.icon(
                                   onPressed: _isUploadingProof ? null : _handleUploadWinProof,
                                   icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF38BDF8)),
