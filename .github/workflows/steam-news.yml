@@ -11,7 +11,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm install firebase-admin axios rss-parser cheerio he
+      - run: npm install firebase-admin axios rss-parser cheerio he dotenv
       - run: node scripts/fetchSteamNews.js
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
