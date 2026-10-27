@@ -6,15 +6,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
+import '../tournament_bracket_screen.dart';
 
-class _AdminTournamentsTab extends StatefulWidget {
-  const _AdminTournamentsTab();
+class AdminTournamentsTab extends StatefulWidget {
+  const AdminTournamentsTab({super.key});
 
   @override
-  State<_AdminTournamentsTab> createState() => _AdminTournamentsTabState();
+  State<AdminTournamentsTab> createState() => AdminTournamentsTabState();
 }
 
-class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
+class AdminTournamentsTabState extends State<AdminTournamentsTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _gameFilter = 'All';
@@ -365,6 +366,22 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              // 🏆 Bracket Management Button
+              IconButton(
+                icon: const Icon(Icons.account_tree_rounded, color: Color(0xFFFFD700), size: 20),
+                tooltip: 'Manage Tournament Bracket',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TournamentBracketScreen(
+                        tournamentId: id,
+                        tournamentTitle: title,
+                      ),
+                    ),
+                  );
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.edit_note_rounded, color: Color(0xFF38BDF8), size: 20),
                 tooltip: 'Edit Tournament',
@@ -390,6 +407,10 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
     final slotsController = TextEditingController(text: existingData?['max_slots']?.toString() ?? '25');
     final mapController = TextEditingController(text: existingData?['map_name'] ?? 'Erangel');
     final rulesController = TextEditingController(text: existingData?['rules'] ?? 'No hacks, fair play required.');
+    
+    // Room ID & Password Controllers Added
+    final roomIdController = TextEditingController(text: existingData?['room_id'] ?? '');
+    final roomPassController = TextEditingController(text: existingData?['room_password'] ?? '');
 
     String selectedGame = existingData?['game_name'] ?? _gameList[0];
     String selectedFormat = existingData?['match_format'] ?? 'Squad 4v4';
@@ -529,6 +550,37 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                // Room ID & Room Password Fields Inside Modal
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: roomIdController,
+                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                        decoration: InputDecoration(
+                          labelText: 'Room ID',
+                          filled: true,
+                          fillColor: ThemeService.cardSecondary,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: roomPassController,
+                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                        decoration: InputDecoration(
+                          labelText: 'Room Password',
+                          filled: true,
+                          fillColor: ThemeService.cardSecondary,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 InkWell(
                   onTap: () async {
@@ -597,6 +649,8 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                         'entry_fee': feeController.text.trim(),
                         'max_slots': int.tryParse(slotsController.text.trim()) ?? 25,
                         'map_name': mapController.text.trim(),
+                        'room_id': roomIdController.text.trim(),
+                        'room_password': roomPassController.text.trim(),
                         'match_time': selectedDateTime.toIso8601String(),
                         'rules': rulesController.text.trim(),
                         'status': 'upcoming',
