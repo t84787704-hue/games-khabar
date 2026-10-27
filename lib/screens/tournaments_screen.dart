@@ -113,7 +113,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       return;
     }
 
-    // 🔍 Safety check: Agar _myTeamId null hai toh dobara fetch karne ki koshish karein
     if (_myTeamId == null) {
       try {
         final leaderTeamRes = await _supabase
@@ -205,7 +204,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       debugPrint('CRITICAL REGISTRATION ERROR: $e');
       if (!mounted) return;
       
-      // 🚨 Yeh ab agar koi database error hoga toh direct screen par dikha dega
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('FAIL: $e'),
@@ -544,7 +542,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     final bool canReveal = isRegistered && isWithin10Mins && roomId.isNotEmpty;
 
     return Container(
-      padding: const SisterPadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: canReveal
             ? const Color(0xFF00FF88).withOpacity(0.12)
