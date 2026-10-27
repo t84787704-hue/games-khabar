@@ -749,8 +749,25 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                   ),
                                 ],
                               ),
-                              // 🔒 FIX: Sirf wahi team "Change Proof" dekh sake gi jisne upload kiya hai, ya phir Admin!
-                              if (_isAdmin || (myRegisteredTeam != null && submittedTeamId.isNotEmpty && submittedTeamId == myRegisteredTeam['id']?.toString()))
+                              // 🔒 SECURE FIX: Sirf Admin ya wahi submitting team members/leader "Change Proof" dekh sakein ge
+                              if (_isAdmin || (() {
+                                bool isTeamMatch = false;
+                                if (submittedTeamId.isNotEmpty) {
+                                  for (final reg in _registeredTeams) {
+                                    final team = reg['teams'] as Map<String, dynamic>?;
+                                    if (team != null && team['id']?.toString() == submittedTeamId) {
+                                      final leaderId = team['leader_id']?.toString();
+                                      final membersList = (team['team_members'] as List?) ?? [];
+                                      final isMember = membersList.any((m) => m['user_id']?.toString() == currentUserId);
+                                      if (leaderId == currentUserId || isMember) {
+                                        isTeamMatch = true;
+                                      }
+                                      break;
+                                    }
+                                  }
+                                }
+                                return isTeamMatch;
+                              })())
                                 TextButton.icon(
                                   onPressed: _isUploadingProof ? null : _handleUploadWinProof,
                                   icon: const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF38BDF8)),
