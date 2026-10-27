@@ -251,6 +251,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           .eq('user_id', memberId);
 
       team.members.remove(memberId);
+      // 🔥 FIX: Kick karte waqt pending_join_requests se bhi user ko nikal dein taake dobara show na ho
       team.pendingJoinRequests.remove(memberId);
 
       final updatedMembers = List<String>.from(team.members);
@@ -333,12 +334,17 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           .eq('user_id', currentUid);
 
       team.members.remove(currentUid);
+      team.pendingJoinRequests.remove(currentUid);
+      
       final updatedMembers = List<String>.from(team.members);
+      final updatedRequests = List<String>.from(team.pendingJoinRequests);
+      
       await SupabaseService.client
           .from('teams')
           .update({
             'members': updatedMembers,
             'member_count': updatedMembers.length,
+            'pending_join_requests': updatedRequests,
           })
           .eq('id', teamUuid);
 
@@ -1431,7 +1437,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       textAlign: TextAlign.center,
                     ),
                   ],
-                ),
+                    ),
               );
             }
 
