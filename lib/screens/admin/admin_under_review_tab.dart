@@ -1,9 +1,11 @@
 // ===============================================================================
 // ADMIN UNDER REVIEW TAB — Review Pending Items & Submissions
+// File: lib/screens/admin/admin_under_review_tab.dart (or respective path)
 // ===============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
@@ -24,17 +26,26 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
     super.dispose();
   }
 
-  Future<void> _updateReviewStatus(String id, String status) async {
+  Future<void> _updateTournamentProofStatus(String tournamentId, String status, {String? rejectReason}) async {
     try {
-      await SupabaseService.client.from('under_review_items').update({
-        'status': status,
+      final updateData = <String, dynamic>{
+        'proof_status': status,
+        'status': status == 'approved' ? 'completed' : 'upcoming', // Agar approve ho jaye to tournament completed ho jayega
+        if (status == 'approved') 'winner_team_id': null, // Chahein to yahan winning team assign kar sakte hain
+        if (status == 'rejected') 'rejection_reason': rejectReason ?? 'Invalid screenshot submitted.',
+        if (status == 'rejected') 'proof_url': null, // Reject hone par purana proof hata sakte hain taake dobara upload ho sake
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', id);
+      };
+
+      await SupabaseService.client
+          .from('tournaments')
+          .update(updateData)
+          .eq('id', tournamentId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(status == 'approved' ? 'Item Approved Successfully! ✓' : 'Item Rejected.'),
+            content: Text(status == 'approved' ? 'Tournament Proof Approved! 🏆' : 'Proof Rejected.'),
             backgroundColor: status == 'approved' ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
           ),
         );
@@ -42,10 +53,45 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating review status: $e'), backgroundColor: const Color(0xFFFF4655)),
+          SnackBar(content: Text('Error updating status: $e'), backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
+  }
+
+  void _showRejectDialog(String tournamentId) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: ThemeService.border)),
+        title: Text('Reject Win Proof', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: reasonController,
+          style: TextStyle(color: ThemeService.textPrimary),
+          decoration: InputDecoration(
+            hintText: 'Enter rejection reason (e.g. Fake screenshot)',
+            hintStyle: TextStyle(color: ThemeService.textSecondary),
+            filled: true,
+            fillColor: ThemeService.cardSecondary,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: ThemeService.border)),
+          ),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF4655)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _updateTournamentProofStatus(tournamentId, 'rejected', rejectReason: reasonController.text.trim());
+            },
+            child: const Text('Reject Proof', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -59,7 +105,7 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
             onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
             style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'Search under review items...',
+              hintText: 'Search pending tournament proofs...',
               hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
               prefixIcon: const Icon(Icons.rate_review_rounded, color: Color(0xFFFF8A00), size: 18),
               filled: true,
@@ -71,20 +117,29 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
         ),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client.from('under_review_items').stream(primaryKey: ['id']).order('created_at', ascending: false),
+            stream: SupabaseService.client
+                .from('tournaments')
+                .stream(primaryKey: ['id'])
+                .order('created_at', ascending: false),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFFFF8A00)));
               }
 
-              final items = snapshot.data ?? [];
-              final filtered = items.where((item) {
-                final status = (item['status'] ?? 'pending').toString().toLowerCase();
-                if (status != 'pending' && status != 'under_review') return false;
+              final tournaments = snapshot.data ?? [];
+              
+              // Sirf wo tournaments filter karein jinka proof upload ho chuka hai aur status pending hai
+              final filtered = tournaments.where((t) {
+                final proofUrl = (t['proof_url'] ?? '').toString().trim();
+                final proofStatus = (t['proof_status'] ?? 'pending').toString().toLowerCase();
+                
+                if (proofUrl.isEmpty) return false;
+                if (proofStatus != 'pending' && proofStatus != 'under_review') return false;
 
                 if (_searchQuery.isNotEmpty) {
-                  final title = (item['title'] ?? item['name'] ?? '').toString().toLowerCase();
-                  if (!title.contains(_searchQuery)) return false;
+                  final title = (t['title'] ?? '').toString().toLowerCase();
+                  final teamName = (t['proof_team_name'] ?? '').toString().toLowerCase();
+                  if (!title.contains(_searchQuery) && !teamName.contains(_searchQuery)) return false;
                 }
                 return true;
               }).toList();
@@ -114,11 +169,12 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
                 itemCount: filtered.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  final item = filtered[index];
-                  final id = item['id']?.toString() ?? '';
-                  final title = item['title'] ?? item['name'] ?? 'Untitled Item';
-                  final subtitle = item['description'] ?? item['subtitle'] ?? 'Pending administrative review.';
-                  final author = item['username'] ?? item['author'] ?? 'User';
+                  final t = filtered[index];
+                  final id = t['id']?.toString() ?? '';
+                  final title = t['title'] ?? 'Tournament Match';
+                  final teamName = t['proof_team_name'] ?? 'Submitted Squad';
+                  final leaderName = t['proof_leader_name'] ?? 'Leader';
+                  final proofUrl = t['proof_url']?.toString() ?? '';
 
                   return Container(
                     padding: const EdgeInsets.all(14),
@@ -135,7 +191,7 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(color: const Color(0xFFFF8A00).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                              child: const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF8A00), size: 18),
+                              child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFF8A00), size: 18),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -143,7 +199,7 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(title, style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w900, fontSize: 14)),
-                                  Text('Submitted by: $author', style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5)),
+                                  Text('Squad: $teamName ( Leader: $leaderName )', style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5)),
                                 ],
                               ),
                             ),
@@ -154,14 +210,29 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        Text(subtitle, style: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5)),
                         const SizedBox(height: 12),
+                        if (proofUrl.isNotEmpty) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: CachedNetworkImage(
+                              imageUrl: proofUrl,
+                              height: 150,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => const SizedBox(
+                                height: 150,
+                                child: Center(child: CircularProgressIndicator(color: Color(0xFF00FF88))),
+                              ),
+                              errorWidget: (_, __, ___) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         Row(
                           children: [
                             Expanded(
                               child: OutlinedButton(
-                                onPressed: () => _updateReviewStatus(id, 'rejected'),
+                                onPressed: () => _showRejectDialog(id),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFFFF4655),
                                   side: const BorderSide(color: Color(0xFFFF4655)),
@@ -173,7 +244,7 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () => _updateReviewStatus(id, 'approved'),
+                                onPressed: () => _updateTournamentProofStatus(id, 'approved'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF00FF88),
                                   foregroundColor: Colors.black,
