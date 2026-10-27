@@ -113,12 +113,35 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       return;
     }
 
+    // 🔍 Safety check: Agar _myTeamId null hai toh dobara fetch karne ki koshish karein
     if (_myTeamId == null) {
+      try {
+        final leaderTeamRes = await _supabase
+            .from('teams')
+            .select('id')
+            .eq('leader_id', user.id)
+            .maybeSingle();
+        _myTeamId = leaderTeamRes?['id']?.toString();
+
+        if (_myTeamId == null) {
+          final memberRes = await _supabase
+              .from('team_members')
+              .select('team_id')
+              .eq('user_id', user.id)
+              .maybeSingle();
+          _myTeamId = memberRes?['team_id']?.toString();
+        }
+      } catch (_) {}
+    }
+
+    if (_myTeamId == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'You need your own team to register! Please create a team with 4 members first.',
+            'You need your own team to register! Please create a team first.',
           ),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
@@ -182,7 +205,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       debugPrint('CRITICAL REGISTRATION ERROR: $e');
       if (!mounted) return;
       
-      // 🚨 Yeh exact error screen par dikhayega taake pata chale masla kahan hai
+      // 🚨 Yeh ab agar koi database error hoga toh direct screen par dikha dega
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('FAIL: $e'),
@@ -521,7 +544,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     final bool canReveal = isRegistered && isWithin10Mins && roomId.isNotEmpty;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const SisterPadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: canReveal
             ? const Color(0xFF00FF88).withOpacity(0.12)
