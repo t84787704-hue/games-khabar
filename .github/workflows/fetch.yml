@@ -1,4 +1,4 @@
-Name: Fetch Gaming News and Prices
+name: Fetch Gaming News and Prices
 on:
   schedule:
     - cron: '0 */6 * * *'
@@ -15,7 +15,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install dependencies
         run: npm install
@@ -23,9 +23,11 @@ jobs:
       - name: Fetch Gaming News
         run: node scripts/fetchSteamNews.js
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Fetch Game Prices & Trigger Sasta Hua Alerts
         run: node scripts/fetchGamePrices.js
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
