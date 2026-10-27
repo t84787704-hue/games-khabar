@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:crypto/crypto.dart';
-import 'package:easy_localization/easy_localization.dart'; // Added for localization
+import 'package:easy_localization/easy_localization.dart';
 
 class SupabaseService {
   static const String supabaseUrl = 'https://dxdkitnroypbblazblja.supabase.co';
@@ -53,6 +53,22 @@ class SupabaseService {
     'apikey': supabaseAnonKey,
     'Authorization': 'Bearer $supabaseAnonKey',
   };
+
+  // ============================================================
+  // STEAM NEWS METHODS
+  // ============================================================
+  static Future<List<Map<String, dynamic>>> getSteamNews({int limit = 50}) async {
+    try {
+      return await query(
+        'steam_news',
+        order: 'created_at.desc',
+        limit: limit,
+      );
+    } catch (e) {
+      debugPrint('Error fetching steam news: $e');
+      return [];
+    }
+  }
 
   // STORAGE — Long-term proper solution using Supabase SDK
   static Future<String?> uploadFile({
@@ -687,10 +703,8 @@ class SupabaseService {
   }
 
   // ============================================================
-  // ADMIN METHODS (NEW - 100% Supabase)
+  // ADMIN METHODS
   // ============================================================
-
-  /// Check if a user is admin
   static Future<bool> isAdmin(String userId) async {
     try {
       final user = await query('users', filters: {'id': 'eq.$userId'}, limit: 1);
@@ -702,7 +716,6 @@ class SupabaseService {
     }
   }
 
-  /// Check current logged in user is admin
   static Future<bool> isCurrentUserAdmin() async {
     try {
       final userId = client.auth.currentUser?.id;
@@ -713,7 +726,6 @@ class SupabaseService {
     }
   }
 
-  /// Get admin stats for dashboard
   static Future<Map<String, int>> getAdminStats() async {
     int totalUsers = 0;
     int totalPosts = 0;
@@ -746,12 +758,10 @@ class SupabaseService {
     };
   }
 
-  /// Get all reports
   static Future<List<Map<String, dynamic>>> getReports() async {
     return await query('reports', order: 'created_at.desc', limit: 100);
   }
 
-  /// Update a report status
   static Future<bool> updateReport({
     required String reportId,
     required String status,
@@ -759,12 +769,10 @@ class SupabaseService {
     return await update('reports', {'status': status}, 'id', reportId);
   }
 
-  /// Delete a report
   static Future<bool> deleteReport(String reportId) async {
     return await delete('reports', 'id', reportId);
   }
 
-  /// Ban a user
   static Future<bool> banUser({
     required String userId,
     required String adminId,
@@ -779,7 +787,6 @@ class SupabaseService {
     }, 'id', userId);
   }
 
-  /// Unban a user
   static Future<bool> unbanUser(String userId) async {
     return await update('users', {
       'is_banned': false,
@@ -790,7 +797,6 @@ class SupabaseService {
     }, 'id', userId);
   }
 
-  /// Approve blue tick
   static Future<bool> approveBlueTick(String userId) async {
     return await update('users', {
       'is_blue_tick_verified': true,
@@ -802,7 +808,6 @@ class SupabaseService {
     }, 'id', userId);
   }
 
-  /// Reject blue tick
   static Future<bool> rejectBlueTick(String userId) async {
     return await update('users', {
       'is_blue_tick_verified': false,
@@ -813,7 +818,6 @@ class SupabaseService {
     }, 'id', userId);
   }
 
-  /// Approve rank verification
   static Future<bool> approveRank({
     required String userId,
     required String rank,
@@ -833,7 +837,6 @@ class SupabaseService {
     }, 'id', userId);
   }
 
-  /// Reject rank verification
   static Future<bool> rejectRank({
     required String userId,
     required String reason,
@@ -848,12 +851,10 @@ class SupabaseService {
     }, 'id', userId);
   }
 
-  /// Delete a post (admin)
   static Future<bool> deletePost(String postId) async {
     return await delete('posts', 'id', postId);
   }
 
-  /// Award coins to user
   static Future<bool> awardCoins({
     required String userId,
     required int amount,
@@ -861,7 +862,6 @@ class SupabaseService {
     String? adminEmail,
   }) async {
     try {
-      // Get current coins
       final users = await query('users', select: 'coins', filters: {'id': 'eq.$userId'}, limit: 1);
       int currentCoins = 0;
       if (users.isNotEmpty) {
@@ -869,14 +869,12 @@ class SupabaseService {
       }
       final newTotal = currentCoins + amount;
 
-      // Update user
       final ok = await update('users', {
         'coins': newTotal,
         'updated_at': DateTime.now().toIso8601String(),
       }, 'id', userId);
 
       if (ok) {
-        // Record transaction
         await recordCoinTransaction(
           userId: userId,
           amount: amount,
@@ -891,7 +889,6 @@ class SupabaseService {
     }
   }
 
-  /// Get pending proofs for admin review
   static Future<List<Map<String, dynamic>>> getPendingProofs() async {
     return await query(
       'active_matches',
@@ -901,7 +898,6 @@ class SupabaseService {
     );
   }
 
-  /// Approve a match proof
   static Future<bool> approveProof({
     required String matchId,
     required String winnerTeamId,
@@ -913,7 +909,6 @@ class SupabaseService {
     }, 'id', matchId);
   }
 
-  /// Reject a match proof
   static Future<bool> rejectProof({
     required String matchId,
     required String reason,
@@ -925,7 +920,6 @@ class SupabaseService {
     }, 'id', matchId);
   }
 
-  // REALTIME STREAMS FOR ADMIN
   static Stream<List<Map<String, dynamic>>> getRealtimeUsers() {
     try {
       return client.from('users').stream(primaryKey: ['id']).map((rows) {
