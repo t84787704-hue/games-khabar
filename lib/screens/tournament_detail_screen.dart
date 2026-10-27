@@ -10,7 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'admin_bracket_screen.dart';
+import 'admin/admin_bracket_screen.dart';
 import '../widgets/victory_celebration_dialog.dart';
 import '../services/theme_service.dart';
 
