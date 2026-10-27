@@ -1831,7 +1831,7 @@ class _CommentSheetState extends State<CommentSheet> {
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Row(
-                      widgets: [
+                      children: [
                         Expanded(
                           child: TextField(
                             controller: _ctrl,
