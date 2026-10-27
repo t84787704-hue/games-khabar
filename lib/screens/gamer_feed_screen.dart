@@ -212,15 +212,48 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
 
     try {
-      final data = await SupabaseService.client
+      // 1. Fetch Community Posts & Steam News in parallel
+      final postsFuture = SupabaseService.client
           .from('posts')
           .select('*')
           .order('created_at', ascending: false)
           .limit(30);
 
-      final fetchedPosts = List<Map<String, dynamic>>.from(data as List);
+      final steamNewsFuture = SupabaseService.getSteamNews(limit: 15);
 
-      final userIds = fetchedPosts
+      final results = await Future.wait([postsFuture, steamNewsFuture]);
+      
+      final fetchedPosts = List<Map<String, dynamic>>.from(results[0] as List);
+      final steamNewsList = results[1];
+
+      // Format Steam News items to look like feed posts so they seamlessly blend into the feed
+      final formattedSteamNews = steamNewsList.map((news) {
+        return {
+          'id': 'steam_${news['id'] ?? DateTime.now().millisecondsSinceEpoch}',
+          'content': news['title'] ?? '',
+          'image_url': news['imageUrl'] ?? news['image_url'] ?? '',
+          'user_id': 'system_steam',
+          'username': 'Steam Gaming News 🎮',
+          'user_avatar': '',
+          'likes_count': 0,
+          'comments_count': 0,
+          'created_at': news['created_at'] ?? DateTime.now().toIso8601String(),
+          'is_steam_news': true,
+          'source_url': news['url'] ?? '',
+        };
+      }).toList();
+
+      // Combine community posts and steam news together
+      final combinedFeed = [...fetchedPosts, ...formattedSteamNews];
+      
+      // Sort combined feed by creation date descending
+      combinedFeed.sort((a, b) {
+        final dateA = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2000);
+        final dateB = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2000);
+        return dateB.compareTo(dateA);
+      });
+
+      final userIds = combinedFeed
           .map((p) => p['user_id']?.toString())
           .where((id) => id != null && id.isNotEmpty && _uuidRegex.hasMatch(id))
           .toSet()
@@ -263,7 +296,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
       if (mounted) {
         setState(() {
-          posts = fetchedPosts;
+          posts = combinedFeed;
           isLoading = false;
         });
       }
@@ -290,6 +323,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   }
 
   void _openUserProfile(String userId, String username) {
+    if (userId == 'system_steam') return; // Do not open profile for system news
     if (userId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('user_not_found'.tr())),
@@ -304,6 +338,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   }
 
   Future<void> _handleLike(Map<String, dynamic> post) async {
+    if (post['is_steam_news'] == true) return; // Disable likes for steam news if needed
+
     final postId = post['id']?.toString() ?? '';
     if (postId.isEmpty) return;
 
@@ -416,7 +452,8 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
     }
   }
 
-  void _showComments(String postId) {
+  void _showComments(String postId, {bool isSteamNews = false}) {
+    if (isSteamNews) return; // Comments disabled for steam news
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -507,7 +544,8 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
     }
   }
 
-  void _showPostOptions(BuildContext context, String postId, String ownerId) {
+  void _showPostOptions(BuildContext context, String postId, String ownerId, {bool isSteamNews = false}) {
+    if (isSteamNews) return; // No options for system steam news
     final isMyPost = ownerId == currentUserId;
 
     showModalBottomSheet(
@@ -544,18 +582,8 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                     builder: (c) => AlertDialog(
                       backgroundColor: ThemeService.card,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: Text(
-                        'delete_post_dialog_title'.tr().contains('delete_post_') 
-                            ? 'Delete Post' 
-                            : 'delete_post_dialog_title'.tr(),
-                        style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
-                      ),
-                      content: Text(
-                        'delete_post_dialog_content'.tr().contains('delete_post_') 
-                            ? 'Are you sure you want to delete this post? This action cannot be undone.' 
-                            : 'delete_post_dialog_content'.tr(),
-                        style: TextStyle(color: ThemeService.textSecondary),
-                      ),
+                      title: Text('Delete Post', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+                      content: Text('Are you sure you want to delete this post? This action cannot be undone.', style: TextStyle(color: ThemeService.textSecondary)),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(c, false),
@@ -573,14 +601,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                     try {
                       try {
                         await SupabaseService.client.from('likes').delete().eq('post_id', postId);
-                      } catch (e) {
-                        debugPrint('Likes delete warning: $e');
-                      }
+                      } catch (_) {}
                       try {
                         await SupabaseService.client.from('comments').delete().eq('post_id', postId);
-                      } catch (e) {
-                        debugPrint('Comments delete warning: $e');
-                      }
+                      } catch (_) {}
 
                       await SupabaseService.client.from('posts').delete().eq('id', postId);
 
@@ -720,7 +744,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                 try {
                                   String? uploadedImageUrl;
 
-                                  // Upload image to Cloudflare R2
                                   if (selectedImage != null) {
                                     uploadedImageUrl = await R2StorageService().uploadImage(
                                       file: selectedImage!,
@@ -743,7 +766,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                     'created_at': nowIso,
                                   };
 
-                                  // Insert into Supabase
                                   final insertedRecord = await SupabaseService.client
                                       .from('posts')
                                       .insert(insertPayload)
@@ -816,7 +838,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                     minLines: 2,
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 16),
                     decoration: InputDecoration(
-                      hintText: 'hint_whats_on_your_mind'.tr().contains('hint_') ? "What's on your mind?" : 'hint_whats_on_your_mind'.tr(),
+                      hintText: "What's on your mind?",
                       hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 16),
                       border: InputBorder.none,
                     ),
@@ -887,7 +909,6 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
     );
   }
 
-  // ═══════════════ UPCOMING TOURNAMENT BANNER WIDGET ═══════════════
   Widget _buildTournamentAnnouncementBanner() {
     if (_announcement == null) return const SizedBox.shrink();
 
@@ -1089,12 +1110,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                 : ListView.builder(
                     itemCount: posts.length + 2,
                     itemBuilder: (context, index) {
-                      // Index 0: Announcement Banner
                       if (index == 0) {
                         return _buildTournamentAnnouncementBanner();
                       }
 
-                      // Index 1: Create Post Input Card
                       if (index == 1) {
                         return InkWell(
                           onTap: _showCreatePost,
@@ -1125,7 +1144,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        'hint_whats_on_your_mind'.tr().contains('hint_') ? "What's on your mind?" : 'hint_whats_on_your_mind'.tr(),
+                                        "What's on your mind?",
                                         style: TextStyle(color: ThemeService.textSecondary, fontSize: 14),
                                       ),
                                     ),
@@ -1139,14 +1158,19 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                         );
                       }
 
-                      // Index 2+: Feed Posts
                       final post = posts[index - 2];
                       final postUserId = post['user_id']?.toString() ?? '';
                       final userProfile = userProfiles[postUserId];
+                      final bool isSteamNews = post['is_steam_news'] == true;
 
-                      final username = userProfile?['username'] ?? post['username'] ?? 'user_gamer'.tr();
-                      final avatarUrl =
-                          (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
+                      final username = isSteamNews 
+                          ? (post['username'] ?? 'Steam Gaming News 🎮')
+                          : (userProfile?['username'] ?? post['username'] ?? 'user_gamer'.tr());
+                      
+                      final avatarUrl = isSteamNews
+                          ? ''
+                          : (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
+                      
                       final postId = post['id']?.toString() ?? '';
                       final isLiked = likedPostIds.contains(postId);
                       
@@ -1164,7 +1188,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
                         elevation: 0,
-                        color: ThemeService.card,
+                        color: isSteamNews ? ThemeService.cardSecondary.withOpacity(0.5) : ThemeService.card,
                         shape: Border(
                           top: BorderSide(color: ThemeService.border, width: 0.5),
                           bottom: BorderSide(color: ThemeService.border, width: 0.5),
@@ -1176,31 +1200,63 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               leading: GestureDetector(
                                 onTap: () => _openUserProfile(postUserId, username.toString()),
-                                child: GamerAvatar(
-                                  photoUrl: avatarUrl,
-                                  displayName: username.toString(),
-                                  radius: 20,
-                                ),
+                                child: isSteamNews
+                                    ? Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF00FF88).withOpacity(0.15),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: const Color(0xFF00FF88), width: 1),
+                                        ),
+                                        child: const Icon(Icons.sports_esports, color: Color(0xFF00FF88), size: 20),
+                                      )
+                                    : GamerAvatar(
+                                        photoUrl: avatarUrl,
+                                        displayName: username.toString(),
+                                        radius: 20,
+                                      ),
                               ),
                               title: GestureDetector(
                                 onTap: () => _openUserProfile(postUserId, username.toString()),
-                                child: Text(
-                                  username.toString(),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                    color: ThemeService.textPrimary,
-                                  ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        username.toString(),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          color: isSteamNews ? const Color(0xFF00FF88) : ThemeService.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isSteamNews)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF00FF88).withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+                                        ),
+                                        child: const Text(
+                                          'OFFICIAL NEWS',
+                                          style: TextStyle(color: Color(0xFF00FF88), fontSize: 9, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                               subtitle: Text(
                                 _formatTimeAgo(post['created_at']),
                                 style: TextStyle(fontSize: 12, color: ThemeService.textSecondary),
                               ),
-                              trailing: IconButton(
-                                icon: Icon(Icons.more_horiz, color: ThemeService.textSecondary),
-                                onPressed: () => _showPostOptions(context, postId, postUserId),
-                              ),
+                              trailing: isSteamNews
+                                  ? null
+                                  : IconButton(
+                                      icon: Icon(Icons.more_horiz, color: ThemeService.textSecondary),
+                                      onPressed: () => _showPostOptions(context, postId, postUserId, isSteamNews: isSteamNews),
+                                    ),
                             ),
                             if (content.isNotEmpty)
                               Padding(
@@ -1268,75 +1324,78 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.all(4),
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFF1877F2),
+                                        decoration: BoxDecoration(
+                                          color: isSteamNews ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
                                           shape: BoxShape.circle,
                                         ),
-                                        child: const Icon(Icons.thumb_up, size: 11, color: Colors.white),
+                                        child: Icon(isSteamNews ? Icons.local_fire_department : Icons.thumb_up, size: 11, color: isSteamNews ? Colors.black : Colors.white),
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        '$likesCount',
+                                        isSteamNews ? 'Steam Gaming News' : '$likesCount',
                                         style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
                                       ),
                                     ],
                                   ),
-                                  Text(
-                                    commentLabel,
-                                    style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
-                                  ),
+                                  if (!isSteamNews)
+                                    Text(
+                                      commentLabel,
+                                      style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
+                                    ),
                                 ],
                               ),
                             ),
                             Divider(height: 1, color: ThemeService.border),
                             Row(
                               children: [
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () => _handleLike(post),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                                            size: 18,
-                                            color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            'btn_like'.tr().contains('btn_') ? 'Like' : 'btn_like'.tr(),
-                                            style: TextStyle(
+                                if (!isSteamNews) ...[
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () => _handleLike(post),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                                              size: 18,
                                               color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
-                                              fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
-                                              fontSize: 13,
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Like',
+                                              style: TextStyle(
+                                                color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
+                                                fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () => _showComments(postId),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.chat_bubble_outline, size: 18, color: ThemeService.textSecondary),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            'btn_comment'.tr().contains('btn_') ? 'Comment' : 'btn_comment'.tr(),
-                                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
-                                          ),
-                                        ],
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () => _showComments(postId),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.chat_bubble_outline, size: 18, color: ThemeService.textSecondary),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Comment',
+                                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
+                                ],
                                 Expanded(
                                   child: InkWell(
                                     onTap: () => _handleShare(post),
@@ -1348,7 +1407,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                           Icon(Icons.share_outlined, size: 18, color: ThemeService.textSecondary),
                                           const SizedBox(width: 6),
                                           Text(
-                                            'btn_share'.tr().contains('btn_') ? 'Share' : 'btn_share'.tr(),
+                                            'Share',
                                             style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
                                           ),
                                         ],
@@ -1772,7 +1831,7 @@ class _CommentSheetState extends State<CommentSheet> {
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Row(
-                      children: [
+                      widgets: [
                         Expanded(
                           child: TextField(
                             controller: _ctrl,
