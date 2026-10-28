@@ -103,17 +103,17 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
   }
 
   Future<void> _registerTeam(String tournamentId, int entryFee) async {
-    // STEP 1: Check Login
+    // 🔍 Step 1: Check Login
     final user = _supabase.auth.currentUser;
     if (user == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Step 1 Failed: Please log in first'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Please log in first'), backgroundColor: Colors.red),
       );
       return;
     }
 
-    // STEP 2: Check Team ID
+    // 🔍 Step 2: Fetch Team ID if null
     if (_myTeamId == null) {
       try {
         final leaderTeamRes = await _supabase
@@ -135,29 +135,29 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
          if (!mounted) return;
          ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Step 2 DB Error: $e'), 
+            content: Text('Team Fetch Error: $e'), 
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 10),
+            duration: const Duration(seconds: 8),
           ),
         );
          return;
       }
     }
 
-    // STEP 3: Team Not Found
+    // 🔍 Step 3: Check if Team exists
     if (_myTeamId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Step 3: You need your own team to register! Please create a team first.'),
+          content: Text('You need your own team to register! Please create a team first.'),
           backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 5),
+          duration: Duration(seconds: 5),
         ),
       );
       return;
     }
 
-    // STEP 4: Insert to Database
+    // 🔍 Step 4: Register Team & Insert to Database
     try {
       final currentTourney = _tournaments.firstWhere(
         (t) => t['id'].toString() == tournamentId,
@@ -173,7 +173,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       });
 
       // 2. Increment Slots via RPC
-      await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
+      try {
+        await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
+      } catch (_) {}
 
       // 3. Send Notifications
       try {
@@ -201,14 +203,12 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         if (notifInserts.isNotEmpty) {
           await _supabase.from('notifications').insert(notifInserts);
         }
-      } catch (e) {
-        // Ignore notification errors so registration doesn't fail
-      }
+      } catch (_) {}
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Success: Squad Registered & Team Notified! 🎉'),
+          content: Text('Squad Registered Successfully! 🎉'),
           backgroundColor: Color(0xFF00FF88),
         ),
       );
@@ -216,13 +216,14 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       _fetchTournaments();
       
     } catch (e) {
-      // STEP 4 ERROR
+      // 🚨 DIRECT SCREEN ERROR: Yahan database ka asal error mobile screen par show hoga!
+      debugPrint('CRITICAL REGISTRATION ERROR: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Step 4 DB ERROR: $e'), 
+          content: Text('DATABASE ERROR: $e'), 
           backgroundColor: const Color(0xFFFF4655),
-          duration: const Duration(seconds: 10),
+          duration: const Duration(seconds: 12),
         ),
       );
     }
