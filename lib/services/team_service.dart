@@ -572,11 +572,12 @@ class TeamService {
   }
 
   /// Update Team Details
-  Future<void> updateTeam({
+  Future<bool> updateTeam({
     required String teamId,
     required String name,
     required String tag,
     File? logoFile,
+    File? newLogoFile,
     required String description,
     required String requirements,
   }) async {
@@ -588,9 +589,10 @@ class TeamService {
         "requirements": requirements.trim(),
       };
 
-      if (logoFile != null) {
+      final fileToUpload = logoFile ?? newLogoFile;
+      if (fileToUpload != null) {
         final uploaded = await SupabaseService.uploadFile(
-          file: logoFile,
+          file: fileToUpload,
           folder: "team_logos",
           bucket: SupabaseService.bucketTeamLogos,
         );
@@ -603,14 +605,18 @@ class TeamService {
           .from("teams")
           .update(updates)
           .eq("id", teamId);
+      return true;
     } catch (e) {
       debugPrint("[TeamService] updateTeam error: $e");
-      rethrow;
+      return false;
     }
   }
 
   /// Delete Team
-  Future<void> deleteTeam(String teamId, String userId) async {
+  Future<bool> deleteTeam({
+    required String teamId,
+    required String userId,
+  }) async {
     try {
       await SupabaseService.client
           .from("team_members")
@@ -622,14 +628,18 @@ class TeamService {
           .delete()
           .eq("id", teamId)
           .eq("leader_id", userId);
+      return true;
     } catch (e) {
       debugPrint("[TeamService] deleteTeam error: $e");
-      rethrow;
+      return false;
     }
   }
 
   /// Request to join a team
-  Future<void> requestToJoinTeam(String teamId, String userId) async {
+  Future<bool> requestToJoinTeam({
+    required String teamId,
+    required String userId,
+  }) async {
     try {
       await SupabaseService.client.from("team_join_requests").upsert({
         "team_id": teamId,
@@ -637,28 +647,36 @@ class TeamService {
         "status": "pending",
         "created_at": DateTime.now().toIso8601String(),
       });
+      return true;
     } catch (e) {
       debugPrint("[TeamService] requestToJoinTeam error: $e");
-      rethrow;
+      return false;
     }
   }
 
   /// Cancel join request
-  Future<void> cancelJoinRequest(String teamId, String userId) async {
+  Future<bool> cancelJoinRequest({
+    required String teamId,
+    required String userId,
+  }) async {
     try {
       await SupabaseService.client
           .from("team_join_requests")
           .delete()
           .eq("team_id", teamId)
           .eq("user_id", userId);
+      return true;
     } catch (e) {
       debugPrint("[TeamService] cancelJoinRequest error: $e");
-      rethrow;
+      return false;
     }
   }
 
   /// Accept join request
-  Future<void> acceptJoinRequest(String teamId, String userId) async {
+  Future<bool> acceptJoinRequest({
+    required String teamId,
+    required String userId,
+  }) async {
     try {
       await SupabaseService.client
           .from("team_join_requests")
@@ -672,23 +690,28 @@ class TeamService {
         "role": "member",
         "joined_at": DateTime.now().toIso8601String(),
       });
+      return true;
     } catch (e) {
       debugPrint("[TeamService] acceptJoinRequest error: $e");
-      rethrow;
+      return false;
     }
   }
 
   /// Reject join request
-  Future<void> rejectJoinRequest(String teamId, String userId) async {
+  Future<bool> rejectJoinRequest({
+    required String teamId,
+    required String userId,
+  }) async {
     try {
       await SupabaseService.client
           .from("team_join_requests")
           .update({"status": "rejected"})
           .eq("team_id", teamId)
           .eq("user_id", userId);
+      return true;
     } catch (e) {
       debugPrint("[TeamService] rejectJoinRequest error: $e");
-      rethrow;
+      return false;
     }
   }
 }
