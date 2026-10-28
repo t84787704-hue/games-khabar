@@ -1,646 +1,577 @@
 // ===============================================================================
-// TEAM CARD — Super Compact & Slim Design (ThemeService & Localized)
-// File: lib/widgets/team_card.dart
+// File: lib/services/team_service.dart
+// Service to manage teams in Supabase with Enriched Member Details
 // ===============================================================================
 
-import 'dart:io';
-import 'package:easy_localization/easy_localization.dart' hide TextDirection;
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import '../models/team_model.dart';
-import '../services/team_service.dart';
-import '../services/supabase_service.dart';
-import '../services/gamer_auth_service.dart';
-import '../screens/team_profile_screen.dart';
-import '../screens/private_match_room_screen.dart';
-import '../services/theme_service.dart';
-import '../services/coin_wallet_service.dart';
-import 'coin_or_ad_popup.dart';
-import 'match_rules_dialog.dart';
+import "dart:io";
+import "dart:async";
+import "package:flutter/foundation.dart";
+import "package:easy_localization/easy_localization.dart";
+import "../models/team_model.dart";
+import "supabase_service.dart";
 
-class TeamCard extends StatefulWidget {
-  final TeamModel team;
-  final String myTeamId;
-  final String myTeamName;
-  final bool isMyTeamFrozen;
-  final Map<String, dynamic>? pendingChallenge;
-  final Future<void> Function(String challengeId)? onCancelChallenge;
+/// Service to manage teams in Supabase
+class TeamService {
+  static final TeamService _instance = TeamService._internal();
+  factory TeamService() => _instance;
+  TeamService._internal();
 
-  const TeamCard({
-    super.key,
-    required this.team,
-    this.myTeamId = '',
-    this.myTeamName = '',
-    this.isMyTeamFrozen = false,
-    this.pendingChallenge,
-    this.onCancelChallenge,
-  });
+  /// Helper to enrich a single raw team row with members, pending join requests, and leader info
+  Future<TeamModel> _enrichTeamRow(Map<String, dynamic> rawRow) async {
+    final teamId = (rawRow["id"] ?? "").toString();
+    final teamUuid = SupabaseService.toUuid(teamId);
 
-  @override
-  State<TeamCard> createState() => _TeamCardState();
-}
+    final teamIds = {teamId, teamUuid}.where((e) => e.isNotEmpty).toList();
 
-class _TeamCardState extends State<TeamCard> {
-  final TeamService _teamService = TeamService();
-  bool _isRequesting = false;
-  bool _isCancelling = false;
-  bool _localRequested = false;
-  bool _localCancelled = false;
-  bool _isMemberFromDb = false;
-  bool _isOwnerFromDb = false;
-
-  // Local optimistic state for sent challenges
-  bool _localSentChallenge = false;
-  String? _localSentChallengeId;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkMembership();
-  }
-
-  Future<void> _checkMembership() async {
-    final currentUid = GamerAuthService().currentUid ??
-        (SupabaseService.client.auth.currentUser?.id ?? '');
-    if (currentUid.isEmpty) return;
-
-    try {
-      final uuid = SupabaseService.toUuid(currentUid);
-      final teamUuid = SupabaseService.toUuid(widget.team.id);
-
-      final res = await SupabaseService.client
-          .from('team_members')
-          .select('role')
-          .eq('user_id', uuid)
-          .eq('team_id', teamUuid)
-          .maybeSingle();
-
-      if (!mounted) return;
-      setState(() {
-        if (res != null) {
-          _isMemberFromDb = true;
-          final role = (res['role'] ?? '').toString().toLowerCase();
-          _isOwnerFromDb =
-              (role == 'owner' || role == 'co_leader' || role == 'leader');
-        } else {
-          _isMemberFromDb = false;
-          _isOwnerFromDb = false;
+    // 1. Fetch members from team_members table and gather user IDs
+    final members = <String>[];
+    final List<Map<String, dynamic>> memberDetails = [];
+    
+    if (rawRow["members"] is List) {
+      for (final m in (rawRow["members"] as List)) {
+        final uid = m.toString().trim();
+        if (uid.isNotEmpty && !members.contains(uid)) {
+          members.add(uid);
         }
-      });
-    } catch (_) {}
-  }
-
-  Color _getGameBadgeColor(String game) {
-    switch (game.toUpperCase()) {
-      case 'PUBG':
-        return const Color(0xFF1877F2);
-      case 'VALORANT':
-        return const Color(0xFF8B5CF6);
-      case 'FREE FIRE':
-        return const Color(0xFFFF5722);
-      case 'COD':
-        return const Color(0xFFE11D48);
-      default:
-        return const Color(0xFF00E5FF);
+      }
     }
-  }
-
-  Future<void> _handleCancelJoinRequest(String currentUid) async {
-    final bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: ThemeService.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'dialog_cancel_request_title'.tr(),
-          style: TextStyle(
-            color: ThemeService.textPrimary,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        content: Text(
-          'dialog_cancel_request_desc'.tr(namedArgs: {'team': widget.team.name}),
-          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(
-              'cancel'.tr(),
-              style: TextStyle(color: ThemeService.textSecondary),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF4655),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'btn_cancel_request'.tr(),
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isCancelling = true);
-
+    
     try {
-      final success = await _teamService.cancelJoinRequest(
-        teamId: widget.team.id,
-        userId: currentUid,
-      );
-
-      if (!mounted) return;
-
-      if (success) {
-        setState(() {
-          _localRequested = false;
-          _localCancelled = true;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('msg_request_cancelled_success'.tr()),
-            backgroundColor: const Color(0xFFFF4655),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('err_something_went_wrong'.tr()),
-            backgroundColor: const Color(0xFFFF4655),
-          ),
-        );
+      final memberRows = await SupabaseService.client
+          .from("team_members")
+          .select("user_id, role")
+          .filter("team_id", "in", teamIds);
+      
+      final memberUserIds = <String>[];
+      final Map<String, String> memberRoles = {};
+      
+      for (final m in memberRows) {
+        final uid = (m["user_id"] ?? "").toString().trim();
+        final role = (m["role"] ?? "member").toString().trim();
+        if (uid.isNotEmpty) {
+          memberRoles[uid] = role;
+          if (!members.contains(uid)) {
+            members.add(uid);
+          }
+          memberUserIds.add(uid);
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
-        );
+
+      final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
+      if (members.isEmpty && leaderId.isNotEmpty) {
+        members.add(leaderId);
+        memberUserIds.add(leaderId);
       }
-    } finally {
-      if (mounted) setState(() => _isCancelling = false);
-    }
-  }
 
-  Future<void> _handleCancelSentChallenge(String challengeId) async {
-    final bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: ThemeService.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'confirm_cancel_challenge_title'.tr().contains('confirm_')
-              ? 'Cancel Challenge?'
-              : 'confirm_cancel_challenge_title'.tr(),
-          style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        content: Text(
-          'confirm_cancel_challenge_desc'.tr().contains('confirm_')
-              ? 'Are you sure you want to cancel the challenge request sent to ${widget.team.name}?'
-              : 'confirm_cancel_challenge_desc'.tr(),
-          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('cancel'.tr(), style: TextStyle(color: ThemeService.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF4655),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('btn_cancel'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() {
-      _localSentChallenge = false;
-      _localSentChallengeId = null;
-    });
-
-    if (widget.onCancelChallenge != null && challengeId.isNotEmpty) {
-      await widget.onCancelChallenge!(challengeId);
-    } else if (challengeId.isNotEmpty) {
-      try {
-        await SupabaseService.client.from('challenges').delete().eq('id', challengeId);
-      } catch (e) {
-        debugPrint('[TeamCard] Error cancelling challenge: $e');
-      }
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('msg_challenge_cancelled_success'.tr().contains('msg_')
-              ? 'Challenge cancelled successfully'
-              : 'msg_challenge_cancelled_success'.tr()),
-          backgroundColor: const Color(0xFFFF4655),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  Future<void> _handleChallenge(String currentUid) async {
-    if (widget.isMyTeamFrozen) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Your team balance is below 1,000 coins!'),
-          backgroundColor: Color(0xFFFF4655),
-        ),
-      );
-      return;
-    }
-
-    final myTeams = await _teamService.getUserTeams(currentUid);
-    final myLeaderTeams = myTeams.where((t) => t.isLeader(currentUid)).toList();
-
-    if (!mounted) return;
-
-    if (myLeaderTeams.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Create a team first to challenge!'),
-          backgroundColor: Color(0xFF65676B),
-        ),
-      );
-      return;
-    }
-
-    final effectiveMyTeam = myLeaderTeams.firstWhere(
-      (t) => t.id == widget.myTeamId,
-      orElse: () => myLeaderTeams.first,
-    );
-    final effectiveMyTeamId = SupabaseService.toUuid(effectiveMyTeam.id);
-    final effectiveTargetId = SupabaseService.toUuid(widget.team.id);
-    final effectiveMyTeamName =
-        widget.myTeamName.isNotEmpty ? widget.myTeamName : effectiveMyTeam.name;
-
-    MatchRulesDialog.show(
-      context,
-      title: 'Challenge Rules (${widget.team.name})',
-      onProceed: () async {
+      // Fetch user profile details (Name & Avatar) for all members in batch
+      if (memberUserIds.isNotEmpty) {
         try {
-          // 0ms Optimistic UI update: instantly change button to "REQUESTED"
-          setState(() {
-            _localSentChallenge = true;
-          });
+          final userRows = await SupabaseService.client
+              .from("users")
+              .select("id, uid, display_name, username, avatar_url, photo_url")
+              .inFilter("id", memberUserIds);
 
-          final res = await SupabaseService.client.from('challenges').insert({
-            'from_team_id': effectiveMyTeamId,
-            'to_team_id': effectiveTargetId,
-            'from_team_name': effectiveMyTeamName,
-            'to_team_name': widget.team.name,
-            'status': 'pending',
-            'game': widget.team.game.isNotEmpty ? widget.team.game : 'PUBG',
-          }).select().maybeSingle();
+          final Map<String, Map<String, String>> userInfoMap = {};
+          for (final u in userRows) {
+            final id = (u["id"] ?? "").toString();
+            final uid = (u["uid"] ?? "").toString();
+            final dName = (u["display_name"] ?? "").toString().trim();
+            final uName = (u["username"] ?? "").toString().trim();
+            final avatar = (u["avatar_url"] ?? u["photo_url"] ?? "").toString().trim();
 
-          if (res != null && res['id'] != null) {
-            _localSentChallengeId = res['id'].toString();
+            String resolvedName = "Member";
+            if (dName.isNotEmpty && dName.toLowerCase() != "null" && dName != 'gamer_id_display') {
+              resolvedName = dName;
+            } else if (uName.isNotEmpty && uName.toLowerCase() != "null") {
+              resolvedName = uName.startsWith('@') ? uName : '@$uName';
+            }
+
+            final userMapData = {'name': resolvedName, 'avatar': avatar};
+            if (id.isNotEmpty) userInfoMap[id] = userMapData;
+            if (uid.isNotEmpty) userInfoMap[uid] = userMapData;
           }
 
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Challenge sent to ${widget.team.name}! ⚡'),
-                backgroundColor: const Color(0xFF1877F2),
-              ),
-            );
+          for (final mId in members) {
+            final uInfo = userInfoMap[mId] ?? {'name': mId == leaderId ? 'Leader' : 'Member', 'avatar': ''};
+            final isLeader = mId == leaderId || memberRoles[mId] == 'owner' || memberRoles[mId] == 'leader';
+            
+            memberDetails.add({
+              'id': mId,
+              'name': uInfo['name'],
+              'avatar': uInfo['avatar'],
+              'role': isLeader ? 'Leader' : (memberRoles[mId] ?? 'Member'),
+            });
           }
         } catch (e) {
-          // Revert optimistic update on failure
-          if (mounted) {
-            setState(() {
-              _localSentChallenge = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
-            );
+          debugPrint("[TeamService] member profiles batch fetch error: $e");
+        }
+      }
+    } catch (e) {
+      debugPrint("[TeamService] getTeam members fetch error: $e");
+    }
+
+    final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
+
+    // 2. Fetch pending join requests from team_join_requests table
+    final pendingRequests = <String>[];
+    try {
+      final reqRows = await SupabaseService.client
+          .from("team_join_requests")
+          .select("user_id, status")
+          .filter("team_id", "in", teamIds)
+          .eq("status", "pending");
+      
+      for (final r in reqRows) {
+        final uid = (r["user_id"] ?? "").toString().trim();
+        if (uid.isNotEmpty && !members.contains(uid) && !pendingRequests.contains(uid)) {
+          pendingRequests.add(uid);
+        }
+      }
+    } catch (e) {
+      debugPrint("[TeamService] pending requests fetch error: $e");
+    }
+
+    // 3. Fetch leader name & avatar from users table
+    String leaderName = (rawRow["leader_name"] ?? rawRow["leaderName"] ?? "").toString().trim();
+    String leaderAvatar = (rawRow["leader_avatar"] ?? rawRow["leaderAvatar"] ?? "").toString().trim();
+    if (leaderId.isNotEmpty) {
+      try {
+        final userRes = await SupabaseService.client
+            .from("users")
+            .select("id, uid, display_name, username, avatar_url, photo_url")
+            .or("id.eq.$leaderId,uid.eq.$leaderId")
+            .maybeSingle();
+        if (userRes != null) {
+          final d = (userRes["display_name"] ?? "").toString().trim();
+          final un = (userRes["username"] ?? "").toString().trim();
+          if (d.isNotEmpty && d.toLowerCase() != "null") {
+            leaderName = d;
+          } else if (un.isNotEmpty && un.toLowerCase() != "null") {
+            leaderName = un;
+          }
+          final av = (userRes["avatar_url"] ?? userRes["photo_url"] ?? "").toString().trim();
+          if (av.isNotEmpty && av.toLowerCase() != "null") {
+            leaderAvatar = av;
           }
         }
-      },
+      } catch (e) {
+        debugPrint("[TeamService] leader fetch error: $e");
+      }
+    }
+
+    final enrichedMap = Map<String, dynamic>.from(rawRow);
+    enrichedMap["members"] = members;
+    enrichedMap["member_details"] = memberDetails;
+    enrichedMap["memberDetails"] = memberDetails;
+    enrichedMap["pending_join_requests"] = pendingRequests;
+    enrichedMap["pendingJoinRequests"] = pendingRequests;
+    enrichedMap["join_requests"] = pendingRequests;
+    enrichedMap["leader_name"] = leaderName.isNotEmpty ? leaderName : "team_leader_fallback".tr();
+    enrichedMap["leaderName"] = leaderName.isNotEmpty ? leaderName : "team_leader_fallback".tr();
+    enrichedMap["leader_avatar"] = leaderAvatar;
+    enrichedMap["leaderAvatar"] = leaderAvatar;
+
+    final team = TeamModel.fromSupabase(enrichedMap);
+    return team.copyWith(
+      members: members,
+      memberDetails: memberDetails,
+      leaderName: leaderName.isNotEmpty ? leaderName : "team_leader_fallback".tr(),
+      leaderAvatar: leaderAvatar,
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final team = widget.team;
-    final currentUid = GamerAuthService().currentUid ??
-        (SupabaseService.client.auth.currentUser?.id ?? '');
-    final isLeader = team.isLeader(currentUid);
-    final isMember = team.isMember(currentUid);
-    final rawHasRequested = team.hasRequestedJoin(currentUid);
+  /// Get single team by ID
+  Future<TeamModel?> getTeam(String teamId) async {
+    if (teamId.isEmpty) return null;
+    try {
+      final teamUuid = SupabaseService.toUuid(teamId);
+      final res = await SupabaseService.client
+          .from("teams")
+          .select()
+          .or("id.eq.$teamUuid,id.eq.$teamId")
+          .maybeSingle();
+      if (res != null) {
+        return await _enrichTeamRow(res);
+      }
+    } catch (e) {
+      debugPrint("[TeamService] getTeam error: $e");
+    }
+    return null;
+  }
 
-    // Agar local cancel kar diya ho to requested false ho jaye
-    final hasRequested = !_localCancelled && (rawHasRequested || _localRequested);
+  /// Get team stream (polls + real-time updates for team, members & join requests)
+  Stream<TeamModel?> getTeamStream(String teamId) async* {
+    if (teamId.isEmpty) {
+      yield null;
+      return;
+    }
+    while (true) {
+      try {
+        final team = await getTeam(teamId);
+        yield team;
+      } catch (e) {
+        debugPrint("[TeamService] getTeamStream error: $e");
+      }
+      await Future.delayed(const Duration(seconds: 3));
+    }
+  }
 
-    final bool isOwnerFinal = isLeader || _isOwnerFromDb;
-    final bool isMemberFinal = isMember || _isMemberFromDb || isOwnerFinal;
+  /// Get all teams where user is leader or member
+  Future<List<TeamModel>> getUserTeams(String userId) async {
+    if (userId.isEmpty) return [];
+    try {
+      final userUuid = SupabaseService.toUuid(userId);
+      final memberRows = await SupabaseService.client
+          .from("team_members")
+          .select("team_id")
+          .or("user_id.eq.$userUuid,user_id.eq.$userId");
 
-    // Active Challenge detection: either from stream prop or locally triggered
-    final bool hasActiveChallenge = _localSentChallenge || (widget.pendingChallenge != null);
-    final String activeChallengeId = widget.pendingChallenge?['id']?.toString() ??
-        _localSentChallengeId ??
-        '';
+      final teamIds = <String>{};
+      for (final r in memberRows) {
+        final tid = r["team_id"]?.toString();
+        if (tid != null && tid.isNotEmpty) teamIds.add(tid);
+      }
 
-    final gameColor = _getGameBadgeColor(team.game.isNotEmpty ? team.game : 'PUBG');
+      final res = await SupabaseService.client
+          .from("teams")
+          .select()
+          .or("leader_id.eq.$userId,leader_id.eq.$userUuid");
 
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeService.themeModeNotifier,
-      builder: (context, _, __) {
-        final isDark = ThemeService.isDarkMode;
+      final result = <TeamModel>[];
+      final seenIds = <String>{};
+      for (final r in res) {
+        final t = await _enrichTeamRow(r);
+        seenIds.add(t.id);
+        result.add(t);
+      }
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 6),
-          decoration: BoxDecoration(
-            color: ThemeService.card,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isOwnerFinal
-                  ? const Color(0xFFFFD700).withOpacity(0.6)
-                  : ThemeService.border,
-              width: isOwnerFinal ? 1.4 : 0.8,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
-                blurRadius: 4,
-                offset: const Offset(0, 1.5),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Top Row: Logo + Info
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Slim Badge / Logo Box (40x40)
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: ThemeService.cardSecondary,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: gameColor.withOpacity(0.35), width: 1),
-                        image: team.logo.isNotEmpty
-                            ? DecorationImage(
-                                image: NetworkImage(team.logo),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
-                      child: team.logo.isEmpty
-                          ? Center(
-                              child: Icon(Icons.shield_rounded, color: gameColor, size: 22),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 10),
+      for (final tid in teamIds) {
+        if (!seenIds.contains(tid)) {
+          final t = await getTeam(tid);
+          if (t != null) {
+            seenIds.add(t.id);
+            result.add(t);
+          }
+        }
+      }
+      return result;
+    } catch (e) {
+      debugPrint("[TeamService] getUserTeams error: $e");
+      return [];
+    }
+  }
 
-                    // Name, Game Tag & Stats
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  team.name,
-                                  style: TextStyle(
-                                    color: ThemeService.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13.5,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                decoration: BoxDecoration(
-                                  color: gameColor.withOpacity(0.16),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  (team.game.isNotEmpty ? team.game : 'PUBG').toUpperCase(),
-                                  style: TextStyle(
-                                    color: gameColor,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 8.5,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 1.5),
-                          Text(
-                            "Leader: ${team.leaderName}",
-                            style: TextStyle(
-                              color: ThemeService.textSecondary,
-                              fontSize: 11,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2.5),
-                          Row(
-                            children: [
-                              const Icon(Icons.group_rounded, color: Color(0xFF1877F2), size: 12),
-                              const SizedBox(width: 3),
-                              Text(
-                                "${team.memberCount} Members",
-                                style: TextStyle(
-                                  color: ThemeService.textSecondary,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFB800), size: 12),
-                              const SizedBox(width: 3),
-                              Text(
-                                "${team.wins} Wins",
-                                style: TextStyle(
-                                  color: ThemeService.textSecondary,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+  /// Stream of user teams (includes both leader and joined member teams)
+  Stream<List<TeamModel>> getUserTeamsStream(String userId) async* {
+    if (userId.isEmpty) {
+      yield [];
+      return;
+    }
+    while (true) {
+      try {
+        final teams = await getUserTeams(userId);
+        yield teams;
+      } catch (e) {
+        debugPrint("[TeamService] getUserTeamsStream error: $e");
+      }
+      await Future.delayed(const Duration(seconds: 4));
+    }
+  }
 
-                const SizedBox(height: 8),
+  /// Fetch all enriched teams with optional gameFilter and searchQuery
+  Future<List<TeamModel>> _fetchAllTeamsEnriched({
+    String? gameFilter,
+    String? searchQuery,
+  }) async {
+    final rows = await SupabaseService.client
+        .from("teams")
+        .select()
+        .order("points", ascending: false);
 
-                // Bottom Buttons Row (Compact height 30)
-                Row(
-                  children: [
-                    // View Team Button
-                    Expanded(
-                      child: SizedBox(
-                        height: 30,
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: ThemeService.textPrimary,
-                            side: BorderSide(color: ThemeService.border, width: 0.8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            backgroundColor: ThemeService.cardSecondary,
-                            padding: EdgeInsets.zero,
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => TeamProfileScreen(teamId: team.id),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            'view_team'.tr(),
-                            style: TextStyle(
-                              color: ThemeService.textPrimary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
+    if (rows.isEmpty) return <TeamModel>[];
 
-                    // Action Button (Open / Cancel Join Request / Cancel Challenge / Send Challenge)
-                    Expanded(
-                      child: SizedBox(
-                        height: 30,
-                        child: isOwnerFinal || isMemberFinal
-                            ? ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF00C853),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                  elevation: 0,
-                                  padding: EdgeInsets.zero,
-                                ),
-                                icon: const Icon(Icons.login_rounded, size: 13),
-                                label: Text(
-                                  'open_team'.tr(),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                                ),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => TeamProfileScreen(teamId: team.id),
-                                    ),
-                                  );
-                                },
-                              )
-                            : hasActiveChallenge
-                                ? OutlinedButton.icon(
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFFFF8A00),
-                                      side: const BorderSide(color: Color(0xFFFF8A00), width: 1),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                      backgroundColor: const Color(0xFFFF8A00).withOpacity(0.08),
-                                      padding: EdgeInsets.zero,
-                                    ),
-                                    icon: const Icon(Icons.hourglass_top_rounded, size: 12, color: Color(0xFFFF8A00)),
-                                    label: Text(
-                                      'btn_requested'.tr().contains('btn_') ? 'Requested' : 'btn_requested'.tr(),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 10.5,
-                                        color: Color(0xFFFF8A00),
-                                      ),
-                                    ),
-                                    onPressed: () => _handleCancelSentChallenge(activeChallengeId),
-                                  )
-                                : hasRequested
-                                    ? OutlinedButton.icon(
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: const Color(0xFFFF8A00),
-                                          side: const BorderSide(color: Color(0xFFFF8A00), width: 1),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                          backgroundColor: const Color(0xFFFF8A00).withOpacity(0.08),
-                                          padding: EdgeInsets.zero,
-                                        ),
-                                        icon: _isCancelling
-                                            ? const SizedBox(
-                                                width: 12,
-                                                height: 12,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 1.5,
-                                                  color: Color(0xFFFF8A00),
-                                                ),
-                                              )
-                                            : const Icon(Icons.close_rounded, size: 12, color: Color(0xFFFF8A00)),
-                                        label: Text(
-                                          _isCancelling
-                                              ? 'loading'.tr()
-                                              : 'btn_cancel_request'.tr(),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 10.5,
-                                            color: Color(0xFFFF8A00),
-                                          ),
-                                        ),
-                                        onPressed: _isCancelling
-                                            ? null
-                                            : () => _handleCancelJoinRequest(currentUid),
-                                      )
-                                    : ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF1877F2),
-                                          foregroundColor: Colors.white,
-                                          elevation: 0,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                          padding: EdgeInsets.zero,
-                                        ),
-                                        icon: const Icon(Icons.flash_on_rounded, size: 13, color: Colors.white),
-                                        label: Text(
-                                          'btn_challenge_caps'.tr(),
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                                        ),
-                                        onPressed: () => _handleChallenge(currentUid),
-                                      ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+    final teamIds = rows
+        .map((r) => (r["id"] ?? "").toString())
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    final Map<String, List<String>> membersByTeam = {};
+    final Map<String, List<Map<String, dynamic>>> memberDetailsByTeam = {};
+    final Map<String, List<String>> pendingByTeam = {};
+
+    if (teamIds.isNotEmpty) {
+      try {
+        final memberRows = await SupabaseService.client
+            .from("team_members")
+            .select("team_id, user_id, role")
+            .inFilter("team_id", teamIds);
+            
+        final allUserIds = memberRows.map((m) => (m["user_id"] ?? "").toString()).where((id) => id.isNotEmpty).toSet().toList();
+        final Map<String, Map<String, String>> userInfoMap = {};
+        
+        if (allUserIds.isNotEmpty) {
+          try {
+            final userRows = await SupabaseService.client
+                .from("users")
+                .select("id, uid, display_name, username, avatar_url, photo_url")
+                .inFilter("id", allUserIds);
+            for (final u in userRows) {
+              final id = (u["id"] ?? "").toString();
+              final uid = (u["uid"] ?? "").toString();
+              final dName = (u["display_name"] ?? "").toString().trim();
+              final uName = (u["username"] ?? "").toString().trim();
+              final avatar = (u["avatar_url"] ?? u["photo_url"] ?? "").toString().trim();
+
+              String resolvedName = "Member";
+              if (dName.isNotEmpty && dName.toLowerCase() != "null" && dName != 'gamer_id_display') {
+                resolvedName = dName;
+              } else if (uName.isNotEmpty && uName.toLowerCase() != "null") {
+                resolvedName = uName.startsWith('@') ? uName : '@$uName';
+              }
+
+              final userMapData = {'name': resolvedName, 'avatar': avatar};
+              if (id.isNotEmpty) userInfoMap[id] = userMapData;
+              if (uid.isNotEmpty) userInfoMap[uid] = userMapData;
+            }
+          } catch (_) {}
+        }
+
+        for (final m in memberRows) {
+          final tid = (m["team_id"] ?? "").toString();
+          final uid = (m["user_id"] ?? "").toString();
+          final role = (m["role"] ?? "member").toString();
+          if (tid.isEmpty || uid.isEmpty) continue;
+          
+          final list = membersByTeam.putIfAbsent(tid, () => []);
+          if (!list.contains(uid)) list.add(uid);
+
+          final detailsList = memberDetailsByTeam.putIfAbsent(tid, () => []);
+          final uInfo = userInfoMap[uid] ?? {'name': 'Member', 'avatar': ''};
+          detailsList.add({
+            'id': uid,
+            'name': uInfo['name'],
+            'avatar': uInfo['avatar'],
+            'role': role,
+          });
+        }
+      } catch (e) {
+        debugPrint("[TeamService] members fetch error: $e");
+      }
+
+      try {
+        final reqRows = await SupabaseService.client
+            .from("team_join_requests")
+            .select("team_id, user_id, status")
+            .inFilter("team_id", teamIds)
+            .eq("status", "pending");
+        for (final r in reqRows) {
+          final tid = (r["team_id"] ?? "").toString();
+          final uid = (r["user_id"] ?? "").toString();
+          if (tid.isEmpty || uid.isEmpty) continue;
+          final list = pendingByTeam.putIfAbsent(tid, () => []);
+          if (!list.contains(uid)) list.add(uid);
+        }
+      } catch (e) {
+        debugPrint("[TeamService] team_join_requests batch fetch error: $e");
+      }
+    }
+
+    final leaderIds = rows
+        .map((r) => (r["leader_id"] ?? r["leaderId"] ?? "").toString())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final Map<String, String> leaderNameById = {};
+    final Map<String, String> leaderAvatarById = {};
+    if (leaderIds.isNotEmpty) {
+      try {
+        final userRows = await SupabaseService.client
+            .from("users")
+            .select("id, uid, display_name, username, avatar_url, photo_url")
+            .inFilter("id", leaderIds);
+        for (final u in userRows) {
+          final id = (u["id"] ?? "").toString();
+          final uid = (u["uid"] ?? "").toString();
+          final d = (u["display_name"] ?? "").toString().trim();
+          final un = (u["username"] ?? "").toString().trim();
+          final name = (d.isNotEmpty && d.toLowerCase() != "null")
+              ? d
+              : ((un.isNotEmpty && un.toLowerCase() != "null") ? un : "team_leader_fallback".tr());
+          final avatar = (u["avatar_url"] ?? u["photo_url"] ?? "").toString();
+          if (id.isNotEmpty) {
+            leaderNameById[id] = name;
+            leaderAvatarById[id] = avatar;
+          }
+          if (uid.isNotEmpty) {
+            leaderNameById[uid] = name;
+            leaderAvatarById[uid] = avatar;
+          }
+        }
+      } catch (e) {
+        debugPrint("[TeamService] leader fetch error: $e");
+      }
+    }
+
+    final enriched = rows.map((rawRow) {
+      final tid = (rawRow["id"] ?? "").toString();
+      final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString();
+
+      var members = List<String>.from(membersByTeam[tid] ?? <String>[]);
+      var memberDetails = List<Map<String, dynamic>>.from(memberDetailsByTeam[tid] ?? <Map<String, dynamic>>[]);
+      
+      if (members.isEmpty && leaderId.isNotEmpty) {
+        members = [leaderId];
+        memberDetails = [{
+          'id': leaderId,
+          'name': leaderNameById[leaderId] ?? 'Leader',
+          'avatar': leaderAvatarById[leaderId] ?? '',
+          'role': 'owner',
+        }];
+      }
+
+      final pending = List<String>.from(pendingByTeam[tid] ?? <String>[]);
+
+      final fallbackLeaderName =
+          (rawRow["leader_name"] ?? rawRow["leaderId"] ?? "").toString().trim();
+      final leaderName = leaderNameById[leaderId] ??
+          (fallbackLeaderName.isNotEmpty ? fallbackLeaderName : "team_leader_fallback".tr());
+      final leaderAvatar = leaderAvatarById[leaderId] ??
+          (rawRow["leader_avatar"] ?? rawRow["leaderAvatar"] ?? "").toString();
+
+      final mapCopy = Map<String, dynamic>.from(rawRow);
+      mapCopy["members"] = members;
+      mapCopy["member_details"] = memberDetails;
+      mapCopy["memberDetails"] = memberDetails;
+      mapCopy["pending_join_requests"] = pending;
+      mapCopy["pendingJoinRequests"] = pending;
+      mapCopy["join_requests"] = pending;
+      mapCopy["leader_name"] = leaderName;
+      mapCopy["leaderName"] = leaderName;
+      mapCopy["leader_avatar"] = leaderAvatar;
+      mapCopy["leaderAvatar"] = leaderAvatar;
+
+      final t = TeamModel.fromSupabase(mapCopy);
+      return t.copyWith(
+        members: members,
+        memberDetails: memberDetails,
+        leaderName: leaderName,
+        leaderAvatar: leaderAvatar,
+      );
+    }).toList();
+
+    var filtered = enriched;
+    if (gameFilter != null &&
+        gameFilter.isNotEmpty &&
+        gameFilter != "All" &&
+        gameFilter != "all_games".tr()) {
+      filtered = filtered
+          .where((t) => t.game.toLowerCase() == gameFilter.toLowerCase())
+          .toList();
+    }
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      final q = searchQuery.trim().toLowerCase();
+      filtered = filtered
+          .where((t) =>
+              t.name.toLowerCase().contains(q) ||
+              t.tag.toLowerCase().contains(q))
+          .toList();
+    }
+    return filtered;
+  }
+
+  /// Get stream of all teams with optional game filter and search query
+  Stream<List<TeamModel>> getTeamsStream({
+    String? gameFilter,
+    String? searchQuery,
+  }) async* {
+    while (true) {
+      try {
+        final list = await _fetchAllTeamsEnriched(
+          gameFilter: gameFilter,
+          searchQuery: searchQuery,
         );
-      },
-    );
+        yield list;
+      } catch (e) {
+        debugPrint("[TeamService] getTeamsStream error: $e");
+      }
+      await Future.delayed(const Duration(seconds: 4));
+    }
   }
-}
-    /// Update Team Details
+
+  /// Create a new team
+  Future<String?> createTeam({
+    required String name,
+    required String tag,
+    File? logoFile,
+    required String game,
+    required String description,
+    required String requirements,
+    required String leaderId,
+    required String leaderName,
+    required String leaderAvatar,
+  }) async {
+    try {
+      final authUserId = SupabaseService.client.auth.currentUser?.id;
+
+      if (authUserId == null || authUserId.isEmpty) {
+        throw Exception('err_user_not_authenticated'.tr());
+      }
+
+      final effectiveLeaderId = authUserId;
+
+      String logoUrl = "";
+      if (logoFile != null) {
+        final uploaded = await SupabaseService.uploadFile(
+          file: logoFile,
+          folder: "team_logos",
+          bucket: SupabaseService.bucketTeamLogos,
+        );
+        if (uploaded != null) logoUrl = uploaded;
+      }
+
+      final teamUuid = SupabaseService.toUuid(
+          DateTime.now().millisecondsSinceEpoch.toString());
+      final now = DateTime.now().toIso8601String();
+
+      final row = {
+        "id": teamUuid,
+        "name": name.trim(),
+        "tag": tag.trim().toUpperCase(),
+        "logo_url": logoUrl,
+        "game": game,
+        "description": description.trim(),
+        "requirements": requirements.trim(),
+        "leader_id": effectiveLeaderId,
+        "wins": 0,
+        "losses": 0,
+        "draws": 0,
+        "points": 0,
+        "created_at": now,
+      };
+
+      await SupabaseService.client.from("teams").insert(row);
+
+      try {
+        await SupabaseService.client.from("team_members").insert({
+          "team_id": teamUuid,
+          "user_id": effectiveLeaderId,
+          "role": "owner",
+          "joined_at": now,
+        });
+      } catch (e) {
+        debugPrint("[TeamService] team_members insert note: $e");
+      }
+
+      debugPrint("[TeamService] ✅ Team created: $teamUuid");
+      return teamUuid;
+    } catch (e) {
+      debugPrint("[TeamService] createTeam error: $e");
+      rethrow;
+    }
+  }
+
+  /// Update Team Details
   Future<bool> updateTeam({
     required String teamId,
     required String name,
@@ -784,5 +715,3 @@ class _TeamCardState extends State<TeamCard> {
     }
   }
 }
-
-  
