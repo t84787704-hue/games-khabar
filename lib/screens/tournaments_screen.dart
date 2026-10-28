@@ -112,9 +112,10 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       var query = _supabase.from('tournaments').select();
       
-      // 👇 یہاں تبدیلی کی ہے: 'game_title' کی جگہ 'game_name' کر دیا ہے
+      // 👇 یہاں تبدیلی کی ہے: گیم کا نام چیک کرنے کے لیے trim() استعمال کیا ہے
       if (widget.gameName != null) {
-        query = query.eq('game_name', widget.gameName); 
+        final searchGame = widget.gameName!.trim();
+        query = query.eq('game_name', searchGame); 
       }
 
       final res = await query.order('created_at', ascending: false);
