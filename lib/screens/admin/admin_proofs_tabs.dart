@@ -618,36 +618,55 @@ class _AdminProofCardState extends State<AdminProofCard> {
         'winner_team_id': teamId,
       }).eq('id', tournamentId);
 
-      // 2. If teamId is present, reward coins to team leader or members
+      // 2. If teamId is present, reward coins to team members (Equal Split)
       if (teamId != null && teamId.toString().isNotEmpty) {
         try {
           final teamData = await SupabaseService.client
               .from('teams')
-              .select('leader_id, name')
+              .select('id, name, leader_id, team_members(user_id)')
               .eq('id', teamId)
               .maybeSingle();
 
           if (teamData != null) {
-            final leaderId = teamData['leader_id']?.toString();
             final teamName = teamData['name']?.toString() ?? 'Winner Team';
-
+            
+            final List<String> memberIds = [];
+            final leaderId = teamData['leader_id']?.toString();
             if (leaderId != null && leaderId.isNotEmpty) {
-              await CoinWalletService.updateCoins(
-                userId: leaderId,
-                amount: prize,
-                type: 'tournament_win',
-                roomId: tournamentId,
-                description: 'Tournament Win: ${widget.match['title'] ?? 'Tournament'}',
-              );
+              memberIds.add(leaderId);
+            }
 
-              await NotificationService().sendNotification(
-                userId: leaderId,
-                type: 'tournament_result',
-                title: '🏆 Tournament Win Approved!',
-                body: 'Your team won ${widget.match['title'] ?? 'Tournament'}! $prize coins added to wallet.',
-                data: {'tournament_id': tournamentId, 'prize': prize},
-                priority: 'high',
-              );
+            final membersList = (teamData['team_members'] as List?) ?? [];
+            for (final m in membersList) {
+              final uid = m['user_id']?.toString();
+              if (uid != null && uid.isNotEmpty && !memberIds.contains(uid)) {
+                memberIds.add(uid);
+              }
+            }
+
+            if (memberIds.isNotEmpty && prize > 0) {
+              final int sharePerPerson = (prize / memberIds.length).floor();
+
+              for (final memberId in memberIds) {
+                if (sharePerPerson > 0) {
+                  await CoinWalletService.updateCoins(
+                    userId: memberId,
+                    amount: sharePerPerson,
+                    type: 'tournament_split_win',
+                    roomId: tournamentId,
+                    description: 'Tournament Win Split ($sharePerPerson coins): ${widget.match['title'] ?? 'Tournament'}',
+                  );
+
+                  await NotificationService().sendNotification(
+                    userId: memberId,
+                    type: 'tournament_result',
+                    title: '🏆 Tournament Win Split Approved!',
+                    body: 'Your team won ${widget.match['title'] ?? 'Tournament'}! $sharePerPerson coins (equal split) added to your wallet.',
+                    data: {'tournament_id': tournamentId, 'prize': sharePerPerson},
+                    priority: 'high',
+                  );
+                }
+              }
             }
           }
         } catch (e) {
@@ -658,7 +677,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Tournament proof accepted & prize distributed! 🎉'),
+            content: Text('Tournament proof accepted & prize split distributed! 🎉'),
             backgroundColor: Color(0xFF00FF88),
           ),
         );
@@ -720,7 +739,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
     if (isRoom) {
       final winnerId = widget.match['winner_id']?.toString() ?? '';
       final winnerName = widget.match['winner_name']?.toString() ?? 'Winner';
-      // ... handled inside room logic ...
       return;
     }
   }
@@ -731,7 +749,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
       await _handleRejectTournament();
       return;
     }
-    // ... rooms / matches reject ...
   }
 
   Widget _buildStatusBadge(String status, String proofStatus) {
