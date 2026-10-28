@@ -3,7 +3,8 @@ class GameModel {
   final String imageUrl;
   final String playedCount;
 
-  GameModel({
+  // 👇 یہاں ہم نے const شامل کیا ہے تاکہ لسٹ میں ایرر ختم ہو جائے
+  const GameModel({
     required this.title,
     required this.imageUrl,
     required this.playedCount,
