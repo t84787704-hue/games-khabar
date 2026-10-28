@@ -12,7 +12,9 @@ import '../widgets/gamer_growth_hub_dialog.dart';
 import 'tournament_detail_screen.dart';
 
 class TournamentsScreen extends StatefulWidget {
-  const TournamentsScreen({super.key});
+  final String? gameName; // 👇 1. نیا پیرامیٹر شامل کیا (گیم کا نام وصول کرنے کے لیے)
+
+  const TournamentsScreen({super.key, this.gameName});
 
   @override
   State<TournamentsScreen> createState() => _TournamentsScreenState();
@@ -110,10 +112,15 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         } catch (_) {}
       }
 
-      final res = await _supabase
-          .from('tournaments')
-          .select()
-          .order('created_at', ascending: false);
+      // 👇 2. یہاں تبدیلی کی ہے: اگر گیم کا نام آیا ہے تو صرف اسی گیم کے ٹورنامنٹس لائیں
+      var query = _supabase.from('tournaments').select();
+      
+      if (widget.gameName != null) {
+        // فرض کریں ڈیٹا بیس میں کالم کا نام 'game_title' ہے (اگر آپ کے ڈیٹا بیس میں 'game' ہے تو اسے 'game' کر لیں)
+        query = query.eq('game_title', widget.gameName); 
+      }
+
+      final res = await query.order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
@@ -270,7 +277,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             backgroundColor: ThemeService.appBarBg,
             elevation: 0,
             title: Text(
-              'Tournaments 🏆',
+              widget.gameName != null ? '${widget.gameName} Tournaments 🏆' : 'Tournaments 🏆', // 👇 ٹائٹل میں گیم کا نام دکھائیں
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: ThemeService.textPrimary,
@@ -312,7 +319,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                 : _tournaments.isEmpty
                     ? Center(
                         child: Text(
-                          'No tournaments available right now',
+                          'No tournaments available for this game right now',
                           style: TextStyle(color: ThemeService.textSecondary),
                         ),
                       )
