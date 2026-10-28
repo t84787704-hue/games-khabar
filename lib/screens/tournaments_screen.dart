@@ -22,6 +22,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   bool _isLoading = true;
+  String? _registeringTournamentId; // کلک پر بٹن پر لوڈنگ دکھانے کے لیے
   List<Map<String, dynamic>> _tournaments = [];
   final Set<String> _registeredTournamentIds = {};
   String? _myTeamId;
@@ -49,6 +50,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     try {
       if (user != null) {
         try {
+          // 1. لیڈر ٹیم چیک کریں
           final leaderTeamRes = await _supabase
               .from('teams')
               .select('id')
@@ -57,27 +59,43 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
           _myTeamId = leaderTeamRes?['id']?.toString();
 
+          // 2. کیپٹن آئی ڈی چیک کریں
           if (_myTeamId == null) {
-            final memberRes = await _supabase
-                .from('team_members')
-                .select('team_id')
-                .eq('user_id', user.id)
-                .maybeSingle();
-            
-            _myTeamId = memberRes?['team_id']?.toString();
+            try {
+              final capRes = await _supabase
+                  .from('teams')
+                  .select('id')
+                  .eq('captain_id', user.id)
+                  .maybeSingle();
+              _myTeamId = capRes?['id']?.toString();
+            } catch (_) {}
           }
 
-          if (_myTeamId != null) {
+          // 3. ممبر چیک کریں
+          if (_myTeamId == null) {
+            try {
+              final memberRes = await _supabase
+                  .from('team_members')
+                  .select('team_id')
+                  .eq('user_id', user.id)
+                  .maybeSingle();
+              _myTeamId = memberRes?['team_id']?.toString();
+            } catch (_) {}
+          }
+
+          // رجسٹرڈ ٹورنامنٹس کی لسٹ
+          _registeredTournamentIds.clear();
+          try {
             final regRes = await _supabase
                 .from('tournament_registrations')
-                .select('tournament_id')
-                .eq('team_id', _myTeamId!);
+                .select('tournament_id');
 
-            _registeredTournamentIds.clear();
             for (var r in regRes) {
-              _registeredTournamentIds.add(r['tournament_id'].toString());
+              if (r['tournament_id'] != null) {
+                _registeredTournamentIds.add(r['tournament_id'].toString());
+              }
             }
-          }
+          } catch (_) {}
         } catch (_) {}
       }
 
@@ -96,24 +114,32 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error loading tournaments: $e')),
         );
       }
     }
   }
 
-  Future<void> _registerTeam(String tournamentId, int entryFee) async {
-    // 🔍 Step 1: Check Login
+  Future<void> _registerTeam(Map<String, dynamic> tournament) async {
+    final tournamentId = tournament['id']?.toString() ?? '';
+    final tourneyTitle = (tournament['title'] ?? tournament['name'] ?? 'Tournament').toString();
+
+    // 🔍 مرحلہ 1: لاگ اِن چیک
     final user = _supabase.auth.currentUser;
     if (user == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in first'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Please log in first to register for tournament!'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
 
-    // 🔍 Step 2: Fetch Team ID if null
+    setState(() => _registeringTournamentId = tournamentId);
+
+    // 🔍 مرحلہ 2: یوزر کی ٹیم تلاش کریں
     if (_myTeamId == null) {
       try {
         final leaderTeamRes = await _supabase
@@ -124,6 +150,28 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         _myTeamId = leaderTeamRes?['id']?.toString();
 
         if (_myTeamId == null) {
+          try {
+            final capRes = await _supabase
+                .from('teams')
+                .select('id')
+                .eq('captain_id', user.id)
+                .maybeSingle();
+            _myTeamId = capRes?['id']?.toString();
+          } catch (_) {}
+        }
+
+        if (_myTeamId == null) {
+          try {
+            final createdRes = await _supabase
+                .from('teams')
+                .select('id')
+                .eq('created_by', user.id)
+                .maybeSingle();
+            _myTeamId = createdRes?['id']?.toString();
+          } catch (_) {}
+        }
+
+        if (_myTeamId == null) {
           final memberRes = await _supabase
               .from('team_members')
               .select('team_id')
@@ -132,52 +180,75 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           _myTeamId = memberRes?['team_id']?.toString();
         }
       } catch (e) {
-         if (!mounted) return;
-         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Team Fetch Error: $e'), 
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 8),
-          ),
-        );
-         return;
+        debugPrint('Team fetch error: $e');
       }
     }
 
-    // 🔍 Step 3: Check if Team exists
+    // 🔍 مرحلہ 3: اگر ٹیم نہیں بنی تو واضح میسج دیں
     if (_myTeamId == null) {
+      setState(() => _registeringTournamentId = null);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You need your own team to register! Please create a team first.'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 5),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Aap ki koi Team nahi bani hui! Pehle "Teams" tab mein ja kar team banayein.',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFFF8A00),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {},
+          ),
         ),
       );
       return;
     }
 
-    // 🔍 Step 4: Register Team & Insert to Database
+    // 🔍 مرحلہ 4: رجسٹریشن ڈیٹا بیس میں درج کریں
     try {
-      final currentTourney = _tournaments.firstWhere(
-        (t) => t['id'].toString() == tournamentId,
-        orElse: () => {},
-      );
-      final tourneyTitle = currentTourney['title']?.toString() ?? 'Tournament';
+      try {
+        await _supabase.from('tournament_registrations').insert({
+          'tournament_id': tournamentId,
+          'team_id': _myTeamId,
+          'leader_id': user.id,
+        });
+      } catch (e) {
+        // Fallback: اگر ٹیبل میں leader_id کی جگہ user_id کالم ہو
+        if (e.toString().contains('leader_id')) {
+          await _supabase.from('tournament_registrations').insert({
+            'tournament_id': tournamentId,
+            'team_id': _myTeamId,
+            'user_id': user.id,
+          });
+        } else {
+          rethrow;
+        }
+      }
 
-      // 1. Insert Registration
-      await _supabase.from('tournament_registrations').insert({
-        'tournament_id': tournamentId,
-        'team_id': _myTeamId,
-        'leader_id': user.id,
-      });
-
-      // 2. Increment Slots via RPC
+      // سلاٹس کاؤنٹ بڑھائیں
       try {
         await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
-      } catch (_) {}
+      } catch (_) {
+        try {
+          final curCount = int.tryParse(tournament['current_teams']?.toString() ?? tournament['joined_teams_count']?.toString() ?? '0') ?? 0;
+          await _supabase.from('tournaments').update({
+            'current_teams': curCount + 1,
+            'joined_teams_count': curCount + 1,
+          }).eq('id', tournamentId);
+        } catch (_) {}
+      }
 
-      // 3. Send Notifications
+      // ٹیم ممبرز کو نوٹیفکیشن
       try {
         final membersRes = await _supabase
             .from('team_members')
@@ -191,7 +262,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             notifInserts.add({
               'user_id': memberUid,
               'title': 'Tournament Registered! 🎮',
-              'body': 'Your squad registered the team for "$tourneyTitle". Be ready for the match!',
+              'body': 'Your squad registered for "$tourneyTitle". Be ready for the match!',
               'type': 'tournament',
               'data': {'tournament_id': tournamentId},
               'created_at': DateTime.now().toIso8601String(),
@@ -214,18 +285,18 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       );
 
       _fetchTournaments();
-      
     } catch (e) {
-      // 🚨 DIRECT SCREEN ERROR: Yahan database ka asal error mobile screen par show hoga!
       debugPrint('CRITICAL REGISTRATION ERROR: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('DATABASE ERROR: $e'), 
+          content: Text('Registration Error: $e'),
           backgroundColor: const Color(0xFFFF4655),
-          duration: const Duration(seconds: 12),
+          duration: const Duration(seconds: 8),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _registeringTournamentId = null);
     }
   }
 
@@ -305,10 +376,13 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
                           final item = _tournaments[index - 1];
                           final tId = item['id'].toString();
-                          final maxTeams = (item['max_teams'] ?? 16) as int;
-                          final currentTeams = (item['current_teams'] ?? 0) as int;
+
+                          // دونوں کالم سپورٹڈ ہیں (max_teams یا max_slots)
+                          final maxTeams = int.tryParse(item['max_teams']?.toString() ?? item['max_slots']?.toString() ?? '16') ?? 16;
+                          final currentTeams = int.tryParse(item['current_teams']?.toString() ?? item['joined_teams_count']?.toString() ?? '0') ?? 0;
                           final isFull = currentTeams >= maxTeams;
                           final isRegistered = _registeredTournamentIds.contains(tId);
+                          final isCurrentRegistering = _registeringTournamentId == tId;
 
                           return InkWell(
                             borderRadius: BorderRadius.circular(16),
@@ -344,7 +418,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          item['title'] ?? 'Tournament',
+                                          item['title'] ?? item['name'] ?? 'Tournament',
                                           style: TextStyle(
                                             color: ThemeService.textPrimary,
                                             fontSize: 16,
@@ -359,7 +433,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                           borderRadius: BorderRadius.circular(20),
                                         ),
                                         child: Text(
-                                          'Prize: ${item['prize_pool']} Coins',
+                                          'Prize: ${item['prize_pool'] ?? 1000} Coins',
                                           style: const TextStyle(
                                             color: Color(0xFF00FF88),
                                             fontWeight: FontWeight.bold,
@@ -372,11 +446,11 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                   const SizedBox(height: 12),
                                   Row(
                                     children: [
-                                      _badge(Icons.sports_esports, item['game_mode'] ?? 'Squad (4v4)'),
+                                      _badge(Icons.sports_esports, (item['game_mode'] ?? item['match_format'] ?? 'Squad (4v4)').toString()),
                                       const SizedBox(width: 8),
-                                      _badge(Icons.map, item['map_name'] ?? 'Erangel'),
+                                      _badge(Icons.map, (item['map_name'] ?? 'Erangel').toString()),
                                       const SizedBox(width: 8),
-                                      _badge(Icons.monetization_on, 'Fee: ${item['entry_fee'] ?? 0}'),
+                                      _badge(Icons.monetization_on, 'Fee: ${item['entry_fee'] ?? 'Free'}'),
                                     ],
                                   ),
                                   const SizedBox(height: 12),
@@ -450,21 +524,27 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                               : BorderSide.none,
                                         ),
                                       ),
-                                      onPressed: (isFull || isRegistered)
+                                      onPressed: (isFull || isRegistered || isCurrentRegistering)
                                           ? null
-                                          : () => _registerTeam(tId, item['entry_fee'] ?? 0),
-                                      child: Text(
-                                        isRegistered
-                                            ? '✓ Squad Registered'
-                                            : (isFull ? 'Slots Full' : 'Register Squad'),
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                          color: isRegistered
-                                              ? const Color(0xFF00FF88)
-                                              : (isFull ? ThemeService.textSecondary : Colors.black),
-                                        ),
-                                      ),
+                                          : () => _registerTeam(item),
+                                      child: isCurrentRegistering
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                                            )
+                                          : Text(
+                                              isRegistered
+                                                  ? '✓ Squad Registered'
+                                                  : (isFull ? 'Slots Full' : 'Register Squad'),
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color: isRegistered
+                                                    ? const Color(0xFF00FF88)
+                                                    : (isFull ? ThemeService.textSecondary : Colors.black),
+                                              ),
+                                            ),
                                     ),
                                   ),
                                 ],
