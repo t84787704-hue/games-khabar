@@ -640,7 +640,7 @@ class _TeamCardState extends State<TeamCard> {
     );
   }
 }
-  /// Update Team Details
+    /// Update Team Details
   Future<bool> updateTeam({
     required String teamId,
     required String name,
@@ -784,3 +784,5 @@ class _TeamCardState extends State<TeamCard> {
     }
   }
 }
+
+  
