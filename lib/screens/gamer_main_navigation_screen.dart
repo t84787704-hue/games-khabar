@@ -15,13 +15,13 @@ import '../services/streak_service.dart';
 import '../services/app_stay_timer_service.dart';
 import '../widgets/daily_streak_dialog.dart';
 import 'gamer_feed_screen.dart';
-import 'tournaments_screen.dart';
+import 'tournaments_screen.dart'; // 👈 یہ امپورٹ رہنے دیں، شاید کہیں اور استعمال ہو رہا ہو
 import 'teams_screen.dart';
 import 'gamer_messages_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
 import 'admin/gamer_admin_dashboard_screen.dart';
-import 'games_screen.dart'; // 👇👇👇 یہاں تبدیلی کی ہے (نیا امپورٹ شامل کیا) 👇👇👇
+import 'games_screen.dart'; 
 
 class GamerMainNavigationScreen extends StatefulWidget {
   final int initialIndex;
@@ -130,11 +130,10 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 👇👇👇 یہاں تبدیلی کی ہے (سکرینز کی لسٹ میں گیمز شامل کیا) 👇👇👇
+    // 👇 یہاں سے TournamentsScreen ہٹا دیا گیا ہے
     final screens = <Widget>[
       GamerFeedScreen(),
-      GamesScreen(), // نیا گیمز والا صفحہ یہاں شامل کیا گیا ہے
-      TournamentsScreen(),
+      GamesScreen(),
       TeamsScreen(),
       GamerMessagesScreen(),
       GamerProfileScreen(),
@@ -188,49 +187,41 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 0,
                           isDark: isDark,
                         ),
-                        // 👇👇👇 یہاں تبدیلی کی ہے (گیمز کا بٹن شامل کیا) 👇👇👇
                         _buildNavItem(
                           index: 1,
-                          icon: Icons.sports_esports_rounded, // گیمز کا آئیکن
-                          label: 'Games', // بٹن کا نام
+                          icon: Icons.sports_esports_rounded,
+                          label: 'Games',
                           isSelected: _currentIndex == 1,
                           isDark: isDark,
                         ),
-                        // 👇👇👇 یہاں سے نیچے والے بٹنوں کے نمبرز 1،2،3 سے بڑھا کر 2،3،4 کر دیے ہیں 👇👇👇
+                        // 👇 Tournaments والا بٹن یہاں سے ہٹا دیا گیا ہے
                         _buildNavItem(
-                          index: 2,
-                          icon: Icons.emoji_events_rounded,
-                          label: 'Tournaments',
+                          index: 2, // پہلے 3 تھا، اب 2
+                          icon: Icons.shield_rounded,
+                          label: 'Teams',
                           isSelected: _currentIndex == 2,
                           isDark: isDark,
                         ),
                         _buildNavItem(
-                          index: 3,
-                          icon: Icons.shield_rounded,
-                          label: 'Teams',
+                          index: 3, // پہلے 4 تھا، اب 3
+                          icon: Icons.chat_bubble_rounded,
+                          label: 'Messages',
                           isSelected: _currentIndex == 3,
                           isDark: isDark,
                         ),
                         _buildNavItem(
-                          index: 4,
-                          icon: Icons.chat_bubble_rounded,
-                          label: 'Messages',
-                          isSelected: _currentIndex == 4,
-                          isDark: isDark,
-                        ),
-                        _buildNavItem(
-                          index: 5,
+                          index: 4, // پہلے 5 تھا، اب 4
                           icon: Icons.person_rounded,
                           label: 'Profile',
-                          isSelected: _currentIndex == 5,
+                          isSelected: _currentIndex == 4,
                           isDark: isDark,
                         ),
                         if (_isAdmin)
                           _buildNavItem(
-                            index: 6,
+                            index: 5, // پہلے 6 تھا، اب 5
                             icon: Icons.admin_panel_settings_rounded,
                             label: 'Admin',
-                            isSelected: _currentIndex == 6,
+                            isSelected: _currentIndex == 5,
                             activeColor: const Color(0xFF1877F2),
                             isDark: isDark,
                           ),
