@@ -504,6 +504,7 @@ class TeamService {
     required String name,
     required String tag,
     File? logoFile,
+    File? newLogoFile,
     required String game,
     required String description,
     required String requirements,
@@ -521,9 +522,10 @@ class TeamService {
       final effectiveLeaderId = authUserId;
 
       String logoUrl = "";
-      if (logoFile != null) {
+      final fileToUpload = logoFile ?? newLogoFile;
+      if (fileToUpload != null) {
         final uploaded = await SupabaseService.uploadFile(
-          file: logoFile,
+          file: fileToUpload,
           folder: "team_logos",
           bucket: SupabaseService.bucketTeamLogos,
         );
@@ -578,6 +580,7 @@ class TeamService {
     required String tag,
     File? logoFile,
     File? newLogoFile,
+    String? game,
     required String description,
     required String requirements,
   }) async {
@@ -588,6 +591,10 @@ class TeamService {
         "description": description.trim(),
         "requirements": requirements.trim(),
       };
+
+      if (game != null && game.isNotEmpty) {
+        updates["game"] = game;
+      }
 
       final fileToUpload = logoFile ?? newLogoFile;
       if (fileToUpload != null) {
@@ -676,6 +683,7 @@ class TeamService {
   Future<bool> acceptJoinRequest({
     required String teamId,
     required String userId,
+    String? userName,
   }) async {
     try {
       await SupabaseService.client
@@ -701,6 +709,7 @@ class TeamService {
   Future<bool> rejectJoinRequest({
     required String teamId,
     required String userId,
+    String? userName,
   }) async {
     try {
       await SupabaseService.client
