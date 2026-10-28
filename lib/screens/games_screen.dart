@@ -59,9 +59,12 @@ class _GamesScreenState extends State<GamesScreen> {
                 return GameCard(
                   game: game,
                   onTap: () {
+                    // 👇 یہاں تبدیلی کی ہے: گیم کا نام ٹورنامنٹس والی سکرین کو بھیج رہے ہیں
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const TournamentsScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => TournamentsScreen(gameName: game.title),
+                      ),
                     );
                   },
                 );
