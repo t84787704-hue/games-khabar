@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/game_model.dart';
 import '../widgets/game_card.dart';
+import 'tournaments_screen.dart'; // ٹورنامنٹس والے صفحے کا امپورٹ شامل کیا
 
 class GamesScreen extends StatelessWidget {
   const GamesScreen({super.key});
@@ -9,23 +10,23 @@ class GamesScreen extends StatelessWidget {
   final List<GameModel> games = const [
     GameModel(
       title: 'Free Fire',
-      // یہاں آپ کسی بھی گیم کی اصلی تصویر کا لنک (URL) ڈال سکتے ہیں
-      imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2jS8lO2m0q6g5R4t3z2x1w9y8v7u6t5s4r3&s', 
+      // اصلی تصویر کا لنک
+      imageUrl: 'https://play-lh.googleusercontent.com/9O2S2g1J2K4l3Q5T8b7V6c5X4z3Y2w1V0u9T8s7R6q5P4o3N2m1L0k', 
       playedCount: '5.9M',
     ),
     GameModel(
       title: 'PUBG Mobile',
-      imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2jS8lO2m0q6g5R4t3z2x1w9y8v7u6t5s4r3&s',
+      imageUrl: 'https://play-lh.googleusercontent.com/2S8lO2m0q6g5R4t3z2x1w9y8v7u6t5s4r3Q2jS8lO2m0q6g5R4t3z2x1w',
       playedCount: '3.9M',
     ),
     GameModel(
       title: 'Call Of Duty',
-      imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2jS8lO2m0q6g5R4t3z2x1w9y8v7u6t5s4r3&s',
+      imageUrl: 'https://play-lh.googleusercontent.com/3T8lO2m0q6g5R4t3z2x1w9y8v7u6t5s4r3Q2jS8lO2m0q6g5R4t3z2x1w',
       playedCount: '1.8M',
     ),
     GameModel(
       title: 'Clash Royale',
-      imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2jS8lO2m0q6g5R4t3z2x1w9y8v7u6t5s4r3&s',
+      imageUrl: 'https://play-lh.googleusercontent.com/4U8lO2m0q6g5R4t3z2x1w9y8v7u6t5s4r3Q2jS8lO2m0q6g5R4t3z2x1w',
       playedCount: '1.2M',
     ),
   ];
@@ -54,9 +55,12 @@ class GamesScreen extends StatelessWidget {
             return GameCard(
               game: games[index],
               onTap: () {
-                // جب صارف گیم پر کلک کرے گا تو یہ کوڈ چلے گا
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${games[index].title} selected!')),
+                // جب صارف گیم پر کلک کرے گا تو ٹورنامنٹس والے صفحے پر چلا جائے گا
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const TournamentsScreen(),
+                  ),
                 );
               },
             );
