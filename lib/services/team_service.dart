@@ -569,3 +569,126 @@ class TeamService {
       debugPrint("[TeamService] createTeam error: $e");
       rethrow;
     }
+  }
+
+  /// Update Team Details
+  Future<void> updateTeam({
+    required String teamId,
+    required String name,
+    required String tag,
+    File? logoFile,
+    required String description,
+    required String requirements,
+  }) async {
+    try {
+      final Map<String, dynamic> updates = {
+        "name": name.trim(),
+        "tag": tag.trim().toUpperCase(),
+        "description": description.trim(),
+        "requirements": requirements.trim(),
+      };
+
+      if (logoFile != null) {
+        final uploaded = await SupabaseService.uploadFile(
+          file: logoFile,
+          folder: "team_logos",
+          bucket: SupabaseService.bucketTeamLogos,
+        );
+        if (uploaded != null) {
+          updates["logo_url"] = uploaded;
+        }
+      }
+
+      await SupabaseService.client
+          .from("teams")
+          .update(updates)
+          .eq("id", teamId);
+    } catch (e) {
+      debugPrint("[TeamService] updateTeam error: $e");
+      rethrow;
+    }
+  }
+
+  /// Delete Team
+  Future<void> deleteTeam(String teamId, String userId) async {
+    try {
+      await SupabaseService.client
+          .from("team_members")
+          .delete()
+          .eq("team_id", teamId);
+
+      await SupabaseService.client
+          .from("teams")
+          .delete()
+          .eq("id", teamId)
+          .eq("leader_id", userId);
+    } catch (e) {
+      debugPrint("[TeamService] deleteTeam error: $e");
+      rethrow;
+    }
+  }
+
+  /// Request to join a team
+  Future<void> requestToJoinTeam(String teamId, String userId) async {
+    try {
+      await SupabaseService.client.from("team_join_requests").upsert({
+        "team_id": teamId,
+        "user_id": userId,
+        "status": "pending",
+        "created_at": DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint("[TeamService] requestToJoinTeam error: $e");
+      rethrow;
+    }
+  }
+
+  /// Cancel join request
+  Future<void> cancelJoinRequest(String teamId, String userId) async {
+    try {
+      await SupabaseService.client
+          .from("team_join_requests")
+          .delete()
+          .eq("team_id", teamId)
+          .eq("user_id", userId);
+    } catch (e) {
+      debugPrint("[TeamService] cancelJoinRequest error: $e");
+      rethrow;
+    }
+  }
+
+  /// Accept join request
+  Future<void> acceptJoinRequest(String teamId, String userId) async {
+    try {
+      await SupabaseService.client
+          .from("team_join_requests")
+          .update({"status": "accepted"})
+          .eq("team_id", teamId)
+          .eq("user_id", userId);
+
+      await SupabaseService.client.from("team_members").insert({
+        "team_id": teamId,
+        "user_id": userId,
+        "role": "member",
+        "joined_at": DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint("[TeamService] acceptJoinRequest error: $e");
+      rethrow;
+    }
+  }
+
+  /// Reject join request
+  Future<void> rejectJoinRequest(String teamId, String userId) async {
+    try {
+      await SupabaseService.client
+          .from("team_join_requests")
+          .update({"status": "rejected"})
+          .eq("team_id", teamId)
+          .eq("user_id", userId);
+    } catch (e) {
+      debugPrint("[TeamService] rejectJoinRequest error: $e");
+      rethrow;
+    }
+  }
+}
