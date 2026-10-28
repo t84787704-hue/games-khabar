@@ -22,7 +22,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   bool _isLoading = true;
-  String? _registeringTournamentId; // کلک پر بٹن پر لوڈنگ دکھانے کے لیے
+  String? _registeringTournamentId;
   List<Map<String, dynamic>> _tournaments = [];
   final Set<String> _registeredTournamentIds = {};
   String? _myTeamId;
@@ -50,7 +50,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     try {
       if (user != null) {
         try {
-          // 1. لیڈر ٹیم چیک کریں
+          // 1. لیڈر ٹیم آئی ڈی تلاش کریں
           final leaderTeamRes = await _supabase
               .from('teams')
               .select('id')
@@ -59,7 +59,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
           _myTeamId = leaderTeamRes?['id']?.toString();
 
-          // 2. کیپٹن آئی ڈی چیک کریں
           if (_myTeamId == null) {
             try {
               final capRes = await _supabase
@@ -71,7 +70,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             } catch (_) {}
           }
 
-          // 3. ممبر چیک کریں
           if (_myTeamId == null) {
             try {
               final memberRes = await _supabase
@@ -83,19 +81,32 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             } catch (_) {}
           }
 
-          // رجسٹرڈ ٹورنامنٹس کی لسٹ
+          // 2. صرف اس یوزر یا اس کی اپنی ٹیم کی رجسٹریشنز فلٹر کریں
           _registeredTournamentIds.clear();
           try {
-            final regRes = await _supabase
-                .from('tournament_registrations')
-                .select('tournament_id');
+            List<Map<String, dynamic>> regRes = [];
+
+            if (_myTeamId != null && _myTeamId!.isNotEmpty) {
+              regRes = await _supabase
+                  .from('tournament_registrations')
+                  .select('tournament_id')
+                  .or('team_id.eq.$_myTeamId,leader_id.eq.${user.id}');
+            } else {
+              regRes = await _supabase
+                  .from('tournament_registrations')
+                  .select('tournament_id')
+                  .eq('leader_id', user.id);
+            }
 
             for (var r in regRes) {
-              if (r['tournament_id'] != null) {
-                _registeredTournamentIds.add(r['tournament_id'].toString());
+              final tId = r['tournament_id']?.toString();
+              if (tId != null && tId.isNotEmpty) {
+                _registeredTournamentIds.add(tId);
               }
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('Registration check error: $e');
+          }
         } catch (_) {}
       }
 
@@ -124,13 +135,12 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     final tournamentId = tournament['id']?.toString() ?? '';
     final tourneyTitle = (tournament['title'] ?? tournament['name'] ?? 'Tournament').toString();
 
-    // 🔍 مرحلہ 1: لاگ اِن چیک
     final user = _supabase.auth.currentUser;
     if (user == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please log in first to register for tournament!'),
+          content: Text('Please log in first to register!'),
           backgroundColor: Colors.red,
         ),
       );
@@ -139,7 +149,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
     setState(() => _registeringTournamentId = tournamentId);
 
-    // 🔍 مرحلہ 2: یوزر کی ٹیم تلاش کریں
     if (_myTeamId == null) {
       try {
         final leaderTeamRes = await _supabase
@@ -148,28 +157,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             .eq('leader_id', user.id)
             .maybeSingle();
         _myTeamId = leaderTeamRes?['id']?.toString();
-
-        if (_myTeamId == null) {
-          try {
-            final capRes = await _supabase
-                .from('teams')
-                .select('id')
-                .eq('captain_id', user.id)
-                .maybeSingle();
-            _myTeamId = capRes?['id']?.toString();
-          } catch (_) {}
-        }
-
-        if (_myTeamId == null) {
-          try {
-            final createdRes = await _supabase
-                .from('teams')
-                .select('id')
-                .eq('created_by', user.id)
-                .maybeSingle();
-            _myTeamId = createdRes?['id']?.toString();
-          } catch (_) {}
-        }
 
         if (_myTeamId == null) {
           final memberRes = await _supabase
@@ -184,7 +171,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       }
     }
 
-    // 🔍 مرحلہ 3: اگر ٹیم نہیں بنی تو واضح میسج دیں
     if (_myTeamId == null) {
       setState(() => _registeringTournamentId = null);
       if (!mounted) return;
@@ -204,17 +190,11 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           ),
           backgroundColor: const Color(0xFFFF8A00),
           duration: const Duration(seconds: 6),
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {},
-          ),
         ),
       );
       return;
     }
 
-    // 🔍 مرحلہ 4: رجسٹریشن ڈیٹا بیس میں درج کریں
     try {
       try {
         await _supabase.from('tournament_registrations').insert({
@@ -223,7 +203,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           'leader_id': user.id,
         });
       } catch (e) {
-        // Fallback: اگر ٹیبل میں leader_id کی جگہ user_id کالم ہو
         if (e.toString().contains('leader_id')) {
           await _supabase.from('tournament_registrations').insert({
             'tournament_id': tournamentId,
@@ -235,7 +214,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         }
       }
 
-      // سلاٹس کاؤنٹ بڑھائیں
+      // سلاٹس کی گنتی میں اضافہ کریں
       try {
         await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
       } catch (_) {
@@ -247,34 +226,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           }).eq('id', tournamentId);
         } catch (_) {}
       }
-
-      // ٹیم ممبرز کو نوٹیفکیشن
-      try {
-        final membersRes = await _supabase
-            .from('team_members')
-            .select('user_id')
-            .eq('team_id', _myTeamId!);
-
-        final List<Map<String, dynamic>> notifInserts = [];
-        for (final m in membersRes) {
-          final memberUid = m['user_id']?.toString();
-          if (memberUid != null && memberUid != user.id) {
-            notifInserts.add({
-              'user_id': memberUid,
-              'title': 'Tournament Registered! 🎮',
-              'body': 'Your squad registered for "$tourneyTitle". Be ready for the match!',
-              'type': 'tournament',
-              'data': {'tournament_id': tournamentId},
-              'created_at': DateTime.now().toIso8601String(),
-              'is_read': false,
-            });
-          }
-        }
-
-        if (notifInserts.isNotEmpty) {
-          await _supabase.from('notifications').insert(notifInserts);
-        }
-      } catch (_) {}
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -292,7 +243,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         SnackBar(
           content: Text('Registration Error: $e'),
           backgroundColor: const Color(0xFFFF4655),
-          duration: const Duration(seconds: 8),
         ),
       );
     } finally {
@@ -377,10 +327,11 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                           final item = _tournaments[index - 1];
                           final tId = item['id'].toString();
 
-                          // دونوں کالم سپورٹڈ ہیں (max_teams یا max_slots)
                           final maxTeams = int.tryParse(item['max_teams']?.toString() ?? item['max_slots']?.toString() ?? '16') ?? 16;
                           final currentTeams = int.tryParse(item['current_teams']?.toString() ?? item['joined_teams_count']?.toString() ?? '0') ?? 0;
                           final isFull = currentTeams >= maxTeams;
+                          
+                          // صرف تب true ہوگا جب اس یوزر کی اپنی ٹیم رجسٹرڈ ہو
                           final isRegistered = _registeredTournamentIds.contains(tId);
                           final isCurrentRegistering = _registeringTournamentId == tId;
 
