@@ -624,6 +624,7 @@ class TeamService {
     required String teamId,
     String? userId,
     String? currentUserId,
+    String? teamName,
   }) async {
     try {
       final effectiveUserId = userId ?? currentUserId ?? "";
@@ -650,11 +651,14 @@ class TeamService {
     }
   }
 
-  /// Request to join a team (Supports optional userName)
+  /// Request to join a team (Supports optional userName, teamName, etc.)
   Future<bool> requestToJoinTeam({
     required String teamId,
     required String userId,
     String? userName,
+    String? teamName,
+    String? userAvatar,
+    String? leaderId,
   }) async {
     try {
       await SupabaseService.client.from("team_join_requests").upsert({
@@ -675,6 +679,7 @@ class TeamService {
     required String teamId,
     required String userId,
     String? userName,
+    String? teamName,
   }) async {
     try {
       await SupabaseService.client
@@ -694,6 +699,8 @@ class TeamService {
     required String teamId,
     required String userId,
     String? userName,
+    String? teamName,
+    String? userAvatar,
   }) async {
     try {
       await SupabaseService.client
@@ -720,6 +727,7 @@ class TeamService {
     required String teamId,
     required String userId,
     String? userName,
+    String? teamName,
   }) async {
     try {
       await SupabaseService.client
