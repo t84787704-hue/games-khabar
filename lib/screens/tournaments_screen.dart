@@ -12,7 +12,7 @@ import '../widgets/gamer_growth_hub_dialog.dart';
 import 'tournament_detail_screen.dart';
 
 class TournamentsScreen extends StatefulWidget {
-  final String? gameName; // 👇 1. نیا پیرامیٹر شامل کیا (گیم کا نام وصول کرنے کے لیے)
+  final String? gameName;
 
   const TournamentsScreen({super.key, this.gameName});
 
@@ -52,7 +52,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     try {
       if (user != null) {
         try {
-          // 1. لیڈر ٹیم آئی ڈی تلاش کریں
           final leaderTeamRes = await _supabase
               .from('teams')
               .select('id')
@@ -83,7 +82,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             } catch (_) {}
           }
 
-          // 2. صرف اس یوزر یا اس کی اپنی ٹیم کی رجسٹریشنز فلٹر کریں
           _registeredTournamentIds.clear();
           try {
             List<Map<String, dynamic>> regRes = [];
@@ -112,12 +110,11 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         } catch (_) {}
       }
 
-      // 👇 2. یہاں تبدیلی کی ہے: اگر گیم کا نام آیا ہے تو صرف اسی گیم کے ٹورنامنٹس لائیں
       var query = _supabase.from('tournaments').select();
       
+      // 👇 یہاں تبدیلی کی ہے: 'game_title' کی جگہ 'game_name' کر دیا ہے
       if (widget.gameName != null) {
-        // فرض کریں ڈیٹا بیس میں کالم کا نام 'game_title' ہے (اگر آپ کے ڈیٹا بیس میں 'game' ہے تو اسے 'game' کر لیں)
-        query = query.eq('game_title', widget.gameName); 
+        query = query.eq('game_name', widget.gameName); 
       }
 
       final res = await query.order('created_at', ascending: false);
@@ -221,7 +218,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         }
       }
 
-      // سلاٹس کی گنتی میں اضافہ کریں
       try {
         await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
       } catch (_) {
@@ -277,7 +273,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             backgroundColor: ThemeService.appBarBg,
             elevation: 0,
             title: Text(
-              widget.gameName != null ? '${widget.gameName} Tournaments 🏆' : 'Tournaments 🏆', // 👇 ٹائٹل میں گیم کا نام دکھائیں
+              widget.gameName != null ? '${widget.gameName} Tournaments 🏆' : 'Tournaments 🏆',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: ThemeService.textPrimary,
@@ -338,7 +334,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                           final currentTeams = int.tryParse(item['current_teams']?.toString() ?? item['joined_teams_count']?.toString() ?? '0') ?? 0;
                           final isFull = currentTeams >= maxTeams;
                           
-                          // صرف تب true ہوگا جب اس یوزر کی اپنی ٹیم رجسٹرڈ ہو
                           final isRegistered = _registeredTournamentIds.contains(tId);
                           final isCurrentRegistering = _registeringTournamentId == tId;
 
