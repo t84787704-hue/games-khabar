@@ -1,11 +1,11 @@
 // ===============================================================================
-// GAMER ADMIN DASHBOARD SCREEN — Modular 14-Tabs Dashboard Controller
+// GAMER ADMIN DASHBOARD SCREEN — Modular Dashboard Controller
 // ===============================================================================
 
 import 'package:flutter/material.dart';
 import '../../services/theme_service.dart';
 
-// Saare 14 Tabs Imports
+// Saare Tabs Imports
 import 'admin_tournaments_tab.dart';
 import 'admin_banner_tab.dart';
 import 'admin_users_tab.dart';
@@ -20,6 +20,7 @@ import 'admin_coins_vault_tab.dart';
 import 'admin_referrals_tab.dart';
 import 'admin_under_review_tab.dart';
 import 'admin_proof_history_tab.dart';
+import 'admin_games_tab.dart'; // 👇 نیا گیمز مینجمنٹ ٹیب شامل کیا
 
 class GamerAdminDashboardScreen extends StatefulWidget {
   const GamerAdminDashboardScreen({super.key});
@@ -31,29 +32,31 @@ class GamerAdminDashboardScreen extends StatefulWidget {
 class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen> {
   int _currentIndex = 0;
 
-  // Saare 14 tabs ki list (Public Class Names ke sath)
+  // Saare tabs ki list (Public Class Names ke sath)
   late final List<Widget> _adminTabs = [
     const AdminTournamentsTab(),        // 0: Tournaments
     const AdminBannerControlTab(),      // 1: Banner Control
     const AdminUsersTab(),              // 2: Users Management
-    const AdminRankVerifyTab(),         // 3: Rank Verification
-    const AdminBlueTickTab(),           // 4: Blue Tick Requests
-    const AdminUcRequestsTab(),         // 5: UC Requests
-    const AdminUcHistoryTab(),          // 6: UC History
-    const AdminPostsModerationTab(),    // 7: Posts Moderation
-    const AdminTeamMatchesTab(),        // 8: Team Matches
-    const AdminReportsTab(),            // 9: Reports Management
-    const AdminCoinsVaultTab(),         // 10: Coins Vault
-    const AdminReferralsTrackerTab(),   // 11: Referrals Tracker
-    const AdminUnderReviewTab(),        // 12: Under Review
-    const AdminProofHistoryTab(),       // 13: Proof History
+    const AdminGamesTab(),              // 3: Games Management (👇 یہاں شامل کیا)
+    const AdminRankVerifyTab(),         // 4: Rank Verification
+    const AdminBlueTickTab(),           // 5: Blue Tick Requests
+    const AdminUcRequestsTab(),         // 6: UC Requests
+    const AdminUcHistoryTab(),          // 7: UC History
+    const AdminPostsModerationTab(),    // 8: Posts Moderation
+    const AdminTeamMatchesTab(),        // 9: Team Matches
+    const AdminReportsTab(),            // 10: Reports Management
+    const AdminCoinsVaultTab(),         // 11: Coins Vault
+    const AdminReferralsTrackerTab(),   // 12: Referrals Tracker
+    const AdminUnderReviewTab(),        // 13: Under Review
+    const AdminProofHistoryTab(),       // 14: Proof History
   ];
 
-  // Tabs ke naam Drawer ya AppBar ke liye
+  // Tabs ke naam Drawer ke liye
   final List<String> _tabTitles = [
     'Tournaments Management',
     'Banner Control',
     'Users Management',
+    'Games Management', // 👇 یہاں شامل کیا
     'Rank Verification',
     'Blue Tick Requests',
     'UC Requests',
@@ -96,7 +99,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '14 Modular Tabs Panel',
+                    '15 Modular Tabs Panel', // 👇 14 سے 15 کر دیا
                     style: TextStyle(color: Colors.black.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -135,22 +138,24 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen> {
     );
   }
 
+  // 👇 آئیکنز کی لسٹ میں گیمز کا آئیکن شامل کیا اور باقیوں کے نمبر بڑھا دیے
   IconData _getIconForIndex(int index) {
     switch (index) {
       case 0: return Icons.emoji_events_rounded;
       case 1: return Icons.view_carousel_rounded;
       case 2: return Icons.people_rounded;
-      case 3: return Icons.verified_rounded;
-      case 4: return Icons.verified_user_rounded;
-      case 5: return Icons.flash_on_rounded;
-      case 6: return Icons.history_rounded;
-      case 7: return Icons.dynamic_feed_rounded;
-      case 8: return Icons.sports_esports_rounded;
-      case 9: return Icons.report_rounded;
-      case 10: return Icons.monetization_on_rounded;
-      case 11: return Icons.group_rounded;
-      case 12: return Icons.rate_review_rounded;
-      case 13: return Icons.history_edu_rounded;
+      case 3: return Icons.sports_esports_rounded; // گیمز مینجمنٹ کا آئیکن
+      case 4: return Icons.verified_rounded;
+      case 5: return Icons.verified_user_rounded;
+      case 6: return Icons.flash_on_rounded;
+      case 7: return Icons.history_rounded;
+      case 8: return Icons.dynamic_feed_rounded;
+      case 9: return Icons.sports_esports_rounded;
+      case 10: return Icons.report_rounded;
+      case 11: return Icons.monetization_on_rounded;
+      case 12: return Icons.group_rounded;
+      case 13: return Icons.rate_review_rounded;
+      case 14: return Icons.history_edu_rounded;
       default: return Icons.folder_rounded;
     }
   }
