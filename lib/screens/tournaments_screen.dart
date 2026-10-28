@@ -49,7 +49,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     try {
       if (user != null) {
         try {
-          // 1. Check if user is a team leader
           final leaderTeamRes = await _supabase
               .from('teams')
               .select('id')
@@ -58,7 +57,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
           _myTeamId = leaderTeamRes?['id']?.toString();
 
-          // 2. If not a leader, check if user is a member of any team
           if (_myTeamId == null) {
             final memberRes = await _supabase
                 .from('team_members')
@@ -105,12 +103,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
   }
 
   Future<void> _registerTeam(String tournamentId, int entryFee) async {
-    // 🔥 DEBUG 1: Function Start
-    debugPrint("🔥 DEBUG 1: _registerTeam Function Start Hua! Tournament ID: $tournamentId");
-
     final user = _supabase.auth.currentUser;
     if (user == null) {
-      debugPrint("🔥 DEBUG: User Null hai!");
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in first')),
       );
@@ -138,9 +133,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     }
 
     if (_myTeamId == null) {
-      // 🔥 DEBUG 2: Team Not Found
-      debugPrint("🔥 DEBUG 2: Team ID Null hai! Database mein team nahi mili.");
-      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -151,9 +143,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       return;
     }
 
-    // 🔥 DEBUG 3: Team Found
-    debugPrint("🔥 DEBUG 3: Team ID Mili: $_myTeamId. Ab insert kar rahe hain...");
-
     try {
       final currentTourney = _tournaments.firstWhere(
         (t) => t['id'].toString() == tournamentId,
@@ -161,7 +150,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       );
       final tourneyTitle = currentTourney['title']?.toString() ?? 'Tournament';
 
-      // 1. Insert Registration with leader_id
+      // 1. Insert Registration
       await _supabase.from('tournament_registrations').insert({
         'tournament_id': tournamentId,
         'team_id': _myTeamId,
@@ -171,7 +160,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       // 2. Increment Slots via RPC
       await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
 
-      // 3. Send Notifications
+      // 3. Notifications (Errors ignored to prevent registration fail)
       try {
         final membersRes = await _supabase
             .from('team_members')
@@ -197,9 +186,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         if (notifInserts.isNotEmpty) {
           await _supabase.from('notifications').insert(notifInserts);
         }
-      } catch (e) {
-        debugPrint("🔥 DEBUG Notification Error: $e");
-      }
+      } catch (_) {}
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -211,14 +198,13 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       _fetchTournaments();
     } catch (e) {
-      debugPrint('🔥 DEBUG CRITICAL REGISTRATION ERROR: $e');
+      // 🔥 ASLI ERROR YAHAN MOBILE SCREEN PAR DIKHEGA
       if (!mounted) return;
-      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('FAIL: $e'),
+          content: Text('DATABASE ERROR: $e'), 
           backgroundColor: const Color(0xFFFF4655),
-          duration: const Duration(seconds: 8),
+          duration: const Duration(seconds: 10), 
         ),
       );
     }
@@ -445,21 +431,10 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                               : BorderSide.none,
                                         ),
                                       ),
+                                      // 🔥 WAPAS ASLI CODE
                                       onPressed: (isFull || isRegistered)
                                           ? null
-                                          : () {
-                                              // 🔥 YEH TEST CODE HAI
-                                              print("🔥 BUTTON DABA!");
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text('Test: Button working! Ab console check karein.'),
-                                                  backgroundColor: Colors.blue,
-                                                  duration: Duration(seconds: 3),
-                                                ),
-                                              );
-                                              
-                                              _registerTeam(tId, item['entry_fee'] ?? 0);
-                                            },
+                                          : () => _registerTeam(tId, item['entry_fee'] ?? 0),
                                       child: Text(
                                         isRegistered
                                             ? '✓ Squad Registered'
