@@ -619,22 +619,30 @@ class TeamService {
     }
   }
 
-  /// Delete Team
+  /// Delete Team (Supports both userId and currentUserId)
   Future<bool> deleteTeam({
     required String teamId,
-    required String userId,
+    String? userId,
+    String? currentUserId,
   }) async {
     try {
+      final effectiveUserId = userId ?? currentUserId ?? "";
+
       await SupabaseService.client
           .from("team_members")
           .delete()
           .eq("team_id", teamId);
 
-      await SupabaseService.client
+      var query = SupabaseService.client
           .from("teams")
           .delete()
-          .eq("id", teamId)
-          .eq("leader_id", userId);
+          .eq("id", teamId);
+
+      if (effectiveUserId.isNotEmpty) {
+        query = query.eq("leader_id", effectiveUserId);
+      }
+
+      await query;
       return true;
     } catch (e) {
       debugPrint("[TeamService] deleteTeam error: $e");
@@ -642,10 +650,11 @@ class TeamService {
     }
   }
 
-  /// Request to join a team
+  /// Request to join a team (Supports optional userName)
   Future<bool> requestToJoinTeam({
     required String teamId,
     required String userId,
+    String? userName,
   }) async {
     try {
       await SupabaseService.client.from("team_join_requests").upsert({
@@ -665,6 +674,7 @@ class TeamService {
   Future<bool> cancelJoinRequest({
     required String teamId,
     required String userId,
+    String? userName,
   }) async {
     try {
       await SupabaseService.client
