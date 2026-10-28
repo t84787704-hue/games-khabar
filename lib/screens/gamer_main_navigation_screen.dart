@@ -21,6 +21,7 @@ import 'gamer_messages_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'create_gamer_id_screen.dart';
 import 'admin/gamer_admin_dashboard_screen.dart';
+import 'games_screen.dart'; // 👇👇👇 یہاں تبدیلی کی ہے (نیا امپورٹ شامل کیا) 👇👇👇
 
 class GamerMainNavigationScreen extends StatefulWidget {
   final int initialIndex;
@@ -129,8 +130,10 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 👇👇👇 یہاں تبدیلی کی ہے (سکرینز کی لسٹ میں گیمز شامل کیا) 👇👇👇
     final screens = <Widget>[
       GamerFeedScreen(),
+      GamesScreen(), // نیا گیمز والا صفحہ یہاں شامل کیا گیا ہے
       TournamentsScreen(),
       TeamsScreen(),
       GamerMessagesScreen(),
@@ -185,40 +188,49 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 0,
                           isDark: isDark,
                         ),
+                        // 👇👇👇 یہاں تبدیلی کی ہے (گیمز کا بٹن شامل کیا) 👇👇👇
                         _buildNavItem(
                           index: 1,
-                          icon: Icons.emoji_events_rounded,
-                          label: 'Tournaments',
+                          icon: Icons.sports_esports_rounded, // گیمز کا آئیکن
+                          label: 'Games', // بٹن کا نام
                           isSelected: _currentIndex == 1,
                           isDark: isDark,
                         ),
+                        // 👇👇👇 یہاں سے نیچے والے بٹنوں کے نمبرز 1،2،3 سے بڑھا کر 2،3،4 کر دیے ہیں 👇👇👇
                         _buildNavItem(
                           index: 2,
-                          icon: Icons.shield_rounded,
-                          label: 'Teams',
+                          icon: Icons.emoji_events_rounded,
+                          label: 'Tournaments',
                           isSelected: _currentIndex == 2,
                           isDark: isDark,
                         ),
                         _buildNavItem(
                           index: 3,
-                          icon: Icons.chat_bubble_rounded,
-                          label: 'Messages',
+                          icon: Icons.shield_rounded,
+                          label: 'Teams',
                           isSelected: _currentIndex == 3,
                           isDark: isDark,
                         ),
                         _buildNavItem(
                           index: 4,
+                          icon: Icons.chat_bubble_rounded,
+                          label: 'Messages',
+                          isSelected: _currentIndex == 4,
+                          isDark: isDark,
+                        ),
+                        _buildNavItem(
+                          index: 5,
                           icon: Icons.person_rounded,
                           label: 'Profile',
-                          isSelected: _currentIndex == 4,
+                          isSelected: _currentIndex == 5,
                           isDark: isDark,
                         ),
                         if (_isAdmin)
                           _buildNavItem(
-                            index: 5,
+                            index: 6,
                             icon: Icons.admin_panel_settings_rounded,
                             label: 'Admin',
-                            isSelected: _currentIndex == 5,
+                            isSelected: _currentIndex == 6,
                             activeColor: const Color(0xFF1877F2),
                             isDark: isDark,
                           ),
