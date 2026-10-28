@@ -23,7 +23,6 @@ class TeamService {
 
     final teamIds = {teamId, teamUuid}.where((e) => e.isNotEmpty).toList();
 
-    // 1. Fetch members from team_members table and gather user IDs
     final members = <String>[];
     final List<Map<String, dynamic>> memberDetails = [];
     
@@ -63,7 +62,6 @@ class TeamService {
         memberUserIds.add(leaderId);
       }
 
-      // Fetch user profile details (Name & Avatar) for all members in batch
       if (memberUserIds.isNotEmpty) {
         try {
           final userRows = await SupabaseService.client
@@ -112,7 +110,6 @@ class TeamService {
 
     final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
 
-    // 2. Fetch pending join requests from team_join_requests table
     final pendingRequests = <String>[];
     try {
       final reqRows = await SupabaseService.client
@@ -131,7 +128,6 @@ class TeamService {
       debugPrint("[TeamService] pending requests fetch error: $e");
     }
 
-    // 3. Fetch leader name & avatar from users table
     String leaderName = (rawRow["leader_name"] ?? rawRow["leaderName"] ?? "").toString().trim();
     String leaderAvatar = (rawRow["leader_avatar"] ?? rawRow["leaderAvatar"] ?? "").toString().trim();
     if (leaderId.isNotEmpty) {
@@ -180,7 +176,6 @@ class TeamService {
     );
   }
 
-  /// Get single team by ID
   Future<TeamModel?> getTeam(String teamId) async {
     if (teamId.isEmpty) return null;
     try {
@@ -199,7 +194,6 @@ class TeamService {
     return null;
   }
 
-  /// Get team stream (polls + real-time updates for team, members & join requests)
   Stream<TeamModel?> getTeamStream(String teamId) async* {
     if (teamId.isEmpty) {
       yield null;
@@ -216,7 +210,6 @@ class TeamService {
     }
   }
 
-  /// Get all teams where user is leader or member
   Future<List<TeamModel>> getUserTeams(String userId) async {
     if (userId.isEmpty) return [];
     try {
@@ -261,7 +254,6 @@ class TeamService {
     }
   }
 
-  /// Stream of user teams (includes both leader and joined member teams)
   Stream<List<TeamModel>> getUserTeamsStream(String userId) async* {
     if (userId.isEmpty) {
       yield [];
@@ -278,7 +270,6 @@ class TeamService {
     }
   }
 
-  /// Fetch all enriched teams with optional gameFilter and searchQuery
   Future<List<TeamModel>> _fetchAllTeamsEnriched({
     String? gameFilter,
     String? searchQuery,
@@ -480,7 +471,6 @@ class TeamService {
     return filtered;
   }
 
-  /// Get stream of all teams with optional game filter and search query
   Stream<List<TeamModel>> getTeamsStream({
     String? gameFilter,
     String? searchQuery,
@@ -499,7 +489,6 @@ class TeamService {
     }
   }
 
-  /// Create a new team
   Future<String?> createTeam({
     required String name,
     required String tag,
