@@ -112,10 +112,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       var query = _supabase.from('tournaments').select();
       
-      // 👇 یہاں تبدیلی کی ہے: گیم کا نام چیک کرنے کے لیے trim() استعمال کیا ہے
-      if (widget.gameName != null) {
-        final searchGame = widget.gameName!.trim();
-        query = query.eq('game_name', searchGame); 
+      // 👇 یہاں ایرر ٹھیک کر دیا گیا ہے (String? کی بجائے ! استعمال کیا)
+      if (widget.gameName != null && widget.gameName!.isNotEmpty) {
+        query = query.eq('game_name', widget.gameName!); 
       }
 
       final res = await query.order('created_at', ascending: false);
