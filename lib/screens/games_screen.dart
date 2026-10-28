@@ -59,11 +59,13 @@ class _GamesScreenState extends State<GamesScreen> {
                 return GameCard(
                   game: game,
                   onTap: () {
-                    // 👇 یہاں تبدیلی کی ہے: گیم کا نام ٹورنامنٹس والی سکرین کو بھیج رہے ہیں
+                    // 👇 یہاں گیم کا نام صحیح طریقے سے بھیج رہے ہیں
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => TournamentsScreen(gameName: game.title),
+                        builder: (context) => TournamentsScreen(
+                          gameName: game.title.trim(), // trim() سے اضافی سپیس ختم ہو جاتی ہے
+                        ),
                       ),
                     );
                   },
