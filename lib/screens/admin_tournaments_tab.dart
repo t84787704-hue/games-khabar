@@ -20,7 +20,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
   String _searchQuery = '';
   String _gameFilter = 'All';
 
-  // 👇 یہاں 14 گیمز کی مکمل لسٹ ہے
+  // 👇 14 گیمز کی مکمل لسٹ
   final List<String> _gameList = [
     'Free Fire',
     'PUBG Mobile',
@@ -37,6 +37,24 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     'Ludo',
     '8 Ball Pool',
   ];
+
+  // 👇 ہر گیم کے لیے مخصوص نقشے (Maps)
+  final Map<String, List<String>> _gameMaps = {
+    'Free Fire': ['Bermuda', 'Purgatory', 'Kalahari', 'Alpine', 'NeXTerra'],
+    'Garena Free Fire Max': ['Bermuda', 'Purgatory', 'Kalahari', 'Alpine', 'NeXTerra'],
+    'PUBG Mobile': ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Livik', 'Nusa'],
+    'BGMI': ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Livik', 'Nusa'],
+    'Call Of Duty': ['Isolated', 'Blackout', 'Alcatraz', 'Rebirth Island'],
+    'Clash Royale': ['Arena 1', 'Arena 5', 'Arena 9', 'Legendary Arena'],
+    'Clash of Clans': ['Home Village', 'Builder Base', 'Clan Capital'],
+    'Minecraft': ['Survival World', 'Creative World', 'Skyblock'],
+    'eFootball': ['Camp Nou', 'Old Trafford', 'Allianz Stadium', 'San Siro'],
+    'Asphalt 9': ['San Francisco', 'Shanghai', 'Cairo', 'Himalayas'],
+    'Brawl Stars': ['Gem Grab', 'Brawl Ball', 'Heist', 'Showdown'],
+    'Stumble Guys': ['Lost Temple', 'Super Slide', 'Over and Under', 'Rush Hour'],
+    'Ludo': ['Classic Board', 'Quick Ludo'],
+    '8 Ball Pool': ['London', 'Sydney', 'Moscow', 'Las Vegas'],
+  };
 
   @override
   void dispose() {
@@ -414,14 +432,19 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final prizeController = TextEditingController(text: existingData?['prize_pool']?.toString() ?? '1000');
     final feeController = TextEditingController(text: existingData?['entry_fee']?.toString() ?? 'Free');
     final slotsController = TextEditingController(text: existingData?['max_slots']?.toString() ?? '25');
-    final mapController = TextEditingController(text: existingData?['map_name'] ?? 'Erangel');
     final rulesController = TextEditingController(text: existingData?['rules'] ?? 'No hacks, fair play required.');
-    
     final roomIdController = TextEditingController(text: existingData?['room_id'] ?? '');
     final roomPassController = TextEditingController(text: existingData?['room_password'] ?? '');
 
     String selectedGame = existingData?['game_name'] ?? _gameList[0];
     String selectedFormat = existingData?['match_format'] ?? 'Squad 4v4';
+    
+    // 👇 میپ کے لیے ڈیفالٹ ویلیو (پہلے سے محفوظ شدہ یا گیم کے حساب سے)
+    String selectedMap = existingData?['map_name'] ?? (_gameMaps[selectedGame]?.first ?? 'Default');
+    if (!_gameMaps[selectedGame]!.contains(selectedMap)) {
+       selectedMap = _gameMaps[selectedGame]!.first;
+    }
+
     DateTime selectedDateTime = DateTime.now().add(const Duration(days: 1));
 
     if (existingData?['match_time'] != null) {
@@ -476,7 +499,13 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         items: _gameList.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                        onChanged: (val) => setModalState(() => selectedGame = val!),
+                        onChanged: (val) {
+                          setModalState(() {
+                            selectedGame = val!;
+                            // 👇 گیم تبدیل کرنے پر میپ بھی خود بخود تبدیل ہو جائے گا
+                            selectedMap = _gameMaps[selectedGame]?.first ?? 'Default';
+                          });
+                        },
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -490,7 +519,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                           fillColor: ThemeService.cardSecondary,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        // 👇 یہاں فارمیٹس کی لسٹ میں Single Match شامل کر دیا ہے
                         items: ['Solo', 'Duo', 'Squad 4v4', 'Single Match'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
                         onChanged: (val) => setModalState(() => selectedFormat = val!),
                       ),
@@ -545,16 +573,19 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                       ),
                     ),
                     const SizedBox(width: 10),
+                    // 👇 یہ اب ٹیکسٹ فیلڈ کی بجائے میپ کا ڈراپ ڈاؤن ہے
                     Expanded(
-                      child: TextField(
-                        controller: mapController,
-                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                      child: DropdownButtonFormField<String>(
+                        value: selectedMap,
+                        dropdownColor: ThemeService.card,
                         decoration: InputDecoration(
                           labelText: 'Map Name',
                           filled: true,
                           fillColor: ThemeService.cardSecondary,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
+                        items: (_gameMaps[selectedGame] ?? ['Default']).map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                        onChanged: (val) => setModalState(() => selectedMap = val!),
                       ),
                     ),
                   ],
@@ -656,7 +687,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                         'prize_pool': prizeController.text.trim(),
                         'entry_fee': feeController.text.trim(),
                         'max_slots': int.tryParse(slotsController.text.trim()) ?? 25,
-                        'map_name': mapController.text.trim(),
+                        'map_name': selectedMap, // 👈 اب یہ ڈراپ ڈاؤن سے آ رہا ہے
                         'room_id': roomIdController.text.trim(),
                         'room_password': roomPassController.text.trim(),
                         'match_time': selectedDateTime.toIso8601String(),
