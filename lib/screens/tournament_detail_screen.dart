@@ -17,11 +17,13 @@ import '../services/theme_service.dart';
 class TournamentDetailScreen extends StatefulWidget {
   final Map<String, dynamic> tournament;
   final bool isRegistered;
+  final String? selectedGameName; // <--- Game name receive karne ke liye
 
   const TournamentDetailScreen({
     super.key,
     required this.tournament,
     required this.isRegistered,
+    this.selectedGameName,
   });
 
   @override
@@ -366,6 +368,101 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 🎮 DYNAMIC GAME BANNER (Shows exact selected game name)
+                  Container(
+                    width: double.infinity,
+                    height: 130,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF1877F2).withOpacity(0.8),
+                          const Color(0xFF00FF88).withOpacity(0.3),
+                          const Color(0xFF161A22),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFF00FF88).withOpacity(0.5),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00FF88).withOpacity(0.15),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          right: -20,
+                          bottom: -20,
+                          child: Icon(
+                            Icons.sports_esports_rounded,
+                            size: 110,
+                            color: Colors.white.withOpacity(0.08),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.4),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.6)),
+                                ),
+                                child: const Text(
+                                  'OFFICIAL TOURNAMENT ARENA ⚡',
+                                  style: TextStyle(
+                                    color: Color(0xFFFFD700),
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                (widget.selectedGameName != null && widget.selectedGameName!.trim().isNotEmpty)
+                                    ? widget.selectedGameName!.toUpperCase()
+                                    : gameMode.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.map_rounded, color: Color(0xFF00FF88), size: 14),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Map: $mapName • Battle for Glory',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.85),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -749,7 +846,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                   ),
                                 ],
                               ),
-                              // 🔒 SECURE FIX: Sirf Admin ya wahi submitting team members/leader "Change Proof" dekh sakein ge
                               if (_isAdmin || (() {
                                 bool isTeamMatch = false;
                                 if (submittedTeamId.isNotEmpty) {
