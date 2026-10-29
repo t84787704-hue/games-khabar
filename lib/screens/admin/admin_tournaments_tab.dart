@@ -20,13 +20,13 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
   String _searchQuery = '';
   String _gameFilter = 'All';
 
-  // 👇 14 گیمز کی مکمل لسٹ
+  // 👇 14 گیمز کی مکمل لسٹ (BGMI کی جگہ Candy Crush)
   final List<String> _gameList = [
     'Free Fire',
     'PUBG Mobile',
     'Call Of Duty',
     'Clash Royale',
-    'BGMI',
+    'Candy Crush', // 👈 BGMI ہٹا کر یہ لگایا
     'Garena Free Fire Max',
     'Clash of Clans',
     'Minecraft',
@@ -43,9 +43,9 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     'Free Fire': ['Bermuda', 'Purgatory', 'Kalahari', 'Alpine', 'NeXTerra'],
     'Garena Free Fire Max': ['Bermuda', 'Purgatory', 'Kalahari', 'Alpine', 'NeXTerra'],
     'PUBG Mobile': ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Livik', 'Nusa'],
-    'BGMI': ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Livik', 'Nusa'],
     'Call Of Duty': ['Isolated', 'Blackout', 'Alcatraz', 'Rebirth Island'],
     'Clash Royale': ['Arena 1', 'Arena 5', 'Arena 9', 'Legendary Arena'],
+    'Candy Crush': ['Level 1-50', 'Level 51-100', 'Level 101-200', 'Level 201+'], // 👈 Candy Crush کے میپس
     'Clash of Clans': ['Home Village', 'Builder Base', 'Clan Capital'],
     'Minecraft': ['Survival World', 'Creative World', 'Skyblock'],
     'eFootball': ['Camp Nou', 'Old Trafford', 'Allianz Stadium', 'San Siro'],
@@ -205,7 +205,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                   .stream(primaryKey: ['id'])
                   .order('created_at', ascending: false),
               builder: (context, snapshot) {
-                // 👇 یہاں تبدیلی کی ہے: صرف لوڈنگ چیک کریں، ڈیٹا خالی ہے یا نہیں وہ بعد میں دیکھیں گے
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
                 }
@@ -440,7 +439,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     String selectedGame = existingData?['game_name'] ?? _gameList[0];
     String selectedFormat = existingData?['match_format'] ?? 'Squad 4v4';
     
-    // 👇 میپ کے لیے ڈیفالٹ ویلیو (پہلے سے محفوظ شدہ یا گیم کے حساب سے)
     String selectedMap = existingData?['map_name'] ?? (_gameMaps[selectedGame]?.first ?? 'Default');
     if (!_gameMaps[selectedGame]!.contains(selectedMap)) {
        selectedMap = _gameMaps[selectedGame]!.first;
@@ -503,7 +501,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                         onChanged: (val) {
                           setModalState(() {
                             selectedGame = val!;
-                            // 👇 گیم تبدیل کرنے پر میپ بھی خود بخود تبدیل ہو جائے گا
                             selectedMap = _gameMaps[selectedGame]?.first ?? 'Default';
                           });
                         },
@@ -574,7 +571,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    // 👇 یہ اب ٹیکسٹ فیلڈ کی بجائے میپ کا ڈراپ ڈاؤن ہے
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: selectedMap,
@@ -688,7 +684,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                         'prize_pool': prizeController.text.trim(),
                         'entry_fee': feeController.text.trim(),
                         'max_slots': int.tryParse(slotsController.text.trim()) ?? 25,
-                        'map_name': selectedMap, // 👈 اب یہ ڈراپ ڈاؤن سے آ رہا ہے
+                        'map_name': selectedMap,
                         'room_id': roomIdController.text.trim(),
                         'room_password': roomPassController.text.trim(),
                         'match_time': selectedDateTime.toIso8601String(),
