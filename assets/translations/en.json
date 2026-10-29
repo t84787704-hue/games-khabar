@@ -1,4 +1,12 @@
 {
+  "blue_tick_verification": "Blue Tick Verification",
+  "owner_creator_badge": "Owner & Creator Badge",
+  "owner_creator_desc": "Exclusive badge for the app owner and core creator.",
+  "invite_refer_gamers": "Invite & Refer 2 Active Gamers",
+  "referral_requirement_desc": "At least 2 friends must join using your referral link/code.",
+  "target_referrals": "Target: 2 Referrals",
+  "joined_count": "Joined",
+  "official_verified_gamer": "Official Verified Gamer,"
 "msg_post_created": "Post created successfully! 🚀",
 "notif_team_join_request_body": "%s has requested to join %s",
 "team_default_name": "Squad",
