@@ -20,12 +20,22 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
   String _searchQuery = '';
   String _gameFilter = 'All';
 
+  // 👇 یہاں 14 گیمز کی مکمل لسٹ ہے
   final List<String> _gameList = [
-    'PUBG Mobile',
-    'BGMI',
     'Free Fire',
-    'COD Mobile',
-    'Apex Legends',
+    'PUBG Mobile',
+    'Call Of Duty',
+    'Clash Royale',
+    'BGMI',
+    'Garena Free Fire Max',
+    'Clash of Clans',
+    'Minecraft',
+    'eFootball',
+    'Asphalt 9',
+    'Brawl Stars',
+    'Stumble Guys',
+    'Ludo',
+    '8 Ball Pool',
   ];
 
   @override
@@ -366,7 +376,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // 🏆 Bracket Management Button
               IconButton(
                 icon: const Icon(Icons.account_tree_rounded, color: Color(0xFFFFD700), size: 20),
                 tooltip: 'Manage Tournament Bracket',
@@ -408,7 +417,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final mapController = TextEditingController(text: existingData?['map_name'] ?? 'Erangel');
     final rulesController = TextEditingController(text: existingData?['rules'] ?? 'No hacks, fair play required.');
     
-    // Room ID & Password Controllers Added
     final roomIdController = TextEditingController(text: existingData?['room_id'] ?? '');
     final roomPassController = TextEditingController(text: existingData?['room_password'] ?? '');
 
@@ -482,7 +490,8 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                           fillColor: ThemeService.cardSecondary,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        items: ['Solo', 'Duo', 'Squad 4v4'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+                        // 👇 یہاں فارمیٹس کی لسٹ میں Single Match شامل کر دیا ہے
+                        items: ['Solo', 'Duo', 'Squad 4v4', 'Single Match'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
                         onChanged: (val) => setModalState(() => selectedFormat = val!),
                       ),
                     ),
@@ -551,7 +560,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                // Room ID & Room Password Fields Inside Modal
                 Row(
                   children: [
                     Expanded(
