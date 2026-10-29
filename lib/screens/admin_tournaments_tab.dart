@@ -101,6 +101,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     try {
       await SupabaseService.client.from('tournaments').delete().eq('id', id);
       if (mounted) {
+        setState(() {}); // Refresh list
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Tournament deleted successfully! 🗑️'),
@@ -197,24 +198,33 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               ],
             ),
           ),
-          // Tournaments List
+          // Tournaments List (Stable FutureBuilder)
           Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: SupabaseService.client
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: SupabaseService.client
                   .from('tournaments')
-                  .stream(primaryKey: ['id'])
+                  .select('*')
                   .order('created_at', ascending: false),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text('Error loading: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+                    ),
+                  );
                 }
 
                 final list = snapshot.data ?? [];
                 var filtered = list.where((item) {
-                  final game = (item['game_name'] ?? item['game'] ?? '').toString();
+                  final game = (item['game_name'] ?? item['game'] ?? '').toString().toLowerCase();
                   final title = (item['title'] ?? item['name'] ?? '').toString().toLowerCase();
 
-                  if (_gameFilter != 'All' && !game.toLowerCase().contains(_gameFilter.toLowerCase())) {
+                  if (_gameFilter != 'All' && !game.contains(_gameFilter.toLowerCase())) {
                     return false;
                   }
                   if (_searchQuery.isNotEmpty && !title.contains(_searchQuery)) {
@@ -436,17 +446,19 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final roomIdController = TextEditingController(text: existingData?['room_id'] ?? '');
     final roomPassController = TextEditingController(text: existingData?['room_password'] ?? '');
 
-    String selectedGame = existingData?['game_name'] ?? _gameList[0];
-    String selectedFormat = existingData?['match_format'] ?? 'Squad 4v4';
+    String selectedGame = existingData?['game_name'] ?? existingData?['game'] ?? _gameList[0];
+    if (!_gameList.contains(selectedGame)) {
+      selectedGame = _gameList[0];
+    }
+
+    String selectedFormat = existingData?['match_format'] ?? existingData?['format'] ?? 'Squad 4v4';
     
-    // 👇 میپ کے لیے ڈیفالٹ ویلیو (پہلے سے محفوظ شدہ یا گیم کے حساب سے)
     String selectedMap = existingData?['map_name'] ?? (_gameMaps[selectedGame]?.first ?? 'Default');
-    if (!_gameMaps[selectedGame]!.contains(selectedMap)) {
+    if (_gameMaps[selectedGame] != null && !_gameMaps[selectedGame]!.contains(selectedMap)) {
        selectedMap = _gameMaps[selectedGame]!.first;
     }
 
     DateTime selectedDateTime = DateTime.now().add(const Duration(days: 1));
-
     if (existingData?['match_time'] != null) {
       selectedDateTime = DateTime.tryParse(existingData!['match_time'].toString()) ?? selectedDateTime;
     }
@@ -502,7 +514,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                         onChanged: (val) {
                           setModalState(() {
                             selectedGame = val!;
-                            // 👇 گیم تبدیل کرنے پر میپ بھی خود بخود تبدیل ہو جائے گا
                             selectedMap = _gameMaps[selectedGame]?.first ?? 'Default';
                           });
                         },
@@ -573,7 +584,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    // 👇 یہ اب ٹیکسٹ فیلڈ کی بجائے میپ کا ڈراپ ڈاؤن ہے
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: selectedMap,
@@ -680,14 +690,16 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                         return;
                       }
 
+                      // 🔒 SECURE PAYLOAD: Sending both 'game_name' and 'game' to match database columns
                       final payload = {
                         'title': title,
                         'game_name': selectedGame,
+                        'game': selectedGame, 
                         'match_format': selectedFormat,
                         'prize_pool': prizeController.text.trim(),
                         'entry_fee': feeController.text.trim(),
                         'max_slots': int.tryParse(slotsController.text.trim()) ?? 25,
-                        'map_name': selectedMap, // 👈 اب یہ ڈراپ ڈاؤن سے آ رہا ہے
+                        'map_name': selectedMap,
                         'room_id': roomIdController.text.trim(),
                         'room_password': roomPassController.text.trim(),
                         'match_time': selectedDateTime.toIso8601String(),
@@ -709,6 +721,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                         }
 
                         Navigator.pop(ctx);
+                        setState(() {}); // Refresh local UI state
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(isEdit ? 'Tournament Updated! 🚀' : 'Tournament Published Successfully! 🏆'),
@@ -768,7 +781,10 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                 'room_id': idController.text.trim(),
                 'room_password': passController.text.trim(),
               }).eq('id', id);
-              if (mounted) Navigator.pop(ctx);
+              if (mounted) {
+                Navigator.pop(ctx);
+                setState(() {}); // Refresh list
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF88), foregroundColor: Colors.black),
             child: const Text('Save & Publish'),
