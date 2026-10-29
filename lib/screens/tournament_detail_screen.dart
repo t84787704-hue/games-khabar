@@ -17,7 +17,7 @@ import '../services/theme_service.dart';
 class TournamentDetailScreen extends StatefulWidget {
   final Map<String, dynamic> tournament;
   final bool isRegistered;
-  final String? selectedGameName; // <--- Game name receive karne ke liye
+  final String? selectedGameName;
 
   const TournamentDetailScreen({
     super.key,
@@ -36,7 +36,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   bool _isUploadingProof = false;
   bool _hasShownCelebration = false;
   bool _isAdmin = false;
-  List<Map<String, dynamic>> _registeredTeams = [];
+  List> _registeredTeams = [];
   Map<String, dynamic>? _tournamentData;
   String _winnerTeamName = 'Champions Squad';
   String _runnerUpTeamName = 'Finalist Squad';
@@ -109,7 +109,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           .eq('tournament_id', tId)
           .order('registered_at', ascending: true);
 
-      final registeredList = List<Map<String, dynamic>>.from(regRes);
+      final registeredList = List>.from(regRes);
 
       final winnerId = _tournamentData?['winner_team_id']?.toString();
       String resolvedWinner = 'Champions Squad';
@@ -155,7 +155,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   void _showCelebrationPopup() {
     final t = _tournamentData ?? widget.tournament;
     final title = (t['title'] ?? 'Tournament Match').toString();
-    final prize = (t['prize_pool'] as num?)?.toInt() ?? 500;
+    final prize = (t['prize_pool'] is num)
+        ? (t['prize_pool'] as num).toInt()
+        : int.tryParse(t['prize_pool']?.toString() ?? '500') ?? 500;
 
     VictoryCelebrationDialog.show(
       context,
@@ -368,7 +370,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 🎮 DYNAMIC GAME BANNER (Shows exact selected game name)
+                  // 🎮 DYNAMIC GAME BANNER
                   Container(
                     width: double.infinity,
                     height: 130,
@@ -388,13 +390,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         color: const Color(0xFF00FF88).withOpacity(0.5),
                         width: 1.5,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF00FF88).withOpacity(0.15),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
                     ),
                     child: Stack(
                       children: [
@@ -527,11 +522,16 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            Icon(Icons.schedule_rounded, color: ThemeService.textSecondary, size: 15),
+                            Icon(isCompleted ? Icons.check_circle_rounded : Icons.schedule_rounded, 
+                                 color: isCompleted ? const Color(0xFF00FF88) : ThemeService.textSecondary, size: 15),
                             const SizedBox(width: 6),
                             Text(
-                              'Match Time: $matchTimeStr',
-                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                              isCompleted ? 'Tournament Status: Successfully Completed' : 'Match Time: $matchTimeStr',
+                              style: TextStyle(
+                                color: isCompleted ? const Color(0xFF00FF88) : ThemeService.textSecondary, 
+                                fontSize: 13,
+                                fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
+                              ),
                             ),
                           ],
                         ),
@@ -555,164 +555,162 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'Custom Room Credentials',
-                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  if (!hasSquadAccess)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: ThemeService.card,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: ThemeService.border),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.lock_rounded, color: Color(0xFFFF8A00), size: 24),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Room ID & Password will be unlocked once your squad is registered.',
-                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else if (roomId.isEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: ThemeService.card,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: ThemeService.border),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.hourglass_top_rounded, color: Color(0xFF38BDF8), size: 24),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Host has not shared Room ID yet. Check back 10-15 minutes before match time.',
-                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: ThemeService.card,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('ROOM ID', style: TextStyle(color: ThemeService.textSecondary, fontSize: 11)),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    roomId,
-                                    style: const TextStyle(
-                                      color: Color(0xFF00FF88),
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.copy_rounded, color: Color(0xFF00FF88), size: 20),
-                                onPressed: () => _copyToClipboard(roomId, 'Room ID'),
-                              ),
-                            ],
-                          ),
-                          Divider(color: ThemeService.border, height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('PASSWORD', style: TextStyle(color: ThemeService.textSecondary, fontSize: 11)),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    roomPass.isNotEmpty ? roomPass : 'No Password',
-                                    style: TextStyle(
-                                      color: ThemeService.textPrimary,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (roomPass.isNotEmpty)
-                                IconButton(
-                                  icon: Icon(Icons.copy_rounded, color: ThemeService.textSecondary, size: 20),
-                                  onPressed: () => _copyToClipboard(roomPass, 'Password'),
-                                ),
-                            ],
-                          ),
-                          if (assignedSlotNumber > 0) ...[
-                            Divider(color: ThemeService.border, height: 16),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00FF88).withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.35)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.pin_drop_rounded, color: Color(0xFF00FF88), size: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: RichText(
-                                      text: TextSpan(
-                                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 12),
-                                        children: [
-                                          const TextSpan(text: 'Assigned Spot: '),
-                                          TextSpan(
-                                            text: 'SLOT #$assignedSlotNumber',
-                                            style: const TextStyle(
-                                              color: Color(0xFF00FF88),
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
-                                          TextSpan(
-                                            text: ' (Room me poori squad yahan baithe)',
-                                            style: TextStyle(
-                                              color: ThemeService.textSecondary,
-                                              fontSize: 10.5,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                  
+                  // 🛠️ HIDE ROOM CREDENTIALS IF COMPLETED
+                  if (!isCompleted) ...[
+                    Text(
+                      'Custom Room Credentials',
+                      style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    if (!hasSquadAccess)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: ThemeService.card,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: ThemeService.border),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.lock_rounded, color: Color(0xFFFF8A00), size: 24),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Room ID & Password will be unlocked once your squad is registered.',
+                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                               ),
                             ),
                           ],
-                        ],
+                        ),
+                      )
+                    else if (roomId.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: ThemeService.card,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: ThemeService.border),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.hourglass_top_rounded, color: Color(0xFF38BDF8), size: 24),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Host has not shared Room ID yet. Check back 10-15 minutes before match time.',
+                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: ThemeService.card,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('ROOM ID', style: TextStyle(color: ThemeService.textSecondary, fontSize: 11)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      roomId,
+                                      style: const TextStyle(
+                                        color: Color(0xFF00FF88),
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.copy_rounded, color: Color(0xFF00FF88), size: 20),
+                                  onPressed: () => _copyToClipboard(roomId, 'Room ID'),
+                                ),
+                              ],
+                            ),
+                            Divider(color: ThemeService.border, height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('PASSWORD', style: TextStyle(color: ThemeService.textSecondary, fontSize: 11)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      roomPass.isNotEmpty ? roomPass : 'No Password',
+                                      style: TextStyle(
+                                        color: ThemeService.textPrimary,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (roomPass.isNotEmpty)
+                                  IconButton(
+                                    icon: Icon(Icons.copy_rounded, color: ThemeService.textSecondary, size: 20),
+                                    onPressed: () => _copyToClipboard(roomPass, 'Password'),
+                                  ),
+                              ],
+                            ),
+                            if (assignedSlotNumber > 0) ...[
+                              Divider(color: ThemeService.border, height: 16),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00FF88).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.35)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.pin_drop_rounded, color: Color(0xFF00FF88), size: 18),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: RichText(
+                                        text: TextSpan(
+                                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 12),
+                                          children: [
+                                            const TextSpan(text: 'Assigned Spot: '),
+                                            TextSpan(
+                                              text: 'SLOT #$assignedSlotNumber',
+                                              style: const TextStyle(
+                                                color: Color(0xFF00FF88),
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
+                  ],
+
                   Text(
                     'Match Result & Win Proof',
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
@@ -766,7 +764,10 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 'View Champions Ceremony 👑',
                                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                               ),
-                              onPressed: _showCelebrationPopup,
+                              onPressed: () {
+                                // 🛠️ FIXED: Directly invoke popup with fallback data
+                                _showCelebrationPopup();
+                              },
                             ),
                           ),
                         ],
