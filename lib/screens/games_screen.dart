@@ -77,10 +77,10 @@ class _GamesScreenState extends State<GamesScreen> {
       imageUrl: 'https://static0.gamerantimages.com/wordpress/wp-content/uploads/2025/03/mixcollage-05-mar-2025-09-03-am-8578.jpg',
       playedCount: '10M+',
     ),
-    // 👇 8 Ball Pool گیم اپنے نئے اور پکے لنک کے ساتھ
+    // 👇 8 Ball Pool گیم کا نیا لنک یہاں شامل کر دیا ہے
     GameModel(
       title: '8 Ball Pool',
-      imageUrl: 'https://i.pinimg.com/736x/8b/5c/5b/8b5c5b8e5f5d5c5b5a59585756555453.jpg', // یہ لنک تبدیل کیا گیا ہے
+      imageUrl: 'https://static0.gamerantimages.com/wordpress/wp-content/uploads/2025/03/mixcollage-05-mar-2025-09-05-am-9226.jpg?w=1200&h=1200&fit=crop',
       playedCount: '8.5M',
     ),
   ];
