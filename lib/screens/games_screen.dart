@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/game_model.dart';
 import '../widgets/game_card.dart';
 import 'tournaments_screen.dart';
+import '../services/theme_service.dart'; // 👈 تھیم سروس کا امپورٹ شامل کیا
 
 class GamesScreen extends StatefulWidget {
   const GamesScreen({super.key});
@@ -77,7 +78,6 @@ class _GamesScreenState extends State<GamesScreen> {
       imageUrl: 'https://static0.gamerantimages.com/wordpress/wp-content/uploads/2025/03/mixcollage-05-mar-2025-09-03-am-8578.jpg',
       playedCount: '10M+',
     ),
-    // 👇 8 Ball Pool گیم کا نیا لنک یہاں شامل کر دیا ہے
     GameModel(
       title: '8 Ball Pool',
       imageUrl: 'https://static0.gamerantimages.com/wordpress/wp-content/uploads/2025/03/mixcollage-05-mar-2025-09-05-am-9226.jpg?w=1200&h=1200&fit=crop',
@@ -88,12 +88,13 @@ class _GamesScreenState extends State<GamesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      // 👇 یہاں ڈارک کلر کی بجائے تھیم سروس کا رنگ لگا دیا ہے
+      backgroundColor: ThemeService.bg, 
       appBar: AppBar(
         title: const Text('All Games', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0D1117),
+        backgroundColor: ThemeService.appBarBg, // 👇 ایپ بار کا رنگ بھی تھیم کے مطابق
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: ThemeService.textPrimary), // 👇 آئیکن کا رنگ بھی تھیم کے مطابق
       ),
       body: Padding(
         padding: const EdgeInsets.all(12.0),
