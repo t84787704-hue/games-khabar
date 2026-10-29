@@ -205,7 +205,8 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                   .stream(primaryKey: ['id'])
                   .order('created_at', ascending: false),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                // 👇 یہاں تبدیلی کی ہے: صرف لوڈنگ چیک کریں، ڈیٹا خالی ہے یا نہیں وہ بعد میں دیکھیں گے
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
                 }
 
