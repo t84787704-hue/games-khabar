@@ -36,7 +36,10 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   bool _isUploadingProof = false;
   bool _hasShownCelebration = false;
   bool _isAdmin = false;
-  List> _registeredTeams = [];
+  
+  // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
+  List<Map<String, dynamic>> _registeredTeams = [];
+  
   Map<String, dynamic>? _tournamentData;
   String _winnerTeamName = 'Champions Squad';
   String _runnerUpTeamName = 'Finalist Squad';
@@ -109,7 +112,8 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           .eq('tournament_id', tId)
           .order('registered_at', ascending: true);
 
-      final registeredList = List>.from(regRes);
+      // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
+      final registeredList = List<Map<String, dynamic>>.from(regRes);
 
       final winnerId = _tournamentData?['winner_team_id']?.toString();
       String resolvedWinner = 'Champions Squad';
