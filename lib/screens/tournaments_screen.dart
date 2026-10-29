@@ -86,15 +86,17 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             List> regRes = [];
 
             if (_myTeamId != null && _myTeamId!.isNotEmpty) {
-              regRes = await _supabase
+              final rawRes = await _supabase
                   .from('tournament_registrations')
                   .select('tournament_id')
                   .or('team_id.eq.$_myTeamId,leader_id.eq.${user.id}');
+              regRes = List>.from(rawRes);
             } else {
-              regRes = await _supabase
+              final rawRes = await _supabase
                   .from('tournament_registrations')
                   .select('tournament_id')
                   .eq('leader_id', user.id);
+              regRes = List>.from(rawRes);
             }
 
             for (var r in regRes) {
@@ -180,8 +182,8 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         setState(() => _registeringTournamentId = null);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
+          const SnackBar(
+            content: Row(
               children: [
                 Icon(Icons.warning_amber_rounded, color: Colors.white),
                 SizedBox(width: 8),
@@ -193,8 +195,8 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                 ),
               ],
             ),
-            backgroundColor: const Color(0xFFFF8A00),
-            duration: const Duration(seconds: 6),
+            backgroundColor: Color(0xFFFF8A00),
+            duration: Duration(seconds: 6),
           ),
         );
         return;
