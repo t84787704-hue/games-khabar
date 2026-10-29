@@ -1,4 +1,4 @@
-name: Fetch Top 50 Gaming News
+Name: Fetch Top 50 Gaming News
 on:
   schedule:
     - cron: '*/15 * * * *'
@@ -11,8 +11,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install firebase-admin axios rss-parser cheerio he dotenv
+      - run: npm install rss-parser cheerio axios dotenv @supabase/supabase-js he
       - run: node scripts/fetchSteamNews.js
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
