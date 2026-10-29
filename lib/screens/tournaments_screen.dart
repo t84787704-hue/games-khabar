@@ -24,7 +24,10 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
   bool _isLoading = true;
   String? _registeringTournamentId;
-  List> _tournaments = [];
+  
+  // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
+  List<Map<String, dynamic>> _tournaments = [];
+  
   final Set<String> _registeredTournamentIds = {};
   String? _myTeamId;
   Timer? _countdownRefreshTimer;
@@ -83,20 +86,21 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
           _registeredTournamentIds.clear();
           try {
-            List> regRes = [];
+            // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
+            List<Map<String, dynamic>> regRes = [];
 
             if (_myTeamId != null && _myTeamId!.isNotEmpty) {
               final rawRes = await _supabase
                   .from('tournament_registrations')
                   .select('tournament_id')
                   .or('team_id.eq.$_myTeamId,leader_id.eq.${user.id}');
-              regRes = List>.from(rawRes);
+              regRes = List<Map<String, dynamic>>.from(rawRes);
             } else {
               final rawRes = await _supabase
                   .from('tournament_registrations')
                   .select('tournament_id')
                   .eq('leader_id', user.id);
-              regRes = List>.from(rawRes);
+              regRes = List<Map<String, dynamic>>.from(rawRes);
             }
 
             for (var r in regRes) {
@@ -121,7 +125,8 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       if (mounted) {
         setState(() {
-          _tournaments = List>.from(res);
+          // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
+          _tournaments = List<Map<String, dynamic>>.from(res);
           _isLoading = false;
         });
       }
