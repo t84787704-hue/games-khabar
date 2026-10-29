@@ -13,7 +13,7 @@ class GameCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E24), // ڈارک کارڈ کا رنگ
+          color: const Color(0xFF1E1E24),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white12),
         ),
@@ -34,30 +34,18 @@ class GameCard extends StatelessWidget {
                 ),
               ),
             ),
-            // گیم کا نام اور کھلاڑیوں کی تعداد
+            // گیم کا نام
             Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    game.title,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.play_circle_fill, color: Colors.amber, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${game.playedCount} Played',
-                        style: const TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ],
+              padding: const EdgeInsets.all(10.0),
+              child: Text(
+                game.title,
+                style: const TextStyle(
+                  color: Colors.white, 
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 14
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
