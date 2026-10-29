@@ -112,7 +112,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       var query = _supabase.from('tournaments').select();
       
-      // 👇 یہاں ایرر ٹھیک کر دیا گیا ہے (String? کی بجائے ! استعمال کیا)
       if (widget.gameName != null && widget.gameName!.isNotEmpty) {
         query = query.eq('game_name', widget.gameName!); 
       }
@@ -137,7 +136,10 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
   Future<void> _registerTeam(Map<String, dynamic> tournament) async {
     final tournamentId = tournament['id']?.toString() ?? '';
-    final tourneyTitle = (tournament['title'] ?? tournament['name'] ?? 'Tournament').toString();
+    
+    // 👇 چیک کریں کہ فارمیٹ Solo یا Single Match ہے یا نہیں
+    final format = (tournament['match_format'] ?? tournament['format'] ?? '').toString().toLowerCase();
+    final isSoloMatch = format.contains('solo') || format.contains('single');
 
     final user = _supabase.auth.currentUser;
     if (user == null) {
@@ -153,71 +155,84 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
     setState(() => _registeringTournamentId = tournamentId);
 
-    if (_myTeamId == null) {
-      try {
-        final leaderTeamRes = await _supabase
-            .from('teams')
-            .select('id')
-            .eq('leader_id', user.id)
-            .maybeSingle();
-        _myTeamId = leaderTeamRes?['id']?.toString();
-
-        if (_myTeamId == null) {
-          final memberRes = await _supabase
-              .from('team_members')
-              .select('team_id')
-              .eq('user_id', user.id)
+    // اگر سولو میچ نہیں ہے تو ٹیم چیک کریں
+    if (!isSoloMatch) {
+      if (_myTeamId == null) {
+        try {
+          final leaderTeamRes = await _supabase
+              .from('teams')
+              .select('id')
+              .eq('leader_id', user.id)
               .maybeSingle();
-          _myTeamId = memberRes?['team_id']?.toString();
-        }
-      } catch (e) {
-        debugPrint('Team fetch error: $e');
-      }
-    }
+          _myTeamId = leaderTeamRes?['id']?.toString();
 
-    if (_myTeamId == null) {
-      setState(() => _registeringTournamentId = null);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.white),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Aap ki koi Team nahi bani hui! Pehle "Teams" tab mein ja kar team banayein.',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+          if (_myTeamId == null) {
+            final memberRes = await _supabase
+                .from('team_members')
+                .select('team_id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+            _myTeamId = memberRes?['team_id']?.toString();
+          }
+        } catch (e) {
+          debugPrint('Team fetch error: $e');
+        }
+      }
+
+      if (_myTeamId == null) {
+        setState(() => _registeringTournamentId = null);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Aap ki koi Team nahi bani hui! Pehle "Teams" tab mein ja kar team banayein.',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+            backgroundColor: const Color(0xFFFF8A00),
+            duration: const Duration(seconds: 6),
           ),
-          backgroundColor: const Color(0xFFFF8A00),
-          duration: const Duration(seconds: 6),
-        ),
-      );
-      return;
+        );
+        return;
+      }
     }
 
     try {
-      try {
+      if (isSoloMatch) {
+        // 👇 سولو میچ کے لیے صرف لیڈر آئی ڈی سیو کریں
         await _supabase.from('tournament_registrations').insert({
           'tournament_id': tournamentId,
-          'team_id': _myTeamId,
           'leader_id': user.id,
         });
-      } catch (e) {
-        if (e.toString().contains('leader_id')) {
+      } else {
+        // ٹیم میچ کے لیے ٹیم آئی ڈی سیو کریں
+        try {
           await _supabase.from('tournament_registrations').insert({
             'tournament_id': tournamentId,
             'team_id': _myTeamId,
-            'user_id': user.id,
+            'leader_id': user.id,
           });
-        } else {
-          rethrow;
+        } catch (e) {
+          if (e.toString().contains('leader_id')) {
+            await _supabase.from('tournament_registrations').insert({
+              'tournament_id': tournamentId,
+              'team_id': _myTeamId,
+              'user_id': user.id,
+            });
+          } else {
+            rethrow;
+          }
         }
       }
 
+      // سلاٹس کی گنتی میں اضافہ کریں
       try {
         await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
       } catch (_) {
@@ -232,9 +247,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Squad Registered Successfully! 🎉'),
-          backgroundColor: Color(0xFF00FF88),
+        SnackBar(
+          content: Text(isSoloMatch ? 'Registered Successfully! 🎉' : 'Squad Registered Successfully! 🎉'),
+          backgroundColor: const Color(0xFF00FF88),
         ),
       );
 
@@ -488,8 +503,8 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                             )
                                           : Text(
                                               isRegistered
-                                                  ? '✓ Squad Registered'
-                                                  : (isFull ? 'Slots Full' : 'Register Squad'),
+                                                  ? '✓ Registered'
+                                                  : (isFull ? 'Slots Full' : 'Register Now'),
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 13,
@@ -634,7 +649,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                   ),
                 ] else if (!isRegistered) ...[
                   Text(
-                    'Register squad to view Room Credentials',
+                    'Register to view Room Credentials',
                     style: TextStyle(
                       color: ThemeService.textSecondary.withOpacity(0.8),
                       fontSize: 11,
