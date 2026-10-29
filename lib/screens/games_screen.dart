@@ -33,17 +33,17 @@ class _GamesScreenState extends State<GamesScreen> {
       imageUrl: 'https://e.snmc.io/lk/f/x/88886e931ef24bc6ddad648cdcf565c8/5296160',
       playedCount: '1.2M',
     ),
+    // 👇 BGMI کو ہٹا کر یہاں Candy Crush شامل کر دیا ہے
     GameModel(
-      title: 'BGMI',
-      imageUrl: 'https://play-lh.googleusercontent.com/q2r1XjWq9m3rO0yqK1f0xY5T3J5B2u2X8v6Y1n8X2u8J4o5S6t8V7e4A=w240-h480-rw',
-      playedCount: '4.5M',
+      title: 'Candy Crush',
+      imageUrl: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1425327952i/25054190.jpg',
+      playedCount: '10M+',
     ),
     GameModel(
       title: 'Garena Free Fire Max',
       imageUrl: 'https://original.fontsinuse.com/fontsinuse.com/use-images/95/95495/95495.jpeg',
       playedCount: '2.1M',
     ),
-    // 👇 یہاں آپ کا نیا بھیجا ہوا لنک لگا دیا ہے
     GameModel(
       title: 'Clash of Clans',
       imageUrl: 'https://m.media-amazon.com/images/M/MV5BYWY0OTUyOGYtYjM5NC00ODAyLTkwYzYtNWVlMzI4ZDkxMjA4XkEyXkFqcGc@._V1_.jpg',
