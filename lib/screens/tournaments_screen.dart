@@ -137,7 +137,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
   Future<void> _registerTeam(Map<String, dynamic> tournament) async {
     final tournamentId = tournament['id']?.toString() ?? '';
     
-    // 👇 چیک کریں کہ فارمیٹ Solo یا Single Match ہے یا نہیں
     final format = (tournament['match_format'] ?? tournament['format'] ?? '').toString().toLowerCase();
     final isSoloMatch = format.contains('solo') || format.contains('single');
 
@@ -155,7 +154,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
     setState(() => _registeringTournamentId = tournamentId);
 
-    // اگر سولو میچ نہیں ہے تو ٹیم چیک کریں
     if (!isSoloMatch) {
       if (_myTeamId == null) {
         try {
@@ -206,13 +204,11 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
     try {
       if (isSoloMatch) {
-        // 👇 سولو میچ کے لیے صرف لیڈر آئی ڈی سیو کریں
         await _supabase.from('tournament_registrations').insert({
           'tournament_id': tournamentId,
           'leader_id': user.id,
         });
       } else {
-        // ٹیم میچ کے لیے ٹیم آئی ڈی سیو کریں
         try {
           await _supabase.from('tournament_registrations').insert({
             'tournament_id': tournamentId,
@@ -232,7 +228,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         }
       }
 
-      // سلاٹس کی گنتی میں اضافہ کریں
       try {
         await _supabase.rpc('increment_tournament_teams', params: {'t_id': tournamentId});
       } catch (_) {
@@ -336,13 +331,10 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                        itemCount: _tournaments.length + 1,
+                        itemCount: _tournaments.length, // 👈 یہاں سے +1 ہٹا دیا ہے
                         itemBuilder: (context, index) {
-                          if (index == 0) {
-                            return _buildTopEngagementBanner();
-                          }
-
-                          final item = _tournaments[index - 1];
+                          // 👇 یہاں سے ڈیلی بونس والا حصہ ہٹا دیا ہے
+                          final item = _tournaments[index];
                           final tId = item['id'].toString();
 
                           final maxTeams = int.tryParse(item['max_teams']?.toString() ?? item['max_slots']?.toString() ?? '16') ?? 16;
@@ -524,64 +516,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildTopEngagementBanner() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: ThemeService.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFD700).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.alarm_on_rounded, color: Color(0xFFFFD700), size: 22),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Daily 10-Min Stay Bonus',
-                  style: TextStyle(
-                    color: ThemeService.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Spend 10 mins in app = Earn +50 Coins & Redeem 60 UC',
-                  style: TextStyle(
-                    color: ThemeService.textSecondary,
-                    fontSize: 10.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFD700),
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: _openRewardsVault,
-            child: const Text('Open Vault', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
-          ),
-        ],
-      ),
     );
   }
 
