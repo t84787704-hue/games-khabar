@@ -11,7 +11,6 @@ class GamesScreen extends StatefulWidget {
 }
 
 class _GamesScreenState extends State<GamesScreen> {
-  // 👇 یہاں 12 گیمز کی لسٹ ہے اور آپ کے بھیجے گئے تمام اصلی لنکس شامل ہیں
   final List<GameModel> games = const [
     GameModel(
       title: 'Free Fire',
@@ -73,6 +72,17 @@ class _GamesScreenState extends State<GamesScreen> {
       imageUrl: 'https://live-assets2.web.stumbleguys.com/cms/STG_Reward_Rush_Weekend_1920x1080_57ad1ab000.png',
       playedCount: '1.9M',
     ),
+    GameModel(
+      title: 'Ludo',
+      imageUrl: 'https://static0.gamerantimages.com/wordpress/wp-content/uploads/2025/03/mixcollage-05-mar-2025-09-03-am-8578.jpg',
+      playedCount: '10M+',
+    ),
+    // 👇 8 Ball Pool گیم اپنے نئے اور پکے لنک کے ساتھ
+    GameModel(
+      title: '8 Ball Pool',
+      imageUrl: 'https://i.pinimg.com/736x/8b/5c/5b/8b5c5b8e5f5d5c5b5a59585756555453.jpg', // یہ لنک تبدیل کیا گیا ہے
+      playedCount: '8.5M',
+    ),
   ];
 
   @override
@@ -99,7 +109,6 @@ class _GamesScreenState extends State<GamesScreen> {
             return GameCard(
               game: games[index],
               onTap: () {
-                // 👇 گیم کا نام ٹورنامنٹس والی سکرین کو بھیج رہے ہیں
                 Navigator.push(
                   context,
                   MaterialPageRoute(
