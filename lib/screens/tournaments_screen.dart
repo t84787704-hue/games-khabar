@@ -1,5 +1,5 @@
 // ===============================================================================
-// TOURNAMENTS SCREEN — Tournament Feed, 10-Min Hook & Rewards Vault Connected
+// TOURNAMENTS SCREEN — Tournament Feed & Match Status Management
 // File: lib/screens/tournaments_screen.dart
 // ===============================================================================
 
@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/theme_service.dart';
-import '../widgets/gamer_growth_hub_dialog.dart';
 import 'tournament_detail_screen.dart';
 
 class TournamentsScreen extends StatefulWidget {
@@ -25,7 +24,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
   bool _isLoading = true;
   String? _registeringTournamentId;
-  List<Map<String, dynamic>> _tournaments = [];
+  List> _tournaments = [];
   final Set<String> _registeredTournamentIds = {};
   String? _myTeamId;
   Timer? _countdownRefreshTimer;
@@ -84,7 +83,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
           _registeredTournamentIds.clear();
           try {
-            List<Map<String, dynamic>> regRes = [];
+            List> regRes = [];
 
             if (_myTeamId != null && _myTeamId!.isNotEmpty) {
               regRes = await _supabase
@@ -113,14 +112,14 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       var query = _supabase.from('tournaments').select();
       
       if (widget.gameName != null && widget.gameName!.isNotEmpty) {
-        query = query.eq('game_name', widget.gameName!); 
+        query = query.or('game_name.ilike.%${widget.gameName}%,game.ilike.%${widget.gameName}%');
       }
 
       final res = await query.order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
-          _tournaments = List<Map<String, dynamic>>.from(res);
+          _tournaments = List>.from(res);
           _isLoading = false;
         });
       }
@@ -263,15 +262,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     }
   }
 
-  void _openRewardsVault() {
-    showDialog(
-      context: context,
-      builder: (_) => const GamerGrowthHubDialog(),
-    ).then((_) {
-      if (mounted) setState(() {});
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
@@ -282,6 +272,10 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           appBar: AppBar(
             backgroundColor: ThemeService.appBarBg,
             elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded, color: ThemeService.textPrimary, size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
             title: Text(
               widget.gameName != null ? '${widget.gameName} Tournaments 🏆' : 'Tournaments 🏆',
               style: TextStyle(
@@ -290,31 +284,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                 fontSize: 18,
               ),
             ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFD700).withOpacity(0.15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.4)),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  ),
-                  icon: const Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 18),
-                  label: const Text(
-                    'Rewards & UC',
-                    style: TextStyle(
-                      color: Color(0xFFFFD700),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                  onPressed: _openRewardsVault,
-                ),
-              ),
-            ],
           ),
           body: RefreshIndicator(
             onRefresh: _fetchTournaments,
@@ -331,9 +300,8 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                        itemCount: _tournaments.length, // 👈 یہاں سے +1 ہٹا دیا ہے
+                        itemCount: _tournaments.length,
                         itemBuilder: (context, index) {
-                          // 👇 یہاں سے ڈیلی بونس والا حصہ ہٹا دیا ہے
                           final item = _tournaments[index];
                           final tId = item['id'].toString();
 
@@ -341,6 +309,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                           final currentTeams = int.tryParse(item['current_teams']?.toString() ?? item['joined_teams_count']?.toString() ?? '0') ?? 0;
                           final isFull = currentTeams >= maxTeams;
                           
+                          final status = (item['status'] ?? 'upcoming').toString().toLowerCase();
+                          final isCompleted = status == 'completed';
+
                           final isRegistered = _registeredTournamentIds.contains(tId);
                           final isCurrentRegistering = _registeringTournamentId == tId;
 
@@ -353,6 +324,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                   builder: (_) => TournamentDetailScreen(
                                     tournament: item,
                                     isRegistered: isRegistered,
+                                    selectedGameName: widget.gameName,
                                   ),
                                 ),
                               ).then((_) => _fetchTournaments());
@@ -364,9 +336,11 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                 color: ThemeService.card,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: isRegistered
-                                      ? const Color(0xFF00FF88).withOpacity(0.5)
-                                      : ThemeService.border,
+                                  color: isCompleted
+                                      ? const Color(0xFFFFD700).withOpacity(0.5)
+                                      : isRegistered
+                                          ? const Color(0xFF00FF88).withOpacity(0.5)
+                                          : ThemeService.border,
                                   width: 1,
                                 ),
                               ),
@@ -389,13 +363,22 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF00FF88).withOpacity(0.15),
+                                          color: isCompleted
+                                              ? const Color(0xFFFFD700).withOpacity(0.15)
+                                              : const Color(0xFF00FF88).withOpacity(0.15),
                                           borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: isCompleted
+                                                ? const Color(0xFFFFD700).withOpacity(0.4)
+                                                : const Color(0xFF00FF88).withOpacity(0.3),
+                                          ),
                                         ),
                                         child: Text(
-                                          'Prize: ${item['prize_pool'] ?? 1000} Coins',
-                                          style: const TextStyle(
-                                            color: Color(0xFF00FF88),
+                                          isCompleted
+                                              ? 'Completed 🏆'
+                                              : 'Prize: ${item['prize_pool'] ?? 1000} Coins',
+                                          style: TextStyle(
+                                            color: isCompleted ? const Color(0xFFFFD700) : const Color(0xFF00FF88),
                                             fontWeight: FontWeight.bold,
                                             fontSize: 12,
                                           ),
@@ -414,7 +397,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 12),
-                                  _buildRoomHookCard(item, isRegistered),
+                                  _buildRoomHookCard(item, isRegistered, isCompleted),
                                   const SizedBox(height: 12),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(6),
@@ -422,7 +405,11 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                       value: maxTeams > 0 ? (currentTeams / maxTeams) : 0,
                                       backgroundColor: ThemeService.border.withOpacity(0.4),
                                       valueColor: AlwaysStoppedAnimation<Color>(
-                                        isRegistered ? const Color(0xFF00FF88) : const Color(0xFF1877F2),
+                                        isCompleted
+                                            ? const Color(0xFFFFD700)
+                                            : isRegistered
+                                                ? const Color(0xFF00FF88)
+                                                : const Color(0xFF1877F2),
                                       ),
                                       minHeight: 6,
                                     ),
@@ -464,29 +451,40 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                     height: 44,
                                     child: ElevatedButton(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: isRegistered
-                                            ? const Color(0xFF00FF88).withOpacity(0.15)
-                                            : (isFull ? ThemeService.cardSecondary : const Color(0xFF00FF88)),
-                                        foregroundColor: isRegistered
-                                            ? const Color(0xFF00FF88)
-                                            : (isFull ? ThemeService.textSecondary : Colors.black),
-                                        disabledBackgroundColor: isRegistered
-                                            ? const Color(0xFF00FF88).withOpacity(0.15)
-                                            : ThemeService.cardSecondary,
-                                        disabledForegroundColor: isRegistered
-                                            ? const Color(0xFF00FF88)
-                                            : ThemeService.textSecondary,
+                                        backgroundColor: isCompleted
+                                            ? const Color(0xFFFFD700)
+                                            : isRegistered
+                                                ? const Color(0xFF00FF88).withOpacity(0.15)
+                                                : (isFull ? ThemeService.cardSecondary : const Color(0xFF00FF88)),
+                                        foregroundColor: isCompleted
+                                            ? Colors.black
+                                            : isRegistered
+                                                ? const Color(0xFF00FF88)
+                                                : (isFull ? ThemeService.textSecondary : Colors.black),
                                         elevation: 0,
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(10),
-                                          side: isRegistered
+                                          side: (!isCompleted && isRegistered)
                                               ? const BorderSide(color: Color(0xFF00FF88), width: 1.2)
                                               : BorderSide.none,
                                         ),
                                       ),
-                                      onPressed: (isFull || isRegistered || isCurrentRegistering)
-                                          ? null
-                                          : () => _registerTeam(item),
+                                      onPressed: isCompleted
+                                          ? () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) => TournamentDetailScreen(
+                                                    tournament: item,
+                                                    isRegistered: isRegistered,
+                                                    selectedGameName: widget.gameName,
+                                                  ),
+                                                ),
+                                              ).then((_) => _fetchTournaments());
+                                            }
+                                          : (isFull || isRegistered || isCurrentRegistering)
+                                              ? null
+                                              : () => _registerTeam(item),
                                       child: isCurrentRegistering
                                           ? const SizedBox(
                                               width: 20,
@@ -494,15 +492,19 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                               child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
                                             )
                                           : Text(
-                                              isRegistered
-                                                  ? '✓ Registered'
-                                                  : (isFull ? 'Slots Full' : 'Register Now'),
+                                              isCompleted
+                                                  ? 'View Results & Winners 👑'
+                                                  : isRegistered
+                                                      ? '✓ Registered'
+                                                      : (isFull ? 'Slots Full' : 'Register Now'),
                                               style: TextStyle(
-                                                fontWeight: FontWeight.bold,
+                                                fontWeight: FontWeight.w900,
                                                 fontSize: 13,
-                                                color: isRegistered
-                                                    ? const Color(0xFF00FF88)
-                                                    : (isFull ? ThemeService.textSecondary : Colors.black),
+                                                color: isCompleted
+                                                    ? Colors.black
+                                                    : isRegistered
+                                                        ? const Color(0xFF00FF88)
+                                                        : (isFull ? ThemeService.textSecondary : Colors.black),
                                               ),
                                             ),
                                     ),
@@ -519,7 +521,34 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     );
   }
 
-  Widget _buildRoomHookCard(Map<String, dynamic> item, bool isRegistered) {
+  Widget _buildRoomHookCard(Map<String, dynamic> item, bool isRegistered, bool isCompleted) {
+    if (isCompleted) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFD700).withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.emoji_events_rounded, size: 18, color: Color(0xFFFFD700)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Match Ended • Champion Crowned 🏆',
+                style: TextStyle(
+                  color: Color(0xFFFFD700),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final matchTimeStr = item['match_time']?.toString();
     final roomId = (item['room_id'] ?? '').toString();
     final roomPass = (item['room_password'] ?? '').toString();
