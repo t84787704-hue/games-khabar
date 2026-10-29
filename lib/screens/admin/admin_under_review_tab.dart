@@ -1,6 +1,6 @@
 // ===============================================================================
 // ADMIN UNDER REVIEW TAB — Review Pending Items & Submissions
-// File: lib/screens/admin/admin_under_review_tab.dart (or respective path)
+// File: lib/screens/admin/admin_under_review_tab.dart
 // ===============================================================================
 
 import 'package:flutter/material.dart';
@@ -30,10 +30,10 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
     try {
       final updateData = <String, dynamic>{
         'proof_status': status,
-        'status': status == 'approved' ? 'completed' : 'upcoming', // Agar approve ho jaye to tournament completed ho jayega
-        if (status == 'approved') 'winner_team_id': null, // Chahein to yahan winning team assign kar sakte hain
+        'status': status == 'approved' ? 'completed' : 'upcoming',
+        if (status == 'approved') 'winner_team_id': null,
         if (status == 'rejected') 'rejection_reason': rejectReason ?? 'Invalid screenshot submitted.',
-        if (status == 'rejected') 'proof_url': null, // Reject hone par purana proof hata sakte hain taake dobara upload ho sake
+        if (status == 'rejected') 'proof_url': null,
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -122,7 +122,8 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
                 .stream(primaryKey: ['id'])
                 .order('created_at', ascending: false),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+              // 👇 یہاں تبدیلی کی ہے: صرف لوڈنگ چیک کریں
+              if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFFFF8A00)));
               }
 
