@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/game_model.dart';
 import '../widgets/game_card.dart';
 import 'tournaments_screen.dart';
-import '../services/theme_service.dart'; // 👈 تھیم سروس کا امپورٹ شامل کیا
+import '../services/theme_service.dart';
 
 class GamesScreen extends StatefulWidget {
   const GamesScreen({super.key});
@@ -35,7 +35,7 @@ class _GamesScreenState extends State<GamesScreen> {
     ),
     GameModel(
       title: 'BGMI',
-      imageUrl: 'https://i.pinimg.com/736x/59/0c/a7/590ca77b4d95284a9e16017234f683c5.jpg',
+      imageUrl: 'https://play-lh.googleusercontent.com/q2r1XjWq9m3rO0yqK1f0xY5T3J5B2u2X8v6Y1n8X2u8J4o5S6t8V7e4A=w240-h480-rw',
       playedCount: '4.5M',
     ),
     GameModel(
@@ -43,9 +43,10 @@ class _GamesScreenState extends State<GamesScreen> {
       imageUrl: 'https://original.fontsinuse.com/fontsinuse.com/use-images/95/95495/95495.jpeg',
       playedCount: '2.1M',
     ),
+    // 👇 یہاں آپ کا نیا بھیجا ہوا لنک لگا دیا ہے
     GameModel(
       title: 'Clash of Clans',
-      imageUrl: 'https://i.ytimg.com/vi/5mLrLB1boAc/maxresdefault.jpg',
+      imageUrl: 'https://m.media-amazon.com/images/M/MV5BYWY0OTUyOGYtYjM5NC00ODAyLTkwYzYtNWVlMzI4ZDkxMjA4XkEyXkFqcGc@._V1_.jpg',
       playedCount: '2.8M',
     ),
     GameModel(
@@ -55,7 +56,7 @@ class _GamesScreenState extends State<GamesScreen> {
     ),
     GameModel(
       title: 'eFootball',
-      imageUrl: 'https://images.igdb.com/igdb/image/upload/t_1080p/co52c8.jpg',
+      imageUrl: 'https://i.ytimg.com/vi/5mLrLB1boAc/maxresdefault.jpg',
       playedCount: '1.5M',
     ),
     GameModel(
@@ -88,13 +89,12 @@ class _GamesScreenState extends State<GamesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 👇 یہاں ڈارک کلر کی بجائے تھیم سروس کا رنگ لگا دیا ہے
-      backgroundColor: ThemeService.bg, 
+      backgroundColor: ThemeService.bg,
       appBar: AppBar(
         title: const Text('All Games', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: ThemeService.appBarBg, // 👇 ایپ بار کا رنگ بھی تھیم کے مطابق
+        backgroundColor: ThemeService.appBarBg,
         elevation: 0,
-        iconTheme: IconThemeData(color: ThemeService.textPrimary), // 👇 آئیکن کا رنگ بھی تھیم کے مطابق
+        iconTheme: IconThemeData(color: ThemeService.textPrimary),
       ),
       body: Padding(
         padding: const EdgeInsets.all(12.0),
