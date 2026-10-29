@@ -1,4 +1,4 @@
-name: Fetch Gaming News and Prices
+Name: Fetch Gaming News and Prices
 on:
   schedule:
     - cron: '0 */6 * * *'
@@ -18,7 +18,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install rss-parser cheerio axios dotenv @supabase/supabase-js he
 
       - name: Fetch Gaming News
         run: node scripts/fetchSteamNews.js
@@ -31,4 +31,3 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          
