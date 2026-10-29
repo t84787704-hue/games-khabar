@@ -309,7 +309,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                           final currentTeams = int.tryParse(item['current_teams']?.toString() ?? item['joined_teams_count']?.toString() ?? '0') ?? 0;
                           final isFull = currentTeams >= maxTeams;
                           
-                          final status = (item['status'] ?? 'upcoming').toString().toLowerCase();
+                          final status = (item['status'] ?? 'upcoming').toString().trim().toLowerCase();
                           final isCompleted = status == 'completed';
 
                           final isRegistered = _registeredTournamentIds.contains(tId);
