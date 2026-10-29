@@ -283,7 +283,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
         bool isUserInRegisteredSquad = false;
         int assignedSlotNumber = 0;
-        Map<String, dynamic>? myRegisteredTeam;
 
         for (int i = 0; i < _registeredTeams.length; i++) {
           final reg = _registeredTeams[i];
@@ -291,12 +290,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           if (team != null) {
             final leaderId = team['leader_id']?.toString();
             final membersList = (team['team_members'] as List?) ?? [];
-            final isMember = membersList.any((m) => m['user_id']?.toString() == currentUserId);
+            final isMember = membersList.any((m) => m is Map && m['user_id']?.toString() == currentUserId);
 
             if (leaderId == currentUserId || isMember) {
               isUserInRegisteredSquad = true;
               assignedSlotNumber = i + 2;
-              myRegisteredTeam = team;
               break;
             }
           }
@@ -370,7 +368,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 🎮 DYNAMIC GAME BANNER
                   Container(
                     width: double.infinity,
                     height: 130,
@@ -556,7 +553,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                   ),
                   const SizedBox(height: 20),
                   
-                  // 🛠️ HIDE ROOM CREDENTIALS IF COMPLETED
                   if (!isCompleted) ...[
                     Text(
                       'Custom Room Credentials',
@@ -765,7 +761,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                               ),
                               onPressed: () {
-                                // 🛠️ FIXED: Directly invoke popup with fallback data
                                 _showCelebrationPopup();
                               },
                             ),
@@ -855,7 +850,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                     if (team != null && team['id']?.toString() == submittedTeamId) {
                                       final leaderId = team['leader_id']?.toString();
                                       final membersList = (team['team_members'] as List?) ?? [];
-                                      final isMember = membersList.any((m) => m['user_id']?.toString() == currentUserId);
+                                      final isMember = membersList.any((m) => m is Map && m['user_id']?.toString() == currentUserId);
                                       if (leaderId == currentUserId || isMember) {
                                         isTeamMatch = true;
                                       }
