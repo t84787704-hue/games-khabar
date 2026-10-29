@@ -83,19 +83,22 @@ class AdminUnderReviewTab extends StatelessWidget {
                   return isPending && (proof.isNotEmpty || hasProofs) && st != 'completed';
                 }).map((r) => {...r, 'is_room': true, 'is_tournament': false}).toList();
 
-                // 3. Tournaments Under Review
+                // 3. Tournaments Under Review (🛠️ FIXED & FLEXIBLE FILTER)
                 final tournamentData = tournamentSnap.data ?? [];
                 final underReviewTournaments = tournamentData.where((t) {
                   final proof = (t['proof_url'] ?? '').toString();
                   final proofStatus = (t['proof_status'] ?? '').toString().toLowerCase();
                   final status = (t['status'] ?? '').toString().toLowerCase();
-                  return proof.isNotEmpty && (proofStatus == 'pending' || proofStatus.isEmpty) && status != 'completed';
+                  
+                  // Agar proof uploaded hai aur status completed nahi hai, toh under review mein aana chahiye
+                  bool isPendingStatus = proofStatus == 'pending' || proofStatus == 'submitted' || proofStatus.isEmpty;
+                  return proof.isNotEmpty && status != 'completed' && isPendingStatus;
                 }).map((t) => {
                       ...t,
                       'is_room': false,
                       'is_tournament': true,
                       'id': t['id'],
-                      'game': t['game_mode'] ?? 'Tournament',
+                      'game': t['game_mode'] ?? t['game_name'] ?? 'Tournament',
                       'mode': t['title'] ?? 'Match',
                       'prize_pool': t['prize_pool'] ?? 0,
                       'win_proof_url': t['proof_url'],
@@ -233,7 +236,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                             'is_room': false,
                             'is_tournament': true,
                             'id': t['id'],
-                            'game': t['game_mode'] ?? 'Tournament',
+                            'game': t['game_mode'] ?? t['game_name'] ?? 'Tournament',
                             'mode': t['title'] ?? 'Match',
                             'prize_pool': t['prize_pool'] ?? 0,
                             'win_proof_url': t['proof_url'],
@@ -628,8 +631,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
               .maybeSingle();
 
           if (teamData != null) {
-            final teamName = teamData['name']?.toString() ?? 'Winner Team';
-            
             final List<String> memberIds = [];
             final leaderId = teamData['leader_id']?.toString();
             if (leaderId != null && leaderId.isNotEmpty) {
@@ -706,7 +707,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
         'proof_status': 'rejected',
         'rejection_reason': finalReason,
         'proof_reject_reason': finalReason,
-        'proof_url': null, // Clear so they can re-upload
+        'proof_url': null,
       }).eq('id', tournamentId);
 
       if (mounted) {
@@ -732,13 +733,6 @@ class _AdminProofCardState extends State<AdminProofCard> {
     final isTournament = widget.match['is_tournament'] == true;
     if (isTournament) {
       await _handleAcceptTournament();
-      return;
-    }
-
-    final isRoom = widget.match['is_room'] == true;
-    if (isRoom) {
-      final winnerId = widget.match['winner_id']?.toString() ?? '';
-      final winnerName = widget.match['winner_name']?.toString() ?? 'Winner';
       return;
     }
   }
