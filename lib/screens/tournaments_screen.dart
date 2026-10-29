@@ -117,9 +117,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       var query = _supabase.from('tournaments').select();
       
-      if (widget.gameName != null && widget.gameName!.isNotEmpty) {
-        query = query.or('game_name.ilike.%${widget.gameName}%,game.ilike.%${widget.gameName}%');
-      }
+     if (widget.gameName != null && widget.gameName!.isNotEmpty) {
+  query = query.eq('game_name', widget.gameName!);
+}
 
       final res = await query.order('created_at', ascending: false);
 
