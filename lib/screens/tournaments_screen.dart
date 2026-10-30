@@ -25,8 +25,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
   bool _isLoading = true;
   String? _registeringTournamentId;
   
-  // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
-  List<Map<String, dynamic>> _tournaments = [];
+  List> _tournaments = [];
   
   final Set<String> _registeredTournamentIds = {};
   String? _myTeamId;
@@ -86,21 +85,20 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
           _registeredTournamentIds.clear();
           try {
-            // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
-            List<Map<String, dynamic>> regRes = [];
+            List> regRes = [];
 
             if (_myTeamId != null && _myTeamId!.isNotEmpty) {
               final rawRes = await _supabase
                   .from('tournament_registrations')
                   .select('tournament_id')
                   .or('team_id.eq.$_myTeamId,leader_id.eq.${user.id}');
-              regRes = List<Map<String, dynamic>>.from(rawRes);
+              regRes = List>.from(rawRes);
             } else {
               final rawRes = await _supabase
                   .from('tournament_registrations')
                   .select('tournament_id')
                   .eq('leader_id', user.id);
-              regRes = List<Map<String, dynamic>>.from(rawRes);
+              regRes = List>.from(rawRes);
             }
 
             for (var r in regRes) {
@@ -117,16 +115,15 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       var query = _supabase.from('tournaments').select();
       
-     if (widget.gameName != null && widget.gameName!.isNotEmpty) {
-  query = query.eq('game_name', widget.gameName!);
-}
+      if (widget.gameName != null && widget.gameName!.isNotEmpty) {
+        query = query.eq('game_name', widget.gameName!);
+      }
 
       final res = await query.order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
-          // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
-          _tournaments = List<Map<String, dynamic>>.from(res);
+          _tournaments = List>.from(res);
           _isLoading = false;
         });
       }
@@ -557,8 +554,8 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     }
 
     final matchTimeStr = item['match_time']?.toString();
-    final roomId = (item['room_id'] ?? '').toString();
-    final roomPass = (item['room_password'] ?? '').toString();
+    final roomId = (item['room_id'] ?? '').toString().trim();
+    final roomPass = (item['room_password'] ?? '').toString().trim();
 
     DateTime? matchTime;
     if (matchTimeStr != null) {
@@ -569,10 +566,11 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
     final now = DateTime.now();
     final difference = matchTime != null ? matchTime.difference(now) : null;
-    final bool isWithin10Mins = difference != null && difference.inMinutes <= 10 && difference.inMinutes >= -90;
+    final bool isPassed = difference != null && difference.isNegative;
+    final bool isWithin10Mins = difference != null && difference.inMinutes <= 10 && difference.inMinutes >= -180;
     final String formattedDate = matchTime != null ? DateFormat('dd MMM, hh:mm a').format(matchTime) : 'Scheduled';
 
-    final bool canReveal = isRegistered && isWithin10Mins && roomId.isNotEmpty;
+    final bool canReveal = isRegistered && (isWithin10Mins || isPassed) && roomId.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -609,7 +607,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                 const SizedBox(height: 2),
                 if (canReveal) ...[
                   Text(
-                    'Room ID: $roomId • Pass: $roomPass',
+                    'Room ID: $roomId • Pass: ${roomPass.isNotEmpty ? roomPass : "No Pass"}',
                     style: const TextStyle(
                       color: Color(0xFF00FF88),
                       fontSize: 12,
@@ -623,6 +621,15 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                     style: TextStyle(
                       color: ThemeService.textSecondary.withOpacity(0.8),
                       fontSize: 11,
+                    ),
+                  ),
+                ] else if (isPassed) ...[
+                  const Text(
+                    'Match in Progress / Waiting for Result',
+                    style: TextStyle(
+                      color: Color(0xFF00FF88),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ] else ...[
