@@ -146,6 +146,7 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
                 .stream(primaryKey: ['id'])
                 .order('created_at', ascending: false),
             builder: (context, snapshot) {
+              // 👇 یہاں تبدیلی کی ہے: صرف لوڈنگ چیک کریں
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFFFF8A00)));
               }
