@@ -14,8 +14,6 @@ import 'admin/admin_bracket_screen.dart';
 import '../widgets/victory_celebration_dialog.dart';
 import '../services/theme_service.dart';
 
-typedef TournamentTeamList = List>;
-
 class TournamentDetailScreen extends StatefulWidget {
   final Map<String, dynamic> tournament;
   final bool isRegistered;
@@ -39,7 +37,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   bool _hasShownCelebration = false;
   bool _isAdmin = false;
   
-  TournamentTeamList _registeredTeams = [];
+  var _registeredTeams = [];
   Map<String, dynamic>? _tournamentData;
   String _winnerTeamName = 'Champions Squad';
   String _runnerUpTeamName = 'Finalist Squad';
@@ -111,11 +109,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           .eq('tournament_id', tId)
           .order('registered_at', ascending: true);
 
-      final List> registeredList = [];
-      if (regRes is List) {
+      final List resolvedList = [];
+      if (regRes != null && regRes is Iterable) {
         for (final item in regRes) {
           if (item is Map) {
-            registeredList.add(Map<String, dynamic>.from(item));
+            resolvedList.add(Map<String, dynamic>.from(item));
           }
         }
       }
@@ -126,9 +124,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       String resolvedRunnerUp = 'Finalist Squad';
 
       if (winnerId != null && winnerId.isNotEmpty) {
-        for (final reg in registeredList) {
-          final team = reg['teams'] as Map<String, dynamic>?;
-          if (team != null) {
+        for (final reg in resolvedList) {
+          final team = reg['teams'];
+          if (team != null && team is Map) {
             if (team['id']?.toString() == winnerId) {
               resolvedWinner = team['name']?.toString() ?? 'Champions Squad';
             } else if (resolvedRunnerUp == 'Finalist Squad') {
@@ -144,7 +142,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
       if (mounted) {
         setState(() {
-          _registeredTeams = registeredList;
+          _registeredTeams = resolvedList;
           _winnerTeamName = resolvedWinner.isNotEmpty ? resolvedWinner : 'Champions Squad';
           _runnerUpTeamName = resolvedRunnerUp;
           _isLoading = false;
@@ -172,11 +170,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   bool _checkIfUserInWinnerTeam(String? userId) {
     if (userId == null || _winnerTeamId == null || _winnerTeamId!.isEmpty) return false;
     for (final reg in _registeredTeams) {
-      final team = reg['teams'] as Map<String, dynamic>?;
-      if (team != null && team['id']?.toString() == _winnerTeamId) {
+      final team = reg['teams'];
+      if (team != null && team is Map && team['id']?.toString() == _winnerTeamId) {
         if (team['leader_id']?.toString() == userId) return true;
         final rawMembers = team['team_members'];
-        if (rawMembers is List) {
+        if (rawMembers != null && rawMembers is Iterable) {
           for (final m in rawMembers) {
             if (m is Map && m['user_id']?.toString() == userId) {
               return true;
@@ -222,9 +220,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
     Map<String, dynamic>? myRegisteredTeam;
     for (final reg in _registeredTeams) {
-      final t = reg['teams'] as Map<String, dynamic>?;
-      if (t != null && t['leader_id']?.toString() == currentUserId) {
-        myRegisteredTeam = t;
+      final t = reg['teams'];
+      if (t != null && t is Map && t['leader_id']?.toString() == currentUserId) {
+        myRegisteredTeam = Map<String, dynamic>.from(t);
         break;
       }
     }
@@ -322,12 +320,12 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
         for (int i = 0; i < _registeredTeams.length; i++) {
           final reg = _registeredTeams[i];
-          final team = reg['teams'] as Map<String, dynamic>?;
-          if (team != null) {
+          final team = reg['teams'];
+          if (team != null && team is Map) {
             final leaderId = team['leader_id']?.toString();
             final rawMembers = team['team_members'];
             bool isMember = false;
-            if (rawMembers is List) {
+            if (rawMembers != null && rawMembers is Iterable) {
               for (final m in rawMembers) {
                 if (m is Map && m['user_id']?.toString() == currentUserId) {
                   isMember = true;
@@ -897,12 +895,12 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 bool isTeamMatch = false;
                                 if (submittedTeamId.isNotEmpty) {
                                   for (final reg in _registeredTeams) {
-                                    final team = reg['teams'] as Map<String, dynamic>?;
-                                    if (team != null && team['id']?.toString() == submittedTeamId) {
+                                    final team = reg['teams'];
+                                    if (team != null && team is Map && team['id']?.toString() == submittedTeamId) {
                                       final leaderId = team['leader_id']?.toString();
                                       final rawMembers = team['team_members'];
                                       bool isMember = false;
-                                      if (rawMembers is List) {
+                                      if (rawMembers != null && rawMembers is Iterable) {
                                         for (final m in rawMembers) {
                                           if (m is Map && m['user_id']?.toString() == currentUserId) {
                                             isMember = true;
@@ -1055,9 +1053,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final item = _registeredTeams[index];
-                        final team = item['teams'] as Map<String, dynamic>?;
-                        final teamName = team?['name']?.toString() ?? 'Squad #${index + 1}';
-                        final isThisWinner = isCompleted && team?['id']?.toString() == _tournamentData?['winner_team_id']?.toString();
+                        final team = item['teams'];
+                        final teamName = (team != null && team is Map) ? (team['name']?.toString() ?? 'Squad #${index + 1}') : 'Squad #${index + 1}';
+                        final isThisWinner = isCompleted && team != null && team is Map && team['id']?.toString() == _tournamentData?['winner_team_id']?.toString();
                         final slotForThisSquad = index + 2;
 
                         return Container(
