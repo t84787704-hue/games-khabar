@@ -115,19 +115,16 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
       final myId = await _dmService.resolveToTableId(effectiveUid);
       final otherId = c.otherUserId;
 
-      // 1. Delete all messages between these two users
+      // 👇 یہاں ڈیلیٹ کا فنکشن ٹھیک کر دیا گیا ہے
       await SupabaseService.client
           .from('direct_messages')
           .delete()
-          .or('and(sender_id.eq.$myId,receiver_id.eq.$otherId),and(sender_id.eq.$otherId,receiver_id.eq.$myId)');
+          .match({'sender_id': myId, 'receiver_id': otherId});
 
-      // Try alternate table if app uses 'messages'
-      try {
-        await SupabaseService.client
-            .from('messages')
-            .delete()
-            .or('and(sender_id.eq.$myId,receiver_id.eq.$otherId),and(sender_id.eq.$otherId,receiver_id.eq.$myId)');
-      } catch (_) {}
+      await SupabaseService.client
+          .from('direct_messages')
+          .delete()
+          .match({'sender_id': otherId, 'receiver_id': myId});
 
       // 2. Remove locally
       setState(() {
