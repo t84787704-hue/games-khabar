@@ -41,7 +41,7 @@ class _GamesScreenState extends State<GamesScreen> {
     ),
     GameModel(
       title: 'Garena Free Fire Max',
-      imageUrl: 'https://original.fontsinuse.com/fontsinuse.com/use-images/95/95495/95495.jpeg',
+      imageUrl: 'https://i.pinimg.com/736x/9c/d7/47/9cd74769ab0b1ca1b7a7a4a06e33f402.jpg',
       playedCount: '2.1M',
     ),
     GameModel(
