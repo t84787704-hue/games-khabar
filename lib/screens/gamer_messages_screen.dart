@@ -112,21 +112,44 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
       final myAuthUid = _authService.currentUid ?? '';
       final myGamerUid = _authService.currentGamer?.uid ?? '';
       final effectiveUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
-      final myId = await _dmService.resolveToTableId(effectiveUid);
-      final otherId = c.otherUserId;
+      final myTableId = await _dmService.resolveToTableId(effectiveUid);
+      final otherTableId = await _dmService.resolveToTableId(c.otherUserId);
 
-      // 👇 یہاں ڈیلیٹ کا فنکشن ٹھیک کر دیا گیا ہے
-      await SupabaseService.client
-          .from('direct_messages')
-          .delete()
-          .match({'sender_id': myId, 'receiver_id': otherId});
+      final myAliases = await _dmService.getUserAliases(effectiveUid);
+      final otherAliases = await _dmService.getUserAliases(c.otherUserId);
 
-      await SupabaseService.client
-          .from('direct_messages')
-          .delete()
-          .match({'sender_id': otherId, 'receiver_id': myId});
+      final Set<String> allMyIds = {
+        ...myAliases,
+        effectiveUid,
+        myAuthUid,
+        myGamerUid,
+        myTableId,
+      }..removeWhere((id) => id.isEmpty);
 
-      // 2. Remove locally
+      final Set<String> allOtherIds = {
+        ...otherAliases,
+        c.otherUserId,
+        otherTableId,
+      }..removeWhere((id) => id.isEmpty);
+
+      // Dono taraf ke messages database se delete karein
+      for (final mId in allMyIds) {
+        for (final oId in allOtherIds) {
+          await SupabaseService.client
+              .from('direct_messages')
+              .delete()
+              .eq('sender_id', mId)
+              .eq('receiver_id', oId);
+
+          await SupabaseService.client
+              .from('direct_messages')
+              .delete()
+              .eq('sender_id', oId)
+              .eq('receiver_id', mId);
+        }
+      }
+
+      // Local list se remove karein
       setState(() {
         _conversations.removeWhere((item) => item.otherUserId == c.otherUserId);
       });
@@ -387,7 +410,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
       direction: DismissDirection.endToStart,
       confirmDismiss: (_) async {
         await _deleteConversation(c);
-        return false; // Handled manually
+        return false;
       },
       background: Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -440,7 +463,6 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  // Avatar with Theme-aware Container
                   Container(
                     width: 50,
                     height: 50,
@@ -472,7 +494,6 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                   ),
                   const SizedBox(width: 12),
 
-                  // Name, Game Badge, Last Message
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -524,7 +545,6 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                     ),
                   ),
 
-                  // Timestamp & Glowing Unread Badge
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
