@@ -24,16 +24,19 @@ class AdminUnderReviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Map<String, dynamic>>>(
+      initialData: const [],
       stream: SupabaseService.client
           .from('active_matches')
           .stream(primaryKey: ['id']),
       builder: (context, matchSnap) {
         return StreamBuilder<List<Map<String, dynamic>>>(
+          initialData: const [],
           stream: SupabaseService.client
               .from('rooms')
               .stream(primaryKey: ['id']),
           builder: (context, roomSnap) {
             return StreamBuilder<List<Map<String, dynamic>>>(
+              initialData: const [],
               stream: SupabaseService.client
                   .from('tournaments')
                   .stream(primaryKey: ['id']),
@@ -42,17 +45,6 @@ class AdminUnderReviewTab extends StatelessWidget {
                   return _buildErrorState(
                     'could_not_load_under_review'.tr(),
                     matchSnap.error ?? roomSnap.error ?? tournamentSnap.error,
-                  );
-                }
-
-                if (matchSnap.connectionState == ConnectionState.waiting &&
-                    !matchSnap.hasData &&
-                    roomSnap.connectionState == ConnectionState.waiting &&
-                    !roomSnap.hasData &&
-                    tournamentSnap.connectionState == ConnectionState.waiting &&
-                    !tournamentSnap.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF00FF88)),
                   );
                 }
 
@@ -83,14 +75,13 @@ class AdminUnderReviewTab extends StatelessWidget {
                   return isPending && (proof.isNotEmpty || hasProofs) && st != 'completed';
                 }).map((r) => {...r, 'is_room': true, 'is_tournament': false}).toList();
 
-                // 3. Tournaments Under Review (🛠️ FIXED & FLEXIBLE FILTER)
+                // 3. Tournaments Under Review
                 final tournamentData = tournamentSnap.data ?? [];
                 final underReviewTournaments = tournamentData.where((t) {
                   final proof = (t['proof_url'] ?? '').toString();
                   final proofStatus = (t['proof_status'] ?? '').toString().toLowerCase();
                   final status = (t['status'] ?? '').toString().toLowerCase();
                   
-                  // Agar proof uploaded hai aur status completed nahi hai, toh under review mein aana chahiye
                   bool isPendingStatus = proofStatus == 'pending' || proofStatus == 'submitted' || proofStatus.isEmpty;
                   return proof.isNotEmpty && status != 'completed' && isPendingStatus;
                 }).map((t) => {
@@ -174,16 +165,19 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
         ),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
+            initialData: const [],
             stream: SupabaseService.client
                 .from('active_matches')
                 .stream(primaryKey: ['id']),
             builder: (context, matchSnap) {
               return StreamBuilder<List<Map<String, dynamic>>>(
+                initialData: const [],
                 stream: SupabaseService.client
                     .from('rooms')
                     .stream(primaryKey: ['id']),
                 builder: (context, roomSnap) {
                   return StreamBuilder<List<Map<String, dynamic>>>(
+                    initialData: const [],
                     stream: SupabaseService.client
                         .from('tournaments')
                         .stream(primaryKey: ['id']),
@@ -192,17 +186,6 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                         return _buildErrorState(
                           'could_not_load_history'.tr(),
                           matchSnap.error ?? roomSnap.error ?? tournamentSnap.error,
-                        );
-                      }
-
-                      if (matchSnap.connectionState == ConnectionState.waiting &&
-                          !matchSnap.hasData &&
-                          roomSnap.connectionState == ConnectionState.waiting &&
-                          !roomSnap.hasData &&
-                          tournamentSnap.connectionState == ConnectionState.waiting &&
-                          !tournamentSnap.hasData) {
-                        return const Center(
-                          child: CircularProgressIndicator(color: Color(0xFF00FF88)),
                         );
                       }
 
@@ -729,11 +712,164 @@ class _AdminProofCardState extends State<AdminProofCard> {
     }
   }
 
+  // Accept specific winner for custom room
+  Future<void> _handleAcceptSpecificWinner({
+    required String winnerId,
+    required String winnerName,
+  }) async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    try {
+      final roomId = widget.match['id']?.toString() ?? '';
+      final prize = (widget.match['prize_pool'] is num)
+          ? (widget.match['prize_pool'] as num).toInt()
+          : int.tryParse(widget.match['prize_pool']?.toString() ?? '0') ?? 0;
+
+      if (winnerId.isNotEmpty && winnerId != 'guest') {
+        try {
+          await CoinWalletService.updateCoins(
+            userId: winnerId,
+            amount: prize,
+            type: 'win_prize',
+            roomId: roomId,
+            description: 'Room win prize: ${widget.match['game']} ${widget.match['mode']}',
+          );
+        } catch (e) {
+          debugPrint('[AdminProofs] Room updateCoins error: $e');
+        }
+
+        try {
+          final winnerRow = await SupabaseService.client
+              .from('users')
+              .select('wins, total_winnings')
+              .or('id.eq.$winnerId,uid.eq.$winnerId')
+              .maybeSingle();
+          if (winnerRow != null) {
+            final currentWins = (winnerRow['wins'] as num?)?.toInt() ?? 0;
+            final currentWinnings = (winnerRow['total_winnings'] as num?)?.toInt() ?? 0;
+            await SupabaseService.client.from('users').update({
+              'wins': currentWins + 1,
+              'total_winnings': currentWinnings + prize,
+            }).or('id.eq.$winnerId,uid.eq.$winnerId');
+          }
+        } catch (_) {}
+      }
+
+      await SupabaseService.client.from('rooms').update({
+        'status': 'completed',
+        'reward_status': 'sent',
+        'winner_id': winnerId,
+        'winner_name': winnerName,
+        'completed_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', roomId);
+
+      try {
+        await SupabaseService.client.from('messages').insert({
+          'room_id': roomId,
+          'sender_id': 'system',
+          'sender_name': 'ADMIN BOT',
+          'message': 'admin_bot_approved_room_msg'.tr(args: [winnerName, prize.toString()]),
+          'type': 'system_reward',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (_) {}
+
+      try {
+        if (winnerId.isNotEmpty && winnerId != 'guest') {
+          await NotificationService().sendNotification(
+            userId: winnerId,
+            type: 'match_result',
+            title: 'proof_approved_notif_title'.tr(args: [prize.toString()]),
+            body: 'proof_approved_notif_body'.tr(args: [
+              (widget.match['game'] ?? 'Game').toString(),
+              prize.toString(),
+            ]),
+            data: {'room_id': roomId, 'prize': prize},
+            priority: 'high',
+          );
+        }
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('winner_verified_snackbar'.tr(args: [winnerName])),
+            backgroundColor: const Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
   Future<void> _handleAcceptDefault() async {
     final isTournament = widget.match['is_tournament'] == true;
     if (isTournament) {
       await _handleAcceptTournament();
       return;
+    }
+
+    final isRoom = widget.match['is_room'] == true;
+    if (isRoom) {
+      final winnerId = widget.match['winner_id']?.toString() ?? widget.match['host_id']?.toString() ?? '';
+      final winnerName = widget.match['winner_name']?.toString() ?? widget.match['host_name']?.toString() ?? 'Winner';
+      await _handleAcceptSpecificWinner(winnerId: winnerId, winnerName: winnerName);
+      return;
+    }
+
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    try {
+      final matchId = widget.match['id'];
+      final submittedByRaw = (widget.match['submitted_by_team_id'] ?? widget.match['winner_team_id'])?.toString();
+      final winnerId = (submittedByRaw != null && submittedByRaw.isNotEmpty)
+          ? submittedByRaw
+          : (widget.match['winner_team_id'] ?? '').toString();
+      final winnerUuid = winnerId.isNotEmpty ? SupabaseService.toUuid(winnerId) : '';
+
+      final ok = await SupabaseService.approveProof(
+        matchId: matchId.toString(),
+        winnerTeamId: winnerUuid,
+      );
+
+      if (ok) {
+        try {
+          final team = await _teamService.getTeam(winnerUuid);
+          if (team != null && team.leaderId.isNotEmpty) {
+            await NotificationService().sendProofNotification(
+              targetUserId: team.leaderId,
+              status: 'accepted',
+              roomTitle: 'Team Match',
+            );
+          }
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? 'proof_accepted_snackbar'.tr() : 'Error accepting proof'),
+            backgroundColor: ok ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -742,6 +878,56 @@ class _AdminProofCardState extends State<AdminProofCard> {
     if (isTournament) {
       await _handleRejectTournament();
       return;
+    }
+
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    try {
+      final matchId = widget.match['id'];
+      final isRoom = widget.match['is_room'] == true;
+      final reason = _reasonController.text.trim();
+      final finalReason = reason.isNotEmpty ? reason : 'Proof invalid or blurred';
+
+      if (isRoom) {
+        await SupabaseService.client.from('rooms').update({
+          'status': 'proof_rejected',
+          'reward_status': 'rejected',
+          'rejection_reason': finalReason,
+          'proof_reject_reason': finalReason,
+        }).eq('id', matchId.toString());
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Room match proof rejected.'),
+              backgroundColor: Color(0xFFFF4655),
+            ),
+          );
+        }
+      } else {
+        final ok = await SupabaseService.rejectProof(
+          matchId: matchId.toString(),
+          reason: finalReason,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(ok ? 'proof_rejected_snackbar'.tr() : 'Error rejecting proof'),
+              backgroundColor: ok ? const Color(0xFFFF8A00) : const Color(0xFFFF4655),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
