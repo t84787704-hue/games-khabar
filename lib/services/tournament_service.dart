@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:easy_localization/easy_localization.dart'; // Added for localization
+import 'package:easy_localization/easy_localization.dart';
 import '../models/tournament_room_model.dart';
 import '../constants/tournament_game_categories.dart';
 import 'coin_wallet_service.dart';
@@ -177,7 +177,8 @@ class TournamentService extends ChangeNotifier {
           .from('tournament_rooms')
           .select()
           .eq('isLive', true)
-          .order('startTime', ascending: true);
+          .order('startTime', ascending: true)
+          .timeout(const Duration(seconds: 4));
 
       final supabaseRooms = (res as List).map((d) => TournamentRoom.fromSupabase(d)).toList();
 
@@ -204,13 +205,14 @@ class TournamentService extends ChangeNotifier {
         roomMap[r.id] = r;
       }
 
-      _rooms = roomMap.values.toList();
-      _rooms.sort((a, b) => b.startTime.compareTo(a.startTime));
-
-      await _saveToLocal();
+      if (roomMap.isNotEmpty) {
+        _rooms = roomMap.values.toList();
+        _rooms.sort((a, b) => b.startTime.compareTo(a.startTime));
+        await _saveToLocal();
+      }
       notifyListeners();
     } catch (e) {
-      debugPrint('TournamentService: fetchRooms error: $e');
+      debugPrint('TournamentService: fetchRooms notice: $e');
       if (_rooms.isEmpty) {
         await _loadFromLocal();
       }
@@ -219,43 +221,82 @@ class TournamentService extends ChangeNotifier {
     return _rooms;
   }
 
-  Stream<List<TournamentRoom>> getLiveRoomsStream({String? gameName}) {
-    return SupabaseService.client
-        .from('tournament_rooms')
-        .stream(primaryKey: ['id'])
-        .map((snap) {
-          final streamRooms = snap
-              .where((d) => d['isLive'] == true)
-              .map((d) => TournamentRoom.fromSupabase(d))
-              .toList();
+  List<TournamentRoom> _filterRoomsByGame(List<TournamentRoom> rooms, String? gameName) {
+    if (gameName != null && gameName.isNotEmpty && gameName != 'all_games'.tr() && gameName != 'All Games' && gameName != 'All') {
+      final target = gameName.toLowerCase().trim();
+      return rooms.where((r) {
+        final gName = r.gameName.toLowerCase().trim();
+        final gType = r.gameType.toLowerCase().trim();
+        return gName == target || gType == target;
+      }).toList();
+    }
+    return rooms;
+  }
+
+  Stream<List<TournamentRoom>> getLiveRoomsStream({String? gameName}) async* {
+    // 1. Immediately yield cached local rooms (Zero latency, never hangs on spinner)
+    if (_rooms.isEmpty) {
+      await _loadFromLocal();
+    }
+    yield _filterRoomsByGame(_rooms, gameName);
+
+    // 2. Immediate REST fetch from Supabase
+    try {
+      final res = await SupabaseService.client
+          .from('tournament_rooms')
+          .select()
+          .timeout(const Duration(seconds: 3));
+      if (res is List && res.isNotEmpty) {
+        final supabaseRooms = res.map((d) => TournamentRoom.fromSupabase(d)).toList();
+        final Map<String, TournamentRoom> map = {};
+        for (final r in _rooms) {
+          if (!r.isExpiredCompleted) map[r.id] = r;
+        }
+        for (final sr in supabaseRooms) {
+          if (!sr.isExpiredCompleted) map[sr.id] = sr;
+        }
+        _rooms = map.values.toList();
+        _rooms.sort((a, b) => b.startTime.compareTo(a.startTime));
+        await _saveToLocal();
+      }
+      yield _filterRoomsByGame(_rooms, gameName);
+    } catch (e) {
+      debugPrint('TournamentService REST fetch notice: $e');
+      yield _filterRoomsByGame(_rooms, gameName);
+    }
+
+    // 3. Listen to realtime stream if available
+    try {
+      await for (final snap in SupabaseService.client
+          .from('tournament_rooms')
+          .stream(primaryKey: ['id'])) {
+        final streamRooms = snap
+            .where((d) => d['isLive'] == true)
+            .map((d) => TournamentRoom.fromSupabase(d))
+            .toList();
+        if (streamRooms.isNotEmpty) {
           final Map<String, TournamentRoom> map = {};
           for (final r in _rooms) {
-            if (!r.isExpiredCompleted) {
-              map[r.id] = r;
-            }
+            if (!r.isExpiredCompleted) map[r.id] = r;
           }
           for (final sr in streamRooms) {
-            if (sr.isExpiredCompleted) {
-              SupabaseService.client.from('tournament_rooms').delete().eq('id', sr.id).catchError((_) {});
-              SupabaseService.client.from('rooms').delete().eq('id', sr.id).catchError((_) {});
-              continue;
-            }
+            if (sr.isExpiredCompleted) continue;
             map[sr.id] = sr;
           }
           _rooms = map.values.toList();
-          _rooms.sort((a, b) => (b.startTime).compareTo(a.startTime));
-
-          if (gameName != null && gameName.isNotEmpty && gameName != 'all_games'.tr()) {
-            final target = gameName.toLowerCase().trim();
-            return _rooms.where((r) {
-              final gName = r.gameName.toLowerCase().trim();
-              final gType = r.gameType.toLowerCase().trim();
-              return gName == target || gType == target;
-            }).toList();
-          }
-
-          return _rooms;
-        });
+          _rooms.sort((a, b) => b.startTime.compareTo(a.startTime));
+          await _saveToLocal();
+        }
+        yield _filterRoomsByGame(_rooms, gameName);
+      }
+    } catch (e) {
+      debugPrint('TournamentService realtime stream notice: $e');
+      // Periodic poll fallback
+      while (true) {
+        await Future.delayed(const Duration(seconds: 6));
+        yield _filterRoomsByGame(_rooms, gameName);
+      }
+    }
   }
 
   Future<bool> joinRoom({
