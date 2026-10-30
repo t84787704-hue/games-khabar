@@ -592,125 +592,149 @@ class _AdminProofCardState extends State<AdminProofCard> {
 
     try {
       final tournamentId = widget.match['id']?.toString() ?? '';
-      final teamId = widget.match['submitted_team_id'] ?? widget.match['proof_team_id'];
       final prize = (widget.match['prize_pool'] is num)
           ? (widget.match['prize_pool'] as num).toInt()
           : int.tryParse(widget.match['prize_pool']?.toString() ?? '0') ?? 0;
 
-      // 1. Mark Tournament as completed and set winner team
+      // 1. Direct Supabase se tournament row fetch karein taake team_id 100% sahi mile
+      final tRow = await SupabaseService.client
+          .from('tournaments')
+          .select('submitted_team_id, proof_team_id, winner_team_id')
+          .eq('id', tournamentId)
+          .maybeSingle();
+
+      String? teamId = tRow?['submitted_team_id']?.toString() ??
+          tRow?['proof_team_id']?.toString() ??
+          tRow?['winner_team_id']?.toString() ??
+          widget.match['submitted_team_id']?.toString() ??
+          widget.match['proof_team_id']?.toString();
+
+      // Agar match data mein teamId na mile, registrations se latest registered squad nikalen
+      if (teamId == null || teamId.isEmpty) {
+        final regRow = await SupabaseService.client
+            .from('tournament_registrations')
+            .select('team_id')
+            .eq('tournament_id', tournamentId)
+            .order('registered_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        teamId = regRow?['team_id']?.toString();
+      }
+
+      // 2. Tournament status complete karein
       await SupabaseService.client.from('tournaments').update({
         'status': 'completed',
         'proof_status': 'accepted',
         'winner_team_id': teamId,
       }).eq('id', tournamentId);
 
-      // 2. If teamId is present, reward coins to team members (Equal Split) and update team stats
-      if (teamId != null && teamId.toString().isNotEmpty) {
-        try {
-          final teamRes = await SupabaseService.client
-              .from('teams')
-              .select('id, name, leader_id, points, matches_won, total_matches')
-              .eq('id', teamId)
-              .maybeSingle();
+      // 3. Team Points (+25) aur Coins distribution
+      if (teamId != null && teamId.isNotEmpty) {
+        final teamRes = await SupabaseService.client
+            .from('teams')
+            .select('id, name, leader_id, points, matches_won, total_matches')
+            .eq('id', teamId)
+            .maybeSingle();
 
-          if (teamRes != null) {
-            final currentPoints = (teamRes['points'] is num)
-                ? (teamRes['points'] as num).toInt()
-                : int.tryParse(teamRes['points']?.toString() ?? '0') ?? 0;
-            final matchesWon = (teamRes['matches_won'] is num)
-                ? (teamRes['matches_won'] as num).toInt()
-                : int.tryParse(teamRes['matches_won']?.toString() ?? '0') ?? 0;
-            final totalMatches = (teamRes['total_matches'] is num)
-                ? (teamRes['total_matches'] as num).toInt()
-                : int.tryParse(teamRes['total_matches']?.toString() ?? '0') ?? 0;
+        if (teamRes != null) {
+          final curPoints = (teamRes['points'] is num)
+              ? (teamRes['points'] as num).toInt()
+              : int.tryParse(teamRes['points']?.toString() ?? '0') ?? 0;
+          final curWon = (teamRes['matches_won'] is num)
+              ? (teamRes['matches_won'] as num).toInt()
+              : int.tryParse(teamRes['matches_won']?.toString() ?? '0') ?? 0;
+          final curTotal = (teamRes['total_matches'] is num)
+              ? (teamRes['total_matches'] as num).toInt()
+              : int.tryParse(teamRes['total_matches']?.toString() ?? '0') ?? 0;
 
-            // 🏆 25 Points aur stats add karna (Leaderboard aur Profile ke liye)
-            await SupabaseService.client.from('teams').update({
-              'points': currentPoints + 25,
-              'matches_won': matchesWon + 1,
-              'total_matches': totalMatches + 1,
-            }).eq('id', teamId);
+          // +25 Points, Wins & Total Matches update
+          await SupabaseService.client.from('teams').update({
+            'points': curPoints + 25,
+            'matches_won': curWon + 1,
+            'total_matches': curTotal + 1,
+          }).eq('id', teamId);
 
-            // Winner team ke sabhi members collect karna
-            final membersData = await SupabaseService.client
-                .from('team_members')
-                .select('user_id')
-                .eq('team_id', teamId);
+          // Members list nikalen
+          final membersData = await SupabaseService.client
+              .from('team_members')
+              .select('user_id')
+              .eq('team_id', teamId);
 
-            final List<String> memberIds = [];
-            final leaderId = teamRes['leader_id']?.toString();
-            if (leaderId != null && leaderId.isNotEmpty) {
-              memberIds.add(leaderId);
-            }
+          final List<String> memberIds = [];
+          final leaderId = teamRes['leader_id']?.toString();
+          if (leaderId != null && leaderId.isNotEmpty) {
+            memberIds.add(leaderId);
+          }
 
-            for (final m in (membersData as List)) {
+          if (membersData is List) {
+            for (final m in membersData) {
               final uid = m['user_id']?.toString();
               if (uid != null && uid.isNotEmpty && !memberIds.contains(uid)) {
                 memberIds.add(uid);
               }
             }
+          }
 
-            // 🪙 Coins Wallet mein add karna
-            if (memberIds.isNotEmpty && prize > 0) {
-              final int sharePerPerson = (prize / memberIds.length).floor();
+          // Wallets mein coins credit karein
+          if (memberIds.isNotEmpty && prize > 0) {
+            final int sharePerPerson = (prize / memberIds.length).floor();
 
-              for (final memberId in memberIds) {
-                if (sharePerPerson > 0) {
-                  try {
-                    final walletRes = await SupabaseService.client
-                        .from('coin_wallets')
-                        .select('balance')
-                        .eq('user_id', memberId)
-                        .maybeSingle();
+            for (final memberId in memberIds) {
+              if (sharePerPerson > 0) {
+                try {
+                  final walletRes = await SupabaseService.client
+                      .from('coin_wallets')
+                      .select('balance')
+                      .eq('user_id', memberId)
+                      .maybeSingle();
 
-                    final currentBalance = (walletRes?['balance'] is num)
-                        ? (walletRes!['balance'] as num).toInt()
-                        : int.tryParse(walletRes?['balance']?.toString() ?? '0') ?? 0;
+                  final curBalance = (walletRes?['balance'] is num)
+                      ? (walletRes!['balance'] as num).toInt()
+                      : int.tryParse(walletRes?['balance']?.toString() ?? '0') ?? 0;
 
-                    await SupabaseService.client.from('coin_wallets').upsert({
-                      'user_id': memberId,
-                      'balance': currentBalance + sharePerPerson,
-                      'updated_at': DateTime.now().toIso8601String(),
-                    });
+                  await SupabaseService.client.from('coin_wallets').upsert({
+                    'user_id': memberId,
+                    'balance': curBalance + sharePerPerson,
+                    'updated_at': DateTime.now().toIso8601String(),
+                  });
 
-                    await SupabaseService.client.from('coin_transactions').insert({
-                      'user_id': memberId,
-                      'amount': sharePerPerson,
-                      'type': 'tournament_win',
-                      'description': 'Tournament Win Prize (${widget.match['title'] ?? 'Tournament'})',
-                      'created_at': DateTime.now().toIso8601String(),
-                    });
-                  } catch (_) {
-                    await CoinWalletService.updateCoins(
-                      userId: memberId,
-                      amount: sharePerPerson,
-                      type: 'tournament_split_win',
-                      roomId: tournamentId,
-                      description: 'Tournament Win Split ($sharePerPerson coins): ${widget.match['title'] ?? 'Tournament'}',
-                    );
-                  }
+                  await SupabaseService.client.from('coin_transactions').insert({
+                    'user_id': memberId,
+                    'amount': sharePerPerson,
+                    'type': 'tournament_win',
+                    'description': 'Tournament Win Split: ${widget.match['title'] ?? 'Tournament'}',
+                    'created_at': DateTime.now().toIso8601String(),
+                  });
+                } catch (_) {
+                  await CoinWalletService.updateCoins(
+                    userId: memberId,
+                    amount: sharePerPerson,
+                    type: 'tournament_split_win',
+                    roomId: tournamentId,
+                    description: 'Tournament Win: ${widget.match['title'] ?? 'Tournament'}',
+                  );
+                }
 
+                try {
                   await NotificationService().sendNotification(
                     userId: memberId,
                     type: 'tournament_result',
                     title: '🏆 Tournament Win Approved!',
-                    body: 'Your team won ${widget.match['title'] ?? 'Tournament'}! $sharePerPerson coins added to your wallet.',
+                    body: 'Mubarak ho! Aapki team jeet gayi. $sharePerPerson coins wallet mein add kar diye gaye hain.',
                     data: {'tournament_id': tournamentId, 'prize': sharePerPerson},
                     priority: 'high',
                   );
-                }
+                } catch (_) {}
               }
             }
           }
-        } catch (e) {
-          debugPrint('[AdminProofs] Tournament reward error: $e');
         }
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Tournament proof accepted! Coins credited & 25 points added! 🎉'),
+            content: Text('Tournament accepted! Points (+25) aur coins distribute ho gaye! 🎉'),
             backgroundColor: Color(0xFF00FF88),
           ),
         );
