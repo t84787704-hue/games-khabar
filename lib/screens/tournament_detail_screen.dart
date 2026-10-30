@@ -14,6 +14,8 @@ import 'admin/admin_bracket_screen.dart';
 import '../widgets/victory_celebration_dialog.dart';
 import '../services/theme_service.dart';
 
+typedef TournamentTeamList = List>;
+
 class TournamentDetailScreen extends StatefulWidget {
   final Map<String, dynamic> tournament;
   final bool isRegistered;
@@ -37,9 +39,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   bool _hasShownCelebration = false;
   bool _isAdmin = false;
   
-  // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
-  List> _registeredTeams = [];
-  
+  TournamentTeamList _registeredTeams = [];
   Map<String, dynamic>? _tournamentData;
   String _winnerTeamName = 'Champions Squad';
   String _runnerUpTeamName = 'Finalist Squad';
@@ -88,9 +88,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     final tId = (_tournamentData?['id'] ?? widget.tournament['id'] ?? '').toString().trim();
 
     if (tId.isEmpty || tId == 'null' || tId.length < 10) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
@@ -113,8 +111,14 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           .eq('tournament_id', tId)
           .order('registered_at', ascending: true);
 
-      // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
-      final registeredList = List>.from(regRes);
+      final List> registeredList = [];
+      if (regRes is List) {
+        for (final item in regRes) {
+          if (item is Map) {
+            registeredList.add(Map<String, dynamic>.from(item));
+          }
+        }
+      }
 
       final winnerId = _tournamentData?['winner_team_id']?.toString();
       _winnerTeamId = winnerId;
@@ -171,8 +175,14 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       final team = reg['teams'] as Map<String, dynamic>?;
       if (team != null && team['id']?.toString() == _winnerTeamId) {
         if (team['leader_id']?.toString() == userId) return true;
-        final membersList = (team['team_members'] as List?) ?? [];
-        return membersList.any((m) => m is Map && m['user_id']?.toString() == userId);
+        final rawMembers = team['team_members'];
+        if (rawMembers is List) {
+          for (final m in rawMembers) {
+            if (m is Map && m['user_id']?.toString() == userId) {
+              return true;
+            }
+          }
+        }
       }
     }
     return false;
@@ -315,8 +325,16 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           final team = reg['teams'] as Map<String, dynamic>?;
           if (team != null) {
             final leaderId = team['leader_id']?.toString();
-            final membersList = (team['team_members'] as List?) ?? [];
-            final isMember = membersList.any((m) => m is Map && m['user_id']?.toString() == currentUserId);
+            final rawMembers = team['team_members'];
+            bool isMember = false;
+            if (rawMembers is List) {
+              for (final m in rawMembers) {
+                if (m is Map && m['user_id']?.toString() == currentUserId) {
+                  isMember = true;
+                  break;
+                }
+              }
+            }
 
             if (leaderId == currentUserId || isMember) {
               isUserInRegisteredSquad = true;
@@ -882,8 +900,16 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                     final team = reg['teams'] as Map<String, dynamic>?;
                                     if (team != null && team['id']?.toString() == submittedTeamId) {
                                       final leaderId = team['leader_id']?.toString();
-                                      final membersList = (team['team_members'] as List?) ?? [];
-                                      final isMember = membersList.any((m) => m is Map && m['user_id']?.toString() == currentUserId);
+                                      final rawMembers = team['team_members'];
+                                      bool isMember = false;
+                                      if (rawMembers is List) {
+                                        for (final m in rawMembers) {
+                                          if (m is Map && m['user_id']?.toString() == currentUserId) {
+                                            isMember = true;
+                                            break;
+                                          }
+                                        }
+                                      }
                                       if (leaderId == currentUserId || isMember) {
                                         isTeamMatch = true;
                                       }
