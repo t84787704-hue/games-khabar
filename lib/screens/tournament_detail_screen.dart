@@ -38,11 +38,12 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   bool _isAdmin = false;
   
   // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
-  List<Map<String, dynamic>> _registeredTeams = [];
+  List> _registeredTeams = [];
   
   Map<String, dynamic>? _tournamentData;
   String _winnerTeamName = 'Champions Squad';
   String _runnerUpTeamName = 'Finalist Squad';
+  String? _winnerTeamId;
 
   @override
   void initState() {
@@ -113,10 +114,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           .order('registered_at', ascending: true);
 
       // 👇 یہاں List کی ٹائپ ٹھیک کر دی گئی ہے
-      final registeredList = List<Map<String, dynamic>>.from(regRes);
+      final registeredList = List>.from(regRes);
 
       final winnerId = _tournamentData?['winner_team_id']?.toString();
-      String resolvedWinner = 'Champions Squad';
+      _winnerTeamId = winnerId;
+      String resolvedWinner = '';
       String resolvedRunnerUp = 'Finalist Squad';
 
       if (winnerId != null && winnerId.isNotEmpty) {
@@ -132,16 +134,23 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         }
       }
 
+      if (resolvedWinner.isEmpty && _tournamentData?['proof_team_name'] != null) {
+        resolvedWinner = _tournamentData!['proof_team_name'].toString();
+      }
+
       if (mounted) {
         setState(() {
           _registeredTeams = registeredList;
-          _winnerTeamName = resolvedWinner;
+          _winnerTeamName = resolvedWinner.isNotEmpty ? resolvedWinner : 'Champions Squad';
           _runnerUpTeamName = resolvedRunnerUp;
           _isLoading = false;
         });
 
         final status = (_tournamentData?['status'] ?? '').toString().toLowerCase();
-        if (status == 'completed' && !_hasShownCelebration) {
+        final currentUserId = _supabase.auth.currentUser?.id;
+        final bool isUserInWinnerTeam = _checkIfUserInWinnerTeam(currentUserId);
+
+        if (status == 'completed' && isUserInWinnerTeam && !_hasShownCelebration) {
           _hasShownCelebration = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _showCelebrationPopup();
@@ -154,6 +163,19 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         debugPrint('Error loading details: $e');
       }
     }
+  }
+
+  bool _checkIfUserInWinnerTeam(String? userId) {
+    if (userId == null || _winnerTeamId == null || _winnerTeamId!.isEmpty) return false;
+    for (final reg in _registeredTeams) {
+      final team = reg['teams'] as Map<String, dynamic>?;
+      if (team != null && team['id']?.toString() == _winnerTeamId) {
+        if (team['leader_id']?.toString() == userId) return true;
+        final membersList = (team['team_members'] as List?) ?? [];
+        return membersList.any((m) => m is Map && m['user_id']?.toString() == userId);
+      }
+    }
+    return false;
   }
 
   void _showCelebrationPopup() {
@@ -305,10 +327,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         }
 
         final bool hasSquadAccess = widget.isRegistered || isUserInRegisteredSquad;
+        final bool isWinnerTeamMember = _checkIfUserInWinnerTeam(currentUserId);
 
         final t = _tournamentData ?? widget.tournament;
         final title = (t['title'] ?? 'Tournament Match').toString();
-        final gameMode = (t['game_mode'] ?? 'Squad (4v4)').toString();
+        final gameMode = (t['game_mode'] ?? t['match_format'] ?? 'Squad (4v4)').toString();
         final mapName = (t['map_name'] ?? 'Erangel').toString();
         final fee = (t['entry_fee'] ?? 0).toString();
         final prize = (t['prize_pool'] ?? 0).toString();
@@ -416,9 +439,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.6)),
                                 ),
-                                child: const Text(
-                                  'OFFICIAL TOURNAMENT ARENA ⚡',
-                                  style: TextStyle(
+                                child: Text(
+                                  '${title.toUpperCase()} • $gameMode',
+                                  style: const TextStyle(
                                     color: Color(0xFFFFD700),
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w900,
@@ -430,7 +453,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                               Text(
                                 (widget.selectedGameName != null && widget.selectedGameName!.trim().isNotEmpty)
                                     ? widget.selectedGameName!.toUpperCase()
-                                    : gameMode.toUpperCase(),
+                                    : (t['game_name'] ?? t['game'] ?? 'GAME').toString().toUpperCase(),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 22,
@@ -729,46 +752,52 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700), size: 28),
+                              const Icon(Icons.military_tech_rounded, color: Color(0xFFFFD700), size: 30),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
-                                      'Tournament Completed 🏆',
-                                      style: TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.bold, fontSize: 14),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          '$_winnerTeamName Won',
+                                          style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.w900, fontSize: 15),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        const Text('👑', style: TextStyle(fontSize: 14)),
+                                      ],
                                     ),
-                                    const SizedBox(height: 2),
+                                    const SizedBox(height: 3),
                                     Text(
-                                      'Champion: $_winnerTeamName • $prize Coins Awarded',
-                                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                                      'Prize Awarded: $prize Coins • Team Points: +25',
+                                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600),
                                     ),
                                   ],
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 44,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFFFD700),
-                                foregroundColor: Colors.black,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          if (isWinnerTeamMember) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 44,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFFD700),
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                icon: const Icon(Icons.celebration_rounded, color: Colors.black, size: 20),
+                                label: const Text(
+                                  'View Champions Ceremony 👑',
+                                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                                ),
+                                onPressed: _showCelebrationPopup,
                               ),
-                              icon: const Icon(Icons.celebration_rounded, color: Colors.black, size: 20),
-                              label: const Text(
-                                'View Champions Ceremony 👑',
-                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                              ),
-                              onPressed: () {
-                                _showCelebrationPopup();
-                              },
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     )
