@@ -20,13 +20,12 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
   String _searchQuery = '';
   String _gameFilter = 'All';
 
-  // 👇 14 گیمز کی مکمل لسٹ (BGMI کی جگہ Candy Crush)
   final List<String> _gameList = [
     'Free Fire',
     'PUBG Mobile',
     'Call Of Duty',
     'Clash Royale',
-    'Candy Crush', // 👈 BGMI ہٹا کر یہ لگایا
+    'Candy Crush',
     'Garena Free Fire Max',
     'Clash of Clans',
     'Minecraft',
@@ -38,14 +37,13 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     '8 Ball Pool',
   ];
 
-  // 👇 ہر گیم کے لیے مخصوص نقشے (Maps)
   final Map<String, List<String>> _gameMaps = {
     'Free Fire': ['Bermuda', 'Purgatory', 'Kalahari', 'Alpine', 'NeXTerra'],
     'Garena Free Fire Max': ['Bermuda', 'Purgatory', 'Kalahari', 'Alpine', 'NeXTerra'],
     'PUBG Mobile': ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Livik', 'Nusa'],
     'Call Of Duty': ['Isolated', 'Blackout', 'Alcatraz', 'Rebirth Island'],
     'Clash Royale': ['Arena 1', 'Arena 5', 'Arena 9', 'Legendary Arena'],
-    'Candy Crush': ['Level 1-50', 'Level 51-100', 'Level 101-200', 'Level 201+'], // 👈 Candy Crush کے میپس
+    'Candy Crush': ['Level 1-50', 'Level 51-100', 'Level 101-200', 'Level 201+'],
     'Clash of Clans': ['Home Village', 'Builder Base', 'Clan Capital'],
     'Minecraft': ['Survival World', 'Creative World', 'Skyblock'],
     'eFootball': ['Camp Nou', 'Old Trafford', 'Allianz Stadium', 'San Siro'],
@@ -136,7 +134,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
       ),
       body: Column(
         children: [
-          // Search & Game Filter Header
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             color: ThemeService.bg,
@@ -197,7 +194,6 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               ],
             ),
           ),
-          // Tournaments List
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: SupabaseService.client
