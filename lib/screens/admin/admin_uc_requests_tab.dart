@@ -91,7 +91,8 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: SupabaseService.client.from('uc_requests').stream(primaryKey: ['id']).order('created_at', ascending: false),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+              // 👇 یہاں تبدیلی کی ہے: صرف لوڈنگ چیک کریں
+              if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFFFFD700)));
               }
 
