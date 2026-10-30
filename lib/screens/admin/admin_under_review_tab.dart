@@ -28,7 +28,6 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
 
   Future<void> _updateTournamentProofStatus(String tournamentId, String status, {String? rejectReason}) async {
     try {
-      // 1. ٹورنامنٹ ٹیبل کو اپ ڈیٹ کریں
       final updateData = <String, dynamic>{
         'proof_status': status,
         'status': status == 'approved' ? 'completed' : 'upcoming',
@@ -43,7 +42,6 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
           .update(updateData)
           .eq('id', tournamentId);
 
-      // 2. پروو ہسٹری ٹیبل میں ریکارڈ محفوظ کریں
       try {
         final tData = await SupabaseService.client
             .from('tournaments')
