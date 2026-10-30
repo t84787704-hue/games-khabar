@@ -719,13 +719,15 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               ),
               Expanded(
                 child: StreamBuilder<List<Map<String, dynamic>>>(
+                  initialData: const [],
                   stream: SupabaseService.client
                       .from('rooms')
                       .stream(primaryKey: ['id'])
                       .order('created_at', ascending: false),
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        (!snapshot.hasData || snapshot.data!.isEmpty)) {
+                      return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
                     }
                     final list = snapshot.data ?? [];
                     final filtered = list.where((r) {
@@ -1388,13 +1390,24 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: StreamBuilder<List<Map<String, dynamic>>>(
+        initialData: const [],
         stream: SupabaseService.client
             .from('rooms')
             .stream(primaryKey: ['id'])
             .eq('id', widget.roomId),
         builder: (context, snapshot) {
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              (!snapshot.hasData || snapshot.data!.isEmpty)) {
+            return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+          }
+
+          if (snapshot.data == null || snapshot.data!.isEmpty) {
+            return Center(
+              child: Text(
+                'room_not_found'.tr(),
+                style: TextStyle(color: ThemeService.textSecondary),
+              ),
+            );
           }
 
           final room = GamerRoom.fromSupabase(snapshot.data!.first);
@@ -1895,6 +1908,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
 
               Expanded(
                 child: StreamBuilder<List<Map<String, dynamic>>>(
+                  initialData: const [],
                   stream: SupabaseService.client
                       .from('messages')
                       .stream(primaryKey: ['id'])
