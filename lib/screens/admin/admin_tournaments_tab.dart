@@ -201,14 +201,17 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                   .stream(primaryKey: ['id'])
                   .order('created_at', ascending: false),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                // 👇 یہاں تبدیلی کی ہے: اگر ڈیٹا لوڈ ہو رہا ہے یا ابھی آیا نہیں تو لوڈر دکھاؤ
+                if (snapshot.connectionState == ConnectionState.waiting || !snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
                 }
 
                 final list = snapshot.data ?? [];
+                
+                // 👇 فلٹر کو بالکل آسان کر دیا ہے
                 var filtered = list.where((item) {
-                  final game = (item['game_name'] ?? item['game'] ?? '').toString();
-                  final title = (item['title'] ?? item['name'] ?? '').toString().toLowerCase();
+                  final game = (item['game_name'] ?? '').toString();
+                  final title = (item['title'] ?? '').toString().toLowerCase();
 
                   if (_gameFilter != 'All' && !game.toLowerCase().contains(_gameFilter.toLowerCase())) {
                     return false;
