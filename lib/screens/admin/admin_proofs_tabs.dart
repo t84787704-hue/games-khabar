@@ -23,19 +23,19 @@ class AdminUnderReviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
+    return StreamBuilder<List>>(
       initialData: const [],
       stream: SupabaseService.client
           .from('active_matches')
           .stream(primaryKey: ['id']),
       builder: (context, matchSnap) {
-        return StreamBuilder<List<Map<String, dynamic>>>(
+        return StreamBuilder<List>>(
           initialData: const [],
           stream: SupabaseService.client
               .from('rooms')
               .stream(primaryKey: ['id']),
           builder: (context, roomSnap) {
-            return StreamBuilder<List<Map<String, dynamic>>>(
+            return StreamBuilder<List>>(
               initialData: const [],
               stream: SupabaseService.client
                   .from('tournaments')
@@ -164,19 +164,19 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
           ),
         ),
         Expanded(
-          child: StreamBuilder<List<Map<String, dynamic>>>(
+          child: StreamBuilder<List>>(
             initialData: const [],
             stream: SupabaseService.client
                 .from('active_matches')
                 .stream(primaryKey: ['id']),
             builder: (context, matchSnap) {
-              return StreamBuilder<List<Map<String, dynamic>>>(
+              return StreamBuilder<List>>(
                 initialData: const [],
                 stream: SupabaseService.client
                     .from('rooms')
                     .stream(primaryKey: ['id']),
                 builder: (context, roomSnap) {
-                  return StreamBuilder<List<Map<String, dynamic>>>(
+                  return StreamBuilder<List>>(
                     initialData: const [],
                     stream: SupabaseService.client
                         .from('tournaments')
@@ -413,7 +413,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
   final TextEditingController _reasonController = TextEditingController();
   final TeamService _teamService = TeamService();
   bool _isProcessing = false;
-  List<Map<String, dynamic>> _fetchedProofs = [];
+  List> _fetchedProofs = [];
   bool _isLoadingProofs = false;
 
   @override
@@ -453,7 +453,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
           .order('created_at', ascending: true);
 
       if (proofRows.isNotEmpty) {
-        final List<Map<String, dynamic>> entries = [];
+        final List> entries = [];
         for (final r in proofRows) {
           final url = (r['proof_url'] ?? r['image_url'] ?? '').toString();
           if (url.isNotEmpty) {
@@ -482,7 +482,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
             .maybeSingle();
 
         if (rData != null && mounted) {
-          final List<Map<String, dynamic>> entries = [];
+          final List> entries = [];
           final rawProofs = rData['proofs'];
           if (rawProofs is List) {
             for (final p in rawProofs) {
@@ -604,48 +604,97 @@ class _AdminProofCardState extends State<AdminProofCard> {
         'winner_team_id': teamId,
       }).eq('id', tournamentId);
 
-      // 2. If teamId is present, reward coins to team members (Equal Split)
+      // 2. If teamId is present, reward coins to team members (Equal Split) and update team stats
       if (teamId != null && teamId.toString().isNotEmpty) {
         try {
-          final teamData = await SupabaseService.client
+          final teamRes = await SupabaseService.client
               .from('teams')
-              .select('id, name, leader_id, team_members(user_id)')
+              .select('id, name, leader_id, points, matches_won, total_matches')
               .eq('id', teamId)
               .maybeSingle();
 
-          if (teamData != null) {
+          if (teamRes != null) {
+            final currentPoints = (teamRes['points'] is num)
+                ? (teamRes['points'] as num).toInt()
+                : int.tryParse(teamRes['points']?.toString() ?? '0') ?? 0;
+            final matchesWon = (teamRes['matches_won'] is num)
+                ? (teamRes['matches_won'] as num).toInt()
+                : int.tryParse(teamRes['matches_won']?.toString() ?? '0') ?? 0;
+            final totalMatches = (teamRes['total_matches'] is num)
+                ? (teamRes['total_matches'] as num).toInt()
+                : int.tryParse(teamRes['total_matches']?.toString() ?? '0') ?? 0;
+
+            // 🏆 25 Points aur stats add karna (Leaderboard aur Profile ke liye)
+            await SupabaseService.client.from('teams').update({
+              'points': currentPoints + 25,
+              'matches_won': matchesWon + 1,
+              'total_matches': totalMatches + 1,
+            }).eq('id', teamId);
+
+            // Winner team ke sabhi members collect karna
+            final membersData = await SupabaseService.client
+                .from('team_members')
+                .select('user_id')
+                .eq('team_id', teamId);
+
             final List<String> memberIds = [];
-            final leaderId = teamData['leader_id']?.toString();
+            final leaderId = teamRes['leader_id']?.toString();
             if (leaderId != null && leaderId.isNotEmpty) {
               memberIds.add(leaderId);
             }
 
-            final membersList = (teamData['team_members'] as List?) ?? [];
-            for (final m in membersList) {
+            for (final m in (membersData as List)) {
               final uid = m['user_id']?.toString();
               if (uid != null && uid.isNotEmpty && !memberIds.contains(uid)) {
                 memberIds.add(uid);
               }
             }
 
+            // 🪙 Coins Wallet mein add karna
             if (memberIds.isNotEmpty && prize > 0) {
               final int sharePerPerson = (prize / memberIds.length).floor();
 
               for (final memberId in memberIds) {
                 if (sharePerPerson > 0) {
-                  await CoinWalletService.updateCoins(
-                    userId: memberId,
-                    amount: sharePerPerson,
-                    type: 'tournament_split_win',
-                    roomId: tournamentId,
-                    description: 'Tournament Win Split ($sharePerPerson coins): ${widget.match['title'] ?? 'Tournament'}',
-                  );
+                  try {
+                    final walletRes = await SupabaseService.client
+                        .from('coin_wallets')
+                        .select('balance')
+                        .eq('user_id', memberId)
+                        .maybeSingle();
+
+                    final currentBalance = (walletRes?['balance'] is num)
+                        ? (walletRes!['balance'] as num).toInt()
+                        : int.tryParse(walletRes?['balance']?.toString() ?? '0') ?? 0;
+
+                    await SupabaseService.client.from('coin_wallets').upsert({
+                      'user_id': memberId,
+                      'balance': currentBalance + sharePerPerson,
+                      'updated_at': DateTime.now().toIso8601String(),
+                    });
+
+                    await SupabaseService.client.from('coin_transactions').insert({
+                      'user_id': memberId,
+                      'amount': sharePerPerson,
+                      'type': 'tournament_win',
+                      'description': 'Tournament Win Prize (${widget.match['title'] ?? 'Tournament'})',
+                      'created_at': DateTime.now().toIso8601String(),
+                    });
+                  } catch (_) {
+                    await CoinWalletService.updateCoins(
+                      userId: memberId,
+                      amount: sharePerPerson,
+                      type: 'tournament_split_win',
+                      roomId: tournamentId,
+                      description: 'Tournament Win Split ($sharePerPerson coins): ${widget.match['title'] ?? 'Tournament'}',
+                    );
+                  }
 
                   await NotificationService().sendNotification(
                     userId: memberId,
                     type: 'tournament_result',
-                    title: '🏆 Tournament Win Split Approved!',
-                    body: 'Your team won ${widget.match['title'] ?? 'Tournament'}! $sharePerPerson coins (equal split) added to your wallet.',
+                    title: '🏆 Tournament Win Approved!',
+                    body: 'Your team won ${widget.match['title'] ?? 'Tournament'}! $sharePerPerson coins added to your wallet.',
                     data: {'tournament_id': tournamentId, 'prize': sharePerPerson},
                     priority: 'high',
                   );
@@ -661,7 +710,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Tournament proof accepted & prize split distributed! 🎉'),
+            content: Text('Tournament proof accepted! Coins credited & 25 points added! 🎉'),
             backgroundColor: Color(0xFF00FF88),
           ),
         );
@@ -990,7 +1039,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
       }
     }
 
-    final List<Map<String, dynamic>> proofEntries = [];
+    final List> proofEntries = [];
     if (_fetchedProofs.isNotEmpty) {
       proofEntries.addAll(_fetchedProofs);
     } else {
