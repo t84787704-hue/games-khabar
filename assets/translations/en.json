@@ -1,4 +1,10 @@
 {
+  "btn_report_post": "Report Post",
+  "msg_post_reported_success": "Post reported successfully. Our team will review it.",
+  "passbook_sheet_title": "Coin Passbook",
+  "passbook_sheet_subtitle": "Track your complete coins earnings and expenses",
+  "wallet_ad_reward_desc": "Reward earned for watching sponsored video ad",
+  "wallet_daily_bonus_claimed_desc": "Daily check-in reward claimed successfully",
 "direct_messages": "Direct Messages",
 "search_messages": "Search messages...",
 "no_messages_yet": "No Messages Yet",
