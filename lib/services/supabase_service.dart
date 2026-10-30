@@ -920,69 +920,198 @@ class SupabaseService {
     }, 'id', matchId);
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeUsers() {
+  // REALTIME STREAMS FOR ADMIN (WITH IMMEDIATE REST FETCH & ZERO-FREEZE FALLBACK)
+  static Stream<List<Map<String, dynamic>>> getRealtimeUsers() async* {
+    // 1. Immediate REST fetch so StreamBuilder never hangs
     try {
-      return client.from('users').stream(primaryKey: ['id']).map((rows) {
-        return rows.map((r) => Map<String, dynamic>.from(r)).toList();
-      });
+      final initial = await client
+          .from('users')
+          .select()
+          .order('created_at', ascending: false)
+          .timeout(const Duration(seconds: 3));
+      if (initial is List) {
+        yield List<Map<String, dynamic>>.from(initial);
+      }
     } catch (e) {
-      return Stream.value([]);
+      debugPrint('getRealtimeUsers initial fetch notice: $e');
+    }
+
+    // 2. Realtime WebSocket stream with polling fallback
+    try {
+      await for (final rows in client.from('users').stream(primaryKey: ['id'])) {
+        yield rows.map((r) => Map<String, dynamic>.from(r)).toList();
+      }
+    } catch (e) {
+      debugPrint('getRealtimeUsers stream fallback notice: $e');
+      while (true) {
+        await Future.delayed(const Duration(seconds: 5));
+        try {
+          final res = await client
+              .from('users')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            yield List<Map<String, dynamic>>.from(res);
+          }
+        } catch (_) {}
+      }
     }
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimePosts() {
+  static Stream<List<Map<String, dynamic>>> getRealtimePosts() async* {
     try {
-      return client
+      final initial = await client
+          .from('posts')
+          .select()
+          .order('created_at', ascending: false)
+          .timeout(const Duration(seconds: 3));
+      if (initial is List) {
+        yield List<Map<String, dynamic>>.from(initial);
+      }
+    } catch (e) {
+      debugPrint('getRealtimePosts initial fetch notice: $e');
+    }
+
+    try {
+      await for (final rows in client
           .from('posts')
           .stream(primaryKey: ['id'])
-          .order('created_at', ascending: false)
-          .map((rows) {
-        return rows.map((r) => Map<String, dynamic>.from(r)).toList();
-      });
+          .order('created_at', ascending: false)) {
+        yield rows.map((r) => Map<String, dynamic>.from(r)).toList();
+      }
     } catch (e) {
-      return Stream.value([]);
+      debugPrint('getRealtimePosts stream fallback notice: $e');
+      while (true) {
+        await Future.delayed(const Duration(seconds: 5));
+        try {
+          final res = await client
+              .from('posts')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            yield List<Map<String, dynamic>>.from(res);
+          }
+        } catch (_) {}
+      }
     }
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeReports() {
+  static Stream<List<Map<String, dynamic>>> getRealtimeReports() async* {
     try {
-      return client
+      final initial = await client
+          .from('reports')
+          .select()
+          .order('created_at', ascending: false)
+          .timeout(const Duration(seconds: 3));
+      if (initial is List) {
+        yield List<Map<String, dynamic>>.from(initial);
+      }
+    } catch (e) {
+      debugPrint('getRealtimeReports initial fetch notice: $e');
+    }
+
+    try {
+      await for (final rows in client
           .from('reports')
           .stream(primaryKey: ['id'])
-          .order('created_at', ascending: false)
-          .map((rows) {
-        return rows.map((r) => Map<String, dynamic>.from(r)).toList();
-      });
+          .order('created_at', ascending: false)) {
+        yield rows.map((r) => Map<String, dynamic>.from(r)).toList();
+      }
     } catch (e) {
-      return Stream.value([]);
+      debugPrint('getRealtimeReports stream fallback notice: $e');
+      while (true) {
+        await Future.delayed(const Duration(seconds: 5));
+        try {
+          final res = await client
+              .from('reports')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            yield List<Map<String, dynamic>>.from(res);
+          }
+        } catch (_) {}
+      }
     }
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeCoinTransactions() {
+  static Stream<List<Map<String, dynamic>>> getRealtimeCoinTransactions() async* {
     try {
-      return client
+      final initial = await client
+          .from('coin_transactions')
+          .select()
+          .order('created_at', ascending: false)
+          .timeout(const Duration(seconds: 3));
+      if (initial is List) {
+        yield List<Map<String, dynamic>>.from(initial);
+      }
+    } catch (e) {
+      debugPrint('getRealtimeCoinTransactions initial fetch notice: $e');
+    }
+
+    try {
+      await for (final rows in client
           .from('coin_transactions')
           .stream(primaryKey: ['id'])
-          .order('created_at', ascending: false)
-          .map((rows) {
-        return rows.map((r) => Map<String, dynamic>.from(r)).toList();
-      });
+          .order('created_at', ascending: false)) {
+        yield rows.map((r) => Map<String, dynamic>.from(r)).toList();
+      }
     } catch (e) {
-      return Stream.value([]);
+      debugPrint('getRealtimeCoinTransactions stream fallback notice: $e');
+      while (true) {
+        await Future.delayed(const Duration(seconds: 5));
+        try {
+          final res = await client
+              .from('coin_transactions')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            yield List<Map<String, dynamic>>.from(res);
+          }
+        } catch (_) {}
+      }
     }
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeNotifications() {
+  static Stream<List<Map<String, dynamic>>> getRealtimeNotifications() async* {
     try {
-      return client
+      final initial = await client
+          .from('notifications')
+          .select()
+          .order('created_at', ascending: false)
+          .timeout(const Duration(seconds: 3));
+      if (initial is List) {
+        yield List<Map<String, dynamic>>.from(initial);
+      }
+    } catch (e) {
+      debugPrint('getRealtimeNotifications initial fetch notice: $e');
+    }
+
+    try {
+      await for (final rows in client
           .from('notifications')
           .stream(primaryKey: ['id'])
-          .order('created_at', ascending: false)
-          .map((rows) {
-        return rows.map((r) => Map<String, dynamic>.from(r)).toList();
-      });
+          .order('created_at', ascending: false)) {
+        yield rows.map((r) => Map<String, dynamic>.from(r)).toList();
+      }
     } catch (e) {
-      return Stream.value([]);
+      debugPrint('getRealtimeNotifications stream fallback notice: $e');
+      while (true) {
+        await Future.delayed(const Duration(seconds: 5));
+        try {
+          final res = await client
+              .from('notifications')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            yield List<Map<String, dynamic>>.from(res);
+          }
+        } catch (_) {}
+      }
     }
   }
 }
