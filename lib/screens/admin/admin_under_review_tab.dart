@@ -28,6 +28,7 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
 
   Future<void> _updateTournamentProofStatus(String tournamentId, String status, {String? rejectReason}) async {
     try {
+      // 1. ٹورنامنٹ ٹیبل کو اپ ڈیٹ کریں
       final updateData = <String, dynamic>{
         'proof_status': status,
         'status': status == 'approved' ? 'completed' : 'upcoming',
@@ -41,6 +42,29 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
           .from('tournaments')
           .update(updateData)
           .eq('id', tournamentId);
+
+      // 2. پروو ہسٹری ٹیبل میں ریکارڈ محفوظ کریں
+      try {
+        final tData = await SupabaseService.client
+            .from('tournaments')
+            .select('title, proof_team_name, proof_url')
+            .eq('id', tournamentId)
+            .maybeSingle();
+
+        if (tData != null) {
+          await SupabaseService.client.from('proof_history').insert({
+            'username': tData['proof_team_name'] ?? 'Unknown Team',
+            'proof_type': tData['title'] ?? 'Tournament Proof',
+            'status': status,
+            'admin_name': 'Admin',
+            'tournament_id': tournamentId,
+            'proof_url': tData['proof_url'],
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
+      } catch (historyError) {
+        debugPrint('Error saving to proof_history: $historyError');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -122,14 +146,12 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
                 .stream(primaryKey: ['id'])
                 .order('created_at', ascending: false),
             builder: (context, snapshot) {
-              // 👇 یہاں تبدیلی کی ہے: صرف لوڈنگ چیک کریں
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFFFF8A00)));
               }
 
               final tournaments = snapshot.data ?? [];
               
-              // Sirf wo tournaments filter karein jinka proof upload ho chuka hai aur status pending hai
               final filtered = tournaments.where((t) {
                 final proofUrl = (t['proof_url'] ?? '').toString().trim();
                 final proofStatus = (t['proof_status'] ?? 'pending').toString().toLowerCase();
