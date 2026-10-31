@@ -1,4 +1,4 @@
-Name: Fetch Gaming News and Prices
+name: Fetch Gaming News and Prices
 on:
   schedule:
     - cron: '0 */6 * * *'
