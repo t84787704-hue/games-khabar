@@ -23,19 +23,19 @@ class AdminUnderReviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List>>(
+    return StreamBuilder(
       initialData: const [],
       stream: SupabaseService.client
           .from('active_matches')
           .stream(primaryKey: ['id']),
       builder: (context, matchSnap) {
-        return StreamBuilder<List>>(
+        return StreamBuilder(
           initialData: const [],
           stream: SupabaseService.client
               .from('rooms')
               .stream(primaryKey: ['id']),
           builder: (context, roomSnap) {
-            return StreamBuilder<List>>(
+            return StreamBuilder(
               initialData: const [],
               stream: SupabaseService.client
                   .from('tournaments')
@@ -49,7 +49,7 @@ class AdminUnderReviewTab extends StatelessWidget {
                 }
 
                 // 1. Team Matches Under Review
-                final matchData = matchSnap.data ?? [];
+                final matchData = (matchSnap.data is List) ? (matchSnap.data as List) : [];
                 final underReviewMatches = matchData.where((m) {
                   final st = (m['status'] ?? '').toString().toLowerCase();
                   final pst = (m['proof_status'] ?? '').toString().toLowerCase();
@@ -57,7 +57,7 @@ class AdminUnderReviewTab extends StatelessWidget {
                 }).map((m) => {...m, 'is_room': false, 'is_tournament': false}).toList();
 
                 // 2. Custom Game Rooms Under Review
-                final roomData = roomSnap.data ?? [];
+                final roomData = (roomSnap.data is List) ? (roomSnap.data as List) : [];
                 final underReviewRooms = roomData.where((r) {
                   final st = (r['status'] ?? '').toString().toLowerCase();
                   final rst = (r['reward_status'] ?? '').toString().toLowerCase();
@@ -76,13 +76,13 @@ class AdminUnderReviewTab extends StatelessWidget {
                 }).map((r) => {...r, 'is_room': true, 'is_tournament': false}).toList();
 
                 // 3. Tournaments Under Review
-                final tournamentData = tournamentSnap.data ?? [];
+                final tournamentData = (tournamentSnap.data is List) ? (tournamentSnap.data as List) : [];
                 final underReviewTournaments = tournamentData.where((t) {
                   final proof = (t['proof_url'] ?? '').toString();
                   final proofStatus = (t['proof_status'] ?? '').toString().toLowerCase();
                   final status = (t['status'] ?? '').toString().toLowerCase();
                   
-                  bool isPendingStatus = proofStatus == 'pending' || proofStatus == 'submitted' || proofStatus.isEmpty;
+                  bool isPendingStatus = proofStatus == 'pending' || proofStatus == 'submitted' || proofStatus == 'approved' || proofStatus.isEmpty;
                   return proof.isNotEmpty && status != 'completed' && isPendingStatus;
                 }).map((t) => {
                       ...t,
@@ -119,7 +119,7 @@ class AdminUnderReviewTab extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     return AdminProofCard(
-                      match: underReview[index],
+                      match: Map<String, dynamic>.from(underReview[index] as Map),
                       showActions: true,
                       showDelete: false,
                     );
@@ -164,19 +164,19 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
           ),
         ),
         Expanded(
-          child: StreamBuilder<List>>(
+          child: StreamBuilder(
             initialData: const [],
             stream: SupabaseService.client
                 .from('active_matches')
                 .stream(primaryKey: ['id']),
             builder: (context, matchSnap) {
-              return StreamBuilder<List>>(
+              return StreamBuilder(
                 initialData: const [],
                 stream: SupabaseService.client
                     .from('rooms')
                     .stream(primaryKey: ['id']),
                 builder: (context, roomSnap) {
-                  return StreamBuilder<List>>(
+                  return StreamBuilder(
                     initialData: const [],
                     stream: SupabaseService.client
                         .from('tournaments')
@@ -189,16 +189,16 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                         );
                       }
 
-                      final matchData = matchSnap.data ?? [];
+                      final matchData = (matchSnap.data is List) ? (matchSnap.data as List) : [];
                       final matchHistory = matchData.where((m) {
                         final st = (m['status'] ?? '').toString().toLowerCase();
                         final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                        final isAccepted = pst == 'accepted' || st == 'completed';
+                        final isAccepted = pst == 'accepted' || pst == 'approved' || st == 'completed';
                         final isRejected = pst == 'rejected' || st == 'rejected';
                         return isAccepted || isRejected;
                       }).map((m) => {...m, 'is_room': false, 'is_tournament': false}).toList();
 
-                      final roomData = roomSnap.data ?? [];
+                      final roomData = (roomSnap.data is List) ? (roomSnap.data as List) : [];
                       final roomHistory = roomData.where((r) {
                         final st = (r['status'] ?? '').toString().toLowerCase();
                         final rst = (r['reward_status'] ?? '').toString().toLowerCase();
@@ -207,11 +207,11 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                         return isAccepted || isRejected;
                       }).map((r) => {...r, 'is_room': true, 'is_tournament': false}).toList();
 
-                      final tournamentData = tournamentSnap.data ?? [];
+                      final tournamentData = (tournamentSnap.data is List) ? (tournamentSnap.data as List) : [];
                       final tournamentHistory = tournamentData.where((t) {
                         final proofStatus = (t['proof_status'] ?? '').toString().toLowerCase();
                         final status = (t['status'] ?? '').toString().toLowerCase();
-                        final isAccepted = proofStatus == 'accepted' || status == 'completed';
+                        final isAccepted = proofStatus == 'accepted' || proofStatus == 'approved' || status == 'completed';
                         final isRejected = proofStatus == 'rejected' || status == 'rejected';
                         return isAccepted || isRejected;
                       }).map((t) => {
@@ -232,7 +232,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                         history = history.where((m) {
                           final st = (m['status'] ?? '').toString().toLowerCase();
                           final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                          return pst == 'accepted' || st == 'completed';
+                          return pst == 'accepted' || pst == 'approved' || st == 'completed';
                         }).toList();
                       } else if (_filter == 'Rejected') {
                         history = history.where((m) {
@@ -263,10 +263,10 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           return AdminProofCard(
-                            match: history[index],
+                            match: Map<String, dynamic>.from(history[index] as Map),
                             showActions: false,
                             showDelete: true,
-                            onDelete: () => _confirmDelete(context, history[index]),
+                            onDelete: () => _confirmDelete(context, Map<String, dynamic>.from(history[index] as Map)),
                           );
                         },
                       );
@@ -313,7 +313,7 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
   }
 
   Future<void> _confirmDelete(BuildContext context, Map<String, dynamic> match) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: ThemeService.card,
@@ -413,7 +413,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
   final TextEditingController _reasonController = TextEditingController();
   final TeamService _teamService = TeamService();
   bool _isProcessing = false;
-  List> _fetchedProofs = [];
+  var _fetchedProofs = [];
   bool _isLoadingProofs = false;
 
   @override
@@ -429,7 +429,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
       if (proofUrl.isNotEmpty) {
         setState(() {
           _fetchedProofs = [{
-            'user_id': widget.match['submitted_team_id'] ?? '',
+            'user_id': widget.match['proof_team_id'] ?? widget.match['submitted_team_id'] ?? '',
             'user_name': widget.match['proof_team_name'] ?? widget.match['proof_leader_name'] ?? 'Tournament Team',
             'is_host': false,
             'proof_url': proofUrl,
@@ -453,7 +453,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
           .order('created_at', ascending: true);
 
       if (proofRows.isNotEmpty) {
-        final List> entries = [];
+        final List entries = [];
         for (final r in proofRows) {
           final url = (r['proof_url'] ?? r['image_url'] ?? '').toString();
           if (url.isNotEmpty) {
@@ -482,7 +482,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
             .maybeSingle();
 
         if (rData != null && mounted) {
-          final List> entries = [];
+          final List entries = [];
           final rawProofs = rData['proofs'];
           if (rawProofs is List) {
             for (final p in rawProofs) {
@@ -596,39 +596,40 @@ class _AdminProofCardState extends State<AdminProofCard> {
           ? (widget.match['prize_pool'] as num).toInt()
           : int.tryParse(widget.match['prize_pool']?.toString() ?? '0') ?? 0;
 
-      // 1. Direct Supabase se tournament row fetch karein taake team_id 100% sahi mile
+      // 1. Supabase se exact columns nikalna
       final tRow = await SupabaseService.client
           .from('tournaments')
-          .select('submitted_team_id, proof_team_id, winner_team_id')
+          .select('proof_team_id, winner_team, winner_team_id, submitted_team_id')
           .eq('id', tournamentId)
           .maybeSingle();
 
-      String? teamId = tRow?['submitted_team_id']?.toString() ??
-          tRow?['proof_team_id']?.toString() ??
+      var teamId = tRow?['proof_team_id']?.toString() ??
+          tRow?['submitted_team_id']?.toString() ??
+          tRow?['winner_team']?.toString() ??
           tRow?['winner_team_id']?.toString() ??
-          widget.match['submitted_team_id']?.toString() ??
-          widget.match['proof_team_id']?.toString();
+          widget.match['proof_team_id']?.toString() ??
+          widget.match['submitted_team_id']?.toString();
 
-      // Agar match data mein teamId na mile, registrations se latest registered squad nikalen
+      // Agar na mile toh registrations se latest squad resolve karna
       if (teamId == null || teamId.isEmpty) {
         final regRow = await SupabaseService.client
             .from('tournament_registrations')
             .select('team_id')
             .eq('tournament_id', tournamentId)
-            .order('registered_at', ascending: false)
             .limit(1)
             .maybeSingle();
         teamId = regRow?['team_id']?.toString();
       }
 
-      // 2. Tournament status complete karein
+      // 2. Tournament status complete karna
       await SupabaseService.client.from('tournaments').update({
         'status': 'completed',
         'proof_status': 'accepted',
+        'winner_team': teamId,
         'winner_team_id': teamId,
       }).eq('id', tournamentId);
 
-      // 3. Team Points (+25) aur Coins distribution
+      // 3. Winning Team ko Points (+25), Wins (+1) aur Coins distribution
       if (teamId != null && teamId.isNotEmpty) {
         final teamRes = await SupabaseService.client
             .from('teams')
@@ -647,20 +648,20 @@ class _AdminProofCardState extends State<AdminProofCard> {
               ? (teamRes['total_matches'] as num).toInt()
               : int.tryParse(teamRes['total_matches']?.toString() ?? '0') ?? 0;
 
-          // +25 Points, Wins & Total Matches update
+          // Team stats (+25 Points, +1 Win)
           await SupabaseService.client.from('teams').update({
             'points': curPoints + 25,
             'matches_won': curWon + 1,
             'total_matches': curTotal + 1,
           }).eq('id', teamId);
 
-          // Members list nikalen
+          // Members list nikalna
           final membersData = await SupabaseService.client
               .from('team_members')
               .select('user_id')
               .eq('team_id', teamId);
 
-          final List<String> memberIds = [];
+          final memberIds = [];
           final leaderId = teamRes['leader_id']?.toString();
           if (leaderId != null && leaderId.isNotEmpty) {
             memberIds.add(leaderId);
@@ -675,12 +676,12 @@ class _AdminProofCardState extends State<AdminProofCard> {
             }
           }
 
-          // Wallets mein coins credit karein
+          // Sab members mein coins divide karna
           if (memberIds.isNotEmpty && prize > 0) {
-            final int sharePerPerson = (prize / memberIds.length).floor();
+            final int share = (prize / memberIds.length).floor();
 
             for (final memberId in memberIds) {
-              if (sharePerPerson > 0) {
+              if (share > 0) {
                 try {
                   final walletRes = await SupabaseService.client
                       .from('coin_wallets')
@@ -694,21 +695,21 @@ class _AdminProofCardState extends State<AdminProofCard> {
 
                   await SupabaseService.client.from('coin_wallets').upsert({
                     'user_id': memberId,
-                    'balance': curBalance + sharePerPerson,
+                    'balance': curBalance + share,
                     'updated_at': DateTime.now().toIso8601String(),
                   });
 
                   await SupabaseService.client.from('coin_transactions').insert({
                     'user_id': memberId,
-                    'amount': sharePerPerson,
+                    'amount': share,
                     'type': 'tournament_win',
                     'description': 'Tournament Win Split: ${widget.match['title'] ?? 'Tournament'}',
                     'created_at': DateTime.now().toIso8601String(),
                   });
                 } catch (_) {
                   await CoinWalletService.updateCoins(
-                    userId: memberId,
-                    amount: sharePerPerson,
+                    userId: memberId.toString(),
+                    amount: share,
                     type: 'tournament_split_win',
                     roomId: tournamentId,
                     description: 'Tournament Win: ${widget.match['title'] ?? 'Tournament'}',
@@ -717,11 +718,11 @@ class _AdminProofCardState extends State<AdminProofCard> {
 
                 try {
                   await NotificationService().sendNotification(
-                    userId: memberId,
+                    userId: memberId.toString(),
                     type: 'tournament_result',
                     title: '🏆 Tournament Win Approved!',
-                    body: 'Mubarak ho! Aapki team jeet gayi. $sharePerPerson coins wallet mein add kar diye gaye hain.',
-                    data: {'tournament_id': tournamentId, 'prize': sharePerPerson},
+                    body: 'Mubarak ho! Aapki team jeet gayi. $share coins wallet mein add kar diye gaye hain.',
+                    data: {'tournament_id': tournamentId, 'prize': share},
                     priority: 'high',
                   );
                 } catch (_) {}
@@ -1009,7 +1010,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
     String label;
     IconData icon;
 
-    if (proofStatus == 'accepted' || status == 'completed') {
+    if (proofStatus == 'accepted' || proofStatus == 'approved' || status == 'completed') {
       color = const Color(0xFF00FF88);
       label = 'status_accepted'.tr().toUpperCase();
       icon = Icons.check_circle_rounded;
@@ -1063,14 +1064,14 @@ class _AdminProofCardState extends State<AdminProofCard> {
       }
     }
 
-    final List> proofEntries = [];
+    final List proofEntries = [];
     if (_fetchedProofs.isNotEmpty) {
       proofEntries.addAll(_fetchedProofs);
     } else {
       final proofUrl = (widget.match['proof_url'] ?? widget.match['win_proof_url'] ?? '').toString();
       if (proofUrl.isNotEmpty) {
         proofEntries.add({
-          'user_id': widget.match['submitted_team_id'] ?? '',
+          'user_id': widget.match['proof_team_id'] ?? widget.match['submitted_team_id'] ?? '',
           'user_name': widget.match['proof_team_name'] ?? widget.match['proof_leader_name'] ?? 'Team Leader',
           'is_host': false,
           'proof_url': proofUrl,
