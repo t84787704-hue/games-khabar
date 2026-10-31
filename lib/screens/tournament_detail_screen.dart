@@ -9,13 +9,19 @@ import '../constants/gamer_theme.dart';
 import 'team_profile_screen.dart';
 
 class TournamentDetailScreen extends StatefulWidget {
-  final String tournamentId;
+  final String? tournamentId;
   final Map<String, dynamic>? initialData;
+  final Map<String, dynamic>? tournament;
+  final bool isRegistered;
+  final String? selectedGameName;
 
   const TournamentDetailScreen({
     super.key,
-    required this.tournamentId,
+    this.tournamentId,
     this.initialData,
+    this.tournament,
+    this.isRegistered = false,
+    this.selectedGameName,
   });
 
   @override
@@ -33,22 +39,39 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
   String get currentUid => GamerAuthService().currentUid ?? '';
 
+  String get effectiveTournamentId {
+    if (widget.tournamentId != null && widget.tournamentId!.isNotEmpty) {
+      return widget.tournamentId!;
+    }
+    final tMap = widget.tournament ?? widget.initialData;
+    if (tMap != null && tMap['id'] != null) {
+      return tMap['id'].toString();
+    }
+    return '';
+  }
+
   @override
   void initState() {
     super.initState();
-    if (widget.initialData != null) {
-      _tournament = Map<String, dynamic>.from(widget.initialData!);
+    final initData = widget.tournament ?? widget.initialData;
+    if (initData != null) {
+      _tournament = Map<String, dynamic>.from(initData);
       _isLoading = false;
     }
     _loadTournamentData();
   }
 
   Future<void> _loadTournamentData() async {
+    final tId = effectiveTournamentId;
+    if (tId.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
     try {
       final res = await SupabaseService.client
           .from('tournaments')
           .select()
-          .eq('id', widget.tournamentId)
+          .eq('id', tId)
           .maybeSingle();
 
       if (res != null) {
@@ -62,13 +85,13 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           regRes = await SupabaseService.client
               .from('tournament_registrations')
               .select('*, teams(id, name, tag, logo_url, leader_id)')
-              .eq('tournament_id', widget.tournamentId)
+              .eq('tournament_id', tId)
               .order('slot_number', ascending: true);
         } catch (_) {
           regRes = await SupabaseService.client
               .from('tournament_registrations')
               .select()
-              .eq('tournament_id', widget.tournamentId);
+              .eq('tournament_id', tId);
         }
 
         if (regRes is List) {

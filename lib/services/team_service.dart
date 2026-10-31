@@ -1,6 +1,7 @@
 import "dart:io";
 import "dart:async";
 import "package:flutter/foundation.dart";
+import "package:shared_preferences/shared_preferences.dart";
 import "../models/team_model.dart";
 import "supabase_service.dart";
 import "coin_wallet_service.dart";
@@ -516,9 +517,9 @@ class TeamService {
     required String teamId,
     String? currentUserId,
   }) async {
-    if (teamId.isEmpty || currentUserId.isEmpty) return "error";
+    if (teamId.isEmpty || currentUserId == null || currentUserId.isEmpty) return "error";
     try {
-      final userUuid = SupabaseService.toUuid(currentUserId);
+      final userUuid = SupabaseService.toUuid(currentUserId!);
       final teamUuid = SupabaseService.toUuid(teamId);
 
       final memberRow = await SupabaseService.client
@@ -815,6 +816,14 @@ class TeamService {
       debugPrint("[TeamService] rejectJoinRequest error: $e");
       return false;
     }
+  }
+
+  /// Cancel join request (called by requesting user)
+  Future<bool> cancelJoinRequest({
+    required String teamId,
+    required String userId,
+  }) async {
+    return rejectJoinRequest(teamId: teamId, userId: userId);
   }
 
   /// 🏆 Award Tournament Winner:
