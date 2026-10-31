@@ -4,6 +4,7 @@ import '../services/supabase_service.dart';
 import '../models/tournament_room_model.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_rooms_screen.dart';
+import 'tournament_detail_screen.dart';
 
 /// TournamentBoardScreen
 /// Displays tournament rooms and manages host display resolution.
@@ -56,13 +57,23 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> {
       }
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161A22),
-        borderRadius: BorderRadius.circular(16),
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TournamentDetailScreen(
+            tournamentId: room.id,
+          ),
+        ),
       ),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161A22),
+          borderRadius: BorderRadius.circular(16),
+        ),
       child: Row(
         children: [
           CircleAvatar(
@@ -104,7 +115,7 @@ class _TournamentBoardScreenState extends State<TournamentBoardScreen> {
           ),
         ],
       ),
-    );
+    ),);
   }
 
   @override

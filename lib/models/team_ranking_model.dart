@@ -51,10 +51,10 @@ class TeamRanking {
 
     return TeamRanking(
       teamId: (data['teamId'] ?? data['team_id'] ?? data['id'] ?? docId ?? '').toString(),
-      teamName: (data['teamName'] ?? data['team_name'] ?? 'Gamer Team').toString(),
+      teamName: (data['teamName'] ?? data['team_name'] ?? data['name'] ?? 'Gamer Team').toString(),
       leaderId: (data['leaderId'] ?? data['leader_id'] ?? '').toString(),
       leaderName: (data['leaderName'] ?? data['leader_name'] ?? 'Leader').toString(),
-      avatar: (data['avatar'] ?? data['avatar_url'] ?? '').toString(),
+      avatar: (data['avatar'] ?? data['avatar_url'] ?? data['logo_url'] ?? '').toString(),
       game: (data['game'] ?? 'All').toString(),
       wins: w,
       losses: l,

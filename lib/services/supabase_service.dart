@@ -54,7 +54,9 @@ class SupabaseService {
     'Authorization': 'Bearer $supabaseAnonKey',
   };
 
+  // ============================================================
   // STEAM NEWS METHODS
+  // ============================================================
   static Future<List<Map<String, dynamic>>> getSteamNews({int limit = 50}) async {
     try {
       return await query(
@@ -68,7 +70,7 @@ class SupabaseService {
     }
   }
 
-  // STORAGE
+  // STORAGE — Long-term proper solution using Supabase SDK
   static Future<String?> uploadFile({
     required File file,
     String? folder,
@@ -101,9 +103,12 @@ class SupabaseService {
           );
 
       final publicUrl = _supabase.storage.from(bucket).getPublicUrl(path);
+      debugPrint('✅ [uploadFile] Success: $publicUrl');
       return publicUrl;
     } on StorageException catch (e) {
       debugPrint('❌ [uploadFile] StorageException: ${e.message}');
+      debugPrint('❌ [uploadFile] StatusCode: ${e.statusCode}');
+      debugPrint('❌ [uploadFile] Bucket: $bucket');
       return null;
     } catch (e) {
       debugPrint('❌ [uploadFile] Unknown error: $e');
@@ -697,7 +702,9 @@ class SupabaseService {
     }
   }
 
+  // ============================================================
   // ADMIN METHODS
+  // ============================================================
   static Future<bool> isAdmin(String userId) async {
     try {
       final user = await query('users', filters: {'id': 'eq.$userId'}, limit: 1);
@@ -910,7 +917,55 @@ class SupabaseService {
       'status': 'rejected',
       'proof_status': 'rejected',
       'admin_note': reason,
-    }, 'id', matchId);
+  }
+
+  static Future<void> logProofHistory({
+    required String username,
+    required String proofType,
+    required String status,
+    String adminName = 'Admin',
+    String? proofUrl,
+    String? tournamentId,
+  }) async {
+    try {
+      final payload = <String, dynamic>{
+        'username': username.trim().isNotEmpty ? username.trim() : 'User',
+        'proof_type': proofType.trim().isNotEmpty ? proofType.trim() : 'Match Proof',
+        'status': status.toLowerCase().contains('reject') ? 'rejected' : 'approved',
+        'admin_name': adminName.trim().isNotEmpty ? adminName.trim() : 'Admin',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      };
+      if (proofUrl != null && proofUrl.isNotEmpty) {
+        payload['proof_url'] = proofUrl;
+      }
+      if (tournamentId != null && tournamentId.isNotEmpty) {
+        payload['tournament_id'] = tournamentId;
+      }
+      final insertResult = await client.from('proof_history').insert(payload).select();
+      if (insertResult is List && insertResult.isNotEmpty) {
+        _cachedProofHistory.insert(0, Map<String, dynamic>.from(insertResult.first));
+      } else {
+        _cachedProofHistory.insert(0, payload);
+      }
+    } catch (e) {
+      debugPrint('[SupabaseService] logProofHistory error: $e');
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getProofHistoryLogs() async {
+    try {
+      final res = await client
+          .from('proof_history')
+          .select()
+          .order('created_at', ascending: false);
+      if (res is List) {
+        _cachedProofHistory = List<Map<String, dynamic>>.from(res);
+        return _cachedProofHistory;
+      }
+    } catch (e) {
+      debugPrint('[SupabaseService] getProofHistoryLogs error: $e');
+    }
+    return [];
   }
 
   // IN-MEMORY CACHES PREVENTING ANY 1-SECOND DISAPPEARING DATA OR FLICKERING
@@ -922,6 +977,17 @@ class SupabaseService {
   static List<Map<String, dynamic>> _cachedRooms = [];
   static List<Map<String, dynamic>> _cachedActiveMatches = [];
   static List<Map<String, dynamic>> _cachedTournaments = [];
+  static List<Map<String, dynamic>> _cachedProofHistory = [];
+
+  static List<Map<String, dynamic>> get cachedUsers => _cachedUsers;
+  static List<Map<String, dynamic>> get cachedPosts => _cachedPosts;
+  static List<Map<String, dynamic>> get cachedReports => _cachedReports;
+  static List<Map<String, dynamic>> get cachedCoinTransactions => _cachedCoinTransactions;
+  static List<Map<String, dynamic>> get cachedNotifications => _cachedNotifications;
+  static List<Map<String, dynamic>> get cachedRooms => _cachedRooms;
+  static List<Map<String, dynamic>> get cachedActiveMatches => _cachedActiveMatches;
+  static List<Map<String, dynamic>> get cachedTournaments => _cachedTournaments;
+  static List<Map<String, dynamic>> get cachedProofHistory => _cachedProofHistory;
 
   // ============================================================
   // BULLETPROOF REALTIME STREAMS (REST-FIRST + SAFE PERIODIC REFRESH)
@@ -998,10 +1064,8 @@ class SupabaseService {
             .timeout(const Duration(seconds: 4));
         if (res is List) {
           final list = List<Map<String, dynamic>>.from(res);
-          if (list.isNotEmpty || _cachedReports.isEmpty) {
-            _cachedReports = list;
-            yield list;
-          }
+          _cachedReports = list;
+          yield list;
         }
       } catch (e) {
         debugPrint('getRealtimeReports error: $e');
@@ -1147,6 +1211,32 @@ class SupabaseService {
         debugPrint('getRealtimeTournaments error: $e');
         if (_cachedTournaments.isNotEmpty) {
           yield _cachedTournaments;
+        }
+      }
+      await Future.delayed(const Duration(seconds: 3));
+    }
+  }
+
+  static Stream<List<Map<String, dynamic>>> getRealtimeProofHistory() async* {
+    if (_cachedProofHistory.isNotEmpty) {
+      yield _cachedProofHistory;
+    }
+    while (true) {
+      try {
+        final res = await client
+            .from('proof_history')
+            .select()
+            .order('created_at', ascending: false)
+            .timeout(const Duration(seconds: 4));
+        if (res is List) {
+          final list = List<Map<String, dynamic>>.from(res);
+          _cachedProofHistory = list;
+          yield list;
+        }
+      } catch (e) {
+        debugPrint('getRealtimeProofHistory error: $e');
+        if (_cachedProofHistory.isNotEmpty) {
+          yield _cachedProofHistory;
         }
       }
       await Future.delayed(const Duration(seconds: 3));

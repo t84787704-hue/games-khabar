@@ -23,23 +23,17 @@ class AdminUnderReviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
+    return StreamBuilder<List<Map<String, dynamic>>>(
       initialData: const [],
-      stream: SupabaseService.client
-          .from('active_matches')
-          .stream(primaryKey: ['id']),
+      stream: SupabaseService.getRealtimeActiveMatches(),
       builder: (context, matchSnap) {
-        return StreamBuilder(
+        return StreamBuilder<List<Map<String, dynamic>>>(
           initialData: const [],
-          stream: SupabaseService.client
-              .from('rooms')
-              .stream(primaryKey: ['id']),
+          stream: SupabaseService.getRealtimeRooms(),
           builder: (context, roomSnap) {
-            return StreamBuilder(
+            return StreamBuilder<List<Map<String, dynamic>>>(
               initialData: const [],
-              stream: SupabaseService.client
-                  .from('tournaments')
-                  .stream(primaryKey: ['id']),
+              stream: SupabaseService.getRealtimeTournaments(),
               builder: (context, tournamentSnap) {
                 if (matchSnap.hasError && roomSnap.hasError && tournamentSnap.hasError) {
                   return _buildErrorState(
@@ -49,7 +43,7 @@ class AdminUnderReviewTab extends StatelessWidget {
                 }
 
                 // 1. Team Matches Under Review
-                final matchData = (matchSnap.data is List) ? (matchSnap.data as List) : [];
+                final matchData = matchSnap.data ?? [];
                 final underReviewMatches = matchData.where((m) {
                   final st = (m['status'] ?? '').toString().toLowerCase();
                   final pst = (m['proof_status'] ?? '').toString().toLowerCase();
@@ -57,7 +51,7 @@ class AdminUnderReviewTab extends StatelessWidget {
                 }).map((m) => {...m, 'is_room': false, 'is_tournament': false}).toList();
 
                 // 2. Custom Game Rooms Under Review
-                final roomData = (roomSnap.data is List) ? (roomSnap.data as List) : [];
+                final roomData = roomSnap.data ?? [];
                 final underReviewRooms = roomData.where((r) {
                   final st = (r['status'] ?? '').toString().toLowerCase();
                   final rst = (r['reward_status'] ?? '').toString().toLowerCase();
@@ -76,13 +70,13 @@ class AdminUnderReviewTab extends StatelessWidget {
                 }).map((r) => {...r, 'is_room': true, 'is_tournament': false}).toList();
 
                 // 3. Tournaments Under Review
-                final tournamentData = (tournamentSnap.data is List) ? (tournamentSnap.data as List) : [];
+                final tournamentData = tournamentSnap.data ?? [];
                 final underReviewTournaments = tournamentData.where((t) {
                   final proof = (t['proof_url'] ?? '').toString();
                   final proofStatus = (t['proof_status'] ?? '').toString().toLowerCase();
                   final status = (t['status'] ?? '').toString().toLowerCase();
                   
-                  bool isPendingStatus = proofStatus == 'pending' || proofStatus == 'submitted' || proofStatus == 'approved' || proofStatus.isEmpty;
+                  bool isPendingStatus = proofStatus == 'pending' || proofStatus == 'submitted' || proofStatus.isEmpty;
                   return proof.isNotEmpty && status != 'completed' && isPendingStatus;
                 }).map((t) => {
                       ...t,
@@ -119,7 +113,7 @@ class AdminUnderReviewTab extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     return AdminProofCard(
-                      match: Map<String, dynamic>.from(underReview[index] as Map),
+                      match: underReview[index],
                       showActions: true,
                       showDelete: false,
                     );
@@ -135,185 +129,29 @@ class AdminUnderReviewTab extends StatelessWidget {
 }
 
 // ============================================================
-// TAB 2: HISTORY (Accepted + Rejected)
+// TAB 2: HISTORY (proof_history table logs)
 // ============================================================
 class AdminProofHistoryTab extends StatefulWidget {
   const AdminProofHistoryTab({super.key});
 
   @override
-  State<AdminProofHistoryTab> createState() => _AdminProofHistoryTabState();
+  State<AdminProofHistoryTab> createState() => AdminProofHistoryTabState();
 }
 
-class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
-  String _filter = 'All';
+class AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _filter = 'All'; // 'All', 'Approved', 'Rejected'
+  int _refreshCounter = 0;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Row(
-            children: [
-              _buildFilterChip('All', 'filter_all'.tr(), Icons.list_alt_rounded, const Color(0xFF8B949E)),
-              const SizedBox(width: 8),
-              _buildFilterChip('Accepted', 'status_accepted'.tr(), Icons.check_circle_rounded, const Color(0xFF00FF88)),
-              const SizedBox(width: 8),
-              _buildFilterChip('Rejected', 'status_rejected'.tr(), Icons.cancel_rounded, const Color(0xFFFF4655)),
-            ],
-          ),
-        ),
-        Expanded(
-          child: StreamBuilder(
-            initialData: const [],
-            stream: SupabaseService.client
-                .from('active_matches')
-                .stream(primaryKey: ['id']),
-            builder: (context, matchSnap) {
-              return StreamBuilder(
-                initialData: const [],
-                stream: SupabaseService.client
-                    .from('rooms')
-                    .stream(primaryKey: ['id']),
-                builder: (context, roomSnap) {
-                  return StreamBuilder(
-                    initialData: const [],
-                    stream: SupabaseService.client
-                        .from('tournaments')
-                        .stream(primaryKey: ['id']),
-                    builder: (context, tournamentSnap) {
-                      if (matchSnap.hasError && roomSnap.hasError && tournamentSnap.hasError) {
-                        return _buildErrorState(
-                          'could_not_load_history'.tr(),
-                          matchSnap.error ?? roomSnap.error ?? tournamentSnap.error,
-                        );
-                      }
-
-                      final matchData = (matchSnap.data is List) ? (matchSnap.data as List) : [];
-                      final matchHistory = matchData.where((m) {
-                        final st = (m['status'] ?? '').toString().toLowerCase();
-                        final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                        final isAccepted = pst == 'accepted' || pst == 'approved' || st == 'completed';
-                        final isRejected = pst == 'rejected' || st == 'rejected';
-                        return isAccepted || isRejected;
-                      }).map((m) => {...m, 'is_room': false, 'is_tournament': false}).toList();
-
-                      final roomData = (roomSnap.data is List) ? (roomSnap.data as List) : [];
-                      final roomHistory = roomData.where((r) {
-                        final st = (r['status'] ?? '').toString().toLowerCase();
-                        final rst = (r['reward_status'] ?? '').toString().toLowerCase();
-                        final isAccepted = st == 'completed' || rst == 'sent';
-                        final isRejected = st == 'proof_rejected' || rst == 'rejected';
-                        return isAccepted || isRejected;
-                      }).map((r) => {...r, 'is_room': true, 'is_tournament': false}).toList();
-
-                      final tournamentData = (tournamentSnap.data is List) ? (tournamentSnap.data as List) : [];
-                      final tournamentHistory = tournamentData.where((t) {
-                        final proofStatus = (t['proof_status'] ?? '').toString().toLowerCase();
-                        final status = (t['status'] ?? '').toString().toLowerCase();
-                        final isAccepted = proofStatus == 'accepted' || proofStatus == 'approved' || status == 'completed';
-                        final isRejected = proofStatus == 'rejected' || status == 'rejected';
-                        return isAccepted || isRejected;
-                      }).map((t) => {
-                            ...t,
-                            'is_room': false,
-                            'is_tournament': true,
-                            'id': t['id'],
-                            'game': t['game_mode'] ?? t['game_name'] ?? 'Tournament',
-                            'mode': t['title'] ?? 'Match',
-                            'prize_pool': t['prize_pool'] ?? 0,
-                            'win_proof_url': t['proof_url'],
-                            'proof_status': t['proof_status'] ?? (t['status'] == 'completed' ? 'accepted' : 'pending'),
-                          }).toList();
-
-                      var history = [...matchHistory, ...roomHistory, ...tournamentHistory];
-
-                      if (_filter == 'Accepted') {
-                        history = history.where((m) {
-                          final st = (m['status'] ?? '').toString().toLowerCase();
-                          final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                          return pst == 'accepted' || pst == 'approved' || st == 'completed';
-                        }).toList();
-                      } else if (_filter == 'Rejected') {
-                        history = history.where((m) {
-                          final st = (m['status'] ?? '').toString().toLowerCase();
-                          final pst = (m['proof_status'] ?? '').toString().toLowerCase();
-                          return pst == 'rejected' || st == 'rejected' || st == 'proof_rejected';
-                        }).toList();
-                      }
-
-                      history.sort((a, b) {
-                        final aDate = a['ended_at'] ?? a['completed_at'] ?? a['created_at'] ?? '';
-                        final bDate = b['ended_at'] ?? b['completed_at'] ?? b['created_at'] ?? '';
-                        return bDate.toString().compareTo(aDate.toString());
-                      });
-
-                      if (history.isEmpty) {
-                        return _buildEmptyState(
-                          icon: Icons.history_rounded,
-                          title: _filter == 'All' ? 'no_proof_history_title'.tr() : 'No $_filter Proofs',
-                          subtitle: 'proof_history_empty_desc'.tr(),
-                          color: const Color(0xFF38BDF8),
-                        );
-                      }
-
-                      return ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 30),
-                        itemCount: history.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          return AdminProofCard(
-                            match: Map<String, dynamic>.from(history[index] as Map),
-                            showActions: false,
-                            showDelete: true,
-                            onDelete: () => _confirmDelete(context, Map<String, dynamic>.from(history[index] as Map)),
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
-  Widget _buildFilterChip(String key, String label, IconData icon, Color color) {
-    final isSelected = _filter == key;
-    return ChoiceChip(
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: isSelected ? Colors.black : color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.black : color,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-      selected: isSelected,
-      selectedColor: color,
-      backgroundColor: ThemeService.cardSecondary,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: isSelected ? color : ThemeService.border),
-      ),
-      onSelected: (val) {
-        if (val) setState(() => _filter = key);
-      },
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context, Map<String, dynamic> match) async {
-    final confirmed = await showDialog(
+  Future<void> _deleteHistoryRecord(String recordId) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: ThemeService.card,
@@ -350,24 +188,9 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
     if (confirmed != true) return;
 
     try {
-      final matchId = match['id']?.toString() ?? '';
-      if (matchId.isEmpty) return;
-
-      final isRoom = match['is_room'] == true;
-      final isTournament = match['is_tournament'] == true;
-
-      if (isTournament) {
-        await SupabaseService.client.from('tournaments').update({
-          'proof_url': null,
-          'proof_status': null,
-        }).eq('id', matchId);
-      } else if (isRoom) {
-        await SupabaseService.client.from('rooms').delete().eq('id', matchId);
-      } else {
-        await SupabaseService.client.from('active_matches').delete().eq('id', matchId);
-      }
-
-      if (context.mounted) {
+      await SupabaseService.client.from('proof_history').delete().eq('id', recordId);
+      if (mounted) {
+        setState(() => _refreshCounter++);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('proof_deleted_from_history'.tr()),
@@ -376,15 +199,446 @@ class _AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
         );
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${'error_deleting_proof'.tr()}: $e'),
-            backgroundColor: const Color(0xFFFF4655),
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
         );
       }
     }
+  }
+
+  void _showProofDialog(BuildContext context, String imageUrl, String username) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: ThemeService.card,
+        insetPadding: const EdgeInsets.all(12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$username - Proof Screenshot 📸',
+                      style: TextStyle(
+                          color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: ThemeService.textSecondary, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                child: InteractiveViewer(
+                  maxScale: 4.0,
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                    ),
+                    errorWidget: (_, __, ___) => const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: Icon(Icons.broken_image_rounded, color: Colors.red, size: 48),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+            style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Search proof history logs...',
+              hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+              prefixIcon: const Icon(Icons.history_edu_rounded, color: Color(0xFF00FF88), size: 18),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.clear, color: ThemeService.textSecondary, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: ThemeService.card,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: ThemeService.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: ThemeService.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF00FF88)),
+              ),
+            ),
+          ),
+        ),
+
+        // Filter chips: All, Approved, Rejected
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              _buildFilterChip('All', 'filter_all'.tr(), Icons.list_alt_rounded, const Color(0xFF8B949E)),
+              const SizedBox(width: 8),
+              _buildFilterChip('Approved', 'status_accepted'.tr(), Icons.check_circle_rounded, const Color(0xFF00FF88)),
+              const SizedBox(width: 8),
+              _buildFilterChip('Rejected', 'status_rejected'.tr(), Icons.cancel_rounded, const Color(0xFFFF4655)),
+            ],
+          ),
+        ),
+
+        // Stream of proof_history
+        Expanded(
+          child: RefreshIndicator(
+            color: const Color(0xFF00FF88),
+            backgroundColor: ThemeService.card,
+            onRefresh: () async {
+              await SupabaseService.getProofHistoryLogs();
+              if (mounted) setState(() => _refreshCounter++);
+            },
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              key: ValueKey(_refreshCounter),
+              initialData: SupabaseService.cachedProofHistory,
+              stream: SupabaseService.getRealtimeProofHistory(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline_rounded, color: Color(0xFFFF4655), size: 40),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Error loading proof history: ${snapshot.error}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00FF88),
+                              foregroundColor: Colors.black,
+                            ),
+                            onPressed: () => setState(() => _refreshCounter++),
+                            icon: const Icon(Icons.refresh_rounded, size: 16),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final logs = snapshot.data ?? [];
+                final filtered = logs.where((log) {
+                  final status = (log['status'] ?? '').toString().toLowerCase();
+                  final isApproved = status == 'approved' || status == 'accepted';
+                  final isRejected = status == 'rejected' || status == 'declined';
+
+                  if (_filter == 'Approved' && !isApproved) return false;
+                  if (_filter == 'Rejected' && !isRejected) return false;
+
+                  if (_searchQuery.isNotEmpty) {
+                    final username = (log['username'] ?? '').toString().toLowerCase();
+                    final proofType = (log['proof_type'] ?? '').toString().toLowerCase();
+                    final adminName = (log['admin_name'] ?? '').toString().toLowerCase();
+                    final st = status;
+                    if (!username.contains(_searchQuery) &&
+                        !proofType.contains(_searchQuery) &&
+                        !adminName.contains(_searchQuery) &&
+                        !st.contains(_searchQuery)) {
+                      return false;
+                    }
+                  }
+                  return true;
+                }).toList();
+
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: ListView(
+                      shrinkWrap: true,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(18),
+                                decoration: BoxDecoration(
+                                  color: ThemeService.card,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: ThemeService.border),
+                                ),
+                                child: const Icon(Icons.folder_open_rounded, color: Color(0xFF00FF88), size: 40),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                'No proof history records found',
+                                style: TextStyle(
+                                  color: ThemeService.textPrimary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Accepted and rejected proofs will automatically show here.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: ThemeService.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final log = filtered[index];
+                    final logId = log['id']?.toString() ?? '';
+                    final username = log['username'] ?? 'User';
+                    final proofType = log['proof_type'] ?? 'Verification Proof';
+                    final status = (log['status'] ?? 'approved').toString().toLowerCase();
+                    final adminName = log['admin_name'] ?? 'Admin';
+                    final proofUrl = (log['proof_url'] ?? '').toString();
+
+                    DateTime? createdAt;
+                    if (log['created_at'] != null) {
+                      createdAt = DateTime.tryParse(log['created_at'].toString());
+                    }
+                    final formattedDate = createdAt != null
+                        ? DateFormat('dd MMM yyyy, hh:mm a').format(createdAt.toLocal())
+                        : 'Past Record';
+
+                    final isApproved = status == 'approved' || status == 'accepted';
+
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: ThemeService.card,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isApproved
+                              ? const Color(0xFF00FF88).withOpacity(0.3)
+                              : const Color(0xFFFF4655).withOpacity(0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: isApproved
+                                      ? const Color(0xFF00FF88).withOpacity(0.12)
+                                      : const Color(0xFFFF4655).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  isApproved ? Icons.verified_rounded : Icons.cancel_rounded,
+                                  color: isApproved ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '$username • $proofType',
+                                      style: TextStyle(
+                                        color: ThemeService.textPrimary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Reviewed by: $adminName',
+                                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      formattedDate,
+                                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isApproved
+                                      ? const Color(0xFF00FF88).withOpacity(0.15)
+                                      : const Color(0xFFFF4655).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: isApproved
+                                        ? const Color(0xFF00FF88).withOpacity(0.4)
+                                        : const Color(0xFFFF4655).withOpacity(0.4),
+                                  ),
+                                ),
+                                child: Text(
+                                  isApproved ? 'APPROVED' : 'REJECTED',
+                                  style: TextStyle(
+                                    color: isApproved ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              if (logId.isNotEmpty)
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655), size: 18),
+                                  tooltip: 'Delete log',
+                                  onPressed: () => _deleteHistoryRecord(logId),
+                                ),
+                            ],
+                          ),
+                          if (proofUrl.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            InkWell(
+                              onTap: () => _showProofDialog(context, proofUrl, username),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF38BDF8).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: CachedNetworkImage(
+                                        imageUrl: proofUrl,
+                                        width: 24,
+                                        height: 24,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, __) => const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF38BDF8)),
+                                        ),
+                                        errorWidget: (_, __, ___) => const Icon(
+                                          Icons.broken_image_rounded,
+                                          color: Colors.white54,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'View Proof Screenshot 📸',
+                                      style: TextStyle(
+                                        color: Color(0xFF38BDF8),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterChip(String key, String label, IconData icon, Color color) {
+    final isSelected = _filter == key;
+    return ChoiceChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: isSelected ? Colors.black : color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.black : color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+      selected: isSelected,
+      selectedColor: color,
+      backgroundColor: ThemeService.cardSecondary,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: isSelected ? color : ThemeService.border),
+      ),
+      onSelected: (val) {
+        if (val) setState(() => _filter = key);
+      },
+    );
   }
 }
 
@@ -413,7 +667,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
   final TextEditingController _reasonController = TextEditingController();
   final TeamService _teamService = TeamService();
   bool _isProcessing = false;
-  var _fetchedProofs = [];
+  List<Map<String, dynamic>> _fetchedProofs = [];
   bool _isLoadingProofs = false;
 
   @override
@@ -429,7 +683,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
       if (proofUrl.isNotEmpty) {
         setState(() {
           _fetchedProofs = [{
-            'user_id': widget.match['proof_team_id'] ?? widget.match['submitted_team_id'] ?? '',
+            'user_id': widget.match['submitted_team_id'] ?? '',
             'user_name': widget.match['proof_team_name'] ?? widget.match['proof_leader_name'] ?? 'Tournament Team',
             'is_host': false,
             'proof_url': proofUrl,
@@ -453,7 +707,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
           .order('created_at', ascending: true);
 
       if (proofRows.isNotEmpty) {
-        final List entries = [];
+        final List<Map<String, dynamic>> entries = [];
         for (final r in proofRows) {
           final url = (r['proof_url'] ?? r['image_url'] ?? '').toString();
           if (url.isNotEmpty) {
@@ -482,7 +736,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
             .maybeSingle();
 
         if (rData != null && mounted) {
-          final List entries = [];
+          final List<Map<String, dynamic>> entries = [];
           final rawProofs = rData['proofs'];
           if (rawProofs is List) {
             for (final p in rawProofs) {
@@ -592,25 +846,50 @@ class _AdminProofCardState extends State<AdminProofCard> {
 
     try {
       final tournamentId = widget.match['id']?.toString() ?? '';
+      final teamId = widget.match['submitted_team_id'] ?? widget.match['proof_team_id'];
+      final prize = (widget.match['prize_pool'] is num)
+          ? (widget.match['prize_pool'] as num).toInt()
+          : int.tryParse(widget.match['prize_pool']?.toString() ?? '0') ?? 0;
 
-      // Direct database stored procedure se points, wins aur coins credit karna
-      final res = await SupabaseService.client.rpc(
-        'accept_tournament_and_reward',
-        params: {'t_id': tournamentId},
-      );
+      // 1. Mark Tournament as completed and set winner team
+      await SupabaseService.client.from('tournaments').update({
+        'status': 'completed',
+        'proof_status': 'accepted',
+        'winner_team_id': teamId,
+      }).eq('id', tournamentId);
 
-      debugPrint('Tournament Reward RPC response: $res');
+      // 2. Award Tournament Winner: +1 win, +25 points to team & leaderboard, and distribute equal coins split
+      if (teamId != null && teamId.toString().isNotEmpty) {
+        await TeamService().awardTournamentWinner(
+          tournamentId: tournamentId,
+          teamId: teamId.toString(),
+          prizePool: prize,
+          tournamentTitle: widget.match['title']?.toString() ?? 'Tournament',
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Tournament accepted! Points (+25) aur coins distribute ho gaye! 🎉'),
+            content: Text('Tournament proof accepted & prize split distributed! 🎉'),
             backgroundColor: Color(0xFF00FF88),
           ),
         );
       }
+
+      // Log to proof_history table
+      try {
+        final winnerUser = widget.match['winner_name'] ?? widget.match['proof_leader_name'] ?? widget.match['submitted_by'] ?? 'Tournament Player';
+        await SupabaseService.logProofHistory(
+          username: winnerUser.toString(),
+          proofType: 'Tournament: ${widget.match['title'] ?? widget.match['game'] ?? 'Tournament'}',
+          status: 'approved',
+          adminName: 'Admin',
+          proofUrl: (widget.match['proof_url'] ?? widget.match['win_proof_url'])?.toString(),
+          tournamentId: tournamentId,
+        );
+      } catch (_) {}
     } catch (e) {
-      debugPrint('[AdminProofs] RPC fallback error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
@@ -636,6 +915,19 @@ class _AdminProofCardState extends State<AdminProofCard> {
         'proof_reject_reason': finalReason,
         'proof_url': null,
       }).eq('id', tournamentId);
+
+      // Log to proof_history table
+      try {
+        final uName = widget.match['winner_name'] ?? widget.match['proof_leader_name'] ?? widget.match['submitted_by'] ?? 'Tournament Player';
+        await SupabaseService.logProofHistory(
+          username: uName.toString(),
+          proofType: 'Tournament: ${widget.match['title'] ?? widget.match['game'] ?? 'Tournament'}',
+          status: 'rejected',
+          adminName: 'Admin',
+          proofUrl: (widget.match['proof_url'] ?? widget.match['win_proof_url'])?.toString(),
+          tournamentId: tournamentId,
+        );
+      } catch (_) {}
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -743,6 +1035,17 @@ class _AdminProofCardState extends State<AdminProofCard> {
           ),
         );
       }
+
+      // Log to proof_history table
+      try {
+        await SupabaseService.logProofHistory(
+          username: winnerName,
+          proofType: 'Room Match: ${widget.match['game'] ?? 'Custom Room'}',
+          status: 'approved',
+          adminName: 'Admin',
+          proofUrl: (widget.match['win_proof_url'] ?? widget.match['proof_url'])?.toString(),
+        );
+      } catch (_) {}
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -795,6 +1098,17 @@ class _AdminProofCardState extends State<AdminProofCard> {
               roomTitle: 'Team Match',
             );
           }
+        } catch (_) {}
+
+        // Log to proof_history table
+        try {
+          await SupabaseService.logProofHistory(
+            username: (widget.match['winner_name'] ?? widget.match['submitted_by'] ?? 'Team Match Leader').toString(),
+            proofType: 'Team Match Proof',
+            status: 'approved',
+            adminName: 'Admin',
+            proofUrl: (widget.match['proof_url'] ?? widget.match['win_proof_url'])?.toString(),
+          );
         } catch (_) {}
       }
 
@@ -864,6 +1178,17 @@ class _AdminProofCardState extends State<AdminProofCard> {
           );
         }
       }
+
+      // Log to proof_history table
+      try {
+        await SupabaseService.logProofHistory(
+          username: (widget.match['host_name'] ?? widget.match['winner_name'] ?? widget.match['submitted_by'] ?? 'User').toString(),
+          proofType: isRoom ? 'Room Match: ${widget.match['game'] ?? 'Game'}' : 'Team Match Proof',
+          status: 'rejected',
+          adminName: 'Admin',
+          proofUrl: (widget.match['win_proof_url'] ?? widget.match['proof_url'])?.toString(),
+        );
+      } catch (_) {}
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -880,7 +1205,7 @@ class _AdminProofCardState extends State<AdminProofCard> {
     String label;
     IconData icon;
 
-    if (proofStatus == 'accepted' || proofStatus == 'approved' || status == 'completed') {
+    if (proofStatus == 'accepted' || status == 'completed') {
       color = const Color(0xFF00FF88);
       label = 'status_accepted'.tr().toUpperCase();
       icon = Icons.check_circle_rounded;
@@ -934,14 +1259,14 @@ class _AdminProofCardState extends State<AdminProofCard> {
       }
     }
 
-    final List proofEntries = [];
+    final List<Map<String, dynamic>> proofEntries = [];
     if (_fetchedProofs.isNotEmpty) {
       proofEntries.addAll(_fetchedProofs);
     } else {
       final proofUrl = (widget.match['proof_url'] ?? widget.match['win_proof_url'] ?? '').toString();
       if (proofUrl.isNotEmpty) {
         proofEntries.add({
-          'user_id': widget.match['proof_team_id'] ?? widget.match['submitted_team_id'] ?? '',
+          'user_id': widget.match['submitted_team_id'] ?? '',
           'user_name': widget.match['proof_team_name'] ?? widget.match['proof_leader_name'] ?? 'Team Leader',
           'is_host': false,
           'proof_url': proofUrl,

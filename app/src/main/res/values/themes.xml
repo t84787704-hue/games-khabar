@@ -2,4 +2,7 @@
 <resources>
 
     <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <style name="LaunchTheme" parent="Theme.MyApplication" />
+    <style name="NormalTheme" parent="Theme.MyApplication" />
 </resources>
+

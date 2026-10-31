@@ -698,16 +698,27 @@ class TeamMatchService {
   Stream<List<TeamRanking>> getTopTeamsLeaderboard({int limit = 100}) async* {
     while (true) {
       try {
-        final rows = await SupabaseService.query(
-          'team_rankings', 
-          order: 'points.desc', 
-          limit: limit,
-        );
-        yield rows.map((r) => TeamRanking.fromMap(r)).toList();
-      } catch (_) {
-        yield [];
+        final rows = await SupabaseService.client
+            .from('teams')
+            .select()
+            .order('points', ascending: false)
+            .limit(limit);
+        yield (rows as List)
+            .map((r) => TeamRanking.fromMap(Map<String, dynamic>.from(r)))
+            .toList();
+      } catch (e) {
+        try {
+          final fallback = await SupabaseService.query(
+            'teams',
+            order: 'points.desc',
+            limit: limit,
+          );
+          yield fallback.map((r) => TeamRanking.fromMap(r)).toList();
+        } catch (_) {
+          yield [];
+        }
       }
-      await Future.delayed(const Duration(seconds: 5));
+      await Future.delayed(const Duration(seconds: 4));
     }
   }
 }

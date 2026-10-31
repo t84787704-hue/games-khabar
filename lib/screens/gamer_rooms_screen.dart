@@ -720,10 +720,7 @@ class _GamerRoomsScreenState extends State<GamerRoomsScreen> {
               Expanded(
                 child: StreamBuilder<List<Map<String, dynamic>>>(
                   initialData: const [],
-                  stream: SupabaseService.client
-                      .from('rooms')
-                      .stream(primaryKey: ['id'])
-                      .order('created_at', ascending: false),
+                  stream: SupabaseService.getRealtimeRooms(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting &&
                         (!snapshot.hasData || snapshot.data!.isEmpty)) {
@@ -1391,10 +1388,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
       ),
       child: StreamBuilder<List<Map<String, dynamic>>>(
         initialData: const [],
-        stream: SupabaseService.client
-            .from('rooms')
-            .stream(primaryKey: ['id'])
-            .eq('id', widget.roomId),
+        stream: SupabaseService.getRealtimeSingleRoom(widget.roomId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               (!snapshot.hasData || snapshot.data!.isEmpty)) {
@@ -1909,11 +1903,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
               Expanded(
                 child: StreamBuilder<List<Map<String, dynamic>>>(
                   initialData: const [],
-                  stream: SupabaseService.client
-                      .from('messages')
-                      .stream(primaryKey: ['id'])
-                      .eq('room_id', widget.roomId)
-                      .order('created_at', ascending: true),
+                  stream: SupabaseService.getRealtimeRoomMessages(widget.roomId),
                   builder: (context, msgSnap) {
                     final msgs = msgSnap.data ?? [];
                     return ListView.builder(

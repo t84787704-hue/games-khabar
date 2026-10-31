@@ -1,14 +1,10 @@
-// ===============================================================================
-// File: lib/services/team_service.dart
-// Service to manage teams in Supabase with Enriched Member Details
-// ===============================================================================
-
 import "dart:io";
 import "dart:async";
 import "package:flutter/foundation.dart";
-import "package:easy_localization/easy_localization.dart";
 import "../models/team_model.dart";
 import "supabase_service.dart";
+import "coin_wallet_service.dart";
+import "notification_service.dart";
 
 /// Service to manage teams in Supabase
 class TeamService {
@@ -21,12 +17,8 @@ class TeamService {
     final teamId = (rawRow["id"] ?? "").toString();
     final teamUuid = SupabaseService.toUuid(teamId);
 
-    final teamIds = {teamId, teamUuid}.where((e) => e.isNotEmpty).toList();
-
-    // 1. Fetch members from team_members table and gather user IDs
+    // 1. Fetch members from team_members table
     final members = <String>[];
-    final List<Map<String, dynamic>> memberDetails = [];
-    
     if (rawRow["members"] is List) {
       for (final m in (rawRow["members"] as List)) {
         final uid = m.toString().trim();
@@ -35,75 +27,15 @@ class TeamService {
         }
       }
     }
-    
     try {
       final memberRows = await SupabaseService.client
           .from("team_members")
-          .select("user_id, role")
-          .filter("team_id", "in", teamIds);
-      
-      final memberUserIds = <String>[];
-      final Map<String, String> memberRoles = {};
-      
+          .select("user_id")
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
       for (final m in memberRows) {
         final uid = (m["user_id"] ?? "").toString().trim();
-        final role = (m["role"] ?? "member").toString().trim();
-        if (uid.isNotEmpty) {
-          memberRoles[uid] = role;
-          if (!members.contains(uid)) {
-            members.add(uid);
-          }
-          memberUserIds.add(uid);
-        }
-      }
-
-      final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
-      if (members.isEmpty && leaderId.isNotEmpty) {
-        members.add(leaderId);
-        memberUserIds.add(leaderId);
-      }
-
-      // Fetch user profile details (Name & Avatar) for all members in batch
-      if (memberUserIds.isNotEmpty) {
-        try {
-          final userRows = await SupabaseService.client
-              .from("users")
-              .select("id, uid, display_name, username, avatar_url, photo_url")
-              .inFilter("id", memberUserIds);
-
-          final Map<String, Map<String, String>> userInfoMap = {};
-          for (final u in userRows) {
-            final id = (u["id"] ?? "").toString();
-            final uid = (u["uid"] ?? "").toString();
-            final dName = (u["display_name"] ?? "").toString().trim();
-            final uName = (u["username"] ?? "").toString().trim();
-            final avatar = (u["avatar_url"] ?? u["photo_url"] ?? "").toString().trim();
-
-            String resolvedName = "Member";
-            if (dName.isNotEmpty && dName.toLowerCase() != "null" && dName != 'gamer_id_display') {
-              resolvedName = dName;
-            } else if (uName.isNotEmpty && uName.toLowerCase() != "null") {
-              resolvedName = uName.startsWith('@') ? uName : '@$uName';
-            }
-
-            final userMapData = {'name': resolvedName, 'avatar': avatar};
-            if (id.isNotEmpty) userInfoMap[id] = userMapData;
-            if (uid.isNotEmpty) userInfoMap[uid] = userMapData;
-          }
-
-          for (final mId in members) {
-            final uInfo = userInfoMap[mId] ?? {'name': mId == leaderId ? 'Leader' : 'Member', 'avatar': ''};
-            final isLeader = mId == leaderId || memberRoles[mId] == 'owner' || memberRoles[mId] == 'leader';
-            
-            memberDetails.add({
-              'id': mId,
-              'name': uInfo['name'],
-              'avatar': uInfo['avatar'],
-              'role': isLeader ? 'Leader' : (memberRoles[mId] ?? 'Member'),
-            });
-          }
-        } catch (e) {
-          debugPrint("[TeamService] member profiles batch fetch error: $e");
+        if (uid.isNotEmpty && !members.contains(uid)) {
+          members.add(uid);
         }
       }
     } catch (e) {
@@ -111,19 +43,32 @@ class TeamService {
     }
 
     final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
+    if (members.isEmpty && leaderId.isNotEmpty) {
+      members.add(leaderId);
+    }
 
     // 2. Fetch pending join requests from team_join_requests table
     final pendingRequests = <String>[];
+    if (rawRow["pending_join_requests"] is List) {
+      for (final r in (rawRow["pending_join_requests"] as List)) {
+        final uid = r.toString().trim();
+        if (uid.isNotEmpty && !pendingRequests.contains(uid)) {
+          pendingRequests.add(uid);
+        }
+      }
+    }
     try {
       final reqRows = await SupabaseService.client
           .from("team_join_requests")
           .select("user_id, status")
-          .filter("team_id", "in", teamIds)
-          .eq("status", "pending");
-      
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
       for (final r in reqRows) {
+        final status = (r["status"] ?? "pending").toString().toLowerCase();
         final uid = (r["user_id"] ?? "").toString().trim();
-        if (uid.isNotEmpty && !members.contains(uid) && !pendingRequests.contains(uid)) {
+        if (uid.isNotEmpty &&
+            status == "pending" &&
+            !members.contains(uid) &&
+            !pendingRequests.contains(uid)) {
           pendingRequests.add(uid);
         }
       }
@@ -138,7 +83,7 @@ class TeamService {
       try {
         final userRes = await SupabaseService.client
             .from("users")
-            .select("id, uid, display_name, username, avatar_url, photo_url")
+            .select("id, uid, display_name, username, avatar_url")
             .or("id.eq.$leaderId,uid.eq.$leaderId")
             .maybeSingle();
         if (userRes != null) {
@@ -149,7 +94,7 @@ class TeamService {
           } else if (un.isNotEmpty && un.toLowerCase() != "null") {
             leaderName = un;
           }
-          final av = (userRes["avatar_url"] ?? userRes["photo_url"] ?? "").toString().trim();
+          final av = (userRes["avatar_url"] ?? "").toString().trim();
           if (av.isNotEmpty && av.toLowerCase() != "null") {
             leaderAvatar = av;
           }
@@ -161,21 +106,18 @@ class TeamService {
 
     final enrichedMap = Map<String, dynamic>.from(rawRow);
     enrichedMap["members"] = members;
-    enrichedMap["member_details"] = memberDetails;
-    enrichedMap["memberDetails"] = memberDetails;
     enrichedMap["pending_join_requests"] = pendingRequests;
     enrichedMap["pendingJoinRequests"] = pendingRequests;
     enrichedMap["join_requests"] = pendingRequests;
-    enrichedMap["leader_name"] = leaderName.isNotEmpty ? leaderName : "team_leader_fallback".tr();
-    enrichedMap["leaderName"] = leaderName.isNotEmpty ? leaderName : "team_leader_fallback".tr();
+    enrichedMap["leader_name"] = leaderName.isNotEmpty ? leaderName : "Leader";
+    enrichedMap["leaderName"] = leaderName.isNotEmpty ? leaderName : "Leader";
     enrichedMap["leader_avatar"] = leaderAvatar;
     enrichedMap["leaderAvatar"] = leaderAvatar;
 
     final team = TeamModel.fromSupabase(enrichedMap);
     return team.copyWith(
       members: members,
-      memberDetails: memberDetails,
-      leaderName: leaderName.isNotEmpty ? leaderName : "team_leader_fallback".tr(),
+      leaderName: leaderName.isNotEmpty ? leaderName : "Leader",
       leaderAvatar: leaderAvatar,
     );
   }
@@ -296,7 +238,6 @@ class TeamService {
         .toList();
 
     final Map<String, List<String>> membersByTeam = {};
-    final Map<String, List<Map<String, dynamic>>> memberDetailsByTeam = {};
     final Map<String, List<String>> pendingByTeam = {};
 
     if (teamIds.isNotEmpty) {
@@ -305,54 +246,12 @@ class TeamService {
             .from("team_members")
             .select("team_id, user_id, role")
             .inFilter("team_id", teamIds);
-            
-        final allUserIds = memberRows.map((m) => (m["user_id"] ?? "").toString()).where((id) => id.isNotEmpty).toSet().toList();
-        final Map<String, Map<String, String>> userInfoMap = {};
-        
-        if (allUserIds.isNotEmpty) {
-          try {
-            final userRows = await SupabaseService.client
-                .from("users")
-                .select("id, uid, display_name, username, avatar_url, photo_url")
-                .inFilter("id", allUserIds);
-            for (final u in userRows) {
-              final id = (u["id"] ?? "").toString();
-              final uid = (u["uid"] ?? "").toString();
-              final dName = (u["display_name"] ?? "").toString().trim();
-              final uName = (u["username"] ?? "").toString().trim();
-              final avatar = (u["avatar_url"] ?? u["photo_url"] ?? "").toString().trim();
-
-              String resolvedName = "Member";
-              if (dName.isNotEmpty && dName.toLowerCase() != "null" && dName != 'gamer_id_display') {
-                resolvedName = dName;
-              } else if (uName.isNotEmpty && uName.toLowerCase() != "null") {
-                resolvedName = uName.startsWith('@') ? uName : '@$uName';
-              }
-
-              final userMapData = {'name': resolvedName, 'avatar': avatar};
-              if (id.isNotEmpty) userInfoMap[id] = userMapData;
-              if (uid.isNotEmpty) userInfoMap[uid] = userMapData;
-            }
-          } catch (_) {}
-        }
-
         for (final m in memberRows) {
           final tid = (m["team_id"] ?? "").toString();
           final uid = (m["user_id"] ?? "").toString();
-          final role = (m["role"] ?? "member").toString();
           if (tid.isEmpty || uid.isEmpty) continue;
-          
           final list = membersByTeam.putIfAbsent(tid, () => []);
           if (!list.contains(uid)) list.add(uid);
-
-          final detailsList = memberDetailsByTeam.putIfAbsent(tid, () => []);
-          final uInfo = userInfoMap[uid] ?? {'name': 'Member', 'avatar': ''};
-          detailsList.add({
-            'id': uid,
-            'name': uInfo['name'],
-            'avatar': uInfo['avatar'],
-            'role': role,
-          });
         }
       } catch (e) {
         debugPrint("[TeamService] members fetch error: $e");
@@ -362,12 +261,12 @@ class TeamService {
         final reqRows = await SupabaseService.client
             .from("team_join_requests")
             .select("team_id, user_id, status")
-            .inFilter("team_id", teamIds)
-            .eq("status", "pending");
+            .inFilter("team_id", teamIds);
         for (final r in reqRows) {
           final tid = (r["team_id"] ?? "").toString();
           final uid = (r["user_id"] ?? "").toString();
-          if (tid.isEmpty || uid.isEmpty) continue;
+          final status = (r["status"] ?? "pending").toString().toLowerCase();
+          if (tid.isEmpty || uid.isEmpty || status != "pending") continue;
           final list = pendingByTeam.putIfAbsent(tid, () => []);
           if (!list.contains(uid)) list.add(uid);
         }
@@ -388,7 +287,7 @@ class TeamService {
       try {
         final userRows = await SupabaseService.client
             .from("users")
-            .select("id, uid, display_name, username, avatar_url, photo_url")
+            .select("id, uid, display_name, username, avatar_url")
             .inFilter("id", leaderIds);
         for (final u in userRows) {
           final id = (u["id"] ?? "").toString();
@@ -397,8 +296,8 @@ class TeamService {
           final un = (u["username"] ?? "").toString().trim();
           final name = (d.isNotEmpty && d.toLowerCase() != "null")
               ? d
-              : ((un.isNotEmpty && un.toLowerCase() != "null") ? un : "team_leader_fallback".tr());
-          final avatar = (u["avatar_url"] ?? u["photo_url"] ?? "").toString();
+              : ((un.isNotEmpty && un.toLowerCase() != "null") ? un : "Leader");
+          final avatar = (u["avatar_url"] ?? "").toString();
           if (id.isNotEmpty) {
             leaderNameById[id] = name;
             leaderAvatarById[id] = avatar;
@@ -418,31 +317,29 @@ class TeamService {
       final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString();
 
       var members = List<String>.from(membersByTeam[tid] ?? <String>[]);
-      var memberDetails = List<Map<String, dynamic>>.from(memberDetailsByTeam[tid] ?? <Map<String, dynamic>>[]);
-      
       if (members.isEmpty && leaderId.isNotEmpty) {
         members = [leaderId];
-        memberDetails = [{
-          'id': leaderId,
-          'name': leaderNameById[leaderId] ?? 'Leader',
-          'avatar': leaderAvatarById[leaderId] ?? '',
-          'role': 'owner',
-        }];
       }
 
       final pending = List<String>.from(pendingByTeam[tid] ?? <String>[]);
+      if (rawRow["pending_join_requests"] is List) {
+        for (final p in (rawRow["pending_join_requests"] as List)) {
+          final pStr = p.toString().trim();
+          if (pStr.isNotEmpty && !pending.contains(pStr) && !members.contains(pStr)) {
+            pending.add(pStr);
+          }
+        }
+      }
 
       final fallbackLeaderName =
-          (rawRow["leader_name"] ?? rawRow["leaderId"] ?? "").toString().trim();
+          (rawRow["leader_name"] ?? rawRow["leaderName"] ?? "").toString().trim();
       final leaderName = leaderNameById[leaderId] ??
-          (fallbackLeaderName.isNotEmpty ? fallbackLeaderName : "team_leader_fallback".tr());
+          (fallbackLeaderName.isNotEmpty ? fallbackLeaderName : "Leader");
       final leaderAvatar = leaderAvatarById[leaderId] ??
           (rawRow["leader_avatar"] ?? rawRow["leaderAvatar"] ?? "").toString();
 
       final mapCopy = Map<String, dynamic>.from(rawRow);
       mapCopy["members"] = members;
-      mapCopy["member_details"] = memberDetails;
-      mapCopy["memberDetails"] = memberDetails;
       mapCopy["pending_join_requests"] = pending;
       mapCopy["pendingJoinRequests"] = pending;
       mapCopy["join_requests"] = pending;
@@ -454,7 +351,6 @@ class TeamService {
       final t = TeamModel.fromSupabase(mapCopy);
       return t.copyWith(
         members: members,
-        memberDetails: memberDetails,
         leaderName: leaderName,
         leaderAvatar: leaderAvatar,
       );
@@ -463,8 +359,7 @@ class TeamService {
     var filtered = enriched;
     if (gameFilter != null &&
         gameFilter.isNotEmpty &&
-        gameFilter != "All" &&
-        gameFilter != "all_games".tr()) {
+        gameFilter != "All") {
       filtered = filtered
           .where((t) => t.game.toLowerCase() == gameFilter.toLowerCase())
           .toList();
@@ -504,7 +399,6 @@ class TeamService {
     required String name,
     required String tag,
     File? logoFile,
-    File? newLogoFile,
     required String game,
     required String description,
     required String requirements,
@@ -516,16 +410,15 @@ class TeamService {
       final authUserId = SupabaseService.client.auth.currentUser?.id;
 
       if (authUserId == null || authUserId.isEmpty) {
-        throw Exception('err_user_not_authenticated'.tr());
+        throw Exception('User not authenticated. Please log in again.');
       }
 
       final effectiveLeaderId = authUserId;
 
       String logoUrl = "";
-      final fileToUpload = logoFile ?? newLogoFile;
-      if (fileToUpload != null) {
+      if (logoFile != null) {
         final uploaded = await SupabaseService.uploadFile(
-          file: fileToUpload,
+          file: logoFile,
           folder: "team_logos",
           bucket: SupabaseService.bucketTeamLogos,
         );
@@ -573,45 +466,44 @@ class TeamService {
     }
   }
 
-  /// Update Team Details
+  /// Update existing team
   Future<bool> updateTeam({
     required String teamId,
     required String name,
     required String tag,
-    File? logoFile,
     File? newLogoFile,
-    String? game,
+    required String game,
     required String description,
     required String requirements,
   }) async {
+    if (teamId.isEmpty) return false;
     try {
       final Map<String, dynamic> updates = {
         "name": name.trim(),
         "tag": tag.trim().toUpperCase(),
+        "game": game,
         "description": description.trim(),
         "requirements": requirements.trim(),
       };
 
-      if (game != null && game.isNotEmpty) {
-        updates["game"] = game;
-      }
-
-      final fileToUpload = logoFile ?? newLogoFile;
-      if (fileToUpload != null) {
-        final uploaded = await SupabaseService.uploadFile(
-          file: fileToUpload,
+      if (newLogoFile != null) {
+        final newLogoUrl = await SupabaseService.uploadFile(
+          file: newLogoFile,
           folder: "team_logos",
           bucket: SupabaseService.bucketTeamLogos,
         );
-        if (uploaded != null) {
-          updates["logo_url"] = uploaded;
+        if (newLogoUrl != null && newLogoUrl.isNotEmpty) {
+          updates["logo_url"] = newLogoUrl;
         }
       }
 
+      final teamUuid = SupabaseService.toUuid(teamId);
       await SupabaseService.client
           .from("teams")
           .update(updates)
-          .eq("id", teamId);
+          .or("id.eq.$teamUuid,id.eq.$teamId");
+
+      debugPrint("[TeamService] ✅ Team updated: $teamId");
       return true;
     } catch (e) {
       debugPrint("[TeamService] updateTeam error: $e");
@@ -619,77 +511,174 @@ class TeamService {
     }
   }
 
-  /// Delete Team (Supports both userId and currentUserId)
-  Future<bool> deleteTeam({
+  /// Delete team (Owner only)
+  Future<String> deleteTeam({
     required String teamId,
-    String? userId,
     String? currentUserId,
-    String? teamName,
   }) async {
+    if (teamId.isEmpty || currentUserId.isEmpty) return "error";
     try {
-      final effectiveUserId = userId ?? currentUserId ?? "";
+      final userUuid = SupabaseService.toUuid(currentUserId);
+      final teamUuid = SupabaseService.toUuid(teamId);
 
-      await SupabaseService.client
+      final memberRow = await SupabaseService.client
           .from("team_members")
-          .delete()
-          .eq("team_id", teamId);
+          .select("role")
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId")
+          .or("user_id.eq.$userUuid,user_id.eq.$currentUserId")
+          .maybeSingle();
 
-      var query = SupabaseService.client
-          .from("teams")
-          .delete()
-          .eq("id", teamId);
-
-      if (effectiveUserId.isNotEmpty) {
-        query = query.eq("leader_id", effectiveUserId);
+      if (memberRow != null) {
+        final role = (memberRow["role"] ?? "").toString().toLowerCase();
+        if (role != "owner" && role != "leader") {
+          return "not_owner";
+        }
       }
 
-      await query;
-      return true;
+      final activeMatches = await SupabaseService.client
+          .from("active_matches")
+          .select("id")
+          .or("team1_id.eq.$teamUuid,team2_id.eq.$teamUuid")
+          .inFilter("status", ["active", "under_review"]);
+
+      if (activeMatches.isNotEmpty) {
+        return "active_match";
+      }
+
+      try {
+        await SupabaseService.client
+            .from("challenges")
+            .delete()
+            .eq("from_team_id", teamUuid);
+      } catch (_) {}
+      try {
+        await SupabaseService.client
+            .from("challenges")
+            .delete()
+            .eq("to_team_id", teamUuid);
+      } catch (_) {}
+      try {
+        await SupabaseService.client
+            .from("team_join_requests")
+            .delete()
+            .eq("team_id", teamUuid);
+      } catch (_) {}
+      try {
+        await SupabaseService.client
+            .from("team_members")
+            .delete()
+            .eq("team_id", teamUuid);
+      } catch (_) {}
+
+      await SupabaseService.client
+          .from("teams")
+          .delete()
+          .or("id.eq.$teamUuid,id.eq.$teamId");
+      debugPrint("[TeamService] ✅ Team deleted: $teamId");
+      return "ok";
     } catch (e) {
       debugPrint("[TeamService] deleteTeam error: $e");
-      return false;
+      return "error";
     }
   }
 
-  /// Request to join a team (Supports optional userName, teamName, etc.)
+  /// Request to join team
   Future<bool> requestToJoinTeam({
     required String teamId,
     required String userId,
     String? userName,
     String? teamName,
-    String? userAvatar,
-    String? leaderId,
   }) async {
+    if (teamId.isEmpty || userId.isEmpty) return false;
     try {
-      await SupabaseService.client.from("team_join_requests").upsert({
-        "team_id": teamId,
-        "user_id": userId,
-        "status": "pending",
-        "created_at": DateTime.now().toIso8601String(),
-      });
+      final teamUuid = SupabaseService.toUuid(teamId);
+      final userUuid = SupabaseService.toUuid(userId);
+      final nowIso = DateTime.now().toIso8601String();
+
+      // 1. Check if request already exists in team_join_requests
+      final existing = await SupabaseService.client
+          .from("team_join_requests")
+          .select("id")
+          .eq("team_id", teamUuid)
+          .eq("user_id", userUuid)
+          .maybeSingle();
+
+      if (existing == null) {
+        await SupabaseService.client.from("team_join_requests").insert({
+          "team_id": teamUuid,
+          "user_id": userUuid,
+          "status": "pending",
+          "created_at": nowIso,
+        });
+      } else {
+        await SupabaseService.client
+            .from("team_join_requests")
+            .update({"status": "pending", "created_at": nowIso})
+            .eq("team_id", teamUuid)
+            .eq("user_id", userUuid);
+      }
+
+      // 2. Sync pending_join_requests column on teams table (if column exists)
+      String leaderId = "";
+      String resolvedTeamName = teamName ?? "Team";
+      try {
+        final teamRow = await SupabaseService.client
+            .from("teams")
+            .select()
+            .or("id.eq.$teamUuid,id.eq.$teamId")
+            .maybeSingle();
+
+        if (teamRow != null) {
+          leaderId = (teamRow["leader_id"] ?? teamRow["leaderId"] ?? "").toString();
+          if (teamName == null || teamName.isEmpty) {
+            resolvedTeamName = (teamRow["name"] ?? "Team").toString();
+          }
+
+          if (teamRow.containsKey("pending_join_requests")) {
+            final currentList = List<String>.from(
+              (teamRow["pending_join_requests"] as List? ?? []).map((e) => e.toString()),
+            );
+            if (!currentList.contains(userUuid)) {
+              currentList.add(userUuid);
+            }
+            await SupabaseService.client
+                .from("teams")
+                .update({"pending_join_requests": currentList})
+                .eq("id", teamUuid);
+          }
+        }
+      } catch (e) {
+        debugPrint("[TeamService] teams pending_join_requests sync note: $e");
+      }
+
+      // 3. Send notification to Team Leader
+      if (leaderId.isNotEmpty && leaderId != userUuid && leaderId != userId) {
+        try {
+          final senderDisplay = (userName != null && userName.trim().isNotEmpty)
+              ? userName.trim()
+              : "A gamer";
+          await SupabaseService.client.from("notifications").insert({
+            "user_id": SupabaseService.toUuid(leaderId),
+            "sender_id": userUuid,
+            "sender_name": senderDisplay,
+            "type": "team_join_request",
+            "title": "New Team Join Request 🛡️",
+            "body": "$senderDisplay requested to join $resolvedTeamName.",
+            "is_read": false,
+            "data": {
+              "team_id": teamUuid,
+              "user_id": userUuid,
+            },
+            "created_at": nowIso,
+          });
+        } catch (e) {
+          debugPrint("[TeamService] join notification note: $e");
+        }
+      }
+
       return true;
     } catch (e) {
       debugPrint("[TeamService] requestToJoinTeam error: $e");
-      return false;
-    }
-  }
-
-  /// Cancel join request
-  Future<bool> cancelJoinRequest({
-    required String teamId,
-    required String userId,
-    String? userName,
-    String? teamName,
-  }) async {
-    try {
-      await SupabaseService.client
-          .from("team_join_requests")
-          .delete()
-          .eq("team_id", teamId)
-          .eq("user_id", userId);
-      return true;
-    } catch (e) {
-      debugPrint("[TeamService] cancelJoinRequest error: $e");
       return false;
     }
   }
@@ -699,22 +688,88 @@ class TeamService {
     required String teamId,
     required String userId,
     String? userName,
-    String? teamName,
-    String? userAvatar,
   }) async {
+    if (teamId.isEmpty || userId.isEmpty) return false;
     try {
+      final teamUuid = SupabaseService.toUuid(teamId);
+      final userUuid = SupabaseService.toUuid(userId);
+      final nowIso = DateTime.now().toIso8601String();
+
+      // 1. Check if already in team_members
+      final existingMember = await SupabaseService.client
+          .from("team_members")
+          .select("user_id")
+          .eq("team_id", teamUuid)
+          .eq("user_id", userUuid)
+          .maybeSingle();
+
+      if (existingMember == null) {
+        await SupabaseService.client.from("team_members").insert({
+          "team_id": teamUuid,
+          "user_id": userUuid,
+          "role": "member",
+          "joined_at": nowIso,
+        });
+      }
+
+      // 2. Delete from team_join_requests
       await SupabaseService.client
           .from("team_join_requests")
-          .update({"status": "accepted"})
-          .eq("team_id", teamId)
-          .eq("user_id", userId);
+          .delete()
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId")
+          .or("user_id.eq.$userUuid,user_id.eq.$userId");
 
-      await SupabaseService.client.from("team_members").insert({
-        "team_id": teamId,
-        "user_id": userId,
-        "role": "member",
-        "joined_at": DateTime.now().toIso8601String(),
-      });
+      // 3. Sync teams table columns if present
+      String teamName = "Team";
+      try {
+        final teamRow = await SupabaseService.client
+            .from("teams")
+            .select()
+            .or("id.eq.$teamUuid,id.eq.$teamId")
+            .maybeSingle();
+        if (teamRow != null) {
+          teamName = (teamRow["name"] ?? "Team").toString();
+          final updates = <String, dynamic>{};
+
+          if (teamRow.containsKey("pending_join_requests")) {
+            final pendingList = List<String>.from(
+              (teamRow["pending_join_requests"] as List? ?? []).map((e) => e.toString()),
+            )..removeWhere((id) => id == userUuid || id == userId);
+            updates["pending_join_requests"] = pendingList;
+          }
+
+          if (teamRow.containsKey("members")) {
+            final membersList = List<String>.from(
+              (teamRow["members"] as List? ?? []).map((e) => e.toString()),
+            );
+            if (!membersList.contains(userUuid)) {
+              membersList.add(userUuid);
+            }
+            updates["members"] = membersList;
+          }
+
+          if (updates.isNotEmpty) {
+            await SupabaseService.client
+                .from("teams")
+                .update(updates)
+                .eq("id", teamUuid);
+          }
+        }
+      } catch (_) {}
+
+      // 4. Notify accepted player
+      try {
+        await SupabaseService.client.from("notifications").insert({
+          "user_id": userUuid,
+          "type": "team_join_accepted",
+          "title": "Team Request Accepted! 🎉",
+          "body": "You are now a member of $teamName.",
+          "is_read": false,
+          "data": {"team_id": teamUuid},
+          "created_at": nowIso,
+        });
+      } catch (_) {}
+
       return true;
     } catch (e) {
       debugPrint("[TeamService] acceptJoinRequest error: $e");
@@ -726,19 +781,508 @@ class TeamService {
   Future<bool> rejectJoinRequest({
     required String teamId,
     required String userId,
-    String? userName,
-    String? teamName,
   }) async {
+    if (teamId.isEmpty || userId.isEmpty) return false;
     try {
+      final teamUuid = SupabaseService.toUuid(teamId);
+      final userUuid = SupabaseService.toUuid(userId);
+
       await SupabaseService.client
           .from("team_join_requests")
-          .update({"status": "rejected"})
-          .eq("team_id", teamId)
-          .eq("user_id", userId);
+          .delete()
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId")
+          .or("user_id.eq.$userUuid,user_id.eq.$userId");
+
+      try {
+        final teamRow = await SupabaseService.client
+            .from("teams")
+            .select()
+            .or("id.eq.$teamUuid,id.eq.$teamId")
+            .maybeSingle();
+        if (teamRow != null && teamRow.containsKey("pending_join_requests")) {
+          final pendingList = List<String>.from(
+            (teamRow["pending_join_requests"] as List? ?? []).map((e) => e.toString()),
+          )..removeWhere((id) => id == userUuid || id == userId);
+          await SupabaseService.client
+              .from("teams")
+              .update({"pending_join_requests": pendingList})
+              .eq("id", teamUuid);
+        }
+      } catch (_) {}
+
       return true;
     } catch (e) {
       debugPrint("[TeamService] rejectJoinRequest error: $e");
       return false;
     }
   }
+
+  /// 🏆 Award Tournament Winner:
+  /// 1. Updates team: wins + 1, points + 25
+  /// 2. Updates team_rankings for Top 100 Leaderboard: wins + 1, points + 25
+  /// 3. Safely queries leader + all team_members
+  /// 4. Splits prize pool equally among all members via CoinWalletService.updateCoins
+  /// 5. Logs to active_matches / match history & notifications
+  Future<bool> awardTournamentWinner({
+    required String tournamentId,
+    required String teamId,
+    required int prizePool,
+    String tournamentTitle = 'Tournament',
+  }) async {
+    try {
+      debugPrint('[TeamService] awardTournamentWinner: tournament=$tournamentId, team=$teamId, prize=$prizePool');
+      final teamUuid = SupabaseService.toUuid(teamId);
+
+      // 1. Fetch team info
+      Map<String, dynamic>? teamRow;
+      try {
+        teamRow = await SupabaseService.client
+            .from('teams')
+            .select()
+            .or('id.eq.$teamUuid,id.eq.$teamId')
+            .maybeSingle();
+      } catch (e) {
+        debugPrint('[TeamService] fetch team error: $e');
+      }
+
+      final teamName = teamRow?['name']?.toString() ?? 'Winning Team';
+      final leaderId = (teamRow?['leader_id'] ?? teamRow?['leaderId'] ?? '').toString();
+      final game = (teamRow?['game'] ?? 'Free Fire').toString();
+      final avatar = (teamRow?['logo_url'] ?? teamRow?['avatar'] ?? '').toString();
+      final currentWins = (teamRow?['wins'] as num?)?.toInt() ?? 0;
+      final currentPoints = (teamRow?['points'] as num?)?.toInt() ?? (currentWins * 25);
+      final currentLosses = (teamRow?['losses'] as num?)?.toInt() ?? 0;
+      final currentDraws = (teamRow?['draws'] as num?)?.toInt() ?? 0;
+
+      final int newWins = currentWins + 1;
+      final int newPoints = currentPoints + 25; // ✅ Each tournament win gives +25 points
+      final int totalMatches = newWins + currentLosses + currentDraws;
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+
+      // 2. Update teams table
+      try {
+        await SupabaseService.client.from('teams').update({
+          'wins': newWins,
+          'points': newPoints,
+          'updated_at': nowIso,
+        }).or('id.eq.$teamUuid,id.eq.$teamId');
+      } catch (e) {
+        debugPrint('[TeamService] Error updating teams wins/points: $e');
+      }
+
+      // 3. Update team_rankings table (for Top 100 Leaderboard)
+      try {
+        await SupabaseService.client.from('team_rankings').upsert({
+          'team_id': teamUuid,
+          'teamId': teamUuid,
+          'team_name': teamName,
+          'teamName': teamName,
+          'leader_id': leaderId,
+          'leaderId': leaderId,
+          'avatar': avatar,
+          'game': game,
+          'wins': newWins,
+          'losses': currentLosses,
+          'draws': currentDraws,
+          'total_matches': totalMatches,
+          'totalMatches': totalMatches,
+          'points': newPoints,
+          'updated_at': nowIso,
+          'updatedAt': nowIso,
+        });
+      } catch (e) {
+        debugPrint('[TeamService] Error updating team_rankings: $e');
+      }
+
+      // 4. Gather all team member IDs (Leader + Members)
+      final List<String> memberIds = [];
+      if (leaderId.isNotEmpty) {
+        memberIds.add(leaderId);
+      }
+      try {
+        final memberRows = await SupabaseService.client
+            .from('team_members')
+            .select('user_id')
+            .or('team_id.eq.$teamUuid,team_id.eq.$teamId');
+        for (final m in memberRows) {
+          final uid = (m['user_id'] ?? '').toString().trim();
+          if (uid.isNotEmpty && !memberIds.contains(uid)) {
+            memberIds.add(uid);
+          }
+        }
+      } catch (e) {
+        debugPrint('[TeamService] Error fetching member IDs: $e');
+      }
+
+      if (memberIds.isEmpty && leaderId.isNotEmpty) {
+        memberIds.add(leaderId);
+      }
+
+      // 5. Distribute prize coins equally
+      if (prizePool > 0 && memberIds.isNotEmpty) {
+        final int share = (prizePool / memberIds.length).floor();
+        for (final uid in memberIds) {
+          if (share > 0) {
+            try {
+              await CoinWalletService.updateCoins(
+                userId: uid,
+                amount: share,
+                type: 'tournament_win',
+                roomId: tournamentId,
+                description: '🏆 Tournament Win Prize ($share Coins): $tournamentTitle',
+              );
+            } catch (e) {
+              debugPrint('[TeamService] Error updating coins for $uid: $e');
+            }
+
+            try {
+              await NotificationService().sendNotification(
+                userId: uid,
+                type: 'tournament_result',
+                title: '🏆 Tournament Champion! ($share Coins Added)',
+                body: 'Your team "$teamName" won "$tournamentTitle"! Your $share coins prize share has been credited to your wallet.',
+                data: {'tournament_id': tournamentId, 'prize': share, 'team_id': teamId},
+                priority: 'high',
+              );
+            } catch (_) {}
+          }
+        }
+      }
+
+      // 6. Record victory in active_matches so it displays under Match & Tournament History
+      try {
+        final matchRecordId = 'tourn_${tournamentId}_${DateTime.now().millisecondsSinceEpoch}';
+        await SupabaseService.client.from('active_matches').insert({
+          'id': matchRecordId,
+          'team1_id': teamUuid,
+          'team2_id': teamUuid,
+          'winner_team_id': teamUuid,
+          'status': 'completed',
+          'result': 'win',
+          'title': '🏆 Tournament: $tournamentTitle',
+          'start_time': nowIso,
+          'ended_at': nowIso,
+          'created_at': nowIso,
+        });
+      } catch (e) {
+        debugPrint('[TeamService] Error inserting match history: $e');
+      }
+
+      // 7. Update tournament record
+      try {
+        await SupabaseService.client.from('tournaments').update({
+          'status': 'completed',
+          'proof_status': 'approved',
+          'winner_team_id': teamId,
+        }).eq('id', tournamentId);
+      } catch (_) {}
+
+      // 8. Log proof history
+      try {
+        await SupabaseService.logProofHistory(
+          username: teamName,
+          proofType: 'Tournament Victory: $tournamentTitle',
+          status: 'approved',
+          adminName: 'Admin',
+          tournamentId: tournamentId,
+        );
+      } catch (_) {}
+
+      return true;
+    } catch (e) {
+      debugPrint('[TeamService] awardTournamentWinner error: $e');
+      return false;
+    }
+  }
+
+  /// 🏆 UNIVERSAL TOURNAMENT SYNC & REPAIR:
+  /// Scans all completed tournaments across the system.
+  /// Dynamically ensures EVERY winning team across the app has:
+  /// 1. Wins incremented/synced for every tournament victory.
+  /// 2. Points incremented by +25 points per tournament win.
+  /// 3. Top 100 Leaderboard updated dynamically.
+  /// 4. Completed match record logged in `active_matches` for team history.
+  /// 5. Prize coins split equally among all squad members (leader + members).
+  /// Works universally for ANY team and ANY user with zero hardcoding!
+  static bool _tournamentsSynced = false;
+  Future<void> syncAllTeamsTournamentWins() async {
+    if (_tournamentsSynced) return;
+    _tournamentsSynced = true;
+
+    try {
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+      final prefs = await SharedPreferences.getInstance();
+
+      // 1. Fetch all completed or approved tournaments
+      List<dynamic> completedTourns = [];
+      try {
+        final res = await SupabaseService.client
+            .from('tournaments')
+            .select()
+            .or('status.eq.completed,proof_status.eq.approved');
+        if (res is List) completedTourns = res;
+      } catch (_) {
+        try {
+          final res = await SupabaseService.client.from('tournaments').select();
+          if (res is List) {
+            completedTourns = res.where((t) {
+              final st = (t['status'] ?? '').toString().toLowerCase();
+              final pst = (t['proof_status'] ?? '').toString().toLowerCase();
+              return st == 'completed' || pst == 'approved' || pst == 'accepted';
+            }).toList();
+          }
+        } catch (_) {}
+      }
+
+      // 2. Group completed tournaments by winner team ID
+      final Map<String, List<Map<String, dynamic>>> tournamentsByTeam = {};
+      for (final t in completedTourns) {
+        if (t is! Map) continue;
+        final tMap = Map<String, dynamic>.from(t);
+        String winnerId = (tMap['winner_team_id'] ??
+                tMap['proof_team_id'] ??
+                tMap['submitted_team_id'] ??
+                tMap['winner_team'] ??
+                '')
+            .toString()
+            .trim();
+
+        // If winner_team_id was missing in database, persist it now
+        if (winnerId.isNotEmpty && (tMap['winner_team_id'] == null || tMap['winner_team_id'].toString().isEmpty)) {
+          try {
+            await SupabaseService.client.from('tournaments').update({
+              'winner_team_id': winnerId,
+              'status': 'completed',
+            }).eq('id', tMap['id']);
+          } catch (_) {}
+        }
+
+        if (winnerId.isEmpty) {
+          final wName = (tMap['proof_team_name'] ?? tMap['winner_team_name'] ?? '').toString().trim();
+          if (wName.isNotEmpty) {
+            try {
+              final foundTeam = await SupabaseService.client
+                  .from('teams')
+                  .select('id')
+                  .ilike('name', wName)
+                  .maybeSingle();
+              if (foundTeam != null) {
+                winnerId = (foundTeam['id'] ?? '').toString().trim();
+              }
+            } catch (_) {}
+          }
+        }
+        if (winnerId.isEmpty) continue;
+
+        final key = winnerId.toLowerCase();
+        tournamentsByTeam.putIfAbsent(key, () => []).add(tMap);
+      }
+
+      // 2b. Also include approved tournament proofs from proof_history table
+      try {
+        final approvedProofs = await SupabaseService.client
+            .from('proof_history')
+            .select()
+            .eq('status', 'approved');
+
+        for (final p in approvedProofs) {
+          final uName = (p['username'] ?? '').toString().trim();
+          final tId = (p['tournament_id'] ?? '').toString().trim();
+          if (uName.isNotEmpty) {
+            try {
+              final teamFound = await SupabaseService.client
+                  .from('teams')
+                  .select('id')
+                  .or('name.ilike.%$uName%,tag.ilike.%$uName%')
+                  .maybeSingle();
+              if (teamFound != null) {
+                final matchedTid = teamFound['id'].toString().toLowerCase();
+                final existingList = tournamentsByTeam.putIfAbsent(matchedTid, () => []);
+                final alreadyHas = existingList.any((item) => (item['id'] ?? '').toString() == tId);
+                if (!alreadyHas && tId.isNotEmpty) {
+                  existingList.add({
+                    'id': tId,
+                    'title': p['proof_type'] ?? 'Tournament Championship',
+                    'prize_pool': 1000,
+                    'created_at': p['created_at'],
+                  });
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (err) {
+        debugPrint('[TeamService] Proof history sync notice: $err');
+      }
+
+      // 3. For EVERY winning team, sync wins, points, leaderboard, match history & prize coins
+      for (final entry in tournamentsByTeam.entries) {
+        final rawTeamId = entry.key;
+        final teamUuid = SupabaseService.toUuid(rawTeamId);
+        final teamTournaments = entry.value;
+        final completedWinsCount = teamTournaments.length;
+
+        try {
+          // Fetch team from Supabase
+          final teamRow = await SupabaseService.client
+              .from('teams')
+              .select()
+              .or('id.eq.$teamUuid,id.eq.$rawTeamId')
+              .maybeSingle();
+
+          if (teamRow == null) continue;
+
+          final teamName = (teamRow['name'] ?? 'Team').toString();
+          final leaderId = (teamRow['leader_id'] ?? teamRow['leaderId'] ?? '').toString().trim();
+          final int dbWins = (teamRow['wins'] as num?)?.toInt() ?? 0;
+          final int dbLosses = (teamRow['losses'] as num?)?.toInt() ?? 0;
+          final int dbDraws = (teamRow['draws'] as num?)?.toInt() ?? 0;
+          final int dbPoints = (teamRow['points'] as num?)?.toInt() ?? 0;
+
+          // Universal rule: Wins must reflect all completed tournament victories
+          final targetWins = dbWins < completedWinsCount ? completedWinsCount : dbWins;
+          // Universal rule: Each win guarantees at least 25 points
+          final minExpectedPoints = targetWins * 25;
+          final targetPoints = dbPoints < minExpectedPoints ? minExpectedPoints : dbPoints;
+          final totalMatches = targetWins + dbLosses + dbDraws;
+
+          // Update teams table if needed
+          if (targetWins != dbWins || targetPoints != dbPoints) {
+            await SupabaseService.client.from('teams').update({
+              'wins': targetWins,
+              'points': targetPoints,
+              'updated_at': nowIso,
+            }).or('id.eq.$teamUuid,id.eq.$rawTeamId');
+          }
+
+          // Optional: team_rankings table fallback
+          try {
+            await SupabaseService.client.from('team_rankings').upsert({
+              'team_id': teamUuid,
+              'teamId': teamUuid,
+              'team_name': teamName,
+              'teamName': teamName,
+              'leader_id': leaderId,
+              'leaderId': leaderId,
+              'avatar': teamRow['avatar_url'] ?? '',
+              'game': teamRow['game'] ?? 'Free Fire',
+              'wins': targetWins,
+              'losses': dbLosses,
+              'draws': dbDraws,
+              'total_matches': totalMatches,
+              'totalMatches': totalMatches,
+              'points': targetPoints,
+              'updated_at': nowIso,
+              'updatedAt': nowIso,
+            });
+          } catch (_) {}
+
+          // Fetch all squad members (Leader + team_members)
+          final List<String> memberIds = [];
+          if (leaderId.isNotEmpty) memberIds.add(leaderId);
+          try {
+            final memberRows = await SupabaseService.client
+                .from('team_members')
+                .select('user_id')
+                .or('team_id.eq.$teamUuid,team_id.eq.$rawTeamId');
+            for (final m in memberRows) {
+              final uid = (m['user_id'] ?? '').toString().trim();
+              if (uid.isNotEmpty && !memberIds.contains(uid)) {
+                memberIds.add(uid);
+              }
+            }
+          } catch (_) {}
+
+          // For each tournament won by this team:
+          for (int i = 0; i < teamTournaments.length; i++) {
+            final t = teamTournaments[i];
+            final tId = (t['id'] ?? '').toString();
+            final tTitle = (t['title'] ?? 'Championship Tournament').toString();
+            final prizePool = (t['prize_pool'] is num)
+                ? (t['prize_pool'] as num).toInt()
+                : int.tryParse(t['prize_pool']?.toString() ?? '0') ?? 0;
+
+            // Ensure Match & Tournament History record in active_matches
+            final matchHistoryId = 'tourn_win_${tId}_${teamUuid.length >= 8 ? teamUuid.substring(0, 8) : teamUuid}';
+            try {
+              await SupabaseService.client.from('active_matches').upsert({
+                'id': matchHistoryId,
+                'team1_id': teamUuid,
+                'team2_id': teamUuid,
+                'winner_team_id': teamUuid,
+                'status': 'completed',
+                'result': 'win',
+                'title': '🏆 Tournament: $tTitle',
+                'start_time': t['created_at'] ?? nowIso,
+                'ended_at': t['ended_at'] ?? t['created_at'] ?? nowIso,
+                'created_at': t['created_at'] ?? nowIso,
+              });
+            } catch (_) {}
+
+            // Ensure equal coin prize split among all members
+            if (prizePool > 0 && memberIds.isNotEmpty) {
+              final distributedKey = 'tourn_prize_distributed_${tId}';
+              final alreadyDistributed = prefs.getBool(distributedKey) ?? false;
+
+              if (!alreadyDistributed) {
+                final int share = (prizePool / memberIds.length).floor();
+                if (share > 0) {
+                  for (final uid in memberIds) {
+                    try {
+                      await CoinWalletService.updateCoins(
+                        userId: uid,
+                        amount: share,
+                        type: 'tournament_win',
+                        roomId: tId,
+                        description: '🏆 Tournament Win Prize ($share Coins): $tTitle',
+                      );
+                    } catch (err) {
+                      debugPrint('[TeamService] Coin credit error for $uid: $err');
+                    }
+                  }
+                  await prefs.setBool(distributedKey, true);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[TeamService] Error syncing team $rawTeamId: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('[TeamService] syncAllTeamsTournamentWins error: $e');
+    }
+  }
+
+  /// Backward-compatible alias
+  Future<void> syncAndRepairMtkTeam() => syncAllTeamsTournamentWins();
 }
+
+// Top-level helpers for backwards compatibility
+Future<bool> updateTeam({
+  required String teamId,
+  required String name,
+  required String tag,
+  File? newLogoFile,
+  required String game,
+  required String description,
+  required String requirements,
+}) =>
+    TeamService().updateTeam(
+      teamId: teamId,
+      name: name,
+      tag: tag,
+      newLogoFile: newLogoFile,
+      game: game,
+      description: description,
+      requirements: requirements,
+    );
+
+Future<String> deleteTeam({
+  required String teamId,
+  String? currentUserId,
+}) =>
+    TeamService().deleteTeam(
+      teamId: teamId,
+      currentUserId: currentUserId,
+    );

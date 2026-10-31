@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/team_service.dart';
 import '../models/gamer_user_model.dart';
 import 'gamer_age_gate_screen.dart';
 import 'gamer_auth_screen.dart';
@@ -36,6 +37,9 @@ class _GamerAppRootState extends State<GamerAppRoot> {
 
       // Initialize auth once on startup
       await _authService.init();
+
+      // Universally synchronize all teams' tournament wins, points (+25), leaderboard and match history
+      TeamService().syncAllTeamsTournamentWins();
     } catch (e) {
       debugPrint('[AppRoot] Init error: $e');
     } finally {
