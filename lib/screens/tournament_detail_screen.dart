@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import '../services/team_service.dart';
 import '../services/gamer_auth_service.dart';
@@ -32,6 +35,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   Map<String, dynamic>? _tournament;
   List<Map<String, dynamic>> _registrations = [];
   bool _isLoading = true;
+  bool _isUploadingProof = false;
   String? _winnerTeamName;
   String? _winnerTeamTag;
   List<String> _winnerMemberIds = [];
@@ -267,6 +271,125 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     );
   }
 
+  Future<void> _pickAndUploadProof() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1920,
+    );
+    if (picked == null) return;
+
+    setState(() => _isUploadingProof = true);
+
+    try {
+      final file = File(picked.path);
+      final tId = effectiveTournamentId;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'tournament_${tId}_$timestamp.jpg';
+
+      String? uploadedUrl;
+      try {
+        await SupabaseService.client.storage.from('match_proofs').upload(
+              fileName,
+              file,
+              fileOptions: const FileOptions(upsert: true),
+            );
+        uploadedUrl = SupabaseService.client.storage
+            .from('match_proofs')
+            .getPublicUrl(fileName);
+      } catch (_) {
+        try {
+          uploadedUrl = await SupabaseService.uploadFile(
+            file: file,
+            bucket: 'match_proofs',
+            customFileName: fileName,
+          );
+        } catch (_) {}
+      }
+
+      if (uploadedUrl == null || uploadedUrl.isEmpty) {
+        throw 'Image upload failed. Please try again.';
+      }
+
+      // Determine team info for the submitting gamer
+      String teamId = '';
+      String teamName = 'Gamer Squad';
+      if (currentUid.isNotEmpty) {
+        try {
+          final tRow = await SupabaseService.client
+              .from('teams')
+              .select('id, name')
+              .eq('leader_id', currentUid)
+              .maybeSingle();
+          if (tRow != null) {
+            teamId = tRow['id']?.toString() ?? '';
+            teamName = tRow['name']?.toString() ?? teamName;
+          } else {
+            final mRow = await SupabaseService.client
+                .from('team_members')
+                .select('team_id, teams(name)')
+                .eq('user_id', currentUid)
+                .maybeSingle();
+            if (mRow != null) {
+              teamId = mRow['team_id']?.toString() ?? '';
+              teamName = (mRow['teams'] as Map?)?['name']?.toString() ?? teamName;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (teamId.isEmpty && _registrations.isNotEmpty) {
+        for (final r in _registrations) {
+          final tMap = r['teams'] as Map?;
+          if (tMap != null && r['team_id'] != null) {
+            teamId = r['team_id'].toString();
+            teamName = tMap['name']?.toString() ?? teamName;
+            break;
+          }
+        }
+      }
+
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+      await SupabaseService.client.from('tournaments').update({
+        'proof_url': uploadedUrl,
+        'proof_status': 'under_review',
+        if (teamId.isNotEmpty) 'proof_team_id': teamId,
+        'proof_team_name': teamName,
+        'submitted_at': nowIso,
+      }).eq('id', tId);
+
+      if (mounted) {
+        setState(() {
+          if (_tournament != null) {
+            _tournament!['proof_url'] = uploadedUrl;
+            _tournament!['proof_status'] = 'under_review';
+            _tournament!['proof_team_name'] = teamName;
+          }
+          _isUploadingProof = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Match Proof uploaded! Now under admin review. 🚀'),
+            backgroundColor: Color(0xFF00FF88),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[TournamentDetail] Error uploading proof: $e');
+      if (mounted) {
+        setState(() => _isUploadingProof = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload proof: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = (_tournament?['title'] ?? 'Tournament').toString();
@@ -280,6 +403,8 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     final entryFeeText = entryFee == 0 ? 'Free Coins' : '$entryFee Coins';
     final rawStatus = (_tournament?['status'] ?? 'upcoming').toString().toLowerCase();
     final rawProofStatus = (_tournament?['proof_status'] ?? '').toString().toLowerCase();
+    final proofUrl = (_tournament?['proof_url'] ?? '').toString().trim();
+    final bool hasProofUploaded = proofUrl.isNotEmpty;
 
     // Exact user requirement: Proof upload ke baad approve ho chuka ho tabhi rewards aur win show hon
     final bool isProofApproved = rawProofStatus == 'approved' || rawProofStatus == 'accepted';
@@ -545,8 +670,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 3. Match Result & Win Proof (Shown ONLY when tournament proof has been uploaded AND approved by admin!)
+                  // 3. Match Result & Win Proof
                   if (isTournamentCompleted && hasValidWinner) ...[
+                    // Case 1: Approved & Winner Decided
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -663,7 +789,8 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                  ] else if (rawProofStatus == 'under_review' || rawProofStatus == 'pending' || rawProofStatus == 'submitted') ...[
+                  ] else if (hasProofUploaded) ...[
+                    // Case 2: Proof Uploaded & Under Admin Review
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -675,13 +802,34 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Match Result & Win Proof',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 15,
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Match Result & Win Proof',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF8A00).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFFF8A00)),
+                                ),
+                                child: const Text(
+                                  'UNDER REVIEW',
+                                  style: TextStyle(
+                                    color: Color(0xFFFF8A00),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 12),
                           Container(
@@ -690,20 +838,158 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFF1F2937),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.5)),
+                              border: Border.all(color: const Color(0xFFFF8A00).withOpacity(0.5)),
                             ),
-                            child: const Row(
+                            child: Column(
                               children: [
-                                Icon(Icons.hourglass_top_rounded, color: Color(0xFF38BDF8), size: 20),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    'Proof submitted and under admin review.',
-                                    style: TextStyle(
-                                      color: Color(0xFF38BDF8),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
+                                Row(
+                                  children: [
+                                    const Icon(Icons.hourglass_top_rounded, color: Color(0xFFFF8A00), size: 22),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Proof submitted and under admin review.',
+                                            style: TextStyle(
+                                              color: Color(0xFFFF8A00),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Submitted by: ${(_tournament?['proof_team_name'] ?? 'Squad').toString()}',
+                                            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11.5),
+                                          ),
+                                        ],
+                                      ),
                                     ),
+                                  ],
+                                ),
+                                if (proofUrl.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: CachedNetworkImage(
+                                      imageUrl: proofUrl,
+                                      height: 130,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                      placeholder: (_, __) => Container(
+                                        height: 130,
+                                        color: Colors.black26,
+                                        child: const Center(
+                                          child: CircularProgressIndicator(color: Color(0xFFFF8A00), strokeWidth: 2),
+                                        ),
+                                      ),
+                                      errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ] else ...[
+                    // Case 3: Proof NOT Uploaded Yet -> Option to Upload Match Proof
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF131A29),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF2A3447)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Match Result & Win Proof',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00B4D8).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF00B4D8)),
+                                ),
+                                child: const Text(
+                                  'PENDING PROOF',
+                                  style: TextStyle(
+                                    color: Color(0xFF00B4D8),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1F2937),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                            ),
+                            child: Column(
+                              children: [
+                                const Icon(Icons.cloud_upload_outlined, color: Color(0xFF38BDF8), size: 36),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'No match proof uploaded yet',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'After match completes, submit winning screenshot for admin verification & prize rewards.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Color(0xFF8B949E),
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00B4D8),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      elevation: 2,
+                                    ),
+                                    icon: _isUploadingProof
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.add_photo_alternate_rounded, size: 18),
+                                    label: Text(
+                                      _isUploadingProof ? 'Uploading Proof...' : 'Upload Win Proof 📸',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    onPressed: _isUploadingProof ? null : _pickAndUploadProof,
                                   ),
                                 ),
                               ],
