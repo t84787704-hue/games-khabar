@@ -1790,6 +1790,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
               'rank_approved_notif_body'.tr(args: [item.game.claimedRank, item.game.gameName]),
           type: 'rank_verified',
         );
+      } catch (_) {}
       if (ok) {
         try {
           await SupabaseService.logProofHistory(

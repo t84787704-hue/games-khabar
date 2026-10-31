@@ -319,9 +319,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
     if (myLeaderTeams.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('leader_required_to_challenge'.tr()),
-          backgroundColor: Color(0xFFFF6B00),
+          backgroundColor: const Color(0xFFFF6B00),
         ),
       );
       return;
@@ -1024,11 +1024,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                   if (ended == true && mounted) {
                                                     ScaffoldMessenger.of(context)
                                                         .showSnackBar(
-                                                      const SnackBar(
+                                                      SnackBar(
                                                         content: Text(
                                                             'proof_submitted_under_review'.tr()),
                                                         backgroundColor:
-                                                            Color(0xFFFFB800),
+                                                            const Color(0xFFFFB800),
                                                       ),
                                                     );
                                                   }
@@ -2015,13 +2015,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               border: Border.all(
                                   color: const Color(0xFF1877F2), width: 1.2),
                             ),
-                            child: const Center(
+                            child: Center(
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.shield_rounded,
+                                  const Icon(Icons.shield_rounded,
                                       color: Color(0xFF1877F2), size: 18),
-                                  SizedBox(width: 8),
+                                  const SizedBox(width: 8),
                                   Text(
                                     'your_own_team'.tr(),
                                     style: TextStyle(

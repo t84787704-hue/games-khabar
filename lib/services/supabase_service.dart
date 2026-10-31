@@ -917,6 +917,7 @@ class SupabaseService {
       'status': 'rejected',
       'proof_status': 'rejected',
       'admin_note': reason,
+    }, 'id', matchId);
   }
 
   static Future<void> logProofHistory({
