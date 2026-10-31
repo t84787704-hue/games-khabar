@@ -25,7 +25,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
   bool _isLoading = true;
   String? _registeringTournamentId;
   
-  List> _tournaments = [];
+  var _tournaments = [];
   
   final Set<String> _registeredTournamentIds = {};
   String? _myTeamId;
@@ -85,26 +85,32 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
           _registeredTournamentIds.clear();
           try {
-            List> regRes = [];
+            final List regRes = [];
 
             if (_myTeamId != null && _myTeamId!.isNotEmpty) {
               final rawRes = await _supabase
                   .from('tournament_registrations')
                   .select('tournament_id')
                   .or('team_id.eq.$_myTeamId,leader_id.eq.${user.id}');
-              regRes = List>.from(rawRes);
+              if (rawRes is Iterable) {
+                regRes.addAll(rawRes);
+              }
             } else {
               final rawRes = await _supabase
                   .from('tournament_registrations')
                   .select('tournament_id')
                   .eq('leader_id', user.id);
-              regRes = List>.from(rawRes);
+              if (rawRes is Iterable) {
+                regRes.addAll(rawRes);
+              }
             }
 
             for (var r in regRes) {
-              final tId = r['tournament_id']?.toString();
-              if (tId != null && tId.isNotEmpty) {
-                _registeredTournamentIds.add(tId);
+              if (r is Map) {
+                final tId = r['tournament_id']?.toString();
+                if (tId != null && tId.isNotEmpty) {
+                  _registeredTournamentIds.add(tId);
+                }
               }
             }
           } catch (e) {
@@ -123,7 +129,15 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
       if (mounted) {
         setState(() {
-          _tournaments = List>.from(res);
+          final List resolvedTournaments = [];
+          if (res is Iterable) {
+            for (final item in res) {
+              if (item is Map) {
+                resolvedTournaments.add(Map<String, dynamic>.from(item));
+              }
+            }
+          }
+          _tournaments = resolvedTournaments;
           _isLoading = false;
         });
       }
@@ -306,7 +320,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                         itemCount: _tournaments.length,
                         itemBuilder: (context, index) {
-                          final item = _tournaments[index];
+                          final item = Map<String, dynamic>.from(_tournaments[index] as Map);
                           final tId = item['id'].toString();
 
                           final maxTeams = int.tryParse(item['max_teams']?.toString() ?? item['max_slots']?.toString() ?? '16') ?? 16;
@@ -356,7 +370,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          item['title'] ?? item['name'] ?? 'Tournament',
+                                          (item['title'] ?? item['name'] ?? 'Tournament').toString(),
                                           style: TextStyle(
                                             color: ThemeService.textPrimary,
                                             fontSize: 16,
