@@ -135,15 +135,40 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       _winnerMemberIds = [];
 
       if (isApproved) {
-        final winnerTeamId = (_tournament?['winner_team_id'] ??
-                _tournament?['proof_team_id'])
+        String? winnerTeamId = (_tournament?['winner_team_id'] ??
+                _tournament?['proof_team_id'] ??
+                _tournament?['submitted_team_id'])
             ?.toString();
 
         if (_tournament?['proof_team_name'] != null && _tournament?['proof_team_name'].toString().isNotEmpty == true) {
           _winnerTeamName = _tournament?['proof_team_name']?.toString();
         }
 
+        if ((winnerTeamId == null || winnerTeamId.isEmpty) && _winnerTeamName != null && _winnerTeamName!.isNotEmpty) {
+          try {
+            final foundTeam = await SupabaseService.client
+                .from('teams')
+                .select('id')
+                .ilike('name', _winnerTeamName!)
+                .maybeSingle();
+            if (foundTeam != null) {
+              winnerTeamId = foundTeam['id']?.toString();
+            }
+          } catch (_) {}
+        }
+
         if (winnerTeamId != null && winnerTeamId.isNotEmpty) {
+          // If winner_team_id was not set in database, save it now
+          if (_tournament?['winner_team_id'] == null || _tournament?['winner_team_id'].toString().isEmpty == true) {
+            _tournament!['winner_team_id'] = winnerTeamId;
+            try {
+              await SupabaseService.client
+                  .from('tournaments')
+                  .update({'winner_team_id': winnerTeamId, 'status': 'completed'})
+                  .eq('id', tId);
+            } catch (_) {}
+          }
+
           try {
             final tUuid = SupabaseService.toUuid(winnerTeamId);
             final tRes = await SupabaseService.client
@@ -176,6 +201,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
           } catch (e) {
             debugPrint('[TournamentDetail] Error loading winner team info: $e');
           }
+
+          // Dynamic self-healing: Ensure wins, +25 points, and 1000 prize coins are credited!
+          try {
+            TeamService().syncAllTeamsTournamentWins(force: true);
+          } catch (_) {}
         }
       }
 

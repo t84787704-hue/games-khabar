@@ -873,13 +873,12 @@ class TeamService {
         await SupabaseService.client.from('teams').update({
           'wins': newWins,
           'points': newPoints,
-          'updated_at': nowIso,
         }).or('id.eq.$teamUuid,id.eq.$teamId');
       } catch (e) {
         debugPrint('[TeamService] Error updating teams wins/points: $e');
       }
 
-      // 3. Update team_rankings table (for Top 100 Leaderboard)
+      // 3. Update team_rankings table (for Top 100 Leaderboard if table exists)
       try {
         await SupabaseService.client.from('team_rankings').upsert({
           'team_id': teamUuid,
@@ -900,7 +899,7 @@ class TeamService {
           'updatedAt': nowIso,
         });
       } catch (e) {
-        debugPrint('[TeamService] Error updating team_rankings: $e');
+        debugPrint('[TeamService] Note: team_rankings table update: $e');
       }
 
       // 4. Gather all team member IDs (Leader + Members)
@@ -960,15 +959,15 @@ class TeamService {
 
       // 6. Record victory in active_matches so it displays under Match & Tournament History
       try {
-        final matchRecordId = 'tourn_${tournamentId}_${DateTime.now().millisecondsSinceEpoch}';
-        await SupabaseService.client.from('active_matches').insert({
-          'id': matchRecordId,
+        final matchRecordUuid = SupabaseService.toUuid('tourn_${tournamentId}_$teamUuid');
+        await SupabaseService.client.from('active_matches').upsert({
+          'id': matchRecordUuid,
           'team1_id': teamUuid,
           'team2_id': teamUuid,
           'winner_team_id': teamUuid,
           'status': 'completed',
           'result': 'win',
-          'title': '🏆 Tournament: $tournamentTitle',
+          'admin_note': '🏆 Tournament: $tournamentTitle',
           'start_time': nowIso,
           'ended_at': nowIso,
           'created_at': nowIso,
@@ -1014,8 +1013,8 @@ class TeamService {
   /// 5. Prize coins split equally among all squad members (leader + members).
   /// Works universally for ANY team and ANY user with zero hardcoding!
   static bool _tournamentsSynced = false;
-  Future<void> syncAllTeamsTournamentWins() async {
-    if (_tournamentsSynced) return;
+  Future<void> syncAllTeamsTournamentWins({bool force = false}) async {
+    if (_tournamentsSynced && !force) return;
     _tournamentsSynced = true;
 
     try {
@@ -1155,12 +1154,11 @@ class TeamService {
           final targetPoints = dbPoints < minExpectedPoints ? minExpectedPoints : dbPoints;
           final totalMatches = targetWins + dbLosses + dbDraws;
 
-          // Update teams table if needed
+          // Update teams table if needed (Note: teams table has no updated_at column)
           if (targetWins != dbWins || targetPoints != dbPoints) {
             await SupabaseService.client.from('teams').update({
               'wins': targetWins,
               'points': targetPoints,
-              'updated_at': nowIso,
             }).or('id.eq.$teamUuid,id.eq.$rawTeamId');
           }
 
@@ -1212,16 +1210,16 @@ class TeamService {
                 : int.tryParse(t['prize_pool']?.toString() ?? '0') ?? 0;
 
             // Ensure Match & Tournament History record in active_matches
-            final matchHistoryId = 'tourn_win_${tId}_${teamUuid.length >= 8 ? teamUuid.substring(0, 8) : teamUuid}';
+            final matchHistoryUuid = SupabaseService.toUuid('tourn_win_${tId}_$teamUuid');
             try {
               await SupabaseService.client.from('active_matches').upsert({
-                'id': matchHistoryId,
+                'id': matchHistoryUuid,
                 'team1_id': teamUuid,
                 'team2_id': teamUuid,
                 'winner_team_id': teamUuid,
                 'status': 'completed',
                 'result': 'win',
-                'title': '🏆 Tournament: $tTitle',
+                'admin_note': '🏆 Tournament: $tTitle',
                 'start_time': t['created_at'] ?? nowIso,
                 'ended_at': t['ended_at'] ?? t['created_at'] ?? nowIso,
                 'created_at': t['created_at'] ?? nowIso,
@@ -1230,8 +1228,21 @@ class TeamService {
 
             // Ensure equal coin prize split among all members
             if (prizePool > 0 && memberIds.isNotEmpty) {
-              final distributedKey = 'tourn_prize_distributed_${tId}';
-              final alreadyDistributed = prefs.getBool(distributedKey) ?? false;
+              bool alreadyDistributed = false;
+              try {
+                final existingTx = await SupabaseService.client
+                    .from('coin_transactions')
+                    .select('id')
+                    .or('room_id.eq.$tId,reference_id.eq.$tId')
+                    .eq('type', 'tournament_win')
+                    .limit(1);
+                if (existingTx is List && existingTx.isNotEmpty) {
+                  alreadyDistributed = true;
+                }
+              } catch (_) {
+                final distributedKey = 'tourn_prize_distributed_$tId';
+                alreadyDistributed = prefs.getBool(distributedKey) ?? false;
+              }
 
               if (!alreadyDistributed) {
                 final int share = (prizePool / memberIds.length).floor();
@@ -1243,13 +1254,14 @@ class TeamService {
                         amount: share,
                         type: 'tournament_win',
                         roomId: tId,
+                        title: '🏆 Tournament Win Prize ($share Coins): $tTitle',
                         description: '🏆 Tournament Win Prize ($share Coins): $tTitle',
                       );
                     } catch (err) {
                       debugPrint('[TeamService] Coin credit error for $uid: $err');
                     }
                   }
-                  await prefs.setBool(distributedKey, true);
+                  await prefs.setBool('tourn_prize_distributed_$tId', true);
                 }
               }
             }

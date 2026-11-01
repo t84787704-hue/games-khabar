@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/team_service.dart';
 
 class AdminUnderReviewTab extends StatefulWidget {
   const AdminUnderReviewTab({super.key});
@@ -28,13 +29,51 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
 
   Future<void> _updateTournamentProofStatus(String tournamentId, String status, {String? rejectReason}) async {
     try {
+      // 1. Fetch tournament details
+      Map<String, dynamic>? tournData;
+      try {
+        final res = await SupabaseService.client
+            .from('tournaments')
+            .select()
+            .eq('id', tournamentId)
+            .maybeSingle();
+        if (res != null) tournData = Map<String, dynamic>.from(res);
+      } catch (e) {
+        debugPrint('Error fetching tournament $tournamentId: $e');
+      }
+
+      String? winningTeamId = (tournData?['winner_team_id'] ??
+              tournData?['proof_team_id'] ??
+              tournData?['submitted_team_id'])
+          ?.toString();
+
+      final proofTeamName = (tournData?['proof_team_name'] ?? '').toString().trim();
+      if ((winningTeamId == null || winningTeamId.isEmpty) && proofTeamName.isNotEmpty) {
+        try {
+          final foundTeam = await SupabaseService.client
+              .from('teams')
+              .select('id')
+              .ilike('name', proofTeamName)
+              .maybeSingle();
+          if (foundTeam != null) {
+            winningTeamId = foundTeam['id']?.toString();
+          }
+        } catch (_) {}
+      }
+
+      final prizePool = (tournData?['prize_pool'] is num)
+          ? (tournData!['prize_pool'] as num).toInt()
+          : int.tryParse(tournData?['prize_pool']?.toString() ?? '1000') ?? 1000;
+      final tournamentTitle = tournData?['title']?.toString() ?? 'Tournament';
+
       final updateData = <String, dynamic>{
         'proof_status': status,
         'status': status == 'approved' ? 'completed' : 'upcoming',
-        if (status == 'approved') 'winner_team_id': null,
+        if (status == 'approved' && winningTeamId != null && winningTeamId.isNotEmpty)
+          'winner_team_id': winningTeamId,
         if (status == 'rejected') 'rejection_reason': rejectReason ?? 'Invalid screenshot submitted.',
         if (status == 'rejected') 'proof_url': null,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       await SupabaseService.client
@@ -42,22 +81,33 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
           .update(updateData)
           .eq('id', tournamentId);
 
+      // Award Tournament Winner: +1 win, +25 points to team & leaderboard, and distribute equal coins split!
+      if (status == 'approved' && winningTeamId != null && winningTeamId.isNotEmpty) {
+        await TeamService().awardTournamentWinner(
+          tournamentId: tournamentId,
+          teamId: winningTeamId,
+          prizePool: prizePool,
+          tournamentTitle: tournamentTitle,
+        );
+      }
+
       try {
-        final tData = await SupabaseService.client
-            .from('tournaments')
-            .select('title, proof_team_name, proof_url')
-            .eq('id', tournamentId)
-            .maybeSingle();
+        final tData = tournData ??
+            await SupabaseService.client
+                .from('tournaments')
+                .select('title, proof_team_name, proof_url')
+                .eq('id', tournamentId)
+                .maybeSingle();
 
         if (tData != null) {
           await SupabaseService.client.from('proof_history').insert({
-            'username': tData['proof_team_name'] ?? 'Unknown Team',
-            'proof_type': tData['title'] ?? 'Tournament Proof',
+            'username': tData['proof_team_name'] ?? proofTeamName.isNotEmpty ? proofTeamName : 'Winning Team',
+            'proof_type': tData['title'] ?? tournamentTitle,
             'status': status,
             'admin_name': 'Admin',
             'tournament_id': tournamentId,
             'proof_url': tData['proof_url'],
-            'created_at': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
           });
         }
       } catch (historyError) {
@@ -67,7 +117,9 @@ class AdminUnderReviewTabState extends State<AdminUnderReviewTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(status == 'approved' ? 'Tournament Proof Approved! 🏆' : 'Proof Rejected.'),
+            content: Text(status == 'approved'
+                ? 'Tournament Proof Approved & Rewards Distributed! 🏆'
+                : 'Proof Rejected.'),
             backgroundColor: status == 'approved' ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
           ),
         );

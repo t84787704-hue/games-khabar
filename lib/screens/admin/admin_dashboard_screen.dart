@@ -2763,14 +2763,59 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
 
   Future<void> _approveProof(String tournamentId) async {
     try {
-      await _supabase.from('tournaments').update({
+      final tournament = _tournaments.firstWhere(
+        (t) => t['id']?.toString() == tournamentId,
+        orElse: () => <String, dynamic>{},
+      );
+
+      String? winningTeamId = (tournament['winner_team_id'] ??
+              tournament['proof_team_id'] ??
+              tournament['submitted_team_id'])
+          ?.toString();
+
+      final proofTeamName = (tournament['proof_team_name'] ?? '').toString().trim();
+      if ((winningTeamId == null || winningTeamId.isEmpty) && proofTeamName.isNotEmpty) {
+        try {
+          final foundTeam = await _supabase
+              .from('teams')
+              .select('id')
+              .ilike('name', proofTeamName)
+              .maybeSingle();
+          if (foundTeam != null) {
+            winningTeamId = foundTeam['id']?.toString();
+          }
+        } catch (_) {}
+      }
+
+      final prizePool = (tournament['prize_pool'] is num)
+          ? (tournament['prize_pool'] as num).toInt()
+          : int.tryParse(tournament['prize_pool']?.toString() ?? '1000') ?? 1000;
+      final tournamentTitle = tournament['title']?.toString() ?? 'Tournament';
+
+      final Map<String, dynamic> updatePayload = {
         'proof_status': 'approved',
-      }).eq('id', tournamentId);
+        'status': 'completed',
+      };
+      if (winningTeamId != null && winningTeamId.isNotEmpty) {
+        updatePayload['winner_team_id'] = winningTeamId;
+      }
+
+      await _supabase.from('tournaments').update(updatePayload).eq('id', tournamentId);
+
+      // Award Tournament Winner: +1 win, +25 points to team, and distribute prize coins equally
+      if (winningTeamId != null && winningTeamId.isNotEmpty) {
+        await TeamService().awardTournamentWinner(
+          tournamentId: tournamentId,
+          teamId: winningTeamId,
+          prizePool: prizePool,
+          tournamentTitle: tournamentTitle,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Victory proof approved successfully! 🎉'),
+            content: Text('Victory proof approved & rewards distributed successfully! 🎉'),
             backgroundColor: Color(0xFF00FF88),
           ),
         );
