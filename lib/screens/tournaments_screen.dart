@@ -335,18 +335,20 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
                           return InkWell(
                             borderRadius: BorderRadius.circular(16),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TournamentDetailScreen(
-                                    tournament: item,
-                                    isRegistered: isRegistered,
-                                    selectedGameName: widget.gameName,
-                                  ),
-                                ),
-                              ).then((_) => _fetchTournaments());
-                            },
+                            onTap: (isRegistered || isCompleted)
+                                ? () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => TournamentDetailScreen(
+                                          tournament: item,
+                                          isRegistered: isRegistered,
+                                          selectedGameName: widget.gameName,
+                                        ),
+                                      ),
+                                    ).then((_) => _fetchTournaments());
+                                  }
+                                : null,
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 16),
                               padding: const EdgeInsets.all(16),
@@ -443,24 +445,39 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                           fontSize: 12,
                                         ),
                                       ),
-                                      const Row(
-                                        children: [
-                                          Text(
-                                            'View Details',
-                                            style: TextStyle(
-                                              color: Color(0xFF38BDF8),
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                      if (isRegistered || isCompleted)
+                                        InkWell(
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => TournamentDetailScreen(
+                                                  tournament: item,
+                                                  isRegistered: isRegistered,
+                                                  selectedGameName: widget.gameName,
+                                                ),
+                                              ),
+                                            ).then((_) => _fetchTournaments());
+                                          },
+                                          child: const Row(
+                                            children: [
+                                              Text(
+                                                'View Details',
+                                                style: TextStyle(
+                                                  color: Color(0xFF38BDF8),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              SizedBox(width: 2),
+                                              Icon(
+                                                Icons.arrow_forward_ios_rounded,
+                                                color: Color(0xFF38BDF8),
+                                                size: 10,
+                                              ),
+                                            ],
                                           ),
-                                          SizedBox(width: 2),
-                                          Icon(
-                                            Icons.arrow_forward_ios_rounded,
-                                            color: Color(0xFF38BDF8),
-                                            size: 10,
-                                          ),
-                                        ],
-                                      ),
+                                        ),
                                     ],
                                   ),
                                   const SizedBox(height: 14),
@@ -500,9 +517,22 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                                 ),
                                               ).then((_) => _fetchTournaments());
                                             }
-                                          : (isFull || isRegistered || isCurrentRegistering)
-                                              ? null
-                                              : () => _registerTeam(item),
+                                          : isRegistered
+                                              ? () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) => TournamentDetailScreen(
+                                                        tournament: item,
+                                                        isRegistered: true,
+                                                        selectedGameName: widget.gameName,
+                                                      ),
+                                                    ),
+                                                  ).then((_) => _fetchTournaments());
+                                                }
+                                              : (isFull || isCurrentRegistering)
+                                                  ? null
+                                                  : () => _registerTeam(item),
                                       child: isCurrentRegistering
                                           ? const SizedBox(
                                               width: 20,
@@ -513,7 +543,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                               isCompleted
                                                   ? 'View Results & Winners 👑'
                                                   : isRegistered
-                                                      ? '✓ Registered'
+                                                      ? '✓ Registered • View Details'
                                                       : (isFull ? 'Slots Full' : 'Register Now'),
                                               style: TextStyle(
                                                 fontWeight: FontWeight.w900,

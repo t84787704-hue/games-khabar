@@ -17,6 +17,7 @@ import '../services/notification_service.dart';
 import 'notifications_screen.dart';
 import '../widgets/gamer_avatar.dart';
 import '../services/theme_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -227,29 +228,43 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       final steamNewsList = results[1];
 
       // Format Steam News items to look like feed posts so they seamlessly blend into the feed
-      final formattedSteamNews = steamNewsList.map((news) {
+      final validNewsList = steamNewsList.where((news) {
         final title = (news['title'] ?? '').toString().trim();
-        final shortDesc = (news['shortDescription'] ?? news['description'] ?? news['content'] ?? '').toString().trim();
-        final contentText = title.isNotEmpty
-            ? (shortDesc.isNotEmpty ? '$title\n\n$shortDesc' : title)
-            : shortDesc;
+        final rawDesc = (news['description'] ?? news['shortDescription'] ?? '').toString().trim();
+        return title.isNotEmpty && rawDesc.isNotEmpty && rawDesc.length >= 20;
+      }).toList();
 
-        final source = (news['source'] ?? 'Gaming News').toString();
-        final rawCreatedAt = (news['created_at'] ?? news['timeAgo'] ?? '').toString();
+      final formattedSteamNews = validNewsList.map((news) {
+        final title = (news['title'] ?? '').toString().trim();
+        final rawDesc = (news['description'] ?? news['shortDescription'] ?? '').toString().trim();
+        final shortDesc = (news['shortDescription'] ?? '').toString().trim().isNotEmpty
+            ? news['shortDescription'].toString().trim()
+            : (rawDesc.length > 280 ? '${rawDesc.substring(0, 280)}...' : rawDesc);
+
+        final contentText = title.isNotEmpty
+            ? (rawDesc.isNotEmpty ? '$title\n\n$rawDesc' : title)
+            : rawDesc;
+
+        final source = (news['source'] ?? news['game'] ?? news['gameName'] ?? 'Gaming News').toString();
+        final rawCreatedAt = (news['created_at'] ?? news['published_at'] ?? news['timeAgo'] ?? '').toString();
 
         return {
           'id': 'steam_${news['id'] ?? DateTime.now().millisecondsSinceEpoch}',
           'content': contentText,
           'title': title,
+          'description': rawDesc,
+          'short_description': shortDesc,
           'image_url': news['imageUrl'] ?? news['image_url'] ?? '',
           'user_id': 'system_steam',
           'username': '$source 🎮',
           'user_avatar': '',
-          'likes_count': 0,
+          'likes_count': (news['views'] as num?)?.toInt() ?? 250,
           'comments_count': 0,
           'created_at': rawCreatedAt.isNotEmpty ? rawCreatedAt : DateTime.now().toIso8601String(),
           'is_steam_news': true,
           'source_url': news['sourceUrl'] ?? news['url'] ?? '',
+          'game_name': news['game'] ?? news['gameName'] ?? '',
+          'category': news['category'] ?? 'Gaming',
         };
       }).toList();
 
@@ -1268,7 +1283,32 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                       onPressed: () => _showPostOptions(context, postId, postUserId, isSteamNews: isSteamNews),
                                     ),
                             ),
-                            if (content.isNotEmpty)
+                            if (isSteamNews && (post['title'] ?? '').toString().isNotEmpty) ...[
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                child: Text(
+                                  post['title'].toString(),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                    color: ThemeService.textPrimary,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ),
+                              if ((post['description'] ?? '').toString().isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                  child: Text(
+                                    post['description'].toString(),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: ThemeService.textPrimary.withOpacity(0.9),
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ),
+                            ] else if (content.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                                 child: Text(
@@ -1358,7 +1398,40 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                             Divider(height: 1, color: ThemeService.border),
                             Row(
                               children: [
-                                if (!isSteamNews) ...[
+                                if (isSteamNews) ...[
+                                  if ((post['source_url'] ?? '').toString().isNotEmpty)
+                                    Expanded(
+                                      child: InkWell(
+                                        onTap: () async {
+                                          final sUrl = (post['source_url'] ?? '').toString();
+                                          if (sUrl.isNotEmpty) {
+                                            final uri = Uri.tryParse(sUrl);
+                                            if (uri != null) {
+                                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                            }
+                                          }
+                                        },
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(vertical: 10),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.open_in_new_rounded, size: 16, color: Color(0xFF00FF88)),
+                                              SizedBox(width: 6),
+                                              Text(
+                                                'Read Full Story',
+                                                style: TextStyle(
+                                                  color: Color(0xFF00FF88),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ] else ...[
                                   Expanded(
                                     child: InkWell(
                                       onTap: () => _handleLike(post),

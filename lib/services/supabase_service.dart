@@ -62,6 +62,7 @@ class SupabaseService {
       final res = await client
           .from('steam_news')
           .select('*')
+          .not('description', 'is', null)
           .order('created_at', ascending: false)
           .limit(limit);
       if (res is List) {
