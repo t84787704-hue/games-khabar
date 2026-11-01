@@ -228,18 +228,28 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
       // Format Steam News items to look like feed posts so they seamlessly blend into the feed
       final formattedSteamNews = steamNewsList.map((news) {
+        final title = (news['title'] ?? '').toString().trim();
+        final shortDesc = (news['shortDescription'] ?? news['description'] ?? news['content'] ?? '').toString().trim();
+        final contentText = title.isNotEmpty
+            ? (shortDesc.isNotEmpty ? '$title\n\n$shortDesc' : title)
+            : shortDesc;
+
+        final source = (news['source'] ?? 'Gaming News').toString();
+        final rawCreatedAt = (news['created_at'] ?? news['timeAgo'] ?? '').toString();
+
         return {
           'id': 'steam_${news['id'] ?? DateTime.now().millisecondsSinceEpoch}',
-          'content': news['title'] ?? '',
+          'content': contentText,
+          'title': title,
           'image_url': news['imageUrl'] ?? news['image_url'] ?? '',
           'user_id': 'system_steam',
-          'username': 'Steam Gaming News 🎮',
+          'username': '$source 🎮',
           'user_avatar': '',
           'likes_count': 0,
           'comments_count': 0,
-          'created_at': news['created_at'] ?? DateTime.now().toIso8601String(),
+          'created_at': rawCreatedAt.isNotEmpty ? rawCreatedAt : DateTime.now().toIso8601String(),
           'is_steam_news': true,
-          'source_url': news['url'] ?? '',
+          'source_url': news['sourceUrl'] ?? news['url'] ?? '',
         };
       }).toList();
 

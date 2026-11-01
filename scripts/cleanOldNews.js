@@ -15,7 +15,7 @@ async function cleanOldShortNews() {
   console.log('Starting cleanup of short (< 500 chars) and invalid news from Supabase...');
   
   const { data: rows, error } = await supabase
-    .from('news')
+    .from('steam_news')
     .select('id, title, titleMap, description, content, descriptionMap, imageUrl, gameName');
 
   if (error) {
@@ -38,20 +38,20 @@ async function cleanOldShortNews() {
 
     // 1. Check if description/content is shorter than 500 characters
     if (desc.trim().length < 500) {
-      await supabase.from('news').delete().eq('id', id);
+      await supabase.from('steam_news').delete().eq('id', id);
       deletedShort++;
       continue;
     }
 
     // 2. Check if image is an invalid URL or fallback Elden Ring for non-Elden-Ring game
     if (img.includes('1245620') && !game.includes('elden ring') && !title.toLowerCase().includes('elden ring')) {
-      await supabase.from('news').delete().eq('id', id);
+      await supabase.from('steam_news').delete().eq('id', id);
       deletedWrongImage++;
       continue;
     }
 
     if (!img.startsWith('http')) {
-      await supabase.from('news').delete().eq('id', id);
+      await supabase.from('steam_news').delete().eq('id', id);
       deletedInvalid++;
       continue;
     }

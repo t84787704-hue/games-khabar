@@ -59,14 +59,26 @@ class SupabaseService {
   // ============================================================
   static Future<List<Map<String, dynamic>>> getSteamNews({int limit = 50}) async {
     try {
-      return await query(
-        'steam_news',
-        order: 'created_at.desc',
-        limit: limit,
-      );
-    } catch (e) {
-      debugPrint('Error fetching steam news: $e');
+      final res = await client
+          .from('steam_news')
+          .select('*')
+          .order('created_at', ascending: false)
+          .limit(limit);
+      if (res is List) {
+        return List<Map<String, dynamic>>.from(res);
+      }
       return [];
+    } catch (e) {
+      debugPrint('Error fetching steam news from client: $e');
+      try {
+        return await query(
+          'steam_news',
+          order: 'created_at.desc',
+          limit: limit,
+        );
+      } catch (_) {
+        return [];
+      }
     }
   }
 

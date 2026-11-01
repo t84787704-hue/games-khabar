@@ -4,6 +4,12 @@ const axios = require('axios');
 const Parser = require('rss-parser');
 const cheerio = require('cheerio');
 const he = require('he');
+const crypto = require('crypto');
+
+function stringToUuid(str) {
+  const hash = crypto.createHash('md5').update(String(str)).digest('hex');
+  return `${hash.substring(0, 8)}-${hash.substring(8, 12)}-${hash.substring(12, 16)}-${hash.substring(16, 20)}-${hash.substring(20, 32)}`;
+}
 
 const parser = new Parser({ customFields: { item: ['media:content', 'enclosure'] } });
 
@@ -437,8 +443,12 @@ async function run(){
         const paras = fullText.split('\n\n').filter(p => p.trim().length > 20);
         const shortDesc = paras.slice(0, 2).join('\n\n') || fullText.substring(0, 300);
 
+        const rawId = `steam_${appId}_${item.gid}`;
+        const uuidId = stringToUuid(rawId);
+        const nowIso = new Date().toISOString();
+
         const newsPayload = {
-          id: `${appId}_${item.gid}`,
+          id: uuidId,
           title: rawTitle,
           description: fullText,
           content: fullText,
@@ -446,6 +456,9 @@ async function run(){
           titleMap: { en: rawTitle, ur: rawTitle, ro: rawTitle },
           descriptionMap: { en: fullText, ur: fullText, ro: fullText },
           imageUrl: img,
+          image_url: img,
+          created_at: nowIso,
+          published_at: nowIso,
           appId,
           appid: appId,
           url: item.url || "",
@@ -458,7 +471,7 @@ async function run(){
           originalPriceVal: originalPriceVal,
           priceHistory: priceHistory,
           timestamp: Math.floor(Date.now() / 1000),
-          timeAgo: new Date().toISOString(),
+          timeAgo: nowIso,
           views: 0,
           isFeatured: false,
           isAuto: true,
@@ -471,7 +484,9 @@ async function run(){
           console.warn(`steam_news upsert warning (${newsPayload.id}): ${insErr.message}`);
         }
       }
-    } catch(e) {}
+    } catch(e) {
+      console.warn(`Error processing game ${gameName}: ${e.message}`);
+    }
   }
 
   // 50 WEBSITES - Latest 20 per website
@@ -502,9 +517,11 @@ async function run(){
 
         const safeId = Buffer.from(articleUrl).toString('base64').replace(/[/+=]/g, '').substring(0, 20);
         const detectedGame = extractGameName(rawTitle, src.name);
+        const uuidId = stringToUuid(`${src.name}_${articleUrl}`);
+        const nowIso = new Date().toISOString();
 
         const newsPayload = {
-          id: `${src.name}_${safeId}`,
+          id: uuidId,
           title: rawTitle,
           description: fullArticle.fullText,
           content: fullArticle.fullText,
@@ -512,12 +529,15 @@ async function run(){
           titleMap: { en: rawTitle, ur: rawTitle, ro: rawTitle },
           descriptionMap: { en: fullArticle.fullText, ur: fullArticle.fullText, ro: fullArticle.fullText },
           imageUrl: img,
+          image_url: img,
+          created_at: nowIso,
+          published_at: nowIso,
           url: articleUrl,
           sourceUrl: articleUrl,
           gameName: detectedGame,
           category: cat,
           timestamp: Math.floor(Date.now() / 1000),
-          timeAgo: new Date().toISOString(),
+          timeAgo: nowIso,
           views: 0,
           isFeatured: false,
           isAuto: true,
@@ -532,7 +552,9 @@ async function run(){
           console.warn(`steam_news upsert warning (${newsPayload.id}): ${insErr.message}`);
         }
       }
-    } catch(e) {}
+    } catch(e) {
+      console.warn(`Error processing site ${src.name}: ${e.message}`);
+    }
   }
 
   console.log('DONE - STEAM NEWS FETCHED TO SUPABASE');
