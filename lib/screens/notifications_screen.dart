@@ -112,18 +112,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     if (notif.type.contains('tournament') || tournamentId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TournamentDetailScreen(
-            tournament: {
-              'id': tournamentId?.toString() ?? '',
-              'title': notif.title,
-            },
-            isRegistered: true,
-          ),
-        ),
-      );
+      _navigateToTournament(notif);
       return;
     }
 
@@ -667,41 +656,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     if (notif.type.contains('tournament') || tournamentId != null) {
-      return Padding(
-        padding: const EdgeInsetsDirectional.only(top: 8, start: 52),
-        child: OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: notif.iconColor),
-            foregroundColor: notif.iconColor,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            minimumSize: Size.zero,
-          ),
-          icon: const Icon(Icons.emoji_events_rounded, size: 12),
-          label: const Text(
-            'View Tournament',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-          ),
-          onPressed: () {
-            setState(() {
-              _locallyReadIds.add(notif.id);
-            });
-            _notificationService.markAsRead(notif.id);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => TournamentDetailScreen(
-                  tournament: {
-                    'id': tournamentId?.toString() ?? '',
-                    'title': notif.title,
-                  },
-                  isRegistered: true,
-                ),
-              ),
-            );
-          },
-        ),
-      );
+      return _buildTournamentAction(notif);
     }
 
     if (notif.type.contains('dispute') ||
@@ -806,6 +761,116 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     return const SizedBox.shrink();
+  }
+
+  Future<void> _navigateToTournament(InAppNotification notif) async {
+    final data = notif.data ?? {};
+    String? tId = (data['tournament_id'] ?? data['tournamentId'] ?? data['id'])?.toString();
+    String? tTitle = (data['tournament_title'] ?? data['tournamentTitle'] ?? data['title'])?.toString();
+
+    // If title or id is not in data, extract tournament name from notification body (e.g. won "Free11"!)
+    if (tTitle == null || tTitle.isEmpty || tTitle.contains('Tournament Champion')) {
+      final match = RegExp(r'won\s+["“]([^"”]+)["”]|tournament\s+["“]([^"”]+)["”]', caseSensitive: false).firstMatch(notif.body);
+      if (match != null) {
+        tTitle = match.group(1) ?? match.group(2);
+      }
+    }
+
+    Map<String, dynamic>? tournamentMap;
+
+    // 1. If ID is present, try finding in Supabase
+    if (tId != null && tId.isNotEmpty) {
+      try {
+        final row = await SupabaseService.client
+            .from('tournaments')
+            .select()
+            .eq('id', tId)
+            .maybeSingle();
+        if (row != null) {
+          tournamentMap = Map<String, dynamic>.from(row);
+          tTitle = tournamentMap['title']?.toString() ?? tTitle;
+        }
+      } catch (_) {}
+    }
+
+    // 2. If not found by ID or ID is empty, search by tournament title
+    if (tournamentMap == null && tTitle != null && tTitle.isNotEmpty) {
+      try {
+        final row = await SupabaseService.client
+            .from('tournaments')
+            .select()
+            .ilike('title', tTitle)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (row != null) {
+          tournamentMap = Map<String, dynamic>.from(row);
+          tId = tournamentMap['id']?.toString() ?? tId;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback: If still not found, check latest completed tournament in database
+    if (tournamentMap == null && notif.type.contains('tournament')) {
+      try {
+        final row = await SupabaseService.client
+            .from('tournaments')
+            .select()
+            .eq('status', 'completed')
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (row != null) {
+          tournamentMap = Map<String, dynamic>.from(row);
+          tId = tournamentMap['id']?.toString() ?? tId;
+          tTitle = tournamentMap['title']?.toString() ?? tTitle;
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TournamentDetailScreen(
+          tournamentId: tId,
+          tournament: tournamentMap,
+          initialData: tournamentMap ?? {
+            if (tId != null && tId.isNotEmpty) 'id': tId,
+            if (tTitle != null && tTitle.isNotEmpty) 'title': tTitle,
+          },
+          isRegistered: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTournamentAction(InAppNotification notif) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(top: 8, start: 52),
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: notif.iconColor),
+          foregroundColor: notif.iconColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          minimumSize: Size.zero,
+        ),
+        icon: const Icon(Icons.emoji_events_rounded, size: 12),
+        label: const Text(
+          'View Tournament',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+        ),
+        onPressed: () {
+          setState(() {
+            _locallyReadIds.add(notif.id);
+          });
+          _notificationService.markAsRead(notif.id);
+          _navigateToTournament(notif);
+        },
+      ),
+    );
   }
 
   Widget _buildEmptyState() {

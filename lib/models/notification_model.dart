@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../constants/gamer_theme.dart';
@@ -62,6 +63,13 @@ class InAppNotification {
       if (val == null) return null;
       if (val is Map<String, dynamic>) return val;
       if (val is Map) return Map<String, dynamic>.from(val);
+      if (val is String && val.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(val);
+          if (decoded is Map<String, dynamic>) return decoded;
+          if (decoded is Map) return Map<String, dynamic>.from(decoded);
+        } catch (_) {}
+      }
       return null;
     }
 

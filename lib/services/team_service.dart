@@ -949,7 +949,13 @@ class TeamService {
                 type: 'tournament_result',
                 title: '🏆 Tournament Champion! ($share Coins Added)',
                 body: 'Your team "$teamName" won "$tournamentTitle"! Your $share coins prize share has been credited to your wallet.',
-                data: {'tournament_id': tournamentId, 'prize': share, 'team_id': teamId},
+                data: {
+                  'tournament_id': tournamentId,
+                  'tournament_title': tournamentTitle,
+                  'prize': share,
+                  'team_id': teamId,
+                  'team_name': teamName,
+                },
                 priority: 'high',
               );
             } catch (_) {}

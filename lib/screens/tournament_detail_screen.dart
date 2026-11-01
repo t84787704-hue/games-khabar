@@ -58,29 +58,60 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   void initState() {
     super.initState();
     final initData = widget.tournament ?? widget.initialData;
-    if (initData != null) {
+    if (initData != null && initData['status'] != null && initData['game_mode'] != null) {
       _tournament = Map<String, dynamic>.from(initData);
       _isLoading = false;
+    } else {
+      if (initData != null) {
+        _tournament = Map<String, dynamic>.from(initData);
+      }
+      _isLoading = true;
     }
     _loadTournamentData();
   }
 
   Future<void> _loadTournamentData() async {
-    final tId = effectiveTournamentId;
-    if (tId.isEmpty) {
+    String tId = effectiveTournamentId;
+    Map<String, dynamic>? res;
+
+    if (tId.isNotEmpty) {
+      try {
+        res = await SupabaseService.client
+            .from('tournaments')
+            .select()
+            .eq('id', tId)
+            .maybeSingle();
+      } catch (_) {}
+    }
+
+    // Fallback: If not found by ID or ID is empty, search by title
+    if (res == null) {
+      final rawTitle = (_tournament?['title'] ?? _tournament?['name'] ?? widget.tournament?['title'] ?? widget.initialData?['title'] ?? '').toString();
+      final cleanTitle = rawTitle.replaceAll(RegExp(r'🏆\s*Tournament\s*Champion!\s*\([^)]*\)\s*', caseSensitive: false), '').trim();
+      final searchTitle = cleanTitle.isNotEmpty ? cleanTitle : rawTitle;
+
+      if (searchTitle.isNotEmpty) {
+        try {
+          res = await SupabaseService.client
+              .from('tournaments')
+              .select()
+              .ilike('title', searchTitle)
+              .order('created_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+        } catch (_) {}
+      }
+    }
+
+    if (res != null) {
+      _tournament = Map<String, dynamic>.from(res);
+      tId = _tournament!['id']?.toString() ?? tId;
+    }
+
+    if (tId.isEmpty && res == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-    try {
-      final res = await SupabaseService.client
-          .from('tournaments')
-          .select()
-          .eq('id', tId)
-          .maybeSingle();
-
-      if (res != null) {
-        _tournament = Map<String, dynamic>.from(res);
-      }
 
       // Load registrations with team info
       try {
@@ -438,16 +469,18 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
     // Exact user requirement: Proof upload ke baad approve ho chuka ho tabhi rewards aur win show hon
     final bool isProofApproved = rawProofStatus == 'approved' || rawProofStatus == 'accepted';
-    final bool isCompletedWithWinner = rawStatus == 'completed' &&
-        ((_tournament?['winner_team_id'] != null && _tournament?['winner_team_id'].toString().isNotEmpty == true) ||
-         (_winnerTeamName != null && _winnerTeamName!.isNotEmpty));
+    final bool isCompletedWithWinner = rawStatus == 'completed';
     final bool isTournamentCompleted = isProofApproved || isCompletedWithWinner;
 
     final hasValidWinner = isTournamentCompleted &&
         ((_winnerTeamName != null && _winnerTeamName!.isNotEmpty) ||
-         (_tournament?['winner_team_name'] != null && _tournament?['winner_team_name'].toString().isNotEmpty == true));
+         (_tournament?['winner_team_name'] != null && _tournament?['winner_team_name'].toString().isNotEmpty == true) ||
+         (_tournament?['proof_team_name'] != null && _tournament?['proof_team_name'].toString().isNotEmpty == true));
 
-    final winnerDisplay = _winnerTeamName ?? _tournament?['winner_team_name']?.toString() ?? 'Champions';
+    final winnerDisplay = _winnerTeamName ??
+        _tournament?['winner_team_name']?.toString() ??
+        _tournament?['proof_team_name']?.toString() ??
+        'Champions';
     final tagDisplay = _winnerTeamTag != null && _winnerTeamTag!.isNotEmpty ? ' [$_winnerTeamTag]' : '';
 
     final maxTeams = _tournament?['max_teams'] ?? 16;
