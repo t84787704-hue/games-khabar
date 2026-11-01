@@ -13,8 +13,15 @@ function stringToUuid(str) {
 
 const parser = new Parser({ customFields: { item: ['media:content', 'enclosure'] } });
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://dxdkitnroypbblazblja.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+const SUPABASE_URL = (process.env.SUPABASE_URL && process.env.SUPABASE_URL.trim() !== '')
+  ? process.env.SUPABASE_URL.trim()
+  : 'https://dxdkitnroypbblazblja.supabase.co';
+
+const SUPABASE_SERVICE_KEY = (process.env.SUPABASE_SERVICE_KEY && process.env.SUPABASE_SERVICE_KEY.trim() !== '')
+  ? process.env.SUPABASE_SERVICE_KEY.trim()
+  : ((process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.trim() !== '')
+      ? process.env.SUPABASE_KEY.trim()
+      : 'sb_publishable_gL8ImGd6TS-gdPOr92leHQ_Cwjiw25Y');
 
 if (!SUPABASE_SERVICE_KEY) {
   console.error('SUPABASE_SERVICE_KEY is missing. Please set it in your .env or environment.');
@@ -54,36 +61,58 @@ const GAME_CATEGORY_MAP = {
   'Phasmophobia': 'Horror Games', 'FC 24': 'Sports Games'
 };
 
-// 2. TOP 50 WEBSITES
+// 2. TOP 50 GAMING WEBSITES & MAJOR SOURCES
 const TOP_50_SITES = [
-  { name: 'IGN', url: 'https://feeds.feedburner.com/ign/games-all' },
-  { name: 'GameSpot', url: 'https://www.gamespot.com/feeds/mashup/' },
-  { name: 'PC Gamer', url: 'https://www.pcgamer.com/rss/' },
-  { name: 'Eurogamer', url: 'https://www.eurogamer.net/feed' },
-  { name: 'Polygon', url: 'https://www.polygon.com/rss/index.xml' },
-  { name: 'GamesRadar', url: 'https://www.gamesradar.com/rss/' },
-  { name: 'Kotaku', url: 'https://kotaku.com/rss' },
-  { name: 'VG247', url: 'https://www.vg247.com/feed' },
-  { name: 'Destructoid', url: 'https://www.destructoid.com/feed/' },
-  { name: 'Rock Paper Shotgun', url: 'https://www.rockpapershotgun.com/feed' },
-  { name: 'PCGamesN', url: 'https://www.pcgamesn.com/mainrss.xml' },
-  { name: 'Game Rant', url: 'https://gamerant.com/feed/' },
-  { name: 'Push Square', url: 'https://www.pushsquare.com/feeds/latest' },
-  { name: 'Nintendo Life', url: 'https://www.nintendolife.com/feeds/latest' },
-  { name: 'PlayStation Blog', url: 'https://blog.playstation.com/feed/' },
-  { name: 'Xbox Wire', url: 'https://news.xbox.com/en-us/feed/' },
-  { name: 'Gematsu', url: 'https://www.gematsu.com/feed' },
-  { name: 'GamingBolt', url: 'https://gamingbolt.com/feed' },
-  { name: 'Free Fire', url: 'https://news.google.com/rss/search?q=Garena+Free+Fire+MAX&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
-  { name: 'PUBG Mobile', url: 'https://news.google.com/rss/search?q=PUBG+Mobile+BGMI&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
-  { name: 'Fortnite', url: 'https://news.google.com/rss/search?q=Fortnite+Epic+Games&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
-  { name: 'Valorant', url: 'https://news.google.com/rss/search?q=Valorant+Riot+Games&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
-  { name: 'GTA 6', url: 'https://news.google.com/rss/search?q=GTA+6+Grand+Theft+Auto+6&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Action Games' },
-  { name: 'WCC3', url: 'https://news.google.com/rss/search?q=WCC3+World+Cricket+Championship+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Sports Games' },
-  { name: 'FIFA FC24', url: 'https://news.google.com/rss/search?q=EA+FC+24+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Sports Games' },
-  { name: 'Jedi Survivor', url: 'https://news.google.com/rss/search?q=Star+Wars+Jedi+Survivor&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Adventure Games' },
-  { name: 'Minecraft', url: 'https://news.google.com/rss/search?q=Minecraft+game+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Survival Games' },
-  { name: 'Bike Racing', url: 'https://news.google.com/rss/search?q=MotoGP+Ride+5+bike+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Bike Games' },
+  { name: 'IGN', url: 'https://feeds.feedburner.com/ign/games-all', cat: 'Action Games' },
+  { name: 'GameSpot', url: 'https://www.gamespot.com/feeds/mashup/', cat: 'Action Games' },
+  { name: 'PC Gamer', url: 'https://www.pcgamer.com/rss/', cat: 'FPS / Shooting' },
+  { name: 'Eurogamer', url: 'https://www.eurogamer.net/feed', cat: 'Adventure Games' },
+  { name: 'Polygon', url: 'https://www.polygon.com/rss/index.xml', cat: 'Adventure Games' },
+  { name: 'GamesRadar', url: 'https://www.gamesradar.com/rss/', cat: 'Action Games' },
+  { name: 'Kotaku', url: 'https://kotaku.com/rss', cat: 'Action Games' },
+  { name: 'VG247', url: 'https://www.vg247.com/feed', cat: 'Action Games' },
+  { name: 'Destructoid', url: 'https://www.destructoid.com/feed/', cat: 'Action Games' },
+  { name: 'Rock Paper Shotgun', url: 'https://www.rockpapershotgun.com/feed', cat: 'Action Games' },
+  { name: 'PCGamesN', url: 'https://www.pcgamesn.com/mainrss.xml', cat: 'FPS / Shooting' },
+  { name: 'Game Rant', url: 'https://gamerant.com/feed/', cat: 'Action Games' },
+  { name: 'Push Square', url: 'https://www.pushsquare.com/feeds/latest', cat: 'Action Games' },
+  { name: 'Nintendo Life', url: 'https://www.nintendolife.com/feeds/latest', cat: 'Adventure Games' },
+  { name: 'PlayStation Blog', url: 'https://blog.playstation.com/feed/', cat: 'Action Games' },
+  { name: 'Xbox Wire', url: 'https://news.xbox.com/en-us/feed/', cat: 'Action Games' },
+  { name: 'Gematsu', url: 'https://www.gematsu.com/feed', cat: 'Adventure Games' },
+  { name: 'GamingBolt', url: 'https://gamingbolt.com/feed', cat: 'Action Games' },
+  { name: 'DualShockers', url: 'https://www.dualshockers.com/feed/', cat: 'Action Games' },
+  { name: 'Pure Xbox', url: 'https://www.purexbox.com/feeds/latest', cat: 'Action Games' },
+  { name: 'Siliconera', url: 'https://www.siliconera.com/feed/', cat: 'Adventure Games' },
+  { name: 'Video Games Chronicle', url: 'https://www.videogameschronicle.com/feed/', cat: 'Action Games' },
+  { name: 'Attack of the Fanboy', url: 'https://attackofthefanboy.com/feed/', cat: 'Action Games' },
+  { name: 'TheGamer', url: 'https://www.thegamer.com/feed/', cat: 'Action Games' },
+  { name: 'Dexerto', url: 'https://www.dexerto.com/feed/', cat: 'Multiplayer Games' },
+  { name: 'Dot Esports', url: 'https://dotesports.com/feed', cat: 'Multiplayer Games' },
+  { name: 'Pocket Gamer', url: 'https://www.pocketgamer.com/rss/', cat: 'Multiplayer Games' },
+  { name: 'Droid Gamers', url: 'https://www.droidgamers.com/feed/', cat: 'Multiplayer Games' },
+  { name: 'TouchArcade', url: 'https://toucharcade.com/feed/', cat: 'Multiplayer Games' },
+  { name: 'Screen Rant Gaming', url: 'https://screenrant.com/feed/gaming/', cat: 'Action Games' },
+  { name: 'Free Fire', url: 'https://news.google.com/rss/search?q=Garena+Free+Fire+MAX+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
+  { name: 'PUBG Mobile', url: 'https://news.google.com/rss/search?q=PUBG+Mobile+BGMI+game+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
+  { name: 'Fortnite', url: 'https://news.google.com/rss/search?q=Fortnite+Epic+Games+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
+  { name: 'Valorant', url: 'https://news.google.com/rss/search?q=Valorant+Riot+Games+patch&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
+  { name: 'GTA 6', url: 'https://news.google.com/rss/search?q=GTA+6+Grand+Theft+Auto+Rockstar&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Action Games' },
+  { name: 'Call of Duty', url: 'https://news.google.com/rss/search?q=Call+of+Duty+Warzone+patch+notes&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
+  { name: 'EA Sports FC', url: 'https://news.google.com/rss/search?q=EA+Sports+FC+25+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Sports Games' },
+  { name: 'Counter-Strike 2', url: 'https://news.google.com/rss/search?q=Counter-Strike+2+Valve+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
+  { name: 'Apex Legends', url: 'https://news.google.com/rss/search?q=Apex+Legends+Respawn+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
+  { name: 'Minecraft', url: 'https://news.google.com/rss/search?q=Minecraft+Mojang+update+patch&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Survival Games' },
+  { name: 'Roblox', url: 'https://news.google.com/rss/search?q=Roblox+game+update+news&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Multiplayer Games' },
+  { name: 'Clash of Clans', url: 'https://news.google.com/rss/search?q=Clash+of+Clans+Supercell+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Strategy Games' },
+  { name: 'Mobile Legends', url: 'https://news.google.com/rss/search?q=Mobile+Legends+Bang+Bang+patch&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Multiplayer Games' },
+  { name: 'League of Legends', url: 'https://news.google.com/rss/search?q=League+of+Legends+Riot+patch&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Multiplayer Games' },
+  { name: 'Genshin Impact', url: 'https://news.google.com/rss/search?q=Genshin+Impact+HoYoverse+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Action Games' },
+  { name: 'Overwatch', url: 'https://news.google.com/rss/search?q=Overwatch+2+Blizzard+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
+  { name: 'WCC3 Cricket', url: 'https://news.google.com/rss/search?q=WCC3+World+Cricket+Championship+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Sports Games' },
+  { name: 'Forza Horizon', url: 'https://news.google.com/rss/search?q=Forza+Horizon+5+Festival+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Racing Games' },
+  { name: 'MotoGP & Bike', url: 'https://news.google.com/rss/search?q=MotoGP+Ride+5+bike+game+racing&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Bike Games' },
+  { name: 'Truck Simulator', url: 'https://news.google.com/rss/search?q=Euro+Truck+Simulator+2+American+Truck+SCS&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Truck Simulator' }
 ];
 
 function cleanDescription(text) {
@@ -320,7 +349,7 @@ async function fetchFullArticle(url) {
     }
 
     const clean = cleanDescription(rawText);
-    if (!clean || clean.length < 500) {
+    if (!clean || clean.length < 200) {
       return null;
     }
 
@@ -499,20 +528,35 @@ async function run(){
         const rawTitle = he.decode(item.title || "").substring(0, 200);
         if (isRussian(rawTitle)) continue;
 
+        let articleBody = null;
+        let cheerioDoc = null;
+
         const fullArticle = await fetchFullArticle(articleUrl);
-        if (!fullArticle || !fullArticle.fullText || fullArticle.fullText.length < 500) {
+        if (fullArticle && fullArticle.fullText && fullArticle.fullText.length >= 200) {
+          articleBody = fullArticle.fullText;
+          cheerioDoc = fullArticle.$;
+        } else {
+          // RSS content fallback (multi-paragraph or full summary)
+          const rssRaw = item['content:encoded'] || item.content || item.contentSnippet || item.summary || item.description || "";
+          const rssCleaned = cleanDescription(rssRaw);
+          if (rssCleaned && rssCleaned.length >= 80) {
+            articleBody = rssCleaned;
+          }
+        }
+
+        if (!articleBody || articleBody.length < 80) {
           continue;
         }
-        if (isRussian(fullArticle.fullText)) continue;
+        if (isRussian(articleBody)) continue;
 
         let cat = src.fixedCat || detectCat(rawTitle) || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length];
         fbIndex++;
 
-        const img = await getImage(articleUrl, item, rawTitle, cat, fullArticle.$);
+        const img = await getImage(articleUrl, item, rawTitle, cat, cheerioDoc);
         if (!img) continue;
 
-        const paras = fullArticle.fullText.split('\n\n').filter(p => p.trim().length > 20);
-        const shortDesc = paras.slice(0, 2).join('\n\n') || fullArticle.fullText.substring(0, 300);
+        const paras = articleBody.split('\n\n').filter(p => p.trim().length > 20);
+        const shortDesc = paras.slice(0, 2).join('\n\n') || articleBody.substring(0, 300);
 
         const safeId = Buffer.from(articleUrl).toString('base64').replace(/[/+=]/g, '').substring(0, 20);
         const detectedGame = extractGameName(rawTitle, src.name);
@@ -522,10 +566,10 @@ async function run(){
         const newsPayload = {
           id: uuidId,
           title: rawTitle,
-          description: fullArticle.fullText,
+          description: articleBody,
           shortDescription: shortDesc,
           titleMap: { en: rawTitle, ur: rawTitle, ro: rawTitle },
-          descriptionMap: { en: fullArticle.fullText, ur: fullArticle.fullText, ro: fullArticle.fullText },
+          descriptionMap: { en: articleBody, ur: articleBody, ro: articleBody },
           imageUrl: img,
           image_url: img,
           created_at: nowIso,

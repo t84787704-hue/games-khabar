@@ -220,7 +220,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           .order('created_at', ascending: false)
           .limit(30);
 
-      final steamNewsFuture = SupabaseService.getSteamNews(limit: 15);
+      final steamNewsFuture = SupabaseService.getSteamNews(limit: 40);
 
       final results = await Future.wait([postsFuture, steamNewsFuture]);
       

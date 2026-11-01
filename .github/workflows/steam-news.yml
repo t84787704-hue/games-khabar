@@ -1,7 +1,7 @@
-Name: Fetch Top 50 Gaming News
+name: Fetch Top 50 Gaming News
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 jobs:
   fetch:

@@ -2,8 +2,15 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://dxdkitnroypbblazblja.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+const SUPABASE_URL = (process.env.SUPABASE_URL && process.env.SUPABASE_URL.trim() !== '')
+  ? process.env.SUPABASE_URL.trim()
+  : 'https://dxdkitnroypbblazblja.supabase.co';
+
+const SUPABASE_SERVICE_KEY = (process.env.SUPABASE_SERVICE_KEY && process.env.SUPABASE_SERVICE_KEY.trim() !== '')
+  ? process.env.SUPABASE_SERVICE_KEY.trim()
+  : ((process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.trim() !== '')
+      ? process.env.SUPABASE_KEY.trim()
+      : 'sb_publishable_gL8ImGd6TS-gdPOr92leHQ_Cwjiw25Y');
 
 if (!SUPABASE_SERVICE_KEY) {
   console.error('SUPABASE_SERVICE_KEY is missing. Please set it in your .env or environment.');
