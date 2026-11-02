@@ -45,10 +45,8 @@ async function cleanOldShortNews() {
 
     // 2. Check if image is a Google logo, favicon, or invalid URL
     const lowerImg = img.toLowerCase();
-    if (lowerImg.includes('googleusercontent') ||
+    if (lowerImg.includes('google') ||
         lowerImg.includes('gstatic') ||
-        lowerImg.includes('google.com') ||
-        lowerImg.includes('news.google.com') ||
         lowerImg.includes('favicon')) {
       await supabase.from('steam_news').delete().eq('id', id);
       deletedWrongImage++;

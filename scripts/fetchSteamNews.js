@@ -278,10 +278,8 @@ async function getRealImage(articleUrl, item, rawTitle = '', category = '', exis
         lower.endsWith('.gif') ||
         lower.includes('feedburner.com/~r/') ||
         lower.includes('1245620') ||
-        lower.includes('googleusercontent') ||
+        lower.includes('google') ||
         lower.includes('gstatic') ||
-        lower.includes('google.com') ||
-        lower.includes('news.google.com') ||
         lower.includes('favicon') ||
         lower.includes('logo');
 

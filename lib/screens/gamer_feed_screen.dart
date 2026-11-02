@@ -148,15 +148,18 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final lower = rawUrl.toLowerCase();
 
     final bool isBad = rawUrl.isEmpty ||
-        lower.contains('googleusercontent') ||
+        lower.contains('google') ||
         lower.contains('gstatic') ||
-        lower.contains('news.google.com') ||
-        lower.contains('google.com') ||
         lower.contains('1x1') ||
         lower.contains('feedburner') ||
         lower.contains('picsum.photos') ||
         lower.contains('example.com') ||
-        lower.endsWith('.gif');
+        lower.contains('favicon') ||
+        lower.contains('placeholder') ||
+        lower.contains('icon') ||
+        lower.endsWith('.gif') ||
+        lower.endsWith('.ico') ||
+        lower.endsWith('.svg');
 
     if (!isBad) {
       return rawUrl;
@@ -315,17 +318,18 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         final rawImg = (news['imageUrl'] ?? news['image_url'] ?? '').toString().trim();
         final lowerImg = rawImg.toLowerCase();
         final bool isBadImg = rawImg.isEmpty ||
-            lowerImg.contains('googleusercontent') ||
+            lowerImg.contains('google') ||
             lowerImg.contains('gstatic') ||
-            lowerImg.contains('news.google.com') ||
-            lowerImg.contains('google.com') ||
             lowerImg.contains('favicon') ||
-            lowerImg.contains('logo') ||
+            lowerImg.contains('placeholder') ||
+            lowerImg.contains('icon') ||
             lowerImg.contains('1x1') ||
             lowerImg.contains('feedburner') ||
             lowerImg.contains('picsum.photos') ||
             lowerImg.contains('example.com') ||
-            lowerImg.endsWith('.gif');
+            lowerImg.endsWith('.gif') ||
+            lowerImg.endsWith('.ico') ||
+            lowerImg.endsWith('.svg');
 
         final cleanImage = !isBadImg
             ? rawImg

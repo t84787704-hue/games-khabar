@@ -141,15 +141,18 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
     final lowerImg = rawImg.toLowerCase();
     final bool isBadImg = rawImg.isEmpty ||
-        lowerImg.contains('googleusercontent') ||
+        lowerImg.contains('google') ||
         lowerImg.contains('gstatic') ||
-        lowerImg.contains('news.google.com') ||
-        lowerImg.contains('google.com') ||
+        lowerImg.contains('favicon') ||
+        lowerImg.contains('placeholder') ||
+        lowerImg.contains('icon') ||
         lowerImg.contains('1x1') ||
         lowerImg.contains('feedburner') ||
         lowerImg.contains('picsum.photos') ||
         lowerImg.contains('example.com') ||
-        lowerImg.endsWith('.gif');
+        lowerImg.endsWith('.gif') ||
+        lowerImg.endsWith('.ico') ||
+        lowerImg.endsWith('.svg');
 
     if (!isBadImg) {
       _imageUrl = rawImg;
@@ -196,9 +199,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       } catch (_) {}
     }
     _source = rawSource.isNotEmpty ? rawSource : 'Steam Gaming News';
-            '')
-        .toString()
-        .trim();
 
     final rawTime = (widget.timeAgo ??
             nd?['created_at'] ??
