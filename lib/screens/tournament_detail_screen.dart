@@ -71,8 +71,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   }
 
   Future<void> _loadTournamentData() async {
-    String tId = effectiveTournamentId;
-    Map<String, dynamic>? res;
+    try {
+      String tId = effectiveTournamentId;
+      Map<String, dynamic>? res;
 
     if (tId.isNotEmpty) {
       try {
