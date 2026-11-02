@@ -43,7 +43,18 @@ async function cleanOldShortNews() {
       continue;
     }
 
-    // 2. Check if image is an invalid URL or fallback Elden Ring for non-Elden-Ring game
+    // 2. Check if image is a Google logo, favicon, or invalid URL
+    const lowerImg = img.toLowerCase();
+    if (lowerImg.includes('googleusercontent') ||
+        lowerImg.includes('gstatic') ||
+        lowerImg.includes('google.com') ||
+        lowerImg.includes('news.google.com') ||
+        lowerImg.includes('favicon')) {
+      await supabase.from('steam_news').delete().eq('id', id);
+      deletedWrongImage++;
+      continue;
+    }
+
     if (img.includes('1245620') && !game.includes('elden ring') && !title.toLowerCase().includes('elden ring')) {
       await supabase.from('steam_news').delete().eq('id', id);
       deletedWrongImage++;

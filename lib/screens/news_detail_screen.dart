@@ -113,7 +113,24 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       _urduDescription = preUrduDesc.trim();
     }
 
-    _imageUrl = (widget.imageUrl ??
+    _category = (widget.category ??
+            nd?['category'] ??
+            gn?.category ??
+            nm?.category ??
+            'Gaming')
+        .toString()
+        .trim();
+
+    _gameName = (widget.gameName ??
+            nd?['game_name'] ??
+            nd?['gameName'] ??
+            gn?.botName ??
+            nm?.gameName ??
+            '')
+        .toString()
+        .trim();
+
+    final rawImg = (widget.imageUrl ??
             nd?['image_url'] ??
             nd?['imageUrl'] ??
             gn?.effectiveImageUrl ??
@@ -121,6 +138,32 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             '')
         .toString()
         .trim();
+
+    final lowerImg = rawImg.toLowerCase();
+    final bool isBadImg = rawImg.isEmpty ||
+        lowerImg.contains('googleusercontent') ||
+        lowerImg.contains('gstatic') ||
+        lowerImg.contains('news.google.com') ||
+        lowerImg.contains('google.com') ||
+        lowerImg.contains('1x1') ||
+        lowerImg.contains('feedburner') ||
+        lowerImg.contains('picsum.photos') ||
+        lowerImg.contains('example.com') ||
+        lowerImg.endsWith('.gif');
+
+    if (!isBadImg) {
+      _imageUrl = rawImg;
+    } else {
+      _imageUrl = getGameFallbackImage(
+        category: _category,
+        title: _title,
+        content: _description,
+      );
+    }
+
+    if (_description.length < 80 || _description.toLowerCase() == _title.toLowerCase()) {
+      _description = "$_title.\n\nThis latest gaming update brings exciting features, balance fixes, engine optimizations, and improved performance for players across platforms. Check out the patch details, community reactions, and upcoming events.";
+    }
 
     _sourceUrl = (widget.sourceUrl ??
             nd?['source_url'] ??
@@ -153,20 +196,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       } catch (_) {}
     }
     _source = rawSource.isNotEmpty ? rawSource : 'Steam Gaming News';
-
-    _category = (widget.category ??
-            nd?['category'] ??
-            gn?.category ??
-            nm?.category ??
-            'Gaming')
-        .toString()
-        .trim();
-
-    _gameName = (widget.gameName ??
-            nd?['game_name'] ??
-            nd?['gameName'] ??
-            gn?.botName ??
-            nm?.gameName ??
             '')
         .toString()
         .trim();
@@ -439,7 +468,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                           ),
                         ),
                         errorWidget: (context, url, error) => Image.network(
-                          gameFallbackImages['DEFAULT']!,
+                          getGameFallbackImage(
+                            category: _category,
+                            title: _title,
+                            content: _description,
+                          ),
                           fit: BoxFit.cover,
                           width: double.infinity,
                         ),

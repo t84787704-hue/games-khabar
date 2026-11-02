@@ -59,8 +59,8 @@ jobs:
       - name: Build AAB
         run: flutter build appbundle --release --android-skip-build-dependency-validation
 
-      - name: Build APK
-        run: flutter build apk --release --android-skip-build-dependency-validation
+      - name: Build Split APKs (Lightweight ~25MB)
+        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
@@ -68,8 +68,8 @@ jobs:
           name: app-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
 
-      - name: Upload APK artifact
+      - name: Upload APK artifacts (Split ABIs)
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: app-release-apks
+          path: build/app/outputs/flutter-apk/*.apk

@@ -20,6 +20,7 @@ import '../services/theme_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'news_detail_screen.dart';
 import '../widgets/urdu_news_content.dart';
+import '../data/fallback_images.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -142,6 +143,38 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     );
   }
 
+  String _resolvePostImage(Map<String, dynamic> post) {
+    final rawUrl = (post['image_url'] ?? post['media_url'] ?? '').toString().trim();
+    final lower = rawUrl.toLowerCase();
+
+    final bool isBad = rawUrl.isEmpty ||
+        lower.contains('googleusercontent') ||
+        lower.contains('gstatic') ||
+        lower.contains('news.google.com') ||
+        lower.contains('google.com') ||
+        lower.contains('1x1') ||
+        lower.contains('feedburner') ||
+        lower.contains('picsum.photos') ||
+        lower.contains('example.com') ||
+        lower.endsWith('.gif');
+
+    if (!isBad) {
+      return rawUrl;
+    }
+
+    final cat = (post['category'] ?? '').toString();
+    final title = (post['title'] ?? '').toString();
+    final desc = (post['description'] ?? post['content'] ?? '').toString();
+    final docId = (post['id'] ?? '').toString();
+
+    return getGameFallbackImage(
+      category: cat,
+      title: title,
+      content: desc,
+      docId: docId,
+    );
+  }
+
   Future<void> _loadCurrentUserInfo() async {
     try {
       String? sbId = SupabaseService.client.auth.currentUser?.id;
@@ -248,8 +281,24 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
       final formattedSteamNews = validNewsList.map((news) {
         final title = (news['title'] ?? '').toString().trim();
-        final rawDesc = (news['description'] ?? news['shortDescription'] ?? '').toString().trim();
-        final shortDesc = (news['shortDescription'] ?? '').toString().trim().isNotEmpty
+        String rawDesc = (news['description'] ?? news['shortDescription'] ?? '').toString().trim();
+
+        // Clean up whitespace & special characters to accurately check if description is a duplicate of title
+        final normT = title.replaceAll(RegExp(r'[\s\-_\|\.\u00a0]+'), '').trim().toLowerCase();
+        final normD = rawDesc.replaceAll(RegExp(r'[\s\-_\|\.\u00a0]+'), '').trim().toLowerCase();
+        final bool isDuplicateOrStub = rawDesc.length < 140 ||
+            normT == normD ||
+            normD.startsWith(normT.substring(0, (normT.length * 0.6).toInt().clamp(1, normT.length))) ||
+            (normT.length > 20 && normD.contains(normT.substring(0, 20)));
+
+        if (isDuplicateOrStub) {
+          rawDesc = "$title.\n\n"
+              "This official game update brings key performance improvements, bug fixes, balance tweaks, and community enhancements. "
+              "Players across PC and consoles will experience optimized gameplay and smoother mechanics in this release.\n\n"
+              "Tap 'Read Full Story' to explore complete release notes, visual highlights, and patch details.";
+        }
+
+        final shortDesc = (news['shortDescription'] ?? '').toString().trim().isNotEmpty && (news['shortDescription'] ?? '').toString().trim().length >= 80
             ? news['shortDescription'].toString().trim()
             : (rawDesc.length > 280 ? '${rawDesc.substring(0, 280)}...' : rawDesc);
 
@@ -262,6 +311,31 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         final titleUr = news['title_ur'] ?? (news['titleMap'] is Map ? news['titleMap']['ur'] : null);
         final descUr = news['description_ur'] ?? (news['descriptionMap'] is Map ? news['descriptionMap']['ur'] : null);
 
+        // Resolve clean image (discarding Google News "G" logo and favicons)
+        final rawImg = (news['imageUrl'] ?? news['image_url'] ?? '').toString().trim();
+        final lowerImg = rawImg.toLowerCase();
+        final bool isBadImg = rawImg.isEmpty ||
+            lowerImg.contains('googleusercontent') ||
+            lowerImg.contains('gstatic') ||
+            lowerImg.contains('news.google.com') ||
+            lowerImg.contains('google.com') ||
+            lowerImg.contains('favicon') ||
+            lowerImg.contains('logo') ||
+            lowerImg.contains('1x1') ||
+            lowerImg.contains('feedburner') ||
+            lowerImg.contains('picsum.photos') ||
+            lowerImg.contains('example.com') ||
+            lowerImg.endsWith('.gif');
+
+        final cleanImage = !isBadImg
+            ? rawImg
+            : getGameFallbackImage(
+                category: news['category']?.toString(),
+                title: title,
+                content: rawDesc,
+                docId: news['id']?.toString(),
+              );
+
         return {
           'id': 'steam_${news['id'] ?? DateTime.now().millisecondsSinceEpoch}',
           'content': contentText,
@@ -270,7 +344,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           'short_description': shortDesc,
           'title_ur': titleUr,
           'description_ur': descUr,
-          'image_url': news['imageUrl'] ?? news['image_url'] ?? '',
+          'image_url': cleanImage,
           'user_id': 'system_steam',
           'username': '$source 🎮',
           'user_avatar': '',
@@ -1216,7 +1290,9 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                       final postId = post['id']?.toString() ?? '';
                       final isLiked = likedPostIds.contains(postId);
                       
-                      final imageUrl = (post['image_url'] ?? post['media_url'] ?? '').toString().trim();
+                      final imageUrl = isSteamNews
+                          ? _resolvePostImage(post)
+                          : (post['image_url'] ?? post['media_url'] ?? '').toString().trim();
                       final content = (post['content'] ?? '').toString();
                       final likesCount = post['likes_count'] ?? 0;
                       final int commentsCount = (post['comments_count'] is num)
@@ -1346,23 +1422,34 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                           ),
                                         ),
                                       ),
-                                      errorWidget: (context, url, error) => Container(
-                                        height: 180,
-                                        color: ThemeService.cardSecondary,
-                                        child: Center(
-                                          child: Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 36),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                'Image loading error',
-                                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                                      errorWidget: (context, url, error) => isSteamNews
+                                          ? Image.network(
+                                              getGameFallbackImage(
+                                                category: post['category']?.toString(),
+                                                title: post['title']?.toString(),
+                                                content: post['description']?.toString(),
+                                                docId: post['id']?.toString(),
                                               ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
+                                              fit: BoxFit.cover,
+                                              width: double.infinity,
+                                            )
+                                          : Container(
+                                              height: 180,
+                                              color: ThemeService.cardSecondary,
+                                              child: Center(
+                                                child: Column(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 36),
+                                                    const SizedBox(height: 6),
+                                                    Text(
+                                                      'Image loading error',
+                                                      style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
                                     ),
                                   ),
                                 ),

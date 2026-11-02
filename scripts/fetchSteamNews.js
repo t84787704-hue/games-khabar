@@ -93,26 +93,14 @@ const TOP_50_SITES = [
   { name: 'Droid Gamers', url: 'https://www.droidgamers.com/feed/', cat: 'Multiplayer Games' },
   { name: 'TouchArcade', url: 'https://toucharcade.com/feed/', cat: 'Multiplayer Games' },
   { name: 'Screen Rant Gaming', url: 'https://screenrant.com/feed/gaming/', cat: 'Action Games' },
-  { name: 'Free Fire', url: 'https://news.google.com/rss/search?q=Garena+Free+Fire+MAX+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
-  { name: 'PUBG Mobile', url: 'https://news.google.com/rss/search?q=PUBG+Mobile+BGMI+game+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
-  { name: 'Fortnite', url: 'https://news.google.com/rss/search?q=Fortnite+Epic+Games+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
-  { name: 'Valorant', url: 'https://news.google.com/rss/search?q=Valorant+Riot+Games+patch&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
-  { name: 'GTA 6', url: 'https://news.google.com/rss/search?q=GTA+6+Grand+Theft+Auto+Rockstar&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Action Games' },
-  { name: 'Call of Duty', url: 'https://news.google.com/rss/search?q=Call+of+Duty+Warzone+patch+notes&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
-  { name: 'EA Sports FC', url: 'https://news.google.com/rss/search?q=EA+Sports+FC+25+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Sports Games' },
-  { name: 'Counter-Strike 2', url: 'https://news.google.com/rss/search?q=Counter-Strike+2+Valve+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
-  { name: 'Apex Legends', url: 'https://news.google.com/rss/search?q=Apex+Legends+Respawn+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Battle Royale' },
-  { name: 'Minecraft', url: 'https://news.google.com/rss/search?q=Minecraft+Mojang+update+patch&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Survival Games' },
-  { name: 'Roblox', url: 'https://news.google.com/rss/search?q=Roblox+game+update+news&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Multiplayer Games' },
-  { name: 'Clash of Clans', url: 'https://news.google.com/rss/search?q=Clash+of+Clans+Supercell+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Strategy Games' },
-  { name: 'Mobile Legends', url: 'https://news.google.com/rss/search?q=Mobile+Legends+Bang+Bang+patch&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Multiplayer Games' },
-  { name: 'League of Legends', url: 'https://news.google.com/rss/search?q=League+of+Legends+Riot+patch&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Multiplayer Games' },
-  { name: 'Genshin Impact', url: 'https://news.google.com/rss/search?q=Genshin+Impact+HoYoverse+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Action Games' },
-  { name: 'Overwatch', url: 'https://news.google.com/rss/search?q=Overwatch+2+Blizzard+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'FPS / Shooting' },
-  { name: 'WCC3 Cricket', url: 'https://news.google.com/rss/search?q=WCC3+World+Cricket+Championship+game&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Sports Games' },
-  { name: 'Forza Horizon', url: 'https://news.google.com/rss/search?q=Forza+Horizon+5+Festival+update&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Racing Games' },
-  { name: 'MotoGP & Bike', url: 'https://news.google.com/rss/search?q=MotoGP+Ride+5+bike+game+racing&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Bike Games' },
-  { name: 'Truck Simulator', url: 'https://news.google.com/rss/search?q=Euro+Truck+Simulator+2+American+Truck+SCS&hl=en-US&gl=US&ceid=US:en', fixedCat: 'Truck Simulator' }
+  { name: 'Traxion.GG', url: 'https://traxion.gg/feed/', fixedCat: 'Truck Simulator' },
+  { name: 'GamingonPhone', url: 'https://gamingonphone.com/feed/', fixedCat: 'Battle Royale' },
+  { name: 'Pocket Tactics', url: 'https://www.pockettactics.com/feed', fixedCat: 'Multiplayer Games' },
+  { name: 'Charlie Intel', url: 'https://charlieintel.com/feed/', fixedCat: 'FPS / Shooting' },
+  { name: 'Esports Insider', url: 'https://esportsinsider.com/feed/', fixedCat: 'Multiplayer Games' },
+  { name: 'VG247', url: 'https://www.vg247.com/feed', fixedCat: 'Action Games' },
+  { name: 'Eurogamer', url: 'https://www.eurogamer.net/feed', fixedCat: 'Action Games' },
+  { name: 'OverTake Racing', url: 'https://www.overtake.gg/news/feed/', fixedCat: 'Racing Games' }
 ];
 
 function cleanDescription(text) {
@@ -286,7 +274,18 @@ async function getRealImage(articleUrl, item, rawTitle = '', category = '', exis
     const abs = makeAbsoluteUrl(image, articleUrl);
     if (abs && abs.startsWith('http')) {
       const lower = abs.toLowerCase();
-      if (!lower.includes('1x1') && !lower.endsWith('.gif') && !lower.includes('feedburner.com/~r/') && !lower.includes('1245620')) {
+      const isBadImage = lower.includes('1x1') ||
+        lower.endsWith('.gif') ||
+        lower.includes('feedburner.com/~r/') ||
+        lower.includes('1245620') ||
+        lower.includes('googleusercontent') ||
+        lower.includes('gstatic') ||
+        lower.includes('google.com') ||
+        lower.includes('news.google.com') ||
+        lower.includes('favicon') ||
+        lower.includes('logo');
+
+      if (!isBadImage) {
         console.log(`[Image Success] Real image found for "${rawTitle.substring(0, 45)}": ${abs}`);
         return abs;
       }
@@ -298,15 +297,7 @@ async function getRealImage(articleUrl, item, rawTitle = '', category = '', exis
     return fallback.url;
   }
 
-  if (articleUrl) {
-    try {
-      const parsed = new URL(articleUrl);
-      const faviconUrl = `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=128`;
-      return faviconUrl;
-    } catch (_) {}
-  }
-
-  return 'https://www.google.com/s2/favicons?domain=steampowered.com&sz=128';
+  return FALLBACK_IMAGES.general;
 }
 
 const getImage = getRealImage;

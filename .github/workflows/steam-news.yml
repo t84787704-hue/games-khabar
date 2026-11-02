@@ -12,6 +12,10 @@ jobs:
         with:
           node-version: '22'
       - run: npm install rss-parser cheerio axios dotenv @supabase/supabase-js he
+      - run: node scripts/cleanOldNews.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       - run: node scripts/fetchSteamNews.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
