@@ -144,7 +144,7 @@ class _UrduNewsContentState extends State<UrduNewsContent> {
         normDesc.startsWith(normTitle.substring(0, (normTitle.length * 0.6).toInt().clamp(1, normTitle.length))) ||
         (normTitle.length > 20 && normDesc.contains(normTitle.substring(0, 20)));
 
-    if (isRepeated || currentDesc.trim().length < 80) {
+    if (isRepeated || currentDesc.trim().length < 160) {
       currentDesc = displayUrdu
           ? 'اس گیم کی تازہ ترین آفیشل اپ ڈیٹ، گیم پلے میں تبدیلیاں، اور تمام نئی تفصیلات جانیے۔ مکمل تفصیلات کے لیے نیچے \'Read Full Story\' پر کلک کریں۔'
           : 'Check out the latest official game patch notes, gameplay balance updates, and upcoming features. Tap \'Read Full Story\' below for full coverage.';

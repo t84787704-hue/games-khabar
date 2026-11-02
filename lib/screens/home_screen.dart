@@ -23,6 +23,7 @@ import 'community_wall_screen.dart';
 import '../widgets/news_card.dart';
 import '../widgets/streak_banner_widget.dart';
 import '../services/streak_service.dart';
+import 'news_detail_screen.dart';
 import '../services/price_alert_service.dart';
 import '../services/countdown_service.dart';
 import '../services/coin_reward_service.dart';
@@ -125,6 +126,21 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     StreakService().recordArticleRead(news.id);
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NewsDetailScreen(
+          newsModel: news,
+          title: news.title,
+          description: news.description,
+          imageUrl: news.effectiveImageUrl,
+          source: news.store,
+          sourceUrl: news.sourceUrl,
+          category: news.category,
+          gameName: news.gameName,
+        ),
+      ),
+    );
   }
 
   void _toggleBookmark(NewsModel news) async {
