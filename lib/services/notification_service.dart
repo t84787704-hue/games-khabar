@@ -8,6 +8,7 @@ import '../models/news_model.dart';
 import '../models/notification_model.dart';
 import 'supabase_store_service.dart';
 import 'supabase_service.dart';
+import '../screens/news_detail_screen.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -922,7 +923,14 @@ class NotificationService {
       views: 1,
     );
 
-    debugPrint('Notification tapped for news: $newsId');
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NewsDetailScreen(
+          newsModel: news,
+        ),
+      ),
+    );
   }
 
   Future<void> sendNewsNotification({

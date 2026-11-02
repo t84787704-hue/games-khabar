@@ -164,6 +164,30 @@ function cleanDescription(text) {
   return t;
 }
 
+async function translateToUrdu(text) {
+  if (!text || typeof text !== 'string') return '';
+  const clean = text.trim();
+  if (!clean) return '';
+  if (/[\u0600-\u06FF]/.test(clean)) return clean;
+  try {
+    const cleanChunk = clean.substring(0, 800);
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ur&dt=t&q=${encodeURIComponent(cleanChunk)}`;
+    const res = await axios.get(url, {
+      timeout: 4000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (res.data && Array.isArray(res.data[0])) {
+      const trans = res.data[0].map(item => item[0]).join('').trim();
+      if (trans && /[\u0600-\u06FF]/.test(trans)) {
+        return trans;
+      }
+    }
+  } catch (_) {}
+  return clean;
+}
+
 function makeAbsoluteUrl(imgUrl, baseLink) {
   if (!imgUrl) return "";
   let url = imgUrl.trim();
@@ -476,13 +500,18 @@ async function run(){
         const uuidId = stringToUuid(rawId);
         const nowIso = new Date().toISOString();
 
+        const urduTitle = await translateToUrdu(rawTitle);
+        const urduDesc = await translateToUrdu(shortDesc || fullText.substring(0, 300));
+
         const newsPayload = {
           id: uuidId,
-          title: rawTitle,
+          title: (urduTitle && urduTitle.length > 5) ? urduTitle : rawTitle,
+          title_ur: urduTitle,
+          description_ur: urduDesc,
           description: fullText,
           shortDescription: shortDesc,
-          titleMap: { en: rawTitle, ur: rawTitle, ro: rawTitle },
-          descriptionMap: { en: fullText, ur: fullText, ro: fullText },
+          titleMap: { en: rawTitle, ur: urduTitle || rawTitle, ro: rawTitle },
+          descriptionMap: { en: fullText, ur: urduDesc || fullText, ro: fullText },
           imageUrl: img,
           image_url: img,
           created_at: nowIso,
@@ -563,13 +592,18 @@ async function run(){
         const uuidId = stringToUuid(`${src.name}_${articleUrl}`);
         const nowIso = new Date().toISOString();
 
+        const urduTitle = await translateToUrdu(rawTitle);
+        const urduDesc = await translateToUrdu(shortDesc || articleBody.substring(0, 300));
+
         const newsPayload = {
           id: uuidId,
-          title: rawTitle,
+          title: (urduTitle && urduTitle.length > 5) ? urduTitle : rawTitle,
+          title_ur: urduTitle,
+          description_ur: urduDesc,
           description: articleBody,
           shortDescription: shortDesc,
-          titleMap: { en: rawTitle, ur: rawTitle, ro: rawTitle },
-          descriptionMap: { en: articleBody, ur: articleBody, ro: articleBody },
+          titleMap: { en: rawTitle, ur: urduTitle || rawTitle, ro: rawTitle },
+          descriptionMap: { en: articleBody, ur: urduDesc || articleBody, ro: articleBody },
           imageUrl: img,
           image_url: img,
           created_at: nowIso,

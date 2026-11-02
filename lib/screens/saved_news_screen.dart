@@ -7,6 +7,7 @@ import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../widgets/app_image_view.dart';
 import '../widgets/translated_news_title.dart';
+import 'news_detail_screen.dart';
 
 class SavedNewsScreen extends StatefulWidget {
   final VoidCallback? onExploreTap;
@@ -38,7 +39,13 @@ class _SavedNewsScreenState extends State<SavedNewsScreen> {
   }
 
   void _navigateToDetail(NewsModel news) {
-    // Detail screen removed in favor of inline expand Super Feed
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NewsDetailScreen(
+          newsModel: news,
+        ),
+      ),
+    );
   }
 
   void _confirmClearAll(BuildContext context) {

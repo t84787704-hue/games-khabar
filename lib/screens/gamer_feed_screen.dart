@@ -18,6 +18,8 @@ import 'notifications_screen.dart';
 import '../widgets/gamer_avatar.dart';
 import '../services/theme_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'news_detail_screen.dart';
+import '../widgets/urdu_news_content.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -125,6 +127,16 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _openNewsDetail(Map<String, dynamic> post) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NewsDetailScreen(
+          newsData: post,
         ),
       ),
     );
@@ -247,6 +259,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
         final source = (news['source'] ?? news['game'] ?? news['gameName'] ?? 'Gaming News').toString();
         final rawCreatedAt = (news['created_at'] ?? news['published_at'] ?? news['timeAgo'] ?? '').toString();
+        final titleUr = news['title_ur'] ?? (news['titleMap'] is Map ? news['titleMap']['ur'] : null);
+        final descUr = news['description_ur'] ?? (news['descriptionMap'] is Map ? news['descriptionMap']['ur'] : null);
 
         return {
           'id': 'steam_${news['id'] ?? DateTime.now().millisecondsSinceEpoch}',
@@ -254,6 +268,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           'title': title,
           'description': rawDesc,
           'short_description': shortDesc,
+          'title_ur': titleUr,
+          'description_ur': descUr,
           'image_url': news['imageUrl'] ?? news['image_url'] ?? '',
           'user_id': 'system_steam',
           'username': '$source 🎮',
@@ -265,6 +281,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           'source_url': news['sourceUrl'] ?? news['url'] ?? '',
           'game_name': news['game'] ?? news['gameName'] ?? '',
           'category': news['category'] ?? 'Gaming',
+          'source': source,
         };
       }).toList();
 
@@ -1284,30 +1301,13 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                                     ),
                             ),
                             if (isSteamNews && (post['title'] ?? '').toString().isNotEmpty) ...[
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                child: Text(
-                                  post['title'].toString(),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w900,
-                                    color: ThemeService.textPrimary,
-                                    height: 1.3,
-                                  ),
-                                ),
+                              UrduNewsContent(
+                                title: post['title'].toString(),
+                                description: (post['description'] ?? '').toString(),
+                                titleUr: post['title_ur']?.toString(),
+                                descriptionUr: post['description_ur']?.toString(),
+                                onTap: () => _openNewsDetail(post),
                               ),
-                              if ((post['description'] ?? '').toString().isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                  child: Text(
-                                    post['description'].toString(),
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: ThemeService.textPrimary.withOpacity(0.9),
-                                      height: 1.45,
-                                    ),
-                                  ),
-                                ),
                             ] else if (content.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1324,7 +1324,9 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: GestureDetector(
-                                  onTap: () => _openImagePreview(context, imageUrl),
+                                  onTap: isSteamNews
+                                      ? () => _openNewsDetail(post)
+                                      : () => _openImagePreview(context, imageUrl),
                                   child: Container(
                                     width: double.infinity,
                                     constraints: const BoxConstraints(minHeight: 180, maxHeight: 420),
@@ -1399,38 +1401,29 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                             Row(
                               children: [
                                 if (isSteamNews) ...[
-                                  if ((post['source_url'] ?? '').toString().isNotEmpty)
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () async {
-                                          final sUrl = (post['source_url'] ?? '').toString();
-                                          if (sUrl.isNotEmpty) {
-                                            final uri = Uri.tryParse(sUrl);
-                                            if (uri != null) {
-                                              await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                            }
-                                          }
-                                        },
-                                        child: const Padding(
-                                          padding: EdgeInsets.symmetric(vertical: 10),
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(Icons.open_in_new_rounded, size: 16, color: Color(0xFF00FF88)),
-                                              SizedBox(width: 6),
-                                              Text(
-                                                'Read Full Story',
-                                                style: TextStyle(
-                                                  color: Color(0xFF00FF88),
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 13,
-                                                ),
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () => _openNewsDetail(post),
+                                      child: const Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 10),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.menu_book_rounded, size: 16, color: Color(0xFF00FF88)),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              'Read Full Story',
+                                              style: TextStyle(
+                                                color: Color(0xFF00FF88),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
+                                  ),
                                 ] else ...[
                                   Expanded(
                                     child: InkWell(
