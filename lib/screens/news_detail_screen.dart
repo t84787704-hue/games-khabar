@@ -72,7 +72,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     _title = (widget.title ??
             nd?['title'] ??
             gn?.titleEn ??
-            nm?.titleEn ??
+            nm?.getTitle('en') ??
+            nm?.title ??
             '')
         .toString()
         .trim();
@@ -81,36 +82,35 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             nd?['description'] ??
             nd?['content'] ??
             gn?.contentEn ??
-            nm?.descriptionEn ??
+            nm?.getDescription('en') ??
+            nm?.description ??
             '')
         .toString()
         .trim();
 
-    // Check pre-translated fields
-    final preUrduTitle = (nd?['title_ur'] ??
-            (nd?['titleMap'] is Map ? nd?['titleMap']['ur'] : null) ??
-            gn?.titleUr ??
-            nm?.titleMap['ur'])
-        ?.toString()
-        .trim();
+    // Check pre-translated fields cleanly
+    String? preUrduTitle = nd?['title_ur']?.toString();
+    if (preUrduTitle == null && nd != null && nd['titleMap'] is Map) {
+      preUrduTitle = (nd['titleMap'] as Map)['ur']?.toString();
+    }
+    preUrduTitle ??= gn?.titleUr ?? nm?.titleMap['ur'];
 
     if (preUrduTitle != null &&
-        preUrduTitle.isNotEmpty &&
+        preUrduTitle.trim().isNotEmpty &&
         TranslationService.isTextInLanguage(preUrduTitle, 'ur')) {
-      _urduTitle = preUrduTitle;
+      _urduTitle = preUrduTitle.trim();
     }
 
-    final preUrduDesc = (nd?['description_ur'] ??
-            (nd?['descriptionMap'] is Map ? nd?['descriptionMap']['ur'] : null) ??
-            gn?.contentUr ??
-            nm?.descriptionMap['ur'])
-        ?.toString()
-        .trim();
+    String? preUrduDesc = nd?['description_ur']?.toString();
+    if (preUrduDesc == null && nd != null && nd['descriptionMap'] is Map) {
+      preUrduDesc = (nd['descriptionMap'] as Map)['ur']?.toString();
+    }
+    preUrduDesc ??= gn?.contentUr ?? nm?.descriptionMap['ur'];
 
     if (preUrduDesc != null &&
-        preUrduDesc.isNotEmpty &&
+        preUrduDesc.trim().isNotEmpty &&
         TranslationService.isTextInLanguage(preUrduDesc, 'ur')) {
-      _urduDescription = preUrduDesc;
+      _urduDescription = preUrduDesc.trim();
     }
 
     _imageUrl = (widget.imageUrl ??
