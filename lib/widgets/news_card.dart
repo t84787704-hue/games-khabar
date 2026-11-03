@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/news_model.dart';
 import '../services/theme_service.dart';
 import '../services/bookmark_service.dart';
+import '../services/app_share_service.dart';
 import 'translated_news_title.dart';
 import 'urdu_summary_text.dart';
 
@@ -66,11 +67,11 @@ class NewsCard extends StatelessWidget {
   }
 
   void _shareArticle() {
-    final shareUrl = (news.sourceUrl != null && news.sourceUrl!.trim().isNotEmpty)
-        ? news.sourceUrl!.trim()
-        : 'https://gameskhabar.pk';
-    final shareText = '🎮 ${news.title}\n\nRead more on Games Khabar:\n$shareUrl';
-    Share.share(shareText, subject: news.title);
+    AppShareService.shareNews(
+      title: news.title,
+      description: news.summary ?? news.content,
+      gameName: news.gameName,
+    );
   }
 
   @override

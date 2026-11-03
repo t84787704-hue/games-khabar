@@ -10,6 +10,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/gaming_news_service.dart';
 import '../services/language_service.dart';
 import '../services/translation_service.dart';
+import '../services/app_share_service.dart';
 
 class NewsPostCard extends StatefulWidget {
   final GamingNewsModel news;
@@ -73,13 +74,11 @@ class _NewsPostCardState extends State<NewsPostCard> {
   }
 
   void _onShare(String title, String content, String sourceUrl) {
-    final finalUrl = sourceUrl.isNotEmpty ? sourceUrl : 'fallback_source_url'.tr();
-    
-    final text = '${'share_prefix_emoji'.tr(args: [title])}\n\n'
-        '$content\n\n'
-        '${'share_source_label'.tr(args: [finalUrl])}';
-        
-    Share.share(text);
+    AppShareService.shareNews(
+      title: title,
+      description: content,
+      gameName: widget.news.gameCategory,
+    );
   }
 
   void _toggleLike() {

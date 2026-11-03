@@ -16,6 +16,7 @@ import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
+import '../services/app_share_service.dart';
 
 class CoinStoreScreen extends StatefulWidget {
   const CoinStoreScreen({super.key});
@@ -540,9 +541,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
           buttonColor: GamerTheme.accentBlue,
           textColor: Colors.white,
           onTap: () {
-            Share.share(
-              'share_invite_msg'.tr(args: [inviteCode]),
-            );
+            AppShareService.shareInviteCode(inviteCode: inviteCode);
           },
         ),
         const SizedBox(height: 24),

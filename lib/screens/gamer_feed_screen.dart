@@ -5,6 +5,7 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
@@ -21,6 +22,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'news_detail_screen.dart';
 import '../widgets/urdu_news_content.dart';
 import '../data/fallback_images.dart';
+import '../services/app_share_service.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -145,23 +147,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
   String _resolvePostImage(Map<String, dynamic> post) {
     final rawUrl = (post['image_url'] ?? post['media_url'] ?? '').toString().trim();
-    final lower = rawUrl.toLowerCase();
-
-    final bool isBad = rawUrl.isEmpty ||
-        lower.contains('google') ||
-        lower.contains('gstatic') ||
-        lower.contains('1x1') ||
-        lower.contains('feedburner') ||
-        lower.contains('picsum.photos') ||
-        lower.contains('example.com') ||
-        lower.contains('favicon') ||
-        lower.contains('placeholder') ||
-        lower.contains('icon') ||
-        lower.endsWith('.gif') ||
-        lower.endsWith('.ico') ||
-        lower.endsWith('.svg');
-
-    if (!isBad) {
+    if (!isBadNewsImage(rawUrl)) {
       return rawUrl;
     }
 
@@ -253,8 +239,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
   }
 
-  Future<void> _loadFeed() async {
-    if (mounted && posts.isEmpty) setState(() => isLoading = true);
+  Future<void> _loadFeed({bool isPullToRefresh = false}) async {
+    if (mounted && posts.isEmpty && !isPullToRefresh) setState(() => isLoading = true);
 
     if (currentUserId.isEmpty) {
       await _loadCurrentUserInfo();
@@ -314,24 +300,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         final titleUr = news['title_ur'] ?? (news['titleMap'] is Map ? news['titleMap']['ur'] : null);
         final descUr = news['description_ur'] ?? (news['descriptionMap'] is Map ? news['descriptionMap']['ur'] : null);
 
-        // Resolve clean image (discarding Google News "G" logo and favicons)
+        // Resolve clean image (discarding Google News "G" logo, gstatic, and favicons)
         final rawImg = (news['imageUrl'] ?? news['image_url'] ?? '').toString().trim();
-        final lowerImg = rawImg.toLowerCase();
-        final bool isBadImg = rawImg.isEmpty ||
-            lowerImg.contains('google') ||
-            lowerImg.contains('gstatic') ||
-            lowerImg.contains('favicon') ||
-            lowerImg.contains('placeholder') ||
-            lowerImg.contains('icon') ||
-            lowerImg.contains('1x1') ||
-            lowerImg.contains('feedburner') ||
-            lowerImg.contains('picsum.photos') ||
-            lowerImg.contains('example.com') ||
-            lowerImg.endsWith('.gif') ||
-            lowerImg.endsWith('.ico') ||
-            lowerImg.endsWith('.svg');
-
-        final cleanImage = !isBadImg
+        final cleanImage = !isBadNewsImage(rawImg)
             ? rawImg
             : getGameFallbackImage(
                 category: news['category']?.toString(),
@@ -544,29 +515,17 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final postUserId = post['user_id']?.toString() ?? '';
     final userProfile = userProfiles[postUserId];
     final username = userProfile?['username'] ?? post['username'] ?? 'user_gamer'.tr();
-
-    final headerText = 'share_post_header'.tr(args: [username]);
-    final postedByText = 'label_posted_by'.tr();
-    final ctaText = 'share_post_cta'.tr();
-    final downloadAppText = 'share_download_app'.tr();
-
-    final shareText = '''
-$headerText
-
-"$content"
-
-$postedByText: $username
-
-$ctaText
-
-$downloadAppText:
-https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
-
-#GamersID #PUBG #BGMI #FreeFire #Esports
-''';
+    final gameTag = post['game_tag']?.toString();
+    final videoUrl = post['video_url']?.toString();
 
     try {
-      await Share.share(shareText.trim(), subject: 'share_subject'.tr(args: [username]));
+      await AppShareService.sharePost(
+        authorName: username,
+        username: username,
+        content: content,
+        gameTag: gameTag,
+        videoUrl: videoUrl,
+      );
     } catch (e) {
       debugPrint('Share error: $e');
     }
@@ -1152,6 +1111,106 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
     return '${dt.day}/${dt.month}/${dt.year}';
   }
 
+  Future<void> _handlePullToRefresh() async {
+    HapticFeedback.mediumImpact();
+    try {
+      await Future.wait([
+        _loadFeed(isPullToRefresh: true),
+        _loadAnnouncement(),
+      ]);
+      if (mounted) {
+        HapticFeedback.lightImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 18),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Latest gaming updates fetched! 🎮',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+            backgroundColor: ThemeService.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: ThemeService.border),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[GamerFeed] Pull-to-refresh error: $e');
+    }
+  }
+
+  Widget _buildEmptyFeedState() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ThemeService.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1877F2).withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.sports_esports_rounded,
+              color: Color(0xFF1877F2),
+              size: 40,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No Gaming Updates Yet',
+            style: TextStyle(
+              color: ThemeService.textPrimary,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Pull down to refresh or check back soon for fresh tournament and game news!',
+            style: TextStyle(
+              color: ThemeService.textSecondary,
+              fontSize: 13,
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _handlePullToRefresh,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Refresh Feed'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1877F2),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
@@ -1219,16 +1278,28 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
             ],
           ),
           body: RefreshIndicator(
-            onRefresh: () async {
-              await Future.wait([
-                _loadFeed(),
-                _loadAnnouncement(),
-              ]);
-            },
-            child: isLoading
-                ? const Center(child: CircularProgressIndicator())
+            color: const Color(0xFF1877F2),
+            backgroundColor: ThemeService.card,
+            displacement: 40,
+            strokeWidth: 2.8,
+            onRefresh: _handlePullToRefresh,
+            child: isLoading && posts.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    children: [
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.6,
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF1877F2),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
                 : ListView.builder(
-                    itemCount: posts.length + 2,
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    itemCount: posts.isEmpty ? 3 : posts.length + 2,
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return _buildTournamentAnnouncementBanner();
@@ -1278,6 +1349,10 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                         );
                       }
 
+                      if (posts.isEmpty) {
+                        return _buildEmptyFeedState();
+                      }
+
                       final post = posts[index - 2];
                       final postUserId = post['user_id']?.toString() ?? '';
                       final userProfile = userProfiles[postUserId];
@@ -1294,9 +1369,7 @@ https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid
                       final postId = post['id']?.toString() ?? '';
                       final isLiked = likedPostIds.contains(postId);
                       
-                      final imageUrl = isSteamNews
-                          ? _resolvePostImage(post)
-                          : (post['image_url'] ?? post['media_url'] ?? '').toString().trim();
+                      final imageUrl = _resolvePostImage(post);
                       final content = (post['content'] ?? '').toString();
                       final likesCount = post['likes_count'] ?? 0;
                       final int commentsCount = (post['comments_count'] is num)

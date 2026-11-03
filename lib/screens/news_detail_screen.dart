@@ -8,6 +8,7 @@ import '../models/gaming_news_model.dart';
 import '../models/news_model.dart';
 import '../data/fallback_images.dart';
 import '../services/gaming_news_service.dart';
+import '../services/app_share_service.dart';
 
 class NewsDetailScreen extends StatefulWidget {
   final Map<String, dynamic>? newsData;
@@ -203,22 +204,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         .toString()
         .trim();
 
-    final lowerImg = rawImg.toLowerCase();
-    final bool isBadImg = rawImg.isEmpty ||
-        lowerImg.contains('google') ||
-        lowerImg.contains('gstatic') ||
-        lowerImg.contains('favicon') ||
-        lowerImg.contains('placeholder') ||
-        lowerImg.contains('icon') ||
-        lowerImg.contains('1x1') ||
-        lowerImg.contains('feedburner') ||
-        lowerImg.contains('picsum.photos') ||
-        lowerImg.contains('example.com') ||
-        lowerImg.endsWith('.gif') ||
-        lowerImg.endsWith('.ico') ||
-        lowerImg.endsWith('.svg');
-
-    if (!isBadImg) {
+    if (!isBadNewsImage(rawImg)) {
       _imageUrl = rawImg;
     } else {
       _imageUrl = getGameFallbackImage(
@@ -361,11 +347,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     final activeTitle = (_showUrdu && _urduTitle != null) ? _urduTitle! : _title;
     final activeDesc = (_showUrdu && _urduDescription != null) ? _urduDescription! : _description;
 
-    final shareText = '🎮 $activeTitle\n\n'
-        '${activeDesc.length > 200 ? "${activeDesc.substring(0, 200)}..." : activeDesc}\n\n'
-        'Read complete story on Games ID app!'
-        '${_sourceUrl.isNotEmpty ? "\n\nSource: $_sourceUrl" : ""}';
-    Share.share(shareText);
+    AppShareService.shareNews(
+      title: activeTitle,
+      description: activeDesc,
+      gameName: _gameCategory,
+    );
   }
 
   Future<void> _openSourceWebsite() async {
@@ -458,12 +444,15 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Color bgColor = ThemeService.bg;
-    final Color cardColor = ThemeService.card;
-    final Color cardSecColor = ThemeService.cardSecondary;
-    final Color textPri = ThemeService.textPrimary;
-    final Color textSec = ThemeService.textSecondary;
-    final Color accentGreen = const Color(0xFF00FF88);
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        final Color bgColor = ThemeService.bg;
+        final Color cardColor = ThemeService.card;
+        final Color cardSecColor = ThemeService.cardSecondary;
+        final Color textPri = ThemeService.textPrimary;
+        final Color textSec = ThemeService.textSecondary;
+        final Color accentGreen = const Color(0xFF00FF88);
 
     final bool displayUrdu = _showUrdu && _urduTitle != null && _urduTitle!.isNotEmpty;
     final currentTitle = displayUrdu ? _urduTitle! : _title;
@@ -910,6 +899,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
           ],
         ),
       ),
+    );
+      },
     );
   }
 }

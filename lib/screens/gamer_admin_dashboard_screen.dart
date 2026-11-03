@@ -3322,7 +3322,7 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                   try {
                     await _supabase.from('tournaments').insert({
                       'title': title,
-                      'game': selectedGame,
+                      'game_name': selectedGame,
                       'game_mode': mode,
                       'map_name': mapController.text.trim().isEmpty ? 'Erangel' : mapController.text.trim(),
                       'entry_fee': fee,

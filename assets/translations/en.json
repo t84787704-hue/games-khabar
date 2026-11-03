@@ -1,7 +1,5 @@
 {
-  "no_comments_yet": "No comments yet. Be the first to comment!",
-  "your_own_team": "Your Team",
-  "write_comment_hint": "Write a friendly comment...",
+  "your_own_team": "YOUR TEAM",
   "btn_report_post": "Report Post",
   "msg_post_reported_success": "Post reported successfully. Our team will review it.",
   "passbook_sheet_title": "Coin Passbook",
@@ -1406,7 +1404,7 @@
   "settings": "Settings",
   "share": "Share",
   "share_app": "Share App",
-  "share_invite_msg": "Join me on Gamers ID! Use my referral code: {} to get 200 free G-Coins instantly. Download now: https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid",
+  "share_invite_msg": "Join me on Gamers ID! Use my referral code: {} to get 200 free G-Coins instantly. Download now: https://play.google.com/store/apps/details?id=com.gameskhabar.games_khabar",
   "share_link": "Share Link",
   "share_news": "Share News",
   "share_post": "Share Post",

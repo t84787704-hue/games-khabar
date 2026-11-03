@@ -93,10 +93,7 @@ class NewsModel {
   String get content => getDescription();
   String get thumbnailUrl => effectiveImageUrl;
   String get effectiveImageUrl {
-    if (imageUrl.trim().isNotEmpty &&
-        (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) &&
-        !imageUrl.contains('picsum.photos') &&
-        !imageUrl.contains('example.com')) {
+    if (!isBadNewsImage(imageUrl)) {
       return imageUrl.trim();
     }
     return getGameFallbackImage(

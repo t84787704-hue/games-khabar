@@ -7,6 +7,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
 import 'package:share_plus/share_plus.dart';
+import '../services/app_share_service.dart';
 
 class VictoryCelebrationDialog extends StatefulWidget {
   final String tournamentTitle;
@@ -105,11 +106,11 @@ class _VictoryCelebrationDialogState extends State<VictoryCelebrationDialog>
   }
 
   void _shareVictory() {
-    final text = '🏆 CHAMPIONS ALERT! 🏆\n\n'
-        'Squad "${widget.winningTeamName}" has won the ${widget.tournamentTitle}!\n'
-        '💰 Prize Won: ${widget.prizeCoins} Coins\n\n'
-        'Join the tournament battles on Gamers ID Network!';
-    Share.share(text);
+    AppShareService.shareVictory(
+      tournamentTitle: widget.tournamentTitle,
+      winningTeamName: widget.winningTeamName,
+      prizeCoins: widget.prizeCoins,
+    );
   }
 
   @override

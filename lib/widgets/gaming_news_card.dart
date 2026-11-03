@@ -7,6 +7,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/gaming_news_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../screens/news_detail_screen.dart';
+import '../services/app_share_service.dart';
 
 class GamingNewsCard extends StatelessWidget {
   final GamingNewsModel news;
@@ -14,10 +15,11 @@ class GamingNewsCard extends StatelessWidget {
   const GamingNewsCard({super.key, required this.news});
 
   void _onShare() {
-    final text = '🎮 ${news.titleEn}\n\n'
-        '${news.titleUr.isNotEmpty ? "${news.titleUr}\n\n" : ""}'
-        'Read more on Games Khabar: ${news.sourceUrl.isNotEmpty ? news.sourceUrl : "https://gameskhabar.pk"}';
-    Share.share(text);
+    AppShareService.shareNews(
+      title: news.titleUr.isNotEmpty ? news.titleUr : news.titleEn,
+      description: news.summaryUr.isNotEmpty ? news.summaryUr : news.summaryEn,
+      gameName: news.gameCategory,
+    );
   }
 
   Future<void> _onOpenDetail(BuildContext context) async {

@@ -22,6 +22,7 @@ import '../services/gamer_social_service.dart';
 import '../services/supabase_service.dart';
 import '../services/language_service.dart';
 import '../services/coin_wallet_service.dart';
+import '../services/app_share_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../widgets/early_bird_banner_widget.dart';
@@ -161,29 +162,17 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         user.rank.toLowerCase() != 'none' &&
         user.rank.toLowerCase() != 'skip';
     
-    final String rankText = hasValidRank 
-        ? 'share_msg_rank'.tr(args: [user.rank]) 
-        : '';
+    final rankStr = hasValidRank ? user.rank : null;
+    final bioStr = user.bio.trim().isNotEmpty ? user.bio.trim() : null;
 
-    final bio = user.bio.trim();
-    final String bioText = bio.isNotEmpty ? 'share_msg_bio'.tr(args: [bio]) : '';
-
-    const String appLink = 'https://play.google.com/store/apps/details?id=com.gameskhabar.gamersid';
-
-    final String shareMessage = '''
-${'share_msg_header'.tr(args: [displayName])}
-
-${'share_msg_handle'.tr(args: [user.username])}
-${'share_msg_game_stats'.tr(args: [game, rankText])}
-${'share_msg_stats'.tr(args: ['${user.followersCount}', '${user.postsCount}', bioText])}
-
-${'share_msg_challenge'.tr()}
-${'share_msg_download'.tr(args: [appLink])}
-'''.trim();
-
-    Share.share(
-      shareMessage,
-      subject: 'share_profile_subject'.tr(args: [displayName]),
+    AppShareService.shareProfile(
+      displayName: displayName,
+      username: user.username,
+      game: game,
+      rank: rankStr,
+      followersCount: user.followersCount,
+      postsCount: user.postsCount,
+      bio: bioStr,
     );
   }
 

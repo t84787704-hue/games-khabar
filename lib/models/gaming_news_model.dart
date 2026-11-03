@@ -28,10 +28,7 @@ class GamingNewsModel {
 
   /// Guaranteed non-empty, working unique image URL for the card
   String get effectiveImageUrl {
-    if (imageUrl.trim().isNotEmpty &&
-        (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) &&
-        !imageUrl.contains('example.com') &&
-        !imageUrl.contains('picsum.photos')) {
+    if (!isBadNewsImage(imageUrl)) {
       return imageUrl.trim();
     }
     return getGameFallbackImage(category: category, title: titleEn, content: contentEn, docId: id);

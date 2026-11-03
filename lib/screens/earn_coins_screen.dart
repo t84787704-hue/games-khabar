@@ -15,6 +15,7 @@ import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/ad_free_service.dart';
 import '../services/theme_service.dart';
+import '../services/app_share_service.dart';
 
 class EarnCoinsScreen extends StatefulWidget {
   const EarnCoinsScreen({Key? key}) : super(key: key);
@@ -581,9 +582,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                 style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
               ),
               onPressed: () {
-                Share.share(
-                  'share_invite_earn_msg'.tr(args: [myCode]),
-                );
+                AppShareService.shareInviteCode(inviteCode: myCode);
               },
             ),
           ),

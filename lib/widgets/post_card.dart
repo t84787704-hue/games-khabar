@@ -35,6 +35,7 @@ import '../screens/gamer_profile_screen.dart';
 import '../services/verification_service.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../widgets/blue_tick_badge.dart';
+import '../services/app_share_service.dart';
 
 class PostCard extends StatefulWidget {
   final dynamic post;
@@ -227,26 +228,15 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  // Share post with game info, direct video link for WhatsApp preview, and deep link
+  // Share post with game info, direct video link for WhatsApp preview, and Play Store link
   Future<void> _sharePost() async {
-    const appLink = 'https://play.google.com/store/apps/details?id=com.gamersid.app';
-    final deepLink = postId.isNotEmpty ? 'https://gamersid.com/post/$postId' : '';
-
-    final buffer = StringBuffer();
-    if (username.isNotEmpty) buffer.writeln('🎮 $displayName (@$username) on Gamers ID');
-    if (postText.isNotEmpty) buffer.writeln(postText);
-    if (gameTag.isNotEmpty) buffer.writeln('Game: $gameTag');
-
-    final vUrl = videoUrl;
-    if (vUrl != null && vUrl.isNotEmpty) {
-      buffer.writeln();
-      buffer.writeln(vUrl);
-    }
-    buffer.writeln();
-    buffer.writeln('Get the app: $appLink');
-    if (deepLink.isNotEmpty) buffer.writeln('View post: $deepLink');
-
-    await Share.share(buffer.toString().trim());
+    await AppShareService.sharePost(
+      authorName: displayName,
+      username: username,
+      content: postText,
+      gameTag: gameTag,
+      videoUrl: videoUrl,
+    );
   }
 
   // Audio cleanup before deleting post

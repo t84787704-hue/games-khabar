@@ -126,7 +126,9 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openCreateEditTournamentModal(),
+        onPressed: () => _openCreateEditTournamentModal(
+          initialGame: _gameFilter != 'All' ? _gameFilter : null,
+        ),
         backgroundColor: const Color(0xFF00FF88),
         foregroundColor: const Color(0xFF0B0F14),
         icon: const Icon(Icons.add_rounded, size: 20),
@@ -436,7 +438,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     );
   }
 
-  void _openCreateEditTournamentModal({Map<String, dynamic>? existingData}) {
+  void _openCreateEditTournamentModal({Map<String, dynamic>? existingData, String? initialGame}) {
     final isEdit = existingData != null;
     final titleController = TextEditingController(text: existingData?['title'] ?? '');
     final prizeController = TextEditingController(text: existingData?['prize_pool']?.toString() ?? '1000');
@@ -446,16 +448,24 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final roomIdController = TextEditingController(text: existingData?['room_id'] ?? '');
     final roomPassController = TextEditingController(text: existingData?['room_password'] ?? '');
 
-    String selectedGame = existingData?['game_name'] ?? existingData?['game'] ?? _gameList[0];
-    if (!_gameList.contains(selectedGame)) {
+    String selectedGame;
+    if (existingData?['game_name'] != null && _gameList.contains(existingData!['game_name'])) {
+      selectedGame = existingData['game_name'];
+    } else if (existingData?['game'] != null && _gameList.contains(existingData!['game'])) {
+      selectedGame = existingData['game'];
+    } else if (initialGame != null && _gameList.contains(initialGame)) {
+      selectedGame = initialGame;
+    } else if (_gameFilter != 'All' && _gameList.contains(_gameFilter)) {
+      selectedGame = _gameFilter;
+    } else {
       selectedGame = _gameList[0];
     }
 
     String selectedFormat = existingData?['match_format'] ?? existingData?['format'] ?? 'Squad 4v4';
     
     String selectedMap = existingData?['map_name'] ?? (_gameMaps[selectedGame]?.first ?? 'Default');
-    if (_gameMaps[selectedGame] != null && !_gameMaps[selectedGame]!.contains(selectedMap)) {
-       selectedMap = _gameMaps[selectedGame]!.first;
+    if (!(_gameMaps[selectedGame] ?? []).contains(selectedMap)) {
+       selectedMap = _gameMaps[selectedGame]?.first ?? 'Default';
     }
 
     DateTime selectedDateTime = DateTime.now().add(const Duration(days: 1));
@@ -502,6 +512,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
+                        key: ValueKey('game_dropdown_$selectedGame'),
                         value: selectedGame,
                         dropdownColor: ThemeService.card,
                         decoration: InputDecoration(
@@ -512,10 +523,12 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                         ),
                         items: _gameList.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
                         onChanged: (val) {
-                          setModalState(() {
-                            selectedGame = val!;
-                            selectedMap = _gameMaps[selectedGame]?.first ?? 'Default';
-                          });
+                          if (val != null) {
+                            setModalState(() {
+                              selectedGame = val;
+                              selectedMap = _gameMaps[selectedGame]?.first ?? 'Default';
+                            });
+                          }
                         },
                       ),
                     ),
@@ -586,6 +599,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: DropdownButtonFormField<String>(
+                        key: ValueKey('map_dropdown_${selectedGame}_$selectedMap'),
                         value: selectedMap,
                         dropdownColor: ThemeService.card,
                         decoration: InputDecoration(
@@ -595,7 +609,11 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         items: (_gameMaps[selectedGame] ?? ['Default']).map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                        onChanged: (val) => setModalState(() => selectedMap = val!),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setModalState(() => selectedMap = val);
+                          }
+                        },
                       ),
                     ),
                   ],

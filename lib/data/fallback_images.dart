@@ -199,6 +199,33 @@ bool isCategoryDefaultImage(String? url) {
   return false;
 }
 
+/// Checks if an image URL is invalid, empty, or a generic placeholder
+/// (such as Google News "G" logo, gstatic, googleusercontent, favicons, or tracking pixels).
+bool isBadNewsImage(String? url) {
+  if (url == null || url.trim().isEmpty) return true;
+  final clean = url.trim();
+  final lower = clean.toLowerCase();
+  if (!lower.startsWith('http://') && !lower.startsWith('https://')) return true;
+
+  return lower.contains('google') ||
+      lower.contains('gstatic') ||
+      lower.contains('googleusercontent') ||
+      lower.contains('1x1') ||
+      lower.contains('feedburner') ||
+      lower.contains('picsum.photos') ||
+      lower.contains('example.com') ||
+      lower.contains('favicon') ||
+      lower.contains('placeholder') ||
+      lower.contains('broken_image') ||
+      lower.contains('logo_default') ||
+      lower.contains('icon_news') ||
+      lower.contains('fallback') ||
+      lower.endsWith('.gif') ||
+      lower.endsWith('.ico') ||
+      lower.endsWith('.svg');
+}
+
+
 /// Universal image finder that guarantees every single card gets a high quality, UNIQUE game picture.
 /// Uses a deterministic hash of the title or article ID to select a unique picture from the matching pool.
 String getGameFallbackImage({

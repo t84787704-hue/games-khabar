@@ -7,11 +7,13 @@ import '../models/team_model.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/team_service.dart';
 import '../services/supabase_service.dart';
+import '../services/theme_service.dart';
 import '../widgets/send_team_match_challenge_dialog.dart';
 import '../widgets/end_match_dialog.dart';
 import 'gamer_profile_screen.dart';
 import 'teams_screen.dart';
 import 'private_match_room_screen.dart';
+import '../services/app_share_service.dart';
 
 class TeamProfileScreen extends StatefulWidget {
   final String teamId;
@@ -377,16 +379,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161F2E),
-        title: const Text('Delete Team?',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: ThemeService.card,
+        title: Text('Delete Team?',
+            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
             'Are you sure you want to delete ${team.name}? This action cannot be undone.',
-            style: const TextStyle(color: Colors.white70)),
+            style: TextStyle(color: ThemeService.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -438,45 +440,45 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161F2E),
-        title: const Text('Edit Team',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: ThemeService.card,
+        title: Text('Edit Team',
+            style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
+                style: TextStyle(color: ThemeService.textPrimary),
+                decoration: InputDecoration(
                     labelText: 'Team Name',
-                    labelStyle: TextStyle(color: Colors.white70)),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: tagCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
+                style: TextStyle(color: ThemeService.textPrimary),
+                decoration: InputDecoration(
                     labelText: 'Tag',
-                    labelStyle: TextStyle(color: Colors.white70)),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: descCtrl,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: ThemeService.textPrimary),
                 maxLines: 2,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                     labelText: 'Description',
-                    labelStyle: TextStyle(color: Colors.white70)),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: reqCtrl,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: ThemeService.textPrimary),
                 maxLines: 2,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                     labelText: 'Requirements',
-                    labelStyle: TextStyle(color: Colors.white70)),
+                    labelStyle: TextStyle(color: ThemeService.textSecondary)),
               ),
             ],
           ),
@@ -484,7 +486,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -519,26 +521,37 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     final currentUid = GamerAuthService().currentUid ??
         (SupabaseService.client.auth.currentUser?.id ?? '');
 
-    return StreamBuilder<TeamModel?>(
-      stream: _teamService.getTeamStream(widget.teamId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0B0F17),
-            body: Center(
-                child: CircularProgressIndicator(color: Color(0xFFFF6B00))),
-          );
-        }
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        final bg = ThemeService.bg;
+        final cardColor = ThemeService.card;
+        final cardSec = ThemeService.cardSecondary;
+        final borderColor = ThemeService.border;
+        final textPri = ThemeService.textPrimary;
+        final textSec = ThemeService.textSecondary;
+        final appBarBg = ThemeService.appBarBg;
 
-        final team = snapshot.data;
-        if (team == null) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0B0F17),
-            body: Center(
-                child: Text('Team not found',
-                    style: TextStyle(color: Colors.white))),
-          );
-        }
+        return StreamBuilder<TeamModel?>(
+          stream: _teamService.getTeamStream(widget.teamId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return Scaffold(
+                backgroundColor: bg,
+                body: const Center(
+                    child: CircularProgressIndicator(color: Color(0xFFFF6B00))),
+              );
+            }
+
+            final team = snapshot.data;
+            if (team == null) {
+              return Scaffold(
+                backgroundColor: bg,
+                body: Center(
+                    child: Text('Team not found',
+                        style: TextStyle(color: textPri))),
+              );
+            }
 
         final isLeader = team.isLeader(currentUid);
         final isMember = team.isMember(currentUid);
@@ -654,19 +667,19 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         (userMatchTeam != null && userMatchTeam.isLeader(currentUid)));
 
                 return Scaffold(
-                  backgroundColor: const Color(0xFF0B0F17),
+                  backgroundColor: bg,
                   appBar: AppBar(
-                    backgroundColor: const Color(0xFF131A29),
+                    backgroundColor: appBarBg,
                     elevation: 0,
                     leading: IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded,
-                          color: Colors.white),
+                      icon: Icon(Icons.arrow_back_rounded,
+                          color: textPri),
                       onPressed: () => Navigator.pop(context),
                     ),
                     title: Text(
                       '${team.name} [${team.tag}]',
-                      style: const TextStyle(
-                          color: Colors.white,
+                      style: TextStyle(
+                          color: textPri,
                           fontWeight: FontWeight.w900,
                           fontSize: 16),
                     ),
@@ -721,9 +734,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         ],
                         if (isLeader)
                           PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert_rounded,
-                                color: Colors.white70),
-                            color: const Color(0xFF161F2E),
+                            icon: Icon(Icons.more_vert_rounded,
+                                color: textSec),
+                            color: cardColor,
                             onSelected: (val) {
                               if (val == 'edit') {
                                 _showEditTeamDialog(team);
@@ -731,16 +744,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 _handleDeleteTeam(team, currentUid);
                               }
                             },
-                            itemBuilder: (ctx) => const [
+                            itemBuilder: (ctx) => [
                               PopupMenuItem(
                                 value: 'edit',
                                 child: Row(
                                   children: [
                                     Icon(Icons.edit_rounded,
-                                        color: Colors.white70, size: 18),
-                                    SizedBox(width: 8),
+                                        color: textSec, size: 18),
+                                    const SizedBox(width: 8),
                                     Text('Edit Team',
-                                        style: TextStyle(color: Colors.white)),
+                                        style: TextStyle(color: textPri)),
                                   ],
                                 ),
                               ),
@@ -748,10 +761,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 value: 'delete',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.delete_forever_rounded,
+                                    const Icon(Icons.delete_forever_rounded,
                                         color: Color(0xFFFF4655), size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Delete Team',
+                                    const SizedBox(width: 8),
+                                    const Text('Delete Team',
                                         style:
                                             TextStyle(color: Color(0xFFFF4655))),
                                   ],
@@ -813,8 +826,21 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             icon: const Icon(Icons.flash_on_rounded,
                                 color: Color(0xFF1877F2)),
                             onPressed: () => _handleChallenge(team, currentUid),
-                          ),
                       ],
+                      IconButton(
+                        tooltip: 'Share Team',
+                        icon: Icon(Icons.share_rounded, color: textPri),
+                        onPressed: () {
+                          AppShareService.shareTeam(
+                            teamName: team.name,
+                            teamTag: team.tag,
+                            game: team.game,
+                            leaderName: team.leaderName,
+                            wins: team.wins,
+                            points: team.points >= (team.wins * 25) ? team.points : (team.wins * 25),
+                          );
+                        },
+                      ),
                     ],
                   ),
                   body: SingleChildScrollView(
@@ -1326,7 +1352,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 margin: const EdgeInsets.only(bottom: 14),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF131A29),
+                                  color: cardColor,
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
                                       color: const Color(0xFFFF6B00)
@@ -1341,11 +1367,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         const Icon(Icons.send_rounded,
                                             color: Color(0xFFFF6B00), size: 18),
                                         const SizedBox(width: 8),
-                                        const Expanded(
+                                        Expanded(
                                           child: Text(
                                             'My Outgoing Requests',
                                             style: TextStyle(
-                                              color: Colors.white,
+                                              color: textPri,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 15,
                                             ),
@@ -1369,7 +1395,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         margin: const EdgeInsets.only(bottom: 8),
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF1B2436),
+                                          color: cardSec,
                                           borderRadius:
                                               BorderRadius.circular(10),
                                         ),
@@ -1378,8 +1404,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                             Expanded(
                                               child: Text(
                                                 'Challenge sent to $toTeamName',
-                                                style: const TextStyle(
-                                                    color: Colors.white,
+                                                style: TextStyle(
+                                                    color: textPri,
                                                     fontSize: 13,
                                                     fontWeight: FontWeight.bold),
                                               ),
@@ -1435,7 +1461,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 margin: const EdgeInsets.only(bottom: 14),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF131A29),
+                                  color: cardColor,
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
                                       color: const Color(0xFF00FF88)
@@ -1450,11 +1476,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         const Icon(Icons.flash_on_rounded,
                                             color: Color(0xFF00FF88), size: 18),
                                         const SizedBox(width: 8),
-                                        const Expanded(
+                                        Expanded(
                                           child: Text(
                                             'Incoming Challenges',
                                             style: TextStyle(
-                                              color: Colors.white,
+                                              color: textPri,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 15,
                                             ),
@@ -1487,7 +1513,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         margin: const EdgeInsets.only(bottom: 8),
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF1B2436),
+                                          color: cardSec,
                                           borderRadius:
                                               BorderRadius.circular(10),
                                         ),
@@ -1497,10 +1523,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           children: [
                                             Text(
                                               '$fromTeamName challenged your team!',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 13.5,
-                                                  color: Colors.white),
+                                                  color: textPri),
                                             ),
                                             const SizedBox(height: 8),
                                             Row(
@@ -1573,13 +1599,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF1B2436), Color(0xFF131A29)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                            color: cardColor,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFF2A3447)),
+                            border: Border.all(color: borderColor),
                           ),
                           child: Row(
                             children: [
@@ -1591,7 +1613,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   height: 72,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: const Color(0xFF26334D),
+                                    color: cardSec,
                                     border: Border.all(
                                         color: const Color(0xFFFF6B00),
                                         width: 2),
@@ -1602,9 +1624,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         : null,
                                   ),
                                   child: team.logo.isEmpty
-                                      ? const Center(
+                                      ? Center(
                                           child: Icon(Icons.shield_rounded,
-                                              color: Colors.white70, size: 36))
+                                              color: textSec, size: 36))
                                       : null,
                                 ),
                               ),
@@ -1618,8 +1640,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         Flexible(
                                           child: Text(
                                             team.name,
-                                            style: const TextStyle(
-                                                color: Colors.white,
+                                            style: TextStyle(
+                                                color: textPri,
                                                 fontWeight: FontWeight.w900,
                                                 fontSize: 18),
                                             overflow: TextOverflow.ellipsis,
@@ -1666,8 +1688,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     const SizedBox(height: 6),
                                     Text(
                                       '👑 Team Leader: ${team.leaderName}',
-                                      style: const TextStyle(
-                                          color: Color(0xFF8B949E),
+                                      style: TextStyle(
+                                          color: textSec,
                                           fontSize: 12),
                                     ),
                                   ],
@@ -1682,9 +1704,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF161F2E),
+                              color: cardColor,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFF2A3447)),
+                              border: Border.all(color: borderColor),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1711,13 +1733,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF161F2E),
+                              color: cardSec,
                               borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: borderColor),
                             ),
                             child: Text(
                               team.description,
-                              style: const TextStyle(
-                                  color: Colors.white70,
+                              style: TextStyle(
+                                  color: textPri,
                                   fontSize: 13,
                                   height: 1.4),
                             ),
@@ -1731,7 +1754,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF161F2E),
+                              color: cardSec,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                   color: const Color(0xFFFFB020)
@@ -1739,8 +1762,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             ),
                             child: Text(
                               team.requirements,
-                              style: const TextStyle(
-                                  color: Colors.white70,
+                              style: TextStyle(
+                                  color: textPri,
                                   fontSize: 13,
                                   height: 1.4),
                             ),
@@ -1755,7 +1778,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1A1F2C),
+                              color: cardColor,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                   color:
@@ -1782,12 +1805,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           vertical: 6),
                                       child: Row(
                                         children: [
-                                          const CircleAvatar(
+                                          CircleAvatar(
                                             radius: 16,
-                                            backgroundColor:
-                                                Color(0xFF26334D),
+                                            backgroundColor: cardSec,
                                             child: Icon(Icons.person,
-                                                color: Colors.white70,
+                                                color: textSec,
                                                 size: 18),
                                           ),
                                           const SizedBox(width: 10),
@@ -1798,8 +1820,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               children: [
                                                 Text(
                                                   displayGamerId,
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
+                                                  style: TextStyle(
+                                                      color: textPri,
                                                       fontWeight:
                                                           FontWeight.bold,
                                                       fontSize: 13),
@@ -1810,9 +1832,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                   const SizedBox(height: 2),
                                                   Text(
                                                     displayUsername,
-                                                    style: const TextStyle(
-                                                        color:
-                                                            Color(0xFF8B949E),
+                                                    style: TextStyle(
+                                                        color: textSec,
                                                         fontSize: 11),
                                                   ),
                                                 ],
@@ -1855,9 +1876,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         _buildSectionHeader('Team Members (${team.memberCount})'),
                         Container(
                           decoration: BoxDecoration(
-                            color: const Color(0xFF161F2E),
+                            color: cardColor,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF2A3447)),
+                            border: Border.all(color: borderColor),
                           ),
                           child: ListView.separated(
                             shrinkWrap: true,
@@ -1865,8 +1886,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             itemCount: team.memberDetails.isNotEmpty
                                 ? team.memberDetails.length
                                 : team.members.length,
-                            separatorBuilder: (c, i) => const Divider(
-                                color: Color(0xFF2A3447), height: 1),
+                            separatorBuilder: (c, i) => Divider(
+                                color: borderColor, height: 1),
                             itemBuilder: (context, index) {
                               String memberId = '';
                               String memberName = 'Member';
@@ -1925,8 +1946,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   return ListTile(
                                     leading: CircleAvatar(
                                       radius: 18,
-                                      backgroundColor:
-                                          const Color(0xFF26334D),
+                                      backgroundColor: cardSec,
                                       backgroundImage: resolvedAvatar.isNotEmpty
                                           ? NetworkImage(resolvedAvatar)
                                           : null,
@@ -1936,16 +1956,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                   ? resolvedName[0]
                                                       .toUpperCase()
                                                   : 'M',
-                                              style: const TextStyle(
-                                                  color: Colors.white,
+                                              style: TextStyle(
+                                                  color: textPri,
                                                   fontWeight:
                                                       FontWeight.bold))
                                           : null,
                                     ),
                                     title: Text(
                                       resolvedName,
-                                      style: const TextStyle(
-                                          color: Colors.white,
+                                      style: TextStyle(
+                                          color: textPri,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13.5),
                                     ),
@@ -1956,7 +1976,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         color: isThisLeader
                                             ? const Color(0xFFFF6B00)
                                                 .withOpacity(0.2)
-                                            : Colors.white10,
+                                            : cardSec,
                                         borderRadius:
                                             BorderRadius.circular(6),
                                       ),
@@ -1967,7 +1987,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         style: TextStyle(
                                           color: isThisLeader
                                               ? const Color(0xFFFF6B00)
-                                              : Colors.white70,
+                                              : textSec,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 10.5,
                                         ),
@@ -1996,11 +2016,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       top: 10,
                       bottom: MediaQuery.of(context).padding.bottom + 10,
                     ),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF131A29),
+                    decoration: BoxDecoration(
+                      color: cardColor,
                       border: Border(
                           top:
-                              BorderSide(color: Color(0xFF2A3447), width: 1)),
+                              BorderSide(color: borderColor, width: 1)),
                     ),
                     child: Builder(
                       builder: (context) {
@@ -2181,15 +2201,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               : () => _handleJoinRequest(
                                                   team, currentUid),
                                           style: OutlinedButton.styleFrom(
-                                            foregroundColor: Colors.white,
+                                            foregroundColor: textPri,
                                             side: BorderSide(
                                               color: isRequested
                                                   ? const Color(0xFFFFB800)
                                                       .withOpacity(0.5)
-                                                  : const Color(0xFF2A3447),
+                                                  : borderColor,
                                             ),
-                                            backgroundColor:
-                                                const Color(0xFF1B2436),
+                                            backgroundColor: cardSec,
                                             shape: RoundedRectangleBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(10)),
@@ -2212,7 +2231,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               fontSize: 12,
                                               color: isRequested
                                                   ? const Color(0xFFFFB800)
-                                                  : Colors.white,
+                                                  : textPri,
                                             ),
                                           ),
                                         ),
@@ -2232,8 +2251,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                 child: Container(
                                                   height: 46,
                                                   decoration: BoxDecoration(
-                                                    color: const Color(
-                                                        0xFF1B2436),
+                                                    color: cardSec,
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             10),
@@ -2336,8 +2354,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         title,
-        style: const TextStyle(
-            color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13.5),
+        style: TextStyle(
+            color: ThemeService.textPrimary,
+            fontWeight: FontWeight.w900,
+            fontSize: 13.5),
       ),
     );
   }
@@ -2350,8 +2370,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 color: color, fontWeight: FontWeight.w900, fontSize: 18)),
         const SizedBox(height: 2),
         Text(label,
-            style: const TextStyle(
-                color: Color(0xFF8B949E),
+            style: TextStyle(
+                color: ThemeService.textSecondary,
                 fontSize: 10,
                 fontWeight: FontWeight.bold)),
       ],
@@ -2359,14 +2379,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Widget _buildDivider() {
-    return Container(height: 24, width: 1, color: const Color(0xFF2A3447));
+    return Container(height: 24, width: 1, color: ThemeService.border);
   }
 
   void _showProofDialog(BuildContext context, String imageUrl) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF131A29),
+        backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2377,16 +2397,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'Match Proof Screenshot 📸',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: ThemeService.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 14),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.white54, size: 20),
+                    icon: Icon(Icons.close,
+                        color: ThemeService.textSecondary, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -2426,7 +2446,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF131A29),
+        backgroundColor: ThemeService.card,
         insetPadding: const EdgeInsets.all(12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
@@ -2439,8 +2459,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   Expanded(
                     child: Text(
                       '$teamName • Team Logo',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -2448,8 +2468,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 20),
+                    icon: Icon(Icons.close,
+                        color: ThemeService.textSecondary, size: 20),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
@@ -2540,27 +2560,27 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF131A29),
+                  color: ThemeService.card,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF2A3447)),
+                  border: Border.all(color: ThemeService.border),
                 ),
-                child: const Column(
+                child: Column(
                   children: [
                     Icon(Icons.history_rounded,
-                        color: Colors.white24, size: 36),
-                    SizedBox(height: 8),
+                        color: ThemeService.textSecondary.withOpacity(0.4), size: 36),
+                    const SizedBox(height: 8),
                     Text(
                       'No Matches Played Yet',
                       style: TextStyle(
-                          color: Colors.white70,
+                          color: ThemeService.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 13),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
                       'Completed team battles and tournament matches will appear here',
                       style:
-                          TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+                          TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -2606,9 +2626,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF131A29),
+                    color: ThemeService.card,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2A3447)),
+                    border: Border.all(color: ThemeService.border),
                   ),
                   child: Row(
                     children: [
@@ -2621,10 +2641,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           width: 52,
                           height: 52,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1B2436),
+                            color: ThemeService.cardSecondary,
                             borderRadius: BorderRadius.circular(8),
                             border:
-                                Border.all(color: const Color(0xFF2A3447)),
+                                Border.all(color: ThemeService.border),
                           ),
                           child: (canViewProof && proofUrl != null && proofUrl.isNotEmpty)
                               ? ClipRRect(
@@ -2735,8 +2755,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
                                 return Text(
                                   'vs $opName$tagStr',
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: ThemeService.textPrimary,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                   ),
@@ -2749,8 +2769,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             if (formattedDate.isNotEmpty)
                               Text(
                                 formattedDate,
-                                style: const TextStyle(
-                                  color: Color(0xFF8B949E),
+                                style: TextStyle(
+                                  color: ThemeService.textSecondary,
                                   fontSize: 11,
                                 ),
                               ),
