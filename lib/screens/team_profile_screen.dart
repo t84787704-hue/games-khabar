@@ -2348,7 +2348,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         );
       },
     );
-  }
+  },
+);
+}
 
   Widget _buildSectionHeader(String title) {
     return Padding(
