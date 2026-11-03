@@ -1,4 +1,6 @@
 {
+  "no_notifications_yet": "No notifications yet",
+  "notifications_empty_sub": "You are all caught up! Check back later for updates.",
   "your_own_team": "YOUR TEAM",
   "btn_report_post": "Report Post",
   "msg_post_reported_success": "Post reported successfully. Our team will review it.",
