@@ -826,6 +826,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             icon: const Icon(Icons.flash_on_rounded,
                                 color: Color(0xFF1877F2)),
                             onPressed: () => _handleChallenge(team, currentUid),
+                          ),
                       ],
                       IconButton(
                         tooltip: 'Share Team',

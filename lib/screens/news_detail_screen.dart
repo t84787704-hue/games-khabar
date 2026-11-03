@@ -350,7 +350,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     AppShareService.shareNews(
       title: activeTitle,
       description: activeDesc,
-      gameName: _gameCategory,
+      gameName: _gameName.isNotEmpty ? _gameName : _category,
     );
   }
 
