@@ -330,9 +330,36 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       return raw;
     }
     try {
-      final dt = DateTime.tryParse(raw);
+      DateTime? dt;
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) {
+        if (!raw.endsWith('Z') && !raw.contains('+') && !RegExp(r'T\d{2}:\d{2}:\d{2}.*-').hasMatch(raw)) {
+          final asUtc = DateTime.tryParse('${raw}Z');
+          dt = (asUtc ?? parsed).toLocal();
+        } else {
+          dt = parsed.toLocal();
+        }
+      }
       if (dt == null) return raw;
-      final diff = DateTime.now().difference(dt);
+      final now = DateTime.now();
+      var diff = now.difference(dt);
+
+      if (diff.isNegative) {
+        final tzOffset = now.timeZoneOffset;
+        if (tzOffset.inMinutes > 0 && diff.inMinutes <= -5) {
+          final candidate = dt.subtract(tzOffset);
+          final candidateDiff = now.difference(candidate);
+          if (!candidateDiff.isNegative || candidateDiff.inSeconds >= -120) {
+            dt = candidate;
+            diff = candidateDiff.isNegative ? Duration.zero : candidateDiff;
+          }
+        }
+        if (diff.isNegative) {
+          if (diff.inSeconds >= -180) return 'Just now';
+          diff = Duration.zero;
+        }
+      }
+
       if (diff.inMinutes < 1) return 'Just now';
       if (diff.inMinutes < 60) return '${diff.inMinutes} mins ago';
       if (diff.inHours < 24) return '${diff.inHours} hrs ago';

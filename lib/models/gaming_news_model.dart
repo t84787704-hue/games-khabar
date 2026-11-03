@@ -269,12 +269,29 @@ class GamingNewsModel {
   String get fullContent => contentEn.isNotEmpty ? contentEn : summary;
 
   String get timeAgo {
-    final diff = DateTime.now().difference(timestamp);
+    var localTs = timestamp.toLocal();
+    final now = DateTime.now();
+    var diff = now.difference(localTs);
+    if (diff.isNegative) {
+      final tzOffset = now.timeZoneOffset;
+      if (tzOffset.inMinutes > 0 && diff.inMinutes <= -5) {
+        final candidate = localTs.subtract(tzOffset);
+        final candidateDiff = now.difference(candidate);
+        if (!candidateDiff.isNegative || candidateDiff.inSeconds >= -120) {
+          localTs = candidate;
+          diff = candidateDiff.isNegative ? Duration.zero : candidateDiff;
+        }
+      }
+      if (diff.isNegative) {
+        if (diff.inSeconds >= -180) return 'Just now';
+        diff = Duration.zero;
+      }
+    }
     if (diff.inSeconds < 60) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+    return '${localTs.day}/${localTs.month}/${localTs.year}';
   }
 
   String get formattedIsoTimestamp {

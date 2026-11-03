@@ -35,7 +35,7 @@ class SteamAllNewsService {
           var items = data['appnews']?['newsitems'] as List?;
           if (items != null && items.isNotEmpty) {
             for (var item in items) {
-              final nowStr = DateTime.now().toIso8601String();
+              final nowStr = DateTime.now().toUtc().toIso8601String();
               try {
                 await SupabaseService.client.from('posts').insert({
                   'title': item['title'] ?? 'steam_no_title'.tr(),

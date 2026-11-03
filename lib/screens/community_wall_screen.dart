@@ -538,12 +538,31 @@ class _CommunityWallScreenState extends State<CommunityWallScreen> {
   }
 
   String _formatTime(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
+    var localDt = dt.toLocal();
+    final now = DateTime.now();
+    var diff = now.difference(localDt);
+
+    if (diff.isNegative) {
+      final tzOffset = now.timeZoneOffset;
+      if (tzOffset.inMinutes > 0 && diff.inMinutes <= -5) {
+        final candidateDt = localDt.subtract(tzOffset);
+        final candidateDiff = now.difference(candidateDt);
+        if (!candidateDiff.isNegative || candidateDiff.inSeconds >= -120) {
+          localDt = candidateDt;
+          diff = candidateDiff.isNegative ? Duration.zero : candidateDiff;
+        }
+      }
+      if (diff.isNegative) {
+        if (diff.inSeconds >= -180) return 'time_just_now'.tr();
+        diff = Duration.zero;
+      }
+    }
+
     if (diff.inSeconds < 45) return 'time_just_now'.tr();
     if (diff.inMinutes < 60) return 'time_minutes_ago'.tr(args: ['${diff.inMinutes}']);
     if (diff.inHours < 24) return 'time_hours_ago'.tr(args: ['${diff.inHours}']);
     if (diff.inDays < 7) return 'time_days_ago'.tr(args: ['${diff.inDays}']);
-    return DateFormat('dd MMM').format(dt);
+    return DateFormat('dd MMM').format(localDt);
   }
 
   @override

@@ -211,7 +211,7 @@ class FirestoreService {
     String createdId = localId;
 
     try {
-      final nowIso = DateTime.now().toIso8601String();
+      final nowIso = DateTime.now().toUtc().toIso8601String();
       await SupabaseService.client.from('news').upsert({
         'id': localId,
         'title': titleMap,

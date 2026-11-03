@@ -3,6 +3,7 @@
 // File: lib/screens/gamer_feed_screen.dart
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,6 +43,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
   // Announcement Banner Data
   Map<String, dynamic>? _announcement;
+  Timer? _timeAgoRefreshTimer;
 
   static final RegExp _uuidRegex = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -51,6 +53,15 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   void initState() {
     super.initState();
     _initScreen();
+    _timeAgoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timeAgoRefreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _initScreen() async {
@@ -834,7 +845,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                     }
                                   }
 
-                                  final nowIso = DateTime.now().toIso8601String();
+                                  final nowIso = DateTime.now().toUtc().toIso8601String();
                                   final insertPayload = {
                                     'content': text,
                                     'user_id': currentUserId,
@@ -1097,18 +1108,73 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     if (raw == null) return 'time_just_now'.tr();
     DateTime? dt;
     if (raw is DateTime) {
-      dt = raw;
+      dt = raw.toLocal();
     } else if (raw is String) {
-      dt = DateTime.tryParse(raw);
+      final s = raw.trim();
+      if (s.isEmpty) return 'time_just_now'.tr();
+
+      final parsed = DateTime.tryParse(s);
+      if (parsed != null) {
+        if (!s.endsWith('Z') && !s.contains('+') && !RegExp(r'T\d{2}:\d{2}:\d{2}.*-').hasMatch(s)) {
+          final asUtc = DateTime.tryParse('${s}Z');
+          dt = (asUtc ?? parsed).toLocal();
+        } else {
+          dt = parsed.toLocal();
+        }
+      }
     }
     if (dt == null) return 'time_just_now'.tr();
 
-    final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'time_just_now'.tr();
-    if (diff.inMinutes < 60) return 'time_minutes_ago'.tr(args: ['${diff.inMinutes}']);
-    if (diff.inHours < 24) return 'time_hours_ago'.tr(args: ['${diff.inHours}']);
-    if (diff.inDays < 7) return 'time_days_ago'.tr(args: ['${diff.inDays}']);
-    return '${dt.day}/${dt.month}/${dt.year}';
+    final now = DateTime.now();
+    var diff = now.difference(dt);
+
+    // Intelligently correct timestamps that appear in the future.
+    // This happens when DateTime.now().toIso8601String() was stored into Postgres timestamptz
+    // without 'Z', causing Postgres to treat local time as UTC, which shifts dt forward by
+    // the local timezone offset (e.g. +5 hours in Pakistan).
+    if (diff.isNegative) {
+      final tzOffset = now.timeZoneOffset;
+      if (tzOffset.inMinutes > 0 && diff.inMinutes <= -5) {
+        final candidateDt = dt.subtract(tzOffset);
+        final candidateDiff = now.difference(candidateDt);
+        if (!candidateDiff.isNegative || candidateDiff.inSeconds >= -120) {
+          dt = candidateDt;
+          diff = candidateDiff.isNegative ? Duration.zero : candidateDiff;
+        }
+      }
+
+      // If still slightly negative (e.g. clock skew between device and server):
+      if (diff.isNegative) {
+        if (diff.inSeconds >= -180) {
+          return 'time_just_now'.tr();
+        } else {
+          diff = Duration.zero;
+        }
+      }
+    }
+
+    final seconds = diff.inSeconds;
+    final minutes = diff.inMinutes;
+    final hours = diff.inHours;
+    final days = diff.inDays;
+
+    if (seconds < 60) {
+      return 'time_just_now'.tr();
+    } else if (minutes < 60) {
+      return 'time_minutes_ago'.tr(args: ['$minutes']);
+    } else if (hours < 24) {
+      return 'time_hours_ago'.tr(args: ['$hours']);
+    } else if (days < 7) {
+      return 'time_days_ago'.tr(args: ['$days']);
+    } else if (days < 30) {
+      final weeks = (days / 7).floor();
+      return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
+    } else if (days < 365) {
+      final months = (days / 30).floor();
+      return '$months ${months == 1 ? 'month' : 'months'} ago';
+    } else {
+      return '${dt.day}/${dt.month}/${dt.year}';
+    }
   }
 
   Future<void> _handlePullToRefresh() async {
