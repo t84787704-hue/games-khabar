@@ -120,13 +120,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         } catch (_) {}
       }
 
-      var query = _supabase.from('tournaments').select();
-      
-      if (widget.gameName != null && widget.gameName!.trim().isNotEmpty) {
-        query = query.ilike('game_name', widget.gameName!.trim());
-      }
-
-      final res = await query.order('created_at', ascending: false);
+      final res = await _supabase.from('tournaments').select().order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
@@ -137,9 +131,10 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                 final map = Map<String, dynamic>.from(item);
                 // Strict per-game isolation: Only show tournaments for this specific game
                 if (widget.gameName != null && widget.gameName!.trim().isNotEmpty) {
-                  final target = widget.gameName!.trim().toLowerCase();
-                  final itemGame = (map['game_name'] ?? map['game'] ?? '').toString().trim().toLowerCase();
-                  if (itemGame != target) {
+                  final targetKey = _normalizeGameKey(widget.gameName!);
+                  final rawItemGame = (map['game_name'] ?? map['game'] ?? '').toString();
+                  final itemKey = _normalizeGameKey(rawItemGame);
+                  if (itemKey != targetKey) {
                     continue; // Skip tournaments that belong to other games
                   }
                 }
@@ -159,6 +154,53 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         );
       }
     }
+  }
+
+  String _normalizeGameKey(String raw) {
+    final clean = raw.trim().toLowerCase();
+    if (clean.contains('max') && (clean.contains('free fire') || clean.contains('ff') || clean.contains('garena'))) {
+      return 'garena free fire max';
+    }
+    if (clean == 'free fire' || clean == 'freefire' || clean == 'ff' || clean.contains('free fire') || clean.contains('freefire')) {
+      return 'free fire';
+    }
+    if (clean.contains('pubg') || clean.contains('bgmi') || clean.contains('battleground')) {
+      return 'pubg mobile';
+    }
+    if (clean.contains('call of duty') || clean == 'cod' || clean == 'codm' || clean.startsWith('cod ')) {
+      return 'call of duty';
+    }
+    if (clean.contains('clash royale') || clean == 'cr') {
+      return 'clash royale';
+    }
+    if (clean.contains('clash of clans') || clean == 'coc') {
+      return 'clash of clans';
+    }
+    if (clean.contains('candy crush')) {
+      return 'candy crush';
+    }
+    if (clean.contains('minecraft') || clean == 'mc') {
+      return 'minecraft';
+    }
+    if (clean.contains('efootball') || clean.contains('pes')) {
+      return 'efootball';
+    }
+    if (clean.contains('asphalt')) {
+      return 'asphalt 9';
+    }
+    if (clean.contains('brawl')) {
+      return 'brawl stars';
+    }
+    if (clean.contains('stumble')) {
+      return 'stumble guys';
+    }
+    if (clean.contains('ludo')) {
+      return 'ludo';
+    }
+    if (clean.contains('8 ball') || clean.contains('8ball')) {
+      return '8 ball pool';
+    }
+    return clean;
   }
 
   Future<void> _registerTeam(Map<String, dynamic> tournament) async {

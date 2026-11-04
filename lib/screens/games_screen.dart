@@ -90,55 +90,128 @@ class _GamesScreenState extends State<GamesScreen> {
   Map<String, int> _tournamentCounts = {};
   bool _isLoading = true;
   Timer? _refreshTimer;
+  StreamSubscription? _tournamentsSub;
 
   @override
   void initState() {
     super.initState();
-    _fetchAvailableTournaments();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 45), (_) {
-      _fetchAvailableTournaments();
-    });
+    _subscribeTournaments();
   }
 
   @override
   void dispose() {
+    _tournamentsSub?.cancel();
     _refreshTimer?.cancel();
     super.dispose();
+  }
+
+  void _subscribeTournaments() {
+    _fetchAvailableTournaments();
+
+    try {
+      _tournamentsSub?.cancel();
+      _tournamentsSub = SupabaseService.client
+          .from('tournaments')
+          .stream(primaryKey: ['id'])
+          .listen((data) {
+        _processTournamentData(data);
+      }, onError: (err) {
+        debugPrint('Tournament stream notice: $err');
+      });
+    } catch (e) {
+      debugPrint('Realtime stream setup exception: $e');
+    }
+
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _fetchAvailableTournaments();
+    });
   }
 
   Future<void> _fetchAvailableTournaments() async {
     try {
       final res = await SupabaseService.client
           .from('tournaments')
-          .select('game_name, game, status');
+          .select();
 
-      final Map<String, int> counts = {};
-
-      if (res is List) {
-        for (final item in res) {
-          if (item is Map) {
-            final status = (item['status'] ?? 'upcoming').toString().trim().toLowerCase();
-            // Tournament is active / available if not completed and not cancelled
-            if (status != 'completed' && status != 'cancelled') {
-              final rawGame = (item['game_name'] ?? item['game'] ?? '').toString().trim().toLowerCase();
-              if (rawGame.isNotEmpty) {
-                counts[rawGame] = (counts[rawGame] ?? 0) + 1;
-              }
-            }
-          }
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _tournamentCounts = counts;
-          _isLoading = false;
-        });
-      }
+      _processTournamentData(res);
     } catch (e) {
       debugPrint('Error loading tournament availability: $e');
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _processTournamentData(dynamic items) {
+    final Map<String, int> counts = {};
+
+    if (items is List) {
+      for (final item in items) {
+        if (item is Map) {
+          final status = (item['status'] ?? 'upcoming').toString().trim().toLowerCase();
+          // Tournament is active / available if not completed and not cancelled
+          if (status != 'completed' && status != 'cancelled') {
+            final rawGame = (item['game_name'] ?? item['game'] ?? item['gameName'] ?? '').toString().trim();
+            if (rawGame.isNotEmpty) {
+              final normKey = _normalizeGameKey(rawGame);
+              counts[normKey] = (counts[normKey] ?? 0) + 1;
+            }
+          }
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _tournamentCounts = counts;
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _normalizeGameKey(String raw) {
+    final clean = raw.trim().toLowerCase();
+    if (clean.contains('max') && (clean.contains('free fire') || clean.contains('ff') || clean.contains('garena'))) {
+      return 'garena free fire max';
+    }
+    if (clean == 'free fire' || clean == 'freefire' || clean == 'ff' || clean.contains('free fire') || clean.contains('freefire')) {
+      return 'free fire';
+    }
+    if (clean.contains('pubg') || clean.contains('bgmi') || clean.contains('battleground')) {
+      return 'pubg mobile';
+    }
+    if (clean.contains('call of duty') || clean == 'cod' || clean == 'codm' || clean.startsWith('cod ')) {
+      return 'call of duty';
+    }
+    if (clean.contains('clash royale') || clean == 'cr') {
+      return 'clash royale';
+    }
+    if (clean.contains('clash of clans') || clean == 'coc') {
+      return 'clash of clans';
+    }
+    if (clean.contains('candy crush')) {
+      return 'candy crush';
+    }
+    if (clean.contains('minecraft') || clean == 'mc') {
+      return 'minecraft';
+    }
+    if (clean.contains('efootball') || clean.contains('pes')) {
+      return 'efootball';
+    }
+    if (clean.contains('asphalt')) {
+      return 'asphalt 9';
+    }
+    if (clean.contains('brawl')) {
+      return 'brawl stars';
+    }
+    if (clean.contains('stumble')) {
+      return 'stumble guys';
+    }
+    if (clean.contains('ludo')) {
+      return 'ludo';
+    }
+    if (clean.contains('8 ball') || clean.contains('8ball')) {
+      return '8 ball pool';
+    }
+    return clean;
   }
 
   bool _isTournamentAvailable(String title) {
@@ -146,26 +219,20 @@ class _GamesScreenState extends State<GamesScreen> {
   }
 
   int _getTournamentCount(String title) {
-    final t = title.trim().toLowerCase();
-    int count = _tournamentCounts[t] ?? 0;
-
-    if (count == 0) {
-      for (final entry in _tournamentCounts.entries) {
-        final k = entry.key;
-        if (k == t) {
-          count += entry.value;
-        } else if (t == 'free fire' && (k == 'free fire' || k == 'ff')) {
-          count += entry.value;
-        } else if (t == 'garena free fire max' && (k == 'free fire max' || k == 'ff max' || k == 'garena free fire max')) {
-          count += entry.value;
-        } else if (t == 'pubg mobile' && (k == 'pubg' || k == 'pubg mobile')) {
-          count += entry.value;
-        } else if (t == 'call of duty' && (k == 'cod' || k == 'codm' || k == 'call of duty')) {
-          count += entry.value;
-        }
+    final key = _normalizeGameKey(title);
+    if (_tournamentCounts.containsKey(key)) {
+      return _tournamentCounts[key]!;
+    }
+    final rawLower = title.trim().toLowerCase();
+    if (_tournamentCounts.containsKey(rawLower)) {
+      return _tournamentCounts[rawLower]!;
+    }
+    for (final entry in _tournamentCounts.entries) {
+      if (entry.key.contains(rawLower) || rawLower.contains(entry.key)) {
+        return entry.value;
       }
     }
-    return count;
+    return 0;
   }
 
   @override
