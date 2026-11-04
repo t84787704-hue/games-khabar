@@ -3,17 +3,22 @@
 // File: lib/widgets/coin_history_sheet.dart
 // ===============================================================================
 
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_transaction_model.dart';
+import '../models/coin_wallet_model.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/coin_reward_service.dart';
+import '../services/ad_free_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import '../screens/coin_store_screen.dart';
+import '../screens/earn_coins_screen.dart';
 
 class CoinHistorySheet extends StatefulWidget {
   final String userId;
@@ -262,36 +267,46 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                       ),
                                     ],
                                   ),
-                                  // IN ESCROW badge
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: ThemeService.card,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: ThemeService.border),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          'label_escrow_hold'.tr(),
-                                          style: const TextStyle(
-                                            color: GamerTheme.accentOrange,
-                                            fontSize: 9.5,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: 0.5,
+                                  // REWARD CLAIM BUTTON
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () => _openRewardClaimModal(context, widget.userId),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [Color(0xFF00FF88), Color(0xFF00C853)],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
                                           ),
+                                          borderRadius: BorderRadius.circular(12),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFF00FF88).withOpacity(0.35),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'coins_amount_format'.tr(args: [NumberFormat("#,###").format(inEscrow)]),
-                                          style: TextStyle(
-                                            color: ThemeService.textPrimary,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text('🎁', style: TextStyle(fontSize: 14)),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              'Claim Reward',
+                                              style: TextStyle(
+                                                color: Color(0xFF0B0F14),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: 0.2,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -833,6 +848,405 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _openRewardClaimModal(BuildContext parentContext, String userId) async {
+    final effectiveUid = userId.isNotEmpty
+        ? userId
+        : (GamerAuthService().currentUid ?? '');
+
+    if (effectiveUid.isEmpty) {
+      ScaffoldMessenger.of(parentContext).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to claim coin rewards!'),
+          backgroundColor: Color(0xFFFF4655),
+        ),
+      );
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+
+    if (!parentContext.mounted) return;
+
+    showModalBottomSheet(
+      context: parentContext,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final now = DateTime.now();
+            final lastMysteryStr = prefs.getString('last_mystery_reward_$effectiveUid');
+            DateTime? lastMysteryDate;
+            if (lastMysteryStr != null) {
+              lastMysteryDate = DateTime.tryParse(lastMysteryStr);
+            }
+            final bool isMysteryAvailable = lastMysteryDate == null ||
+                now.difference(lastMysteryDate).inHours >= 12;
+
+            return StreamBuilder<List<Map<String, dynamic>>>(
+              stream: SupabaseService.client
+                  .from('coin_wallets')
+                  .stream(primaryKey: ['id'])
+                  .or('id.eq.$effectiveUid,user_id.eq.$effectiveUid'),
+              builder: (context, walletSnap) {
+                CoinWallet wallet = CoinWallet.empty(effectiveUid);
+                if (walletSnap.hasData && walletSnap.data != null && walletSnap.data!.isNotEmpty) {
+                  wallet = CoinWallet.fromMap(walletSnap.data!.first);
+                }
+
+                final bool canDaily = wallet.canClaimDailyBonus;
+                final nextBonusDuration = wallet.nextDailyBonusDuration;
+
+                String formatDuration(Duration d) {
+                  final h = d.inHours;
+                  final m = d.inMinutes % 60;
+                  if (h > 0) return '${h}h ${m}m';
+                  return '${m}m';
+                }
+
+                return Container(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    14,
+                    20,
+                    MediaQuery.of(ctx).padding.bottom + 20,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ThemeService.card,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    border: Border.all(color: ThemeService.border),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: ThemeService.border,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00FF88).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFF00FF88).withOpacity(0.4),
+                              ),
+                            ),
+                            child: const Text('🎁', style: TextStyle(fontSize: 22)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Claim Rewards & Bonuses',
+                                  style: TextStyle(
+                                    color: ThemeService.textPrimary,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Collect daily coins and sponsored bonuses',
+                                  style: TextStyle(
+                                    color: ThemeService.textSecondary,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close_rounded, color: ThemeService.textPrimary),
+                            onPressed: () => Navigator.pop(modalCtx),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+
+                      // 1. Daily Login Bonus
+                      _rewardCard(
+                        icon: Icons.calendar_today_rounded,
+                        iconColor: const Color(0xFFFFD700),
+                        title: 'Daily Login Bonus',
+                        subtitle: canDaily
+                            ? 'Claim +50 G-Coins for checking in today!'
+                            : 'Already claimed today • Next in ${formatDuration(nextBonusDuration)}',
+                        coinsBadge: '+50 Coins',
+                        actionWidget: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: canDaily
+                                ? const Color(0xFF00FF88)
+                                : ThemeService.cardSecondary,
+                            foregroundColor: canDaily
+                                ? const Color(0xFF0B0F14)
+                                : ThemeService.textSecondary,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: canDaily
+                              ? () async {
+                                  Navigator.pop(modalCtx);
+                                  final success = await _walletService.claimDailyBonus(effectiveUid);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(parentContext).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          success
+                                              ? '🎉 50 G-Coins Claimed Successfully!'
+                                              : 'Daily bonus already claimed for today.',
+                                        ),
+                                        backgroundColor: success
+                                            ? const Color(0xFF00FF88)
+                                            : const Color(0xFFFF9900),
+                                      ),
+                                    );
+                                  }
+                                }
+                              : null,
+                          child: Text(
+                            canDaily ? 'Claim +50' : '✓ Claimed',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 2. Watch Sponsored Video
+                      _rewardCard(
+                        icon: Icons.play_circle_filled_rounded,
+                        iconColor: const Color(0xFF00FF88),
+                        title: 'Sponsored Video Ad',
+                        subtitle: 'Watch a short 5-second video to earn instant coins',
+                        coinsBadge: '+100 Coins',
+                        actionWidget: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00FF88),
+                            foregroundColor: const Color(0xFF0B0F14),
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: const Icon(Icons.tv_rounded, size: 15),
+                          label: const Text(
+                            'Watch (+100)',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          onPressed: () async {
+                            Navigator.pop(modalCtx);
+                            try {
+                              await AdFreeService().showRewardedAdForAction(
+                                context: parentContext,
+                                actionTitle: 'Sponsored Video',
+                                onRewardEarned: () async {
+                                  await _walletService.rewardAdCoins(effectiveUid);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(parentContext).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('🎉 +100 G-Coins Added to Your Wallet!'),
+                                        backgroundColor: Color(0xFF00FF88),
+                                      ),
+                                    );
+                                  }
+                                },
+                              );
+                            } catch (e) {
+                              debugPrint('Reward ad error: $e');
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 3. Lucky Mystery Box
+                      _rewardCard(
+                        icon: Icons.card_giftcard_rounded,
+                        iconColor: const Color(0xFFFF9900),
+                        title: 'Lucky Mystery Box',
+                        subtitle: isMysteryAvailable
+                            ? 'Tap to unbox a surprise coin gift (+25 to +75 Coins)!'
+                            : 'Opened recently • Next box in 12 hours',
+                        coinsBadge: '+25~75 Coins',
+                        actionWidget: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isMysteryAvailable
+                                ? const Color(0xFFFF9900)
+                                : ThemeService.cardSecondary,
+                            foregroundColor: isMysteryAvailable
+                                ? Colors.white
+                                : ThemeService.textSecondary,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: isMysteryAvailable
+                              ? () async {
+                                  final randomCoins = 25 + Random().nextInt(51); // 25..75
+                                  await prefs.setString(
+                                    'last_mystery_reward_$effectiveUid',
+                                    DateTime.now().toIso8601String(),
+                                  );
+
+                                  await CoinWalletService.updateCoins(
+                                    userId: effectiveUid,
+                                    amount: randomCoins,
+                                    type: 'mystery_reward',
+                                    title: '🎁 Lucky Mystery Box',
+                                    description: 'Surprise Passbook Coin Reward',
+                                  );
+
+                                  Navigator.pop(modalCtx);
+
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(parentContext).showSnackBar(
+                                      SnackBar(
+                                        content: Text('🎉 Wow! You unboxed +$randomCoins G-Coins!'),
+                                        backgroundColor: const Color(0xFF00FF88),
+                                      ),
+                                    );
+                                  }
+                                }
+                              : null,
+                          child: Text(
+                            isMysteryAvailable ? 'Open Box 🎰' : '✓ Opened',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // 4. More Coins Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: ThemeService.border),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            foregroundColor: ThemeService.textPrimary,
+                          ),
+                          icon: const Icon(Icons.monetization_on_outlined, size: 18, color: Color(0xFFFFD700)),
+                          label: const Text(
+                            'Open Earn Coins Center 🚀',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(modalCtx);
+                            Navigator.push(
+                              parentContext,
+                              MaterialPageRoute(
+                                builder: (_) => EarnCoinsScreen(userId: effectiveUid),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _rewardCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String coinsBadge,
+    required Widget actionWidget,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: ThemeService.cardSecondary,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ThemeService.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          color: ThemeService.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFD700).withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        coinsBadge,
+                        style: const TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
+                    fontSize: 11,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          actionWidget,
+        ],
+      ),
     );
   }
 }
