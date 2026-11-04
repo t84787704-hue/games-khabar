@@ -3188,11 +3188,20 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                       labelStyle: TextStyle(color: Colors.white60),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'Call Of Duty', child: Text('Call Of Duty')),
                       DropdownMenuItem(value: 'Free Fire', child: Text('Free Fire')),
+                      DropdownMenuItem(value: 'Garena Free Fire Max', child: Text('Garena Free Fire Max')),
                       DropdownMenuItem(value: 'PUBG Mobile', child: Text('PUBG Mobile')),
+                      DropdownMenuItem(value: 'Call Of Duty', child: Text('Call Of Duty')),
+                      DropdownMenuItem(value: 'Clash Royale', child: Text('Clash Royale')),
+                      DropdownMenuItem(value: 'Candy Crush', child: Text('Candy Crush')),
+                      DropdownMenuItem(value: 'Clash of Clans', child: Text('Clash of Clans')),
                       DropdownMenuItem(value: 'Minecraft', child: Text('Minecraft')),
-                      DropdownMenuItem(value: 'Apex Legends', child: Text('Apex Legends')),
+                      DropdownMenuItem(value: 'eFootball', child: Text('eFootball')),
+                      DropdownMenuItem(value: 'Asphalt 9', child: Text('Asphalt 9')),
+                      DropdownMenuItem(value: 'Brawl Stars', child: Text('Brawl Stars')),
+                      DropdownMenuItem(value: 'Stumble Guys', child: Text('Stumble Guys')),
+                      DropdownMenuItem(value: 'Ludo', child: Text('Ludo')),
+                      DropdownMenuItem(value: '8 Ball Pool', child: Text('8 Ball Pool')),
                     ],
                     onChanged: (val) {
                       if (val != null) setDState(() => selectedGame = val);

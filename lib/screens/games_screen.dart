@@ -169,47 +169,61 @@ class _GamesScreenState extends State<GamesScreen> {
 
   String _normalizeGameKey(String raw) {
     final clean = raw.trim().toLowerCase();
-    if (clean.contains('max') && (clean.contains('free fire') || clean.contains('ff') || clean.contains('garena'))) {
-      return 'garena free fire max';
+    // 1. Strict separation: Check Free Fire MAX first
+    if (clean.contains('max') && (clean.contains('free') || clean.contains('fire') || clean.contains('ff') || clean.contains('garena'))) {
+      return 'free_fire_max';
     }
-    if (clean == 'free fire' || clean == 'freefire' || clean == 'ff' || clean.contains('free fire') || clean.contains('freefire')) {
-      return 'free fire';
+    // 2. Standard Free Fire (strictly WITHOUT max)
+    if (!clean.contains('max') && (clean.contains('free fire') || clean.contains('freefire') || clean == 'ff' || clean.startsWith('ff '))) {
+      return 'free_fire';
     }
+    // 3. PUBG Mobile
     if (clean.contains('pubg') || clean.contains('bgmi') || clean.contains('battleground')) {
-      return 'pubg mobile';
+      return 'pubg_mobile';
     }
+    // 4. Call Of Duty
     if (clean.contains('call of duty') || clean == 'cod' || clean == 'codm' || clean.startsWith('cod ')) {
-      return 'call of duty';
+      return 'call_of_duty';
     }
+    // 5. Clash Royale
     if (clean.contains('clash royale') || clean == 'cr') {
-      return 'clash royale';
+      return 'clash_royale';
     }
+    // 6. Clash of Clans
     if (clean.contains('clash of clans') || clean == 'coc') {
-      return 'clash of clans';
+      return 'clash_of_clans';
     }
+    // 7. Candy Crush
     if (clean.contains('candy crush')) {
-      return 'candy crush';
+      return 'candy_crush';
     }
+    // 8. Minecraft
     if (clean.contains('minecraft') || clean == 'mc') {
       return 'minecraft';
     }
+    // 9. eFootball
     if (clean.contains('efootball') || clean.contains('pes')) {
       return 'efootball';
     }
+    // 10. Asphalt 9
     if (clean.contains('asphalt')) {
-      return 'asphalt 9';
+      return 'asphalt_9';
     }
+    // 11. Brawl Stars
     if (clean.contains('brawl')) {
-      return 'brawl stars';
+      return 'brawl_stars';
     }
+    // 12. Stumble Guys
     if (clean.contains('stumble')) {
-      return 'stumble guys';
+      return 'stumble_guys';
     }
+    // 13. Ludo
     if (clean.contains('ludo')) {
       return 'ludo';
     }
+    // 14. 8 Ball Pool
     if (clean.contains('8 ball') || clean.contains('8ball')) {
-      return '8 ball pool';
+      return '8_ball_pool';
     }
     return clean;
   }
@@ -220,19 +234,7 @@ class _GamesScreenState extends State<GamesScreen> {
 
   int _getTournamentCount(String title) {
     final key = _normalizeGameKey(title);
-    if (_tournamentCounts.containsKey(key)) {
-      return _tournamentCounts[key]!;
-    }
-    final rawLower = title.trim().toLowerCase();
-    if (_tournamentCounts.containsKey(rawLower)) {
-      return _tournamentCounts[rawLower]!;
-    }
-    for (final entry in _tournamentCounts.entries) {
-      if (entry.key.contains(rawLower) || rawLower.contains(entry.key)) {
-        return entry.value;
-      }
-    }
-    return 0;
+    return _tournamentCounts[key] ?? 0;
   }
 
   @override
