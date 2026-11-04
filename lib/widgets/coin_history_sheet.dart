@@ -886,16 +886,10 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             final bool isMysteryAvailable = lastMysteryDate == null ||
                 now.difference(lastMysteryDate).inHours >= 12;
 
-            return StreamBuilder<List<Map<String, dynamic>>>(
-              stream: SupabaseService.client
-                  .from('coin_wallets')
-                  .stream(primaryKey: ['id'])
-                  .or('id.eq.$effectiveUid,user_id.eq.$effectiveUid'),
+            return StreamBuilder<CoinWallet>(
+              stream: CoinWalletService().walletStream(effectiveUid),
               builder: (context, walletSnap) {
-                CoinWallet wallet = CoinWallet.empty(effectiveUid);
-                if (walletSnap.hasData && walletSnap.data != null && walletSnap.data!.isNotEmpty) {
-                  wallet = CoinWallet.fromMap(walletSnap.data!.first);
-                }
+                final CoinWallet wallet = walletSnap.data ?? CoinWallet.empty(effectiveUid);
 
                 final bool canDaily = wallet.canClaimDailyBonus;
                 final nextBonusDuration = wallet.nextDailyBonusDuration;
@@ -1151,7 +1145,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                             Navigator.push(
                               parentContext,
                               MaterialPageRoute(
-                                builder: (_) => EarnCoinsScreen(userId: effectiveUid),
+                                builder: (_) => const EarnCoinsScreen(),
                               ),
                             );
                           },
