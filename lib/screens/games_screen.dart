@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/game_model.dart';
 import '../widgets/game_card.dart';
 import 'tournaments_screen.dart';
 import '../services/theme_service.dart';
+import '../services/supabase_service.dart';
 
 class GamesScreen extends StatefulWidget {
   const GamesScreen({super.key});
@@ -33,7 +35,6 @@ class _GamesScreenState extends State<GamesScreen> {
       imageUrl: 'https://e.snmc.io/lk/f/x/88886e931ef24bc6ddad648cdcf565c8/5296160',
       playedCount: '1.2M',
     ),
-    // 👇 BGMI کو ہٹا کر یہاں Candy Crush شامل کر دیا ہے
     GameModel(
       title: 'Candy Crush',
       imageUrl: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1425327952i/25054190.jpg',
@@ -86,43 +87,144 @@ class _GamesScreenState extends State<GamesScreen> {
     ),
   ];
 
+  Map<String, int> _tournamentCounts = {};
+  bool _isLoading = true;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAvailableTournaments();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      _fetchAvailableTournaments();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchAvailableTournaments() async {
+    try {
+      final res = await SupabaseService.client
+          .from('tournaments')
+          .select('game_name, game, status');
+
+      final Map<String, int> counts = {};
+
+      if (res is List) {
+        for (final item in res) {
+          if (item is Map) {
+            final status = (item['status'] ?? 'upcoming').toString().trim().toLowerCase();
+            // Tournament is active / available if not completed and not cancelled
+            if (status != 'completed' && status != 'cancelled') {
+              final rawGame = (item['game_name'] ?? item['game'] ?? '').toString().trim().toLowerCase();
+              if (rawGame.isNotEmpty) {
+                counts[rawGame] = (counts[rawGame] ?? 0) + 1;
+              }
+            }
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _tournamentCounts = counts;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading tournament availability: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  bool _isTournamentAvailable(String title) {
+    return _getTournamentCount(title) > 0;
+  }
+
+  int _getTournamentCount(String title) {
+    final t = title.trim().toLowerCase();
+    int count = _tournamentCounts[t] ?? 0;
+
+    if (count == 0) {
+      for (final entry in _tournamentCounts.entries) {
+        final k = entry.key;
+        if (k == t) {
+          count += entry.value;
+        } else if (t == 'free fire' && (k == 'free fire' || k == 'ff')) {
+          count += entry.value;
+        } else if (t == 'garena free fire max' && (k == 'free fire max' || k == 'ff max' || k == 'garena free fire max')) {
+          count += entry.value;
+        } else if (t == 'pubg mobile' && (k == 'pubg' || k == 'pubg mobile')) {
+          count += entry.value;
+        } else if (t == 'call of duty' && (k == 'cod' || k == 'codm' || k == 'call of duty')) {
+          count += entry.value;
+        }
+      }
+    }
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ThemeService.bg,
-      appBar: AppBar(
-        title: const Text('All Games', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: ThemeService.appBarBg,
-        elevation: 0,
-        iconTheme: IconThemeData(color: ThemeService.textPrimary),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.85,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: ThemeService.bg,
+          appBar: AppBar(
+            title: Text(
+              'All Games',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: ThemeService.textPrimary,
+              ),
+            ),
+            backgroundColor: ThemeService.appBarBg,
+            elevation: 0,
+            iconTheme: IconThemeData(color: ThemeService.textPrimary),
           ),
-          itemCount: games.length,
-          itemBuilder: (context, index) {
-            return GameCard(
-              game: games[index],
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TournamentsScreen(
-                      gameName: games[index].title.trim(),
-                    ),
-                  ),
+          body: RefreshIndicator(
+            onRefresh: _fetchAvailableTournaments,
+            color: const Color(0xFF00FF88),
+            backgroundColor: ThemeService.card,
+            child: GridView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.77,
+              ),
+              itemCount: games.length,
+              itemBuilder: (context, index) {
+                final game = games[index];
+                final isAvailable = _isTournamentAvailable(game.title);
+                final count = _getTournamentCount(game.title);
+
+                return GameCard(
+                  game: game,
+                  isTournamentAvailable: isAvailable,
+                  tournamentCount: count,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TournamentsScreen(
+                          gameName: game.title.trim(),
+                        ),
+                      ),
+                    ).then((_) => _fetchAvailableTournaments());
+                  },
                 );
               },
-            );
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
