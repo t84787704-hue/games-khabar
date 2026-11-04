@@ -1,13 +1,15 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://dxdkitnroypbblazblja.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+const SUPABASE_URL = (process.env.SUPABASE_URL && process.env.SUPABASE_URL.trim() !== '')
+  ? process.env.SUPABASE_URL.trim()
+  : 'https://dxdkitnroypbblazblja.supabase.co';
 
-if (!SUPABASE_SERVICE_KEY) {
-  console.error('SUPABASE_SERVICE_KEY is missing. Please set it in your .env or environment.');
-  process.exit(1);
-}
+const SUPABASE_SERVICE_KEY = (process.env.SUPABASE_SERVICE_KEY && process.env.SUPABASE_SERVICE_KEY.trim() !== '')
+  ? process.env.SUPABASE_SERVICE_KEY.trim()
+  : ((process.env.SUPABASE_KEY && process.env.SUPABASE_KEY.trim() !== '')
+      ? process.env.SUPABASE_KEY.trim()
+      : 'sb_publishable_gL8ImGd6TS-gdPOr92leHQ_Cwjiw25Y');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
@@ -16,25 +18,25 @@ async function cleanOldShortNews() {
   
   const { data: rows, error } = await supabase
     .from('steam_news')
-    .select('id, title, titleMap, description, content, descriptionMap, imageUrl, gameName');
+    .select('*');
 
   if (error) {
     console.error('Error fetching news:', error.message);
     process.exit(1);
   }
 
-  console.log(`Total documents in Supabase 'news': ${rows.length}`);
+  console.log(`Total documents in Supabase 'news': ${rows ? rows.length : 0}`);
 
   let deletedShort = 0;
   let deletedWrongImage = 0;
   let deletedInvalid = 0;
 
-  for (const item of rows) {
+  for (const item of (rows || [])) {
     const id = item.id;
     const title = item.title || (typeof item.titleMap === 'object' ? item.titleMap?.en : '') || '';
-    const desc = item.description || item.content || (typeof item.descriptionMap === 'object' ? item.descriptionMap?.en : '') || '';
-    const img = item.imageUrl || '';
-    const game = (item.gameName || '').toLowerCase();
+    const desc = item.description || (typeof item.descriptionMap === 'object' ? item.descriptionMap?.en : '') || '';
+    const img = item.imageUrl || item.image_url || '';
+    const game = (item.gameName || item.game || '').toLowerCase();
 
     // 1. Check if description/content is shorter than 500 characters
     if (desc.trim().length < 500) {
