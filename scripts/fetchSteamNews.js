@@ -158,10 +158,10 @@ async function translateToUrdu(text) {
   if (!clean) return '';
   if (/[\u0600-\u06FF]/.test(clean)) return clean;
   try {
-    const cleanChunk = clean.substring(0, 800);
+    const cleanChunk = clean.substring(0, 400);
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ur&dt=t&q=${encodeURIComponent(cleanChunk)}`;
     const res = await axios.get(url, {
-      timeout: 4000,
+      timeout: 2000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
       }
@@ -309,7 +309,7 @@ async function fetchFullArticle(url) {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9'
       },
-      timeout: 10000,
+      timeout: 4500,
       maxRedirects: 5
     });
 
@@ -427,25 +427,28 @@ function extractGameName(title, fallback = '') {
 async function run(){
   console.log('START FETCH - STEAM NEWS TO SUPABASE');
 
-  // STEP 0 - PURANI RUSSIAN DELETE KARO FROM SUPABASE
+  const existingIds = new Set();
+  // STEP 0 - PURANI RUSSIAN DELETE KARO & LOAD EXISTING IDS FROM SUPABASE
   try {
     const { data: snap } = await supabase.from('steam_news').select('id, title, titleMap');
     let del = 0;
     if (snap) {
       for (const row of snap) {
+        if (row.id) existingIds.add(String(row.id));
         const title = row.title || row.titleMap?.en || "";
         if (isRussian(title)) {
           await supabase.from('steam_news').delete().eq('id', row.id);
+          existingIds.delete(String(row.id));
           del++;
         }
       }
     }
-    console.log(`Cleaned ${del} Russian old docs from Supabase steam_news`);
+    console.log(`Loaded ${existingIds.size} existing articles from Supabase (Cleaned ${del} Russian).`);
   } catch(e) {
     console.log("Clean fail", e.message);
   }
 
-  // STEAM - Latest 20 per game
+  // STEAM - Latest 5 per game (only fetch new)
   for (const [gameName, appId] of Object.entries(allGamesAppIds)) {
     try {
       let currentPrice = 2999;
@@ -455,7 +458,7 @@ async function run(){
         { date: 'Today', price: 2999 }
       ];
       try {
-        const pRes = await axios.get(`https://store.steampowered.com/api/appdetails?appids=${appId}&filters=price_overview&cc=pk`, { timeout: 4000 });
+        const pRes = await axios.get(`https://store.steampowered.com/api/appdetails?appids=${appId}&filters=price_overview&cc=pk`, { timeout: 3000 });
         const po = pRes.data?.[appId]?.data?.price_overview;
         if (po) {
           currentPrice = Math.round(po.final / 100);
@@ -468,8 +471,14 @@ async function run(){
         }
       } catch (_) {}
 
-      const res = await axios.get(`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=20&maxlength=0`);
-      for (const item of res.data?.appnews?.newsitems || []) {
+      const res = await axios.get(`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=6&maxlength=0`, { timeout: 4000 });
+      for (const item of (res.data?.appnews?.newsitems || []).slice(0, 5)) {
+        const rawId = `steam_${appId}_${item.gid}`;
+        const uuidId = stringToUuid(rawId);
+        if (existingIds.has(uuidId)) {
+          continue; // Already in Supabase, skip to save time
+        }
+
         const rawTitle = he.decode(item.title || "").substring(0, 200);
         if (isRussian(rawTitle)) continue;
 
@@ -484,9 +493,6 @@ async function run(){
 
         const paras = fullText.split('\n\n').filter(p => p.trim().length > 20);
         const shortDesc = paras.slice(0, 2).join('\n\n') || fullText.substring(0, 300);
-
-        const rawId = `steam_${appId}_${item.gid}`;
-        const uuidId = stringToUuid(rawId);
         const nowIso = new Date().toISOString();
 
         const urduTitle = await translateToUrdu(rawTitle);
@@ -495,8 +501,6 @@ async function run(){
         const newsPayload = {
           id: uuidId,
           title: (urduTitle && urduTitle.length > 5) ? urduTitle : rawTitle,
-          title_ur: urduTitle,
-          description_ur: urduDesc,
           description: fullText,
           shortDescription: shortDesc,
           titleMap: { en: rawTitle, ur: urduTitle || rawTitle, ro: rawTitle },
@@ -528,6 +532,8 @@ async function run(){
         const { error: insErr } = await supabase.from('steam_news').upsert(newsPayload, { onConflict: 'id' });
         if (insErr) {
           console.warn(`steam_news upsert warning (${newsPayload.id}): ${insErr.message}`);
+        } else {
+          existingIds.add(uuidId);
         }
       }
     } catch(e) {
@@ -535,13 +541,18 @@ async function run(){
     }
   }
 
-  // 50 WEBSITES - Latest 20 per website
+  // 50 WEBSITES - Latest 4 per website (skip existing)
   for (const src of TOP_50_SITES) {
     try {
       const feed = await parser.parseURL(src.url);
-      for (const item of feed.items.slice(0, 20)) {
+      for (const item of feed.items.slice(0, 4)) {
         const articleUrl = item.link || item.guid || "";
         if (!articleUrl || !articleUrl.startsWith('http')) continue;
+
+        const uuidId = stringToUuid(`${src.name}_${articleUrl}`);
+        if (existingIds.has(uuidId)) {
+          continue; // Already in Supabase, skip to save time
+        }
 
         const rawTitle = he.decode(item.title || "").substring(0, 200);
         if (isRussian(rawTitle)) continue;
@@ -554,7 +565,6 @@ async function run(){
           articleBody = fullArticle.fullText;
           cheerioDoc = fullArticle.$;
         } else {
-          // RSS content fallback (multi-paragraph or full summary)
           const rssRaw = item['content:encoded'] || item.content || item.contentSnippet || item.summary || item.description || "";
           const rssCleaned = cleanDescription(rssRaw);
           if (rssCleaned && rssCleaned.length >= 80) {
@@ -576,9 +586,7 @@ async function run(){
         const paras = articleBody.split('\n\n').filter(p => p.trim().length > 20);
         const shortDesc = paras.slice(0, 2).join('\n\n') || articleBody.substring(0, 300);
 
-        const safeId = Buffer.from(articleUrl).toString('base64').replace(/[/+=]/g, '').substring(0, 20);
         const detectedGame = extractGameName(rawTitle, src.name);
-        const uuidId = stringToUuid(`${src.name}_${articleUrl}`);
         const nowIso = new Date().toISOString();
 
         const urduTitle = await translateToUrdu(rawTitle);
@@ -587,8 +595,6 @@ async function run(){
         const newsPayload = {
           id: uuidId,
           title: (urduTitle && urduTitle.length > 5) ? urduTitle : rawTitle,
-          title_ur: urduTitle,
-          description_ur: urduDesc,
           description: articleBody,
           shortDescription: shortDesc,
           titleMap: { en: rawTitle, ur: urduTitle || rawTitle, ro: rawTitle },
@@ -615,6 +621,8 @@ async function run(){
         const { error: insErr } = await supabase.from('steam_news').upsert(newsPayload, { onConflict: 'id' });
         if (insErr) {
           console.warn(`steam_news upsert warning (${newsPayload.id}): ${insErr.message}`);
+        } else {
+          existingIds.add(uuidId);
         }
       }
     } catch(e) {
