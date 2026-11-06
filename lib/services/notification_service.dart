@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:easy_localization/easy_localization.dart'; // Added for localization
+import 'package:easy_localization/easy_localization.dart';
 import '../models/news_model.dart';
 import '../models/notification_model.dart';
 import 'supabase_store_service.dart';
 import 'supabase_service.dart';
+import 'gamer_auth_service.dart';
 import '../screens/news_detail_screen.dart';
 
 class NotificationService {
@@ -26,9 +28,9 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
   static const String topicName = 'all_news';
-  static const String channelId = 'games_khabar_alerts_v2';
-  static const String channelName = 'Games Khabar Notifications';
-  static const String channelDescription = 'Instant gaming alerts, match updates, and in-app alerts';
+  static const String channelId = 'gamers_id_loud_alerts_v3';
+  static const String channelName = 'Gamers ID Alerts';
+  static const String channelDescription = 'Instant match challenges, tournaments, squad alerts, chats and rewards';
 
   final AndroidNotificationChannel _androidChannel = AndroidNotificationChannel(
     channelId,
@@ -37,7 +39,7 @@ class NotificationService {
     importance: Importance.max,
     playSound: true,
     enableVibration: true,
-    vibrationPattern: Int64List.fromList([0, 300, 200, 300]),
+    vibrationPattern: Int64List.fromList([0, 500, 250, 500]),
     enableLights: true,
     ledColor: const Color(0xFF00FF88),
   );
@@ -46,6 +48,7 @@ class NotificationService {
 
   final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
   StreamSubscription? _realtimeNotifSub;
+  Timer? _backgroundPollingTimer;
   final Set<String> _seenNotificationIds = {};
 
   Future<void> initialize() async {
@@ -138,17 +141,54 @@ class NotificationService {
         if (user == null) {
           unreadCountNotifier.value = 0;
           _realtimeNotifSub?.cancel();
+          _backgroundPollingTimer?.cancel();
           _seenNotificationIds.clear();
           return;
         }
         _subscribeToUserNotifications(user.id);
       });
+
+      // Also listen to GamerAuthService's user notifier
+      GamerAuthService().authUserNotifier.addListener(() {
+        final gamerUser = GamerAuthService().authUserNotifier.value;
+        if (gamerUser != null) {
+          _subscribeToUserNotifications(gamerUser.id);
+        }
+      });
     } catch (_) {}
   }
 
+  /// Explicit subscription helper accessible from anywhere
+  void subscribeToUser(String userId) {
+    if (userId.isEmpty) return;
+    _subscribeToUserNotifications(userId);
+  }
+
+  /// Show quick high-priority banner and ring/vibrate
+  Future<void> showBannerNotification({
+    required String title,
+    required String body,
+    String? type,
+    Map<String, dynamic>? data,
+  }) async {
+    final notif = InAppNotification(
+      id: 'local_${DateTime.now().millisecondsSinceEpoch}',
+      userId: SupabaseService.client.auth.currentUser?.id ?? '',
+      type: type ?? 'general',
+      title: title,
+      body: body,
+      isRead: false,
+      createdAt: DateTime.now(),
+      data: data,
+    );
+    await showInAppLocalNotification(notif);
+  }
+
   void _subscribeToUserNotifications(String userId) {
+    if (userId.isEmpty) return;
     refreshUnreadCount(userId);
     _realtimeNotifSub?.cancel();
+    _backgroundPollingTimer?.cancel();
     bool isFirst = true;
 
     try {
@@ -170,9 +210,25 @@ class NotificationService {
 
         if (isFirst) {
           isFirst = false;
+          final now = DateTime.now();
           for (final r in userRows) {
             final id = r['id']?.toString() ?? '';
-            if (id.isNotEmpty) _seenNotificationIds.add(id);
+            if (id.isNotEmpty) {
+              _seenNotificationIds.add(id);
+              final isRead = r['is_read'] == true || r['isRead'] == true || r['read'] == true;
+              if (!isRead) {
+                final createdAtStr = r['created_at']?.toString() ?? '';
+                if (createdAtStr.isNotEmpty) {
+                  try {
+                    final created = DateTime.parse(createdAtStr);
+                    if (now.difference(created).inMinutes <= 10) {
+                      final notif = InAppNotification.fromMap(r);
+                      showInAppLocalNotification(notif);
+                    }
+                  } catch (_) {}
+                }
+              }
+            }
           }
           return;
         }
@@ -189,6 +245,48 @@ class NotificationService {
         }
       }, onError: (_) {});
     } catch (_) {}
+
+    // Fallback periodic poll every 20 seconds to guarantee delivery even if realtime socket drops
+    _backgroundPollingTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+      try {
+        final userUuid = SupabaseService.toUuid(userId);
+        dynamic rows;
+        try {
+          rows = await SupabaseService.client
+              .from('notifications')
+              .select()
+              .or('user_id.eq.$userUuid,user_id.eq.$userId,recipientUid.eq.$userId')
+              .eq('is_read', false)
+              .order('created_at', ascending: false)
+              .limit(10);
+        } catch (_) {}
+
+        if (rows is List) {
+          unreadCountNotifier.value = rows.length;
+          final now = DateTime.now();
+          for (final r in rows) {
+            final id = r['id']?.toString() ?? '';
+            if (id.isNotEmpty && !_seenNotificationIds.contains(id)) {
+              _seenNotificationIds.add(id);
+              final createdAtStr = r['created_at']?.toString() ?? '';
+              bool shouldAlert = true;
+              if (createdAtStr.isNotEmpty) {
+                try {
+                  final dt = DateTime.parse(createdAtStr);
+                  if (now.difference(dt).inMinutes > 60) {
+                    shouldAlert = false;
+                  }
+                } catch (_) {}
+              }
+              if (shouldAlert) {
+                final notif = InAppNotification.fromMap(r);
+                showInAppLocalNotification(notif);
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    });
   }
 
   /// Fresh exact unread count directly from database
@@ -231,6 +329,14 @@ class NotificationService {
 
   Future<void> showInAppLocalNotification(InAppNotification notif) async {
     try {
+      // 1. Trigger physical device haptic vibration
+      try {
+        HapticFeedback.vibrate();
+        Future.delayed(const Duration(milliseconds: 250), () {
+          HapticFeedback.heavyImpact();
+        });
+      } catch (_) {}
+
       final payloadData = {
         'id': notif.id,
         'type': notif.type,
@@ -245,12 +351,15 @@ class NotificationService {
         _androidChannel.name,
         channelDescription: _androidChannel.description,
         importance: Importance.max,
-        priority: Priority.high,
+        priority: Priority.max,
         playSound: true,
         enableVibration: true,
-        vibrationPattern: Int64List.fromList([0, 300, 200, 300]),
+        vibrationPattern: Int64List.fromList([0, 500, 250, 500]),
         icon: '@mipmap/ic_launcher',
         color: const Color(0xFF00FF88),
+        category: AndroidNotificationCategory.message,
+        visibility: NotificationVisibility.public,
+        ticker: notif.title,
         styleInformation: BigTextStyleInformation(
           notif.body,
           contentTitle: notif.title,
@@ -272,6 +381,70 @@ class NotificationService {
         NotificationDetails(android: androidDetails, iOS: iosDetails),
         payload: jsonEncode(payloadData),
       );
+
+      // 2. In-app floating popup banner if app is currently in foreground
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFF1E293B),
+            elevation: 8,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFF00FF88), width: 1.5),
+            ),
+            duration: const Duration(seconds: 4),
+            content: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00FF88).withOpacity(0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.notifications_active,
+                    color: Color(0xFF00FF88),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        notif.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        notif.body,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('showInAppLocalNotification error: $e');
     }

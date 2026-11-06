@@ -14,6 +14,7 @@ import 'screens/gamer_auth_screen.dart';
 import 'screens/banned_screen.dart';
 import 'screens/gamer_privacy_policy_screen.dart';
 import 'screens/gamer_terms_of_service_screen.dart';
+import 'services/notification_service.dart';
 
 // ✅ Global Notification Plugin Instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -22,32 +23,7 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 // ✅ Notification Permission, Sound aur Vibration Setup
 Future<void> initNotificationService() async {
   try {
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    const InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
-
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-    final androidPlugin = flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-
-    // 1. App khulte hi System Permission Popup mangna (Naye mobiles par "Allow" aayega)
-    await androidPlugin?.requestNotificationsPermission();
-
-    // 2. High Priority Sound & Vibration Notification Channel create karna
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      'gamers_id_notifications', // Channel ID
-      'Gamers ID Alerts',        // Channel Title
-      description: 'Match challenges, chat, and wallet reward alerts',
-      importance: Importance.max,
-      playSound: true,
-      enableVibration: true,
-    );
-
-    await androidPlugin?.createNotificationChannel(channel);
+    await NotificationService().initialize();
   } catch (e) {
     debugPrint('Notification service init error: $e');
   }
@@ -59,24 +35,9 @@ Future<void> showLocalNotification({
   required String body,
 }) async {
   try {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'gamers_id_notifications',
-      'Gamers ID Alerts',
-      channelDescription: 'Match challenges, chat, and wallet reward alerts',
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-    );
-
-    const NotificationDetails platformDetails =
-        NotificationDetails(android: androidDetails);
-
-    await flutterLocalNotificationsPlugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
-      body,
-      platformDetails,
+    await NotificationService().showBannerNotification(
+      title: title,
+      body: body,
     );
   } catch (e) {
     debugPrint('Show notification error: $e');
@@ -86,25 +47,18 @@ Future<void> showLocalNotification({
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Initialize Notifications & Request Permission on startup
-  await initNotificationService();
-
-  try {
-    await EasyLocalization.ensureInitialized();
-  } catch (e) {
-    debugPrint('EasyLocalization init error: $e');
-  }
-
-  SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.manual,
-    overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
-  );
-
   // ✅ Initialize Supabase
   try {
     await SupabaseService.init();
   } catch (e) {
     debugPrint('Supabase initialize error: $e');
+  }
+
+  // ✅ Initialize Notifications & Request Permission on startup
+  try {
+    await NotificationService().initialize();
+  } catch (e) {
+    debugPrint('NotificationService init error: $e');
   }
 
   // ✅ Language init
@@ -144,6 +98,7 @@ class GamersIdApp extends StatelessWidget {
           top: true,
           bottom: true,
           child: MaterialApp(
+            navigatorKey: NotificationService.navigatorKey,
             key: ValueKey(themeMode),
             title: 'Gamers ID',
             debugShowCheckedModeBanner: false,

@@ -50,6 +50,9 @@ class GamerAuthService {
     final initialUser = _supabase.auth.currentUser;
     authUserNotifier.value = initialUser;
     if (initialUser != null) {
+      try {
+        NotificationService().subscribeToUser(initialUser.id);
+      } catch (_) {}
       isLoadingNotifier.value = true;
       await refreshCurrentGamer();
     } else {
@@ -96,6 +99,7 @@ class GamerAuthService {
       }
 
       try {
+        NotificationService().subscribeToUser(authUserId);
         NotificationService().saveUserFcmToken(authUserId);
       } catch (_) {}
 

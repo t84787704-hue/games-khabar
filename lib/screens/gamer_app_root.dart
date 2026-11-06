@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/team_service.dart';
+import '../services/notification_service.dart';
 import '../models/gamer_user_model.dart';
 import 'gamer_age_gate_screen.dart';
 import 'gamer_auth_screen.dart';
@@ -34,6 +35,11 @@ class _GamerAppRootState extends State<GamerAppRoot> {
     try {
       final prefs = await SharedPreferences.getInstance();
       _ageVerified = prefs.getBool('age_verified') ?? false;
+
+      // Initialize notifications
+      try {
+        await NotificationService().initialize();
+      } catch (_) {}
 
       // Initialize auth once on startup
       await _authService.init();
