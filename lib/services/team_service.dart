@@ -982,14 +982,38 @@ class TeamService {
         debugPrint('[TeamService] Error inserting match history: $e');
       }
 
-      // 7. Update tournament record
+      // 7. Update tournament record universally with winner team name & completed status
+      final tournamentUpdatePayload = {
+        'status': 'completed',
+        'proof_status': 'approved',
+        'winner_team_id': teamId,
+        'winner_team_name': teamName,
+        'proof_team_name': teamName,
+      };
+
       try {
-        await SupabaseService.client.from('tournaments').update({
-          'status': 'completed',
-          'proof_status': 'approved',
-          'winner_team_id': teamId,
-        }).eq('id', tournamentId);
-      } catch (_) {}
+        await SupabaseService.client
+            .from('tournaments')
+            .update(tournamentUpdatePayload)
+            .eq('id', tournamentId);
+      } catch (_) {
+        try {
+          await SupabaseService.client
+              .from('tournaments')
+              .update(tournamentUpdatePayload)
+              .eq('id', SupabaseService.toUuid(tournamentId));
+        } catch (_) {}
+      }
+
+      // Also ensure updated by title if title is known (e.g. Free11)
+      if (tournamentTitle.isNotEmpty && tournamentTitle != 'Tournament') {
+        try {
+          await SupabaseService.client
+              .from('tournaments')
+              .update(tournamentUpdatePayload)
+              .ilike('title', tournamentTitle);
+        } catch (_) {}
+      }
 
       // 8. Log proof history
       try {
