@@ -649,10 +649,13 @@ class GamerSocialService {
         final snippet = (originalContent != null && originalContent.length > 40)
             ? '${originalContent.substring(0, 40)}...'
             : (originalContent ?? 'post');
-        NotificationService().sendInAppNotification(
-          recipientUid: originalAuthorId,
+        NotificationService().sendNotification(
+          userId: originalAuthorId,
+          senderId: authUserId,
+          senderName: freshDisplayName,
+          senderAvatar: freshAvatar,
           title: '🔁 New Repost!',
-          message: isQuote
+          body: isQuote
               ? '@$freshUsername quoted your post: "$snippet"'
               : '@$freshUsername reposted your post: "$snippet"',
           type: 'social',

@@ -352,6 +352,13 @@ class _PostCardState extends State<PostCard> {
                 );
               }
             },
+            child: Text('delete'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showRepostSheet() {
     if (widget.onRepostTap != null) {
       widget.onRepostTap!();
