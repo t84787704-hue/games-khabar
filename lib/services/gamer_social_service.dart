@@ -508,8 +508,219 @@ class GamerSocialService {
       {required String postId, required String userId}) async {
     try {
       await _supabase.from('posts').delete().eq('id', postId);
+      feedRefreshNotifier.value++;
     } catch (e) {
       debugPrint('[GamerSocialService] Error deleting post: $e');
+    }
+  }
+
+  // ==========================================
+  // REPOST / QUOTE POST SYSTEM
+  // ==========================================
+
+  Future<String> createRepost({
+    required String originalPostId,
+    required String originalAuthorId,
+    required String originalAuthorUsername,
+    String? originalAuthorAvatar,
+    String? originalContent,
+    String? originalImageUrl,
+    String? originalGame,
+    String? quoteText,
+  }) async {
+    final authUserId = _supabase.auth.currentUser?.id;
+    if (authUserId == null || authUserId.isEmpty) {
+      throw Exception('User not authenticated. Please log in to repost.');
+    }
+
+    final postUuid = stringToUuid(authUserId);
+    String freshUsername = 'gamer';
+    String freshDisplayName = 'Gamer';
+    String freshAvatar = '';
+
+    try {
+      final userRow = await _supabase
+          .from('users')
+          .select('username, display_name, avatar_url')
+          .eq('id', authUserId)
+          .maybeSingle();
+
+      if (userRow != null) {
+        freshUsername = (userRow['username'] ?? '').toString();
+        freshDisplayName = (userRow['display_name'] ?? '').toString();
+        freshAvatar = (userRow['avatar_url'] ?? '').toString();
+      }
+    } catch (_) {}
+
+    await _ensureUserExists(
+      userId: authUserId,
+      username: freshUsername,
+      displayName: freshDisplayName,
+      userPhoto: freshAvatar,
+    );
+
+    final isQuote = quoteText != null && quoteText.trim().isNotEmpty;
+    final finalContent = isQuote ? quoteText.trim() : (originalContent ?? '');
+    final finalGame = (originalGame != null && originalGame.isNotEmpty) ? originalGame : 'BGMI';
+
+    Map<String, dynamic>? response;
+    try {
+      // 1. Try full schema with repost columns
+      response = await _supabase
+          .from('posts')
+          .insert({
+            'user_id': postUuid,
+            'username': freshUsername,
+            'display_name': freshDisplayName,
+            'user_avatar': freshAvatar,
+            'content': finalContent,
+            'image_url': originalImageUrl,
+            'media_url': originalImageUrl,
+            'game': finalGame,
+            'likes_count': 0,
+            'comments_count': 0,
+            'reposts_count': 0,
+            'shares_count': 0,
+            'is_repost': true,
+            'repost_of_id': originalPostId,
+            'repost_type': isQuote ? 'quote' : 'instant',
+            'original_author_id': originalAuthorId,
+            'original_author_username': originalAuthorUsername,
+            'original_author_avatar': originalAuthorAvatar,
+            'original_content': originalContent,
+            'original_image_url': originalImageUrl,
+          })
+          .select()
+          .single();
+    } catch (e) {
+      debugPrint('[GamerSocialService] Extended repost schema fallback: $e');
+      // Fallback if some custom columns not yet in DB table
+      final fallbackContent = isQuote
+          ? '${quoteText.trim()}\n\n🔁 Reposted from @$originalAuthorUsername:\n${originalContent ?? ""}'
+          : '🔁 Reposted from @$originalAuthorUsername:\n${originalContent ?? ""}';
+      response = await _supabase
+          .from('posts')
+          .insert({
+            'user_id': postUuid,
+            'username': freshUsername,
+            'display_name': freshDisplayName,
+            'user_avatar': freshAvatar,
+            'content': fallbackContent,
+            'image_url': originalImageUrl,
+            'media_url': originalImageUrl,
+            'game': finalGame,
+            'likes_count': 0,
+            'comments_count': 0,
+          })
+          .select()
+          .single();
+    }
+
+    // 2. Track in reposts table
+    try {
+      await _supabase.from('reposts').insert({
+        'post_id': originalPostId,
+        'user_id': authUserId,
+        'username': freshUsername,
+      });
+    } catch (_) {}
+
+    // 3. Increment shares_count / reposts_count on original post
+    try {
+      final origRow = await _supabase
+          .from('posts')
+          .select('shares_count, reposts_count')
+          .eq('id', originalPostId)
+          .maybeSingle();
+
+      if (origRow != null) {
+        final curShares = (origRow['shares_count'] as num?)?.toInt() ?? 0;
+        final curReposts = (origRow['reposts_count'] as num?)?.toInt() ?? 0;
+        await _supabase.from('posts').update({
+          'shares_count': curShares + 1,
+          'reposts_count': curReposts + 1,
+        }).eq('id', originalPostId);
+      }
+    } catch (_) {}
+
+    // 4. Send notification to original post author
+    if (originalAuthorId.isNotEmpty && originalAuthorId != authUserId) {
+      try {
+        final snippet = (originalContent != null && originalContent.length > 40)
+            ? '${originalContent.substring(0, 40)}...'
+            : (originalContent ?? 'post');
+        NotificationService().sendInAppNotification(
+          recipientUid: originalAuthorId,
+          title: '🔁 New Repost!',
+          message: isQuote
+              ? '@$freshUsername quoted your post: "$snippet"'
+              : '@$freshUsername reposted your post: "$snippet"',
+          type: 'social',
+          data: {'post_id': originalPostId, 'type': 'repost'},
+        );
+      } catch (_) {}
+    }
+
+    feedRefreshNotifier.value++;
+    return response['id']?.toString() ?? '';
+  }
+
+  Future<bool> undoRepost({
+    required String originalPostId,
+    required String userId,
+  }) async {
+    final authUserId = _supabase.auth.currentUser?.id ?? userId;
+    final postUuid = stringToUuid(authUserId);
+
+    try {
+      // 1. Remove from reposts tracking table
+      try {
+        await _supabase
+            .from('reposts')
+            .delete()
+            .eq('post_id', originalPostId)
+            .eq('user_id', authUserId);
+      } catch (_) {}
+
+      // 2. Remove the reposted post item from posts table
+      try {
+        await _supabase
+            .from('posts')
+            .delete()
+            .eq('user_id', postUuid)
+            .eq('repost_of_id', originalPostId);
+      } catch (_) {
+        // Fallback search
+        await _supabase
+            .from('posts')
+            .delete()
+            .eq('user_id', postUuid)
+            .ilike('content', '%@%');
+      }
+
+      // 3. Decrement shares_count / reposts_count on original post
+      try {
+        final origRow = await _supabase
+            .from('posts')
+            .select('shares_count, reposts_count')
+            .eq('id', originalPostId)
+            .maybeSingle();
+
+        if (origRow != null) {
+          final curShares = (origRow['shares_count'] as num?)?.toInt() ?? 0;
+          final curReposts = (origRow['reposts_count'] as num?)?.toInt() ?? 0;
+          await _supabase.from('posts').update({
+            if (curShares > 0) 'shares_count': curShares - 1,
+            if (curReposts > 0) 'reposts_count': curReposts - 1,
+          }).eq('id', originalPostId);
+        }
+      } catch (_) {}
+
+      feedRefreshNotifier.value++;
+      return true;
+    } catch (e) {
+      debugPrint('[GamerSocialService] undoRepost error: $e');
+      return false;
     }
   }
 

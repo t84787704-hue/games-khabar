@@ -15,6 +15,15 @@ class GamerPost {
   final double userKd;
   final int likesCount;
   final int commentsCount;
+  final int repostsCount;
+  final bool isRepost;
+  final String? repostOfId;
+  final String? repostType;
+  final String? originalAuthorId;
+  final String? originalAuthorUsername;
+  final String? originalAuthorAvatar;
+  final String? originalContent;
+  final String? originalImageUrl;
   final bool isVerified;
   final bool isDemoAccount;
   final DateTime? createdAt;
@@ -33,6 +42,15 @@ class GamerPost {
     this.userKd = 0.0,
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.repostsCount = 0,
+    this.isRepost = false,
+    this.repostOfId,
+    this.repostType,
+    this.originalAuthorId,
+    this.originalAuthorUsername,
+    this.originalAuthorAvatar,
+    this.originalContent,
+    this.originalImageUrl,
     this.isVerified = false,
     this.isDemoAccount = false,
     this.createdAt,
@@ -112,6 +130,15 @@ class GamerPost {
       userKd: (data['userKd'] ?? data['user_kd'] as num?)?.toDouble() ?? 0.0,
       likesCount: (data['likes_count'] ?? data['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (data['comments_count'] ?? data['commentsCount'] as num?)?.toInt() ?? 0,
+      repostsCount: (data['reposts_count'] ?? data['repostsCount'] ?? data['shares_count'] as num?)?.toInt() ?? 0,
+      isRepost: data['is_repost'] == true || data['isRepost'] == true,
+      repostOfId: (data['repost_of_id'] ?? data['repostOfId'])?.toString(),
+      repostType: (data['repost_type'] ?? data['repostType'])?.toString(),
+      originalAuthorId: (data['original_author_id'] ?? data['originalAuthorId'])?.toString(),
+      originalAuthorUsername: (data['original_author_username'] ?? data['originalAuthorUsername'])?.toString(),
+      originalAuthorAvatar: (data['original_author_avatar'] ?? data['originalAuthorAvatar'])?.toString(),
+      originalContent: (data['original_content'] ?? data['originalContent'])?.toString(),
+      originalImageUrl: (data['original_image_url'] ?? data['originalImageUrl'])?.toString(),
       isVerified: data['isVerified'] == true || data['is_verified'] == true,
       isDemoAccount: data['isDemoAccount'] == true || data['is_demo_account'] == true,
       createdAt: created,
@@ -161,6 +188,15 @@ class GamerPost {
       userKd: (data['userKd'] ?? data['user_kd'] as num?)?.toDouble() ?? 0.0,
       likesCount: (data['likesCount'] ?? data['likes_count'] as num?)?.toInt() ?? 0,
       commentsCount: (data['commentsCount'] ?? data['comments_count'] as num?)?.toInt() ?? 0,
+      repostsCount: (data['reposts_count'] ?? data['repostsCount'] ?? data['shares_count'] as num?)?.toInt() ?? 0,
+      isRepost: data['is_repost'] == true || data['isRepost'] == true,
+      repostOfId: (data['repost_of_id'] ?? data['repostOfId'])?.toString(),
+      repostType: (data['repost_type'] ?? data['repostType'])?.toString(),
+      originalAuthorId: (data['original_author_id'] ?? data['originalAuthorId'])?.toString(),
+      originalAuthorUsername: (data['original_author_username'] ?? data['originalAuthorUsername'])?.toString(),
+      originalAuthorAvatar: (data['original_author_avatar'] ?? data['originalAuthorAvatar'])?.toString(),
+      originalContent: (data['original_content'] ?? data['originalContent'])?.toString(),
+      originalImageUrl: (data['original_image_url'] ?? data['originalImageUrl'])?.toString(),
       isVerified: data['isVerified'] == true || data['is_verified'] == true,
       isDemoAccount: data['isDemoAccount'] == true || data['is_demo_account'] == true,
       createdAt: created,
@@ -184,6 +220,16 @@ class GamerPost {
       'user_kd': userKd,
       'likes_count': likesCount,
       'comments_count': commentsCount,
+      'reposts_count': repostsCount,
+      'shares_count': repostsCount,
+      'is_repost': isRepost,
+      'repost_of_id': repostOfId,
+      'repost_type': repostType,
+      'original_author_id': originalAuthorId,
+      'original_author_username': originalAuthorUsername,
+      'original_author_avatar': originalAuthorAvatar,
+      'original_content': originalContent,
+      'original_image_url': originalImageUrl,
       'is_verified': isVerified,
       'is_demo_account': isDemoAccount,
     };
@@ -203,6 +249,15 @@ class GamerPost {
     double? userKd,
     int? likesCount,
     int? commentsCount,
+    int? repostsCount,
+    bool? isRepost,
+    String? repostOfId,
+    String? repostType,
+    String? originalAuthorId,
+    String? originalAuthorUsername,
+    String? originalAuthorAvatar,
+    String? originalContent,
+    String? originalImageUrl,
     bool? isVerified,
     bool? isDemoAccount,
     DateTime? createdAt,
@@ -221,6 +276,15 @@ class GamerPost {
       userKd: userKd ?? this.userKd,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
+      repostsCount: repostsCount ?? this.repostsCount,
+      isRepost: isRepost ?? this.isRepost,
+      repostOfId: repostOfId ?? this.repostOfId,
+      repostType: repostType ?? this.repostType,
+      originalAuthorId: originalAuthorId ?? this.originalAuthorId,
+      originalAuthorUsername: originalAuthorUsername ?? this.originalAuthorUsername,
+      originalAuthorAvatar: originalAuthorAvatar ?? this.originalAuthorAvatar,
+      originalContent: originalContent ?? this.originalContent,
+      originalImageUrl: originalImageUrl ?? this.originalImageUrl,
       isVerified: isVerified ?? this.isVerified,
       isDemoAccount: isDemoAccount ?? this.isDemoAccount,
       createdAt: createdAt ?? this.createdAt,

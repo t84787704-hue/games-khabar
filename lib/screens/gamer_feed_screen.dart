@@ -24,6 +24,7 @@ import 'news_detail_screen.dart';
 import '../widgets/urdu_news_content.dart';
 import '../data/fallback_images.dart';
 import '../services/app_share_service.dart';
+import '../services/gamer_social_service.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -36,6 +37,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   List<Map<String, dynamic>> posts = [];
   Map<String, Map<String, dynamic>> userProfiles = {};
   Set<String> likedPostIds = {};
+  Set<String> repostedPostIds = {};
   bool isLoading = true;
   String currentUserId = '';
   String currentUsername = 'user_gamer'.tr();
@@ -394,6 +396,32 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         } catch (e) {
           debugPrint('Likes fetch warning (ignored): $e');
         }
+
+        try {
+          final repostsData = await SupabaseService.client
+              .from('reposts')
+              .select('post_id')
+              .eq('user_id', currentUserId);
+
+          repostedPostIds = (repostsData as List)
+              .map((e) => e['post_id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet();
+        } catch (e) {
+          debugPrint('Reposts fetch warning (ignored): $e');
+        }
+      }
+
+      // Also mark reposts authored by current user
+      for (final p in combinedFeed) {
+        if ((p['is_repost'] == true || p['repost_of_id'] != null) &&
+            (p['user_id']?.toString() == currentUserId ||
+             p['user_id']?.toString() == SupabaseService.toUuid(currentUserId))) {
+          final origId = p['repost_of_id']?.toString();
+          if (origId != null && origId.isNotEmpty) {
+            repostedPostIds.add(origId);
+          }
+        }
       }
 
       if (mounted) {
@@ -540,6 +568,481 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     } catch (e) {
       debugPrint('Share error: $e');
     }
+  }
+
+  void _showRepostSheet(Map<String, dynamic> post) {
+    final postId = post['id']?.toString() ?? '';
+    if (postId.isEmpty) return;
+
+    if (currentUserId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('err_login_required_post'.tr()),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final bool isReposted = repostedPostIds.contains(postId);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ThemeService.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (isReposted) ...[
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.repeat_rounded, color: Colors.red, size: 22),
+                  ),
+                  title: const Text(
+                    'Undo Repost',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                  ),
+                  subtitle: Text(
+                    'Remove this repost from your feed',
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleUndoRepost(post);
+                  },
+                ),
+              ] else ...[
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00FF88).withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.repeat_rounded, color: Color(0xFF00FF88), size: 22),
+                  ),
+                  title: Text(
+                    'Repost',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: ThemeService.textPrimary),
+                  ),
+                  subtitle: Text(
+                    'Instantly share this post to your feed',
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleInstantRepost(post);
+                  },
+                ),
+              ],
+              const Divider(height: 1),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1877F2).withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.edit_note_rounded, color: Color(0xFF1877F2), size: 22),
+                ),
+                title: Text(
+                  'Quote Repost',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: ThemeService.textPrimary),
+                ),
+                subtitle: Text(
+                  'Add your own thoughts or caption before reposting',
+                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openQuoteRepostDialog(post);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleInstantRepost(Map<String, dynamic> post) async {
+    final postId = post['id']?.toString() ?? '';
+    if (postId.isEmpty) return;
+
+    final postUserId = post['user_id']?.toString() ?? '';
+    final userProfile = userProfiles[postUserId];
+    final bool isSteamNews = post['is_steam_news'] == true;
+    final originalAuthorName = isSteamNews
+        ? 'Steam Gaming News 🎮'
+        : (userProfile?['username'] ?? post['username'] ?? 'gamer');
+    final originalAuthorAvatar = isSteamNews
+        ? ''
+        : (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
+    final originalContent = (post['content'] ?? post['title'] ?? '').toString();
+    final originalImage = _resolvePostImage(post);
+    final originalGame = (post['game'] ?? post['game_tag'] ?? 'BGMI').toString();
+
+    setState(() {
+      repostedPostIds.add(postId);
+      final curCount = (post['reposts_count'] as num?)?.toInt() ?? (post['shares_count'] as num?)?.toInt() ?? 0;
+      post['reposts_count'] = curCount + 1;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.repeat_rounded, color: Color(0xFF00FF88), size: 20),
+            SizedBox(width: 8),
+            Text('Reposted to your feed! 🔁'),
+          ],
+        ),
+        backgroundColor: Color(0xFF1F2937),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      final newPostId = await GamerSocialService().createRepost(
+        originalPostId: postId,
+        originalAuthorId: postUserId,
+        originalAuthorUsername: originalAuthorName,
+        originalAuthorAvatar: originalAuthorAvatar,
+        originalContent: originalContent,
+        originalImageUrl: originalImage,
+        originalGame: originalGame,
+        quoteText: null,
+      );
+
+      if (newPostId.isNotEmpty && mounted) {
+        final newRepostItem = {
+          'id': newPostId,
+          'user_id': currentUserId,
+          'username': currentUsername,
+          'display_name': currentUsername,
+          'user_avatar': currentAvatarUrl,
+          'content': originalContent,
+          'image_url': originalImage,
+          'media_url': originalImage,
+          'game': originalGame,
+          'likes_count': 0,
+          'comments_count': 0,
+          'reposts_count': 0,
+          'created_at': DateTime.now().toIso8601String(),
+          'is_repost': true,
+          'repost_of_id': postId,
+          'repost_type': 'instant',
+          'original_author_id': postUserId,
+          'original_author_username': originalAuthorName,
+          'original_author_avatar': originalAuthorAvatar,
+          'original_content': originalContent,
+          'original_image_url': originalImage,
+        };
+        setState(() {
+          posts.insert(0, newRepostItem);
+        });
+      }
+    } catch (e) {
+      debugPrint('[Feed] Instant repost error: $e');
+    }
+  }
+
+  Future<void> _handleUndoRepost(Map<String, dynamic> post) async {
+    final postId = post['id']?.toString() ?? '';
+    if (postId.isEmpty) return;
+
+    setState(() {
+      repostedPostIds.remove(postId);
+      final curCount = (post['reposts_count'] as num?)?.toInt() ?? (post['shares_count'] as num?)?.toInt() ?? 0;
+      if (curCount > 0) {
+        post['reposts_count'] = curCount - 1;
+      }
+      posts.removeWhere((p) => (p['is_repost'] == true && p['repost_of_id']?.toString() == postId && p['user_id']?.toString() == currentUserId));
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Repost removed'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      await GamerSocialService().undoRepost(
+        originalPostId: postId,
+        userId: currentUserId,
+      );
+    } catch (e) {
+      debugPrint('[Feed] Undo repost error: $e');
+    }
+  }
+
+  void _openQuoteRepostDialog(Map<String, dynamic> post) {
+    final quoteController = TextEditingController();
+    final postId = post['id']?.toString() ?? '';
+    final postUserId = post['user_id']?.toString() ?? '';
+    final userProfile = userProfiles[postUserId];
+    final bool isSteamNews = post['is_steam_news'] == true;
+    final originalAuthorName = isSteamNews
+        ? 'Steam Gaming News 🎮'
+        : (userProfile?['username'] ?? post['username'] ?? 'gamer');
+    final originalAuthorAvatar = isSteamNews
+        ? ''
+        : (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
+    final originalContent = (post['content'] ?? post['title'] ?? '').toString();
+    final originalImage = _resolvePostImage(post);
+    final originalGame = (post['game'] ?? post['game_tag'] ?? 'BGMI').toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          bool isSubmitting = false;
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+              top: 16,
+              left: 16,
+              right: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.close_rounded, color: ThemeService.textSecondary),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                      Text(
+                        'Quote Repost',
+                        style: TextStyle(
+                          color: ThemeService.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00FF88),
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                final quoteText = quoteController.text.trim();
+                                if (quoteText.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Please add your thoughts or caption.')),
+                                  );
+                                  return;
+                                }
+                                setModalState(() => isSubmitting = true);
+                                Navigator.pop(ctx);
+
+                                setState(() {
+                                  repostedPostIds.add(postId);
+                                  final curCount = (post['reposts_count'] as num?)?.toInt() ?? (post['shares_count'] as num?)?.toInt() ?? 0;
+                                  post['reposts_count'] = curCount + 1;
+                                });
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Row(
+                                      children: [
+                                        Icon(Icons.repeat_rounded, color: Color(0xFF00FF88), size: 20),
+                                        SizedBox(width: 8),
+                                        Text('Quote repost shared to your feed! 🔁'),
+                                      ],
+                                    ),
+                                    backgroundColor: Color(0xFF1F2937),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+
+                                try {
+                                  final newPostId = await GamerSocialService().createRepost(
+                                    originalPostId: postId,
+                                    originalAuthorId: postUserId,
+                                    originalAuthorUsername: originalAuthorName,
+                                    originalAuthorAvatar: originalAuthorAvatar,
+                                    originalContent: originalContent,
+                                    originalImageUrl: originalImage,
+                                    originalGame: originalGame,
+                                    quoteText: quoteText,
+                                  );
+
+                                  if (newPostId.isNotEmpty && mounted) {
+                                    final newRepostItem = {
+                                      'id': newPostId,
+                                      'user_id': currentUserId,
+                                      'username': currentUsername,
+                                      'display_name': currentUsername,
+                                      'user_avatar': currentAvatarUrl,
+                                      'content': quoteText,
+                                      'image_url': originalImage,
+                                      'media_url': originalImage,
+                                      'game': originalGame,
+                                      'likes_count': 0,
+                                      'comments_count': 0,
+                                      'reposts_count': 0,
+                                      'created_at': DateTime.now().toIso8601String(),
+                                      'is_repost': true,
+                                      'repost_of_id': postId,
+                                      'repost_type': 'quote',
+                                      'original_author_id': postUserId,
+                                      'original_author_username': originalAuthorName,
+                                      'original_author_avatar': originalAuthorAvatar,
+                                      'original_content': originalContent,
+                                      'original_image_url': originalImage,
+                                    };
+                                    setState(() {
+                                      posts.insert(0, newRepostItem);
+                                    });
+                                  }
+                                } catch (e) {
+                                  debugPrint('[Feed] Quote repost error: $e');
+                                }
+                              },
+                        child: isSubmitting
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                              )
+                            : const Text(
+                                'Repost',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      GamerAvatar(
+                        photoUrl: currentAvatarUrl,
+                        displayName: currentUsername,
+                        radius: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: quoteController,
+                          maxLines: 4,
+                          minLines: 2,
+                          autofocus: true,
+                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Add your thoughts... (Apni raye likhein)',
+                            hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: ThemeService.cardSecondary,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: ThemeService.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            GamerAvatar(
+                              photoUrl: originalAuthorAvatar,
+                              displayName: originalAuthorName,
+                              radius: 12,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '@$originalAuthorName',
+                                style: TextStyle(
+                                  color: ThemeService.textPrimary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12.5,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (originalContent.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            originalContent,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5),
+                          ),
+                        ],
+                        if (originalImage.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CachedNetworkImage(
+                              imageUrl: originalImage,
+                              height: 100,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _showComments(String postId, {bool isSteamNews = false}) {
@@ -1446,6 +1949,17 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                           ? '$commentsCount ${commentsCount == 1 ? "comment" : "comments"}'
                           : 'No comments';
 
+                      final int repostsCount = (post['reposts_count'] is num)
+                          ? (post['reposts_count'] as num).toInt()
+                          : ((post['shares_count'] is num) ? (post['shares_count'] as num).toInt() : 0);
+                      final bool isReposted = repostedPostIds.contains(postId);
+                      final bool isRepost = post['is_repost'] == true || post['repost_of_id'] != null;
+                      final String? repostType = post['repost_type']?.toString();
+                      final String? origAuthorName = post['original_author_username']?.toString();
+                      final String? origAuthorAvatar = post['original_author_avatar']?.toString();
+                      final String? origContent = post['original_content']?.toString();
+                      final String? origImage = post['original_image_url']?.toString();
+
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
                         elevation: 0,
@@ -1457,6 +1971,26 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (isRepost)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 14, right: 14, top: 10, bottom: 2),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.repeat_rounded, size: 15, color: Color(0xFF00FF88)),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      postUserId == currentUserId
+                                          ? 'You reposted'
+                                          : '${username.toString()} reposted',
+                                      style: const TextStyle(
+                                        color: Color(0xFF00FF88),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               leading: GestureDetector(
@@ -1539,6 +2073,64 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                   ),
                                 ),
                               ),
+                            if (repostType == 'quote' && (origContent != null || origAuthorName != null))
+                              Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: ThemeService.cardSecondary,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: ThemeService.border.withOpacity(0.8)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        GamerAvatar(
+                                          photoUrl: origAuthorAvatar ?? '',
+                                          displayName: origAuthorName ?? 'gamer',
+                                          radius: 12,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            '@${origAuthorName ?? "gamer"}',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: ThemeService.textPrimary,
+                                              fontSize: 12.5,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (origContent != null && origContent.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        origContent,
+                                        maxLines: 4,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                                      ),
+                                    ],
+                                    if (origImage != null && origImage.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: CachedNetworkImage(
+                                          imageUrl: origImage,
+                                          height: 140,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
                             if (imageUrl.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
@@ -1619,11 +2211,26 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                       ),
                                     ],
                                   ),
-                                  if (!isSteamNews)
-                                    Text(
-                                      commentLabel,
-                                      style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
-                                    ),
+                                  Row(
+                                    children: [
+                                      if (repostsCount > 0) ...[
+                                        Text(
+                                          '$repostsCount ${repostsCount == 1 ? "repost" : "reposts"}',
+                                          style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
+                                        ),
+                                        if (!isSteamNews && commentsCount > 0)
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                                            child: Text('•', style: TextStyle(color: ThemeService.textSecondary, fontSize: 12)),
+                                          ),
+                                      ],
+                                      if (!isSteamNews && commentsCount > 0)
+                                        Text(
+                                          commentLabel,
+                                          style: TextStyle(fontSize: 13, color: ThemeService.textSecondary),
+                                        ),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),
@@ -1668,13 +2275,13 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                               size: 18,
                                               color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
                                             ),
-                                            const SizedBox(width: 6),
+                                            const SizedBox(width: 4),
                                             Text(
                                               'Like',
                                               style: TextStyle(
                                                 color: isLiked ? const Color(0xFF1877F2) : ThemeService.textSecondary,
                                                 fontWeight: isLiked ? FontWeight.bold : FontWeight.normal,
-                                                fontSize: 13,
+                                                fontSize: 12.5,
                                               ),
                                             ),
                                           ],
@@ -1691,10 +2298,10 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
                                             Icon(Icons.chat_bubble_outline, size: 18, color: ThemeService.textSecondary),
-                                            const SizedBox(width: 6),
+                                            const SizedBox(width: 4),
                                             Text(
                                               'Comment',
-                                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                                              style: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5),
                                             ),
                                           ],
                                         ),
@@ -1704,6 +2311,33 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                 ],
                                 Expanded(
                                   child: InkWell(
+                                    onTap: () => _showRepostSheet(post),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.repeat_rounded,
+                                            size: 18,
+                                            color: isReposted ? const Color(0xFF00FF88) : ThemeService.textSecondary,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            repostsCount > 0 ? '$repostsCount' : 'Repost',
+                                            style: TextStyle(
+                                              color: isReposted ? const Color(0xFF00FF88) : ThemeService.textSecondary,
+                                              fontWeight: isReposted ? FontWeight.bold : FontWeight.normal,
+                                              fontSize: 12.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: InkWell(
                                     onTap: () => _handleShare(post),
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1711,10 +2345,10 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
                                           Icon(Icons.share_outlined, size: 18, color: ThemeService.textSecondary),
-                                          const SizedBox(width: 6),
+                                          const SizedBox(width: 4),
                                           Text(
                                             'Share',
-                                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+                                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5),
                                           ),
                                         ],
                                       ),

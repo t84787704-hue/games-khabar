@@ -36,11 +36,13 @@ import '../services/verification_service.dart';
 import '../widgets/rank_badge_widget.dart';
 import '../widgets/blue_tick_badge.dart';
 import '../services/app_share_service.dart';
+import '../services/supabase_service.dart';
 
 class PostCard extends StatefulWidget {
   final dynamic post;
   final VoidCallback? onDeleteTap;
   final VoidCallback? onCommentTap;
+  final VoidCallback? onRepostTap;
   final String? currentUserId;
 
   const PostCard({
@@ -48,6 +50,7 @@ class PostCard extends StatefulWidget {
     required this.post,
     this.onDeleteTap,
     this.onCommentTap,
+    this.onRepostTap,
     this.currentUserId,
   });
 
@@ -59,6 +62,8 @@ class _PostCardState extends State<PostCard> {
   final GamerSocialService _socialService = GamerSocialService();
   final GamerAuthService _authService = GamerAuthService();
   bool _isAuthorVerified = false;
+  bool _isRepostedByMe = false;
+  int _repostsCountDelta = 0;
 
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
@@ -151,6 +156,60 @@ class _PostCardState extends State<PostCard> {
           ? (widget.post['commentsCount'] ?? widget.post['comments_count'] ?? 0)
           : (widget.post?.commentsCount ?? 0));
 
+  int get repostsCount => (widget.post is GamerPost)
+      ? (widget.post as GamerPost).repostsCount
+      : (widget.post is Map
+          ? ((widget.post['repostsCount'] ?? widget.post['reposts_count'] ?? widget.post['shares_count'] ?? 0) as num).toInt()
+          : (widget.post?.repostsCount ?? 0));
+
+  bool get isRepost => (widget.post is GamerPost)
+      ? (widget.post as GamerPost).isRepost
+      : (widget.post is Map
+          ? (widget.post['is_repost'] == true || widget.post['isRepost'] == true)
+          : (widget.post?.isRepost ?? false));
+
+  String? get repostOfId => (widget.post is GamerPost)
+      ? (widget.post as GamerPost).repostOfId
+      : (widget.post is Map
+          ? (widget.post['repost_of_id'] ?? widget.post['repostOfId'])?.toString()
+          : widget.post?.repostOfId?.toString());
+
+  String? get repostType => (widget.post is GamerPost)
+      ? (widget.post as GamerPost).repostType
+      : (widget.post is Map
+          ? (widget.post['repost_type'] ?? widget.post['repostType'])?.toString()
+          : widget.post?.repostType?.toString());
+
+  String? get originalAuthorId => (widget.post is GamerPost)
+      ? (widget.post as GamerPost).originalAuthorId
+      : (widget.post is Map
+          ? (widget.post['original_author_id'] ?? widget.post['originalAuthorId'])?.toString()
+          : widget.post?.originalAuthorId?.toString());
+
+  String? get originalAuthorUsername => (widget.post is GamerPost)
+      ? (widget.post as GamerPost).originalAuthorUsername
+      : (widget.post is Map
+          ? (widget.post['original_author_username'] ?? widget.post['originalAuthorUsername'])?.toString()
+          : widget.post?.originalAuthorUsername?.toString());
+
+  String? get originalAuthorAvatar => (widget.post is GamerPost)
+      ? (widget.post as GamerPost).originalAuthorAvatar
+      : (widget.post is Map
+          ? (widget.post['original_author_avatar'] ?? widget.post['originalAuthorAvatar'])?.toString()
+          : widget.post?.originalAuthorAvatar?.toString());
+
+  String? get originalContent => (widget.post is GamerPost)
+      ? (widget.post as GamerPost).originalContent
+      : (widget.post is Map
+          ? (widget.post['original_content'] ?? widget.post['originalContent'])?.toString()
+          : widget.post?.originalContent?.toString());
+
+  String? get originalImageUrl => (widget.post is GamerPost)
+      ? (widget.post as GamerPost).originalImageUrl
+      : (widget.post is Map
+          ? (widget.post['original_image_url'] ?? widget.post['originalImageUrl'])?.toString()
+          : widget.post?.originalImageUrl?.toString());
+
   DateTime? get createdAt => (widget.post is GamerPost)
       ? (widget.post as GamerPost).createdAt
       : (widget.post is Map
@@ -165,6 +224,7 @@ class _PostCardState extends State<PostCard> {
     _isAuthorVerified = (widget.post is GamerPost && (widget.post as GamerPost).isVerified) ||
         VerificationService.isVerifiedCached(userId);
     _checkVerification();
+    _checkIfReposted();
   }
 
   @override
@@ -172,7 +232,24 @@ class _PostCardState extends State<PostCard> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.post != widget.post) {
       _checkVerification();
+      _checkIfReposted();
     }
+  }
+
+  Future<void> _checkIfReposted() async {
+    final uid = _authService.currentUid ?? widget.currentUserId;
+    if (uid == null || uid.isEmpty || postId.isEmpty) return;
+    try {
+      final res = await SupabaseService.client
+          .from('reposts')
+          .select('id')
+          .eq('post_id', postId)
+          .eq('user_id', uid)
+          .maybeSingle();
+      if (mounted && res != null) {
+        setState(() => _isRepostedByMe = true);
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkVerification() async {
@@ -275,9 +352,369 @@ class _PostCardState extends State<PostCard> {
                 );
               }
             },
-            child: Text('delete'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+  void _showRepostSheet() {
+    if (widget.onRepostTap != null) {
+      widget.onRepostTap!();
+      return;
+    }
+
+    final curUid = _authService.currentUid ?? widget.currentUserId ?? '';
+    if (curUid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('err_login_required_post'.tr()),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ThemeService.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_isRepostedByMe) ...[
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.repeat_rounded, color: Colors.red, size: 22),
+                  ),
+                  title: const Text(
+                    'Undo Repost',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                  ),
+                  subtitle: Text(
+                    'Remove this repost from your feed',
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleUndoRepost();
+                  },
+                ),
+              ] else ...[
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00FF88).withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.repeat_rounded, color: Color(0xFF00FF88), size: 22),
+                  ),
+                  title: Text(
+                    'Repost',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: ThemeService.textPrimary),
+                  ),
+                  subtitle: Text(
+                    'Instantly share this post to your feed',
+                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleInstantRepost();
+                  },
+                ),
+              ],
+              const Divider(height: 1),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1877F2).withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.edit_note_rounded, color: Color(0xFF1877F2), size: 22),
+                ),
+                title: Text(
+                  'Quote Repost',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: ThemeService.textPrimary),
+                ),
+                subtitle: Text(
+                  'Add your own thoughts or caption before reposting',
+                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openQuoteRepostDialog();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleInstantRepost() async {
+    final curUid = _authService.currentUid ?? widget.currentUserId ?? '';
+    if (curUid.isEmpty || postId.isEmpty) return;
+
+    setState(() {
+      _isRepostedByMe = true;
+      _repostsCountDelta++;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.repeat_rounded, color: Color(0xFF00FF88), size: 20),
+            SizedBox(width: 8),
+            Text('Reposted to your feed! 🔁'),
+          ],
+        ),
+        backgroundColor: Color(0xFF1F2937),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      await _socialService.createRepost(
+        originalPostId: postId,
+        originalAuthorId: userId,
+        originalAuthorUsername: username,
+        originalAuthorAvatar: userPhoto,
+        originalContent: postText,
+        originalImageUrl: imageUrl,
+        originalGame: gameTag,
+        quoteText: null,
+      );
+    } catch (e) {
+      debugPrint('[PostCard] Instant repost error: $e');
+    }
+  }
+
+  Future<void> _handleUndoRepost() async {
+    final curUid = _authService.currentUid ?? widget.currentUserId ?? '';
+    if (curUid.isEmpty || postId.isEmpty) return;
+
+    setState(() {
+      _isRepostedByMe = false;
+      _repostsCountDelta--;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Repost removed'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      await _socialService.undoRepost(
+        originalPostId: postId,
+        userId: curUid,
+      );
+    } catch (e) {
+      debugPrint('[PostCard] Undo repost error: $e');
+    }
+  }
+
+  void _openQuoteRepostDialog() {
+    final quoteController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          bool isSubmitting = false;
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+              top: 16,
+              left: 16,
+              right: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.close_rounded, color: ThemeService.textSecondary),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                      Text(
+                        'Quote Repost',
+                        style: TextStyle(
+                          color: ThemeService.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00FF88),
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                final quoteText = quoteController.text.trim();
+                                if (quoteText.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Please add your thoughts or caption.')),
+                                  );
+                                  return;
+                                }
+                                setModalState(() => isSubmitting = true);
+                                Navigator.pop(ctx);
+
+                                setState(() {
+                                  _isRepostedByMe = true;
+                                  _repostsCountDelta++;
+                                });
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Row(
+                                      children: [
+                                        Icon(Icons.edit_note_rounded, color: Color(0xFF00FF88), size: 20),
+                                        SizedBox(width: 8),
+                                        Text('Quote repost shared! 💬'),
+                                      ],
+                                    ),
+                                    backgroundColor: Color(0xFF1F2937),
+                                    behavior: SnackBarBehavior.floating,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+
+                                try {
+                                  await _socialService.createRepost(
+                                    originalPostId: postId,
+                                    originalAuthorId: userId,
+                                    originalAuthorUsername: username,
+                                    originalAuthorAvatar: userPhoto,
+                                    originalContent: postText,
+                                    originalImageUrl: imageUrl,
+                                    originalGame: gameTag,
+                                    quoteText: quoteText,
+                                  );
+                                } catch (e) {
+                                  debugPrint('[PostCard] Quote repost error: $e');
+                                }
+                              },
+                        child: const Text('Post', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: quoteController,
+                    maxLines: 4,
+                    minLines: 2,
+                    autofocus: true,
+                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: 'Add your comment...',
+                      hintStyle: TextStyle(color: ThemeService.textSecondary),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: ThemeService.cardElevated,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: ThemeService.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            GamerAvatar(
+                              photoUrl: userPhoto,
+                              displayName: displayName,
+                              radius: 12,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              displayName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: ThemeService.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '@$username',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: ThemeService.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (postText.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            postText,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13, color: ThemeService.textPrimary),
+                          ),
+                        ],
+                        if (imageUrl != null && imageUrl!.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CachedNetworkImage(
+                              imageUrl: imageUrl!,
+                              height: 100,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -336,6 +773,26 @@ class _PostCardState extends State<PostCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Repost Banner
+          if (isRepost)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: Row(
+                children: [
+                  const Icon(Icons.repeat_rounded, size: 14, color: Color(0xFF00FF88)),
+                  const SizedBox(width: 6),
+                  Text(
+                    currentUid == userId ? 'You reposted' : '$displayName reposted',
+                    style: const TextStyle(
+                      color: Color(0xFF00FF88),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Header: Avatar, Name, @username, Game Tag & Menu
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 14, 10, 8),
@@ -500,12 +957,79 @@ class _PostCardState extends State<PostCard> {
             ),
           ],
 
+          // Quoted post preview inside the card
+          if (repostType == 'quote' && (originalContent != null && originalContent!.isNotEmpty))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: ThemeService.cardElevated,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (originalAuthorAvatar != null && originalAuthorAvatar!.isNotEmpty) ...[
+                          GamerAvatar(
+                            photoUrl: originalAuthorAvatar!,
+                            displayName: originalAuthorUsername ?? 'gamer',
+                            radius: 11,
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Text(
+                          '@${originalAuthorUsername ?? "gamer"}',
+                          style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      originalContent!,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: ThemeService.textSecondary,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                    if (originalImageUrl != null && originalImageUrl!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CachedNetworkImage(
+                          imageUrl: originalImageUrl!,
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(
+                            height: 120,
+                            color: GamerTheme.cardElevated,
+                          ),
+                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
           const SizedBox(height: 8),
           const Divider(color: GamerTheme.borderDark, height: 1),
 
-          // Bottom Action Bar: Like, Comment, Share
+          // Bottom Action Bar: Like, Comment, Repost, Share
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -525,7 +1049,7 @@ class _PostCardState extends State<PostCard> {
                       },
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                         child: Row(
                           children: [
                             Icon(
@@ -533,13 +1057,13 @@ class _PostCardState extends State<PostCard> {
                               color: isLiked ? GamerTheme.redAccent : GamerTheme.textGray,
                               size: 19,
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 5),
                             Text(
                               '$likesCount',
                               style: TextStyle(
                                 color: isLiked ? GamerTheme.redAccent : GamerTheme.textGray,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 13,
+                                fontSize: 12.5,
                               ),
                             ),
                           ],
@@ -554,7 +1078,7 @@ class _PostCardState extends State<PostCard> {
                   onTap: widget.onCommentTap ?? _showCommentsSheet,
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     child: Row(
                       children: [
                         const Icon(
@@ -562,13 +1086,40 @@ class _PostCardState extends State<PostCard> {
                           color: GamerTheme.textGray,
                           size: 18,
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Text(
                           '$commentsCount',
                           style: const TextStyle(
                             color: GamerTheme.textGray,
                             fontWeight: FontWeight.bold,
-                            fontSize: 13,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Repost Button
+                InkWell(
+                  onTap: _showRepostSheet,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.repeat_rounded,
+                          color: _isRepostedByMe ? const Color(0xFF00FF88) : GamerTheme.textGray,
+                          size: 19,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${(repostsCount + _repostsCountDelta) < 0 ? 0 : (repostsCount + _repostsCountDelta)}',
+                          style: TextStyle(
+                            color: _isRepostedByMe ? const Color(0xFF00FF88) : GamerTheme.textGray,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
                           ),
                         ),
                       ],
@@ -581,7 +1132,7 @@ class _PostCardState extends State<PostCard> {
                   onTap: _sharePost,
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     child: Row(
                       children: [
                         const Icon(
@@ -589,13 +1140,13 @@ class _PostCardState extends State<PostCard> {
                           color: GamerTheme.textGray,
                           size: 18,
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Text(
                           'share'.tr(),
                           style: const TextStyle(
                             color: GamerTheme.textGray,
                             fontWeight: FontWeight.bold,
-                            fontSize: 13,
+                            fontSize: 12.5,
                           ),
                         ),
                       ],

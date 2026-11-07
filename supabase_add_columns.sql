@@ -47,3 +47,25 @@ ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
 
 -- Welcome bonus claim tracking (Issue #6)
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS welcome_bonus_claimed BOOLEAN DEFAULT false;
+
+-- Post Repost & Quote Repost columns
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS is_repost BOOLEAN DEFAULT false;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS repost_of_id TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS repost_type TEXT DEFAULT 'instant';
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS original_author_id TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS original_author_username TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS original_author_avatar TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS original_content TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS original_image_url TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS reposts_count INT DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS public.reposts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    username TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(post_id, user_id)
+);
+ALTER TABLE public.reposts DISABLE ROW LEVEL SECURITY;
+
