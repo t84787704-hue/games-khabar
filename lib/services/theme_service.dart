@@ -18,6 +18,7 @@ class ThemeService {
   static Color get appBarBg => isDarkMode ? const Color(0xFF121824) : const Color(0xFFFFFFFF);
   static Color get card => isDarkMode ? const Color(0xFF121824) : const Color(0xFFFFFFFF);
   static Color get cardSecondary => isDarkMode ? const Color(0xFF182234) : const Color(0xFFF1F5F9);
+  static Color get cardElevated => isDarkMode ? const Color(0xFF182234) : const Color(0xFFF1F5F9);
   static Color get border => isDarkMode ? const Color(0xFF1F2E45) : const Color(0xFFE2E8F0);
   static Color get textPrimary => isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
   static Color get textSecondary => isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B);

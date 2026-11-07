@@ -659,7 +659,7 @@ class _PostCardState extends State<PostCard> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: ThemeService.cardElevated,
+                      color: ThemeService.cardSecondary,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: ThemeService.border),
                     ),
@@ -971,7 +971,7 @@ class _PostCardState extends State<PostCard> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: ThemeService.cardElevated,
+                  color: ThemeService.cardSecondary,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: ThemeService.border),
                 ),
