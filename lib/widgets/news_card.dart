@@ -71,6 +71,7 @@ class NewsCard extends StatelessWidget {
       title: news.title,
       description: news.summary ?? news.content,
       gameName: news.gameName,
+      sourceUrl: news.sourceUrl,
     );
   }
 

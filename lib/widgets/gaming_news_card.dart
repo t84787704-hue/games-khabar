@@ -19,6 +19,7 @@ class GamingNewsCard extends StatelessWidget {
       title: news.titleUr.isNotEmpty ? news.titleUr : news.titleEn,
       description: news.summaryUr.isNotEmpty ? news.summaryUr : news.summaryEn,
       gameName: news.gameCategory,
+      sourceUrl: news.sourceUrl,
     );
   }
 

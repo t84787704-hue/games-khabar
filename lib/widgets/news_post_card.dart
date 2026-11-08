@@ -78,6 +78,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
       title: title,
       description: content,
       gameName: widget.news.gameCategory,
+      sourceUrl: sourceUrl.isNotEmpty ? sourceUrl : null,
     );
   }
 

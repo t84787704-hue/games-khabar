@@ -305,7 +305,7 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  // Share post with game info, direct video link for WhatsApp preview, and Play Store link
+  // Share post with game info, direct video/image link, and Play Store link
   Future<void> _sharePost() async {
     await AppShareService.sharePost(
       authorName: displayName,
@@ -313,6 +313,7 @@ class _PostCardState extends State<PostCard> {
       content: postText,
       gameTag: gameTag,
       videoUrl: videoUrl,
+      imageUrl: imageUrl,
     );
   }
 

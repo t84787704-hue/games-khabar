@@ -27,6 +27,7 @@ import 'gamer_download_data_screen.dart';
 import 'gamer_terms_of_service_screen.dart';
 import 'gamer_delete_account_screen.dart';
 import 'gamer_auth_screen.dart';
+import '../services/app_share_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -1002,6 +1003,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       ListTile(
                         leading: Icon(Icons.share_rounded, color: neonGreen, size: 22),
+                        title: Text(
+                          'share_app'.tr(),
+                          style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          'Doston ke sath app share karein & Play Store link dein',
+                          style: TextStyle(color: textGray, fontSize: 12),
+                        ),
+                        trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
+                        onTap: () {
+                          AppShareService.shareApp();
+                        },
+                      ),
+                      Divider(color: borderDark, height: 1),
+
+                      ListTile(
+                        leading: Icon(Icons.public_rounded, color: neonGreen, size: 22),
                         title: Text(
                           'follow_us'.tr(),
                           style: TextStyle(color: textWhite, fontSize: 14, fontWeight: FontWeight.bold),

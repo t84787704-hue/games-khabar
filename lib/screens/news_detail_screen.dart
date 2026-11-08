@@ -378,6 +378,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       title: activeTitle,
       description: activeDesc,
       gameName: _gameName.isNotEmpty ? _gameName : _category,
+      sourceUrl: _sourceUrl.isNotEmpty ? _sourceUrl : null,
     );
   }
 

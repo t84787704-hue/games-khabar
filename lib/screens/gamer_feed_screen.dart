@@ -550,21 +550,39 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   }
 
   Future<void> _handleShare(Map<String, dynamic> post) async {
-    final content = (post['content'] ?? '').toString();
-    final postUserId = post['user_id']?.toString() ?? '';
-    final userProfile = userProfiles[postUserId];
-    final username = userProfile?['username'] ?? post['username'] ?? 'user_gamer'.tr();
-    final gameTag = post['game_tag']?.toString();
-    final videoUrl = post['video_url']?.toString();
+    final bool isSteamNews = post['is_steam_news'] == true;
 
     try {
-      await AppShareService.sharePost(
-        authorName: username,
-        username: username,
-        content: content,
-        gameTag: gameTag,
-        videoUrl: videoUrl,
-      );
+      if (isSteamNews) {
+        final title = (post['title'] ?? 'Gaming News').toString();
+        final rawDesc = (post['description'] ?? post['short_description'] ?? post['content'] ?? '').toString();
+        final sourceUrl = (post['source_url'] ?? '').toString();
+        final game = (post['game_name'] ?? post['category'] ?? 'Gaming').toString();
+
+        await AppShareService.shareNews(
+          title: title,
+          description: rawDesc,
+          gameName: game,
+          sourceUrl: sourceUrl,
+        );
+      } else {
+        final content = (post['content'] ?? '').toString();
+        final postUserId = post['user_id']?.toString() ?? '';
+        final userProfile = userProfiles[postUserId];
+        final username = userProfile?['username'] ?? post['username'] ?? 'gamer';
+        final gameTag = (post['game_tag'] ?? post['game'] ?? 'Gaming').toString();
+        final videoUrl = (post['video_url'] ?? post['video'])?.toString();
+        final imageUrl = _resolvePostImage(post);
+
+        await AppShareService.sharePost(
+          authorName: username,
+          username: username,
+          content: content,
+          gameTag: gameTag,
+          videoUrl: videoUrl,
+          imageUrl: imageUrl.isNotEmpty ? imageUrl : null,
+        );
+      }
     } catch (e) {
       debugPrint('Share error: $e');
     }

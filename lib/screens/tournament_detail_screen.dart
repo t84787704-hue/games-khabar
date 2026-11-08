@@ -10,6 +10,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/theme_service.dart';
 import '../constants/gamer_theme.dart';
 import 'team_profile_screen.dart';
+import '../services/app_share_service.dart';
 
 class TournamentDetailScreen extends StatefulWidget {
   final String? tournamentId;
@@ -698,6 +699,22 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                 fontSize: 16,
               ),
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.share_rounded, size: 20),
+                color: accentGreen,
+                tooltip: 'Share Tournament',
+                onPressed: () {
+                  AppShareService.shareTournament(
+                    title: title,
+                    game: game,
+                    prize: '$prizePool Coins',
+                    fee: entryFeeText,
+                    map: mapName,
+                  );
+                },
+              ),
+            ],
           ),
           body: _isLoading
               ? Center(child: CircularProgressIndicator(color: accentGreen))
