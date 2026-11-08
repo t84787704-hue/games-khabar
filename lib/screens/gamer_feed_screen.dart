@@ -25,6 +25,7 @@ import '../widgets/urdu_news_content.dart';
 import '../data/fallback_images.dart';
 import '../services/app_share_service.dart';
 import '../services/gamer_social_service.dart';
+import '../services/news_image_resolver.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -54,6 +55,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   @override
   void initState() {
     super.initState();
+    NewsImageResolver.onImageResolved.addListener(_onNewsImageResolved);
     _initScreen();
     _timeAgoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
@@ -62,8 +64,15 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
   @override
   void dispose() {
+    NewsImageResolver.onImageResolved.removeListener(_onNewsImageResolved);
     _timeAgoRefreshTimer?.cancel();
     super.dispose();
+  }
+
+  void _onNewsImageResolved() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _initScreen() async {
@@ -160,7 +169,27 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
   String _resolvePostImage(Map<String, dynamic> post) {
     final rawUrl = (post['image_url'] ?? post['media_url'] ?? '').toString().trim();
-    if (!isBadNewsImage(rawUrl)) {
+    final sourceUrl = (post['source_url'] ?? post['url'] ?? '').toString().trim();
+
+    // Check if NewsImageResolver has resolved or pre-seeded the genuine article image
+    final resolved = NewsImageResolver.resolveDirect(
+      rawUrl,
+      sourceUrl: sourceUrl,
+      onResolved: (realImg) {
+        if (mounted && post['image_url'] != realImg) {
+          setState(() {
+            post['image_url'] = realImg;
+            post['imageUrl'] = realImg;
+          });
+        }
+      },
+    );
+
+    if (resolved.isNotEmpty && !NewsImageResolver.isGenericImage(resolved)) {
+      return resolved;
+    }
+
+    if (!isBadNewsImage(rawUrl) && !rawUrl.contains('images.unsplash.com')) {
       return rawUrl;
     }
 
@@ -313,16 +342,28 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         final titleUr = news['title_ur'] ?? (news['titleMap'] is Map ? news['titleMap']['ur'] : null);
         final descUr = news['description_ur'] ?? (news['descriptionMap'] is Map ? news['descriptionMap']['ur'] : null);
 
-        // Resolve clean image (discarding Google News "G" logo, gstatic, and favicons)
+        // Resolve genuine image directly from source website or NewsImageResolver
         final rawImg = (news['imageUrl'] ?? news['image_url'] ?? '').toString().trim();
-        final cleanImage = !isBadNewsImage(rawImg)
-            ? rawImg
-            : getGameFallbackImage(
-                category: news['category']?.toString(),
-                title: title,
-                content: rawDesc,
-                docId: news['id']?.toString(),
-              );
+        final sourceUrl = (news['sourceUrl'] ?? news['url'] ?? '').toString().trim();
+        final realResolvedImg = NewsImageResolver.resolveDirect(
+          rawImg,
+          sourceUrl: sourceUrl,
+          onResolved: (img) {
+            news['imageUrl'] = img;
+            news['image_url'] = img;
+          },
+        );
+
+        final cleanImage = (!NewsImageResolver.isGenericImage(realResolvedImg))
+            ? realResolvedImg
+            : (!isBadNewsImage(rawImg) && !rawImg.contains('images.unsplash.com'))
+                ? rawImg
+                : getGameFallbackImage(
+                    category: news['category']?.toString(),
+                    title: title,
+                    content: rawDesc,
+                    docId: news['id']?.toString(),
+                  );
 
         return {
           'id': 'steam_${news['id'] ?? DateTime.now().millisecondsSinceEpoch}',

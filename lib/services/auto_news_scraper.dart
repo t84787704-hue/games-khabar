@@ -9,6 +9,7 @@ import '../data/fallback_images.dart';
 import '../services/translation_service.dart';
 import '../services/supabase_store_service.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'news_image_resolver.dart';
 
 class RssSource {
   final String id;
@@ -597,41 +598,9 @@ class AutoNewsScraper {
     }
   }
 
-  /// Fetch OG Image from article link: Use http.get(articleLink) and parse meta property="og:image"
+  /// Fetch OG Image from article link: Use NewsImageResolver to extract real image from page
   static Future<String?> fetchOgImage(String articleLink) async {
-    if (articleLink.trim().isEmpty || !articleLink.startsWith('http')) return null;
-    try {
-      final res = await http.get(
-        Uri.parse(articleLink),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      ).timeout(const Duration(seconds: 4));
-
-      if (res.statusCode == 200 && res.body.isNotEmpty) {
-        final doc = html_parser.parse(res.body);
-        final metaTags = doc.getElementsByTagName('meta');
-        for (final meta in metaTags) {
-          final prop = meta.attributes['property']?.toLowerCase() ?? '';
-          final name = meta.attributes['name']?.toLowerCase() ?? '';
-          final content = meta.attributes['content']?.trim() ?? '';
-
-          if ((prop == 'og:image' ||
-                  prop == 'og:image:url' ||
-                  name == 'twitter:image' ||
-                  name == 'twitter:image:src') &&
-              content.isNotEmpty &&
-              content.startsWith('http') &&
-              !content.contains('icon') &&
-              !content.contains('pixel') &&
-              !content.contains('1x1')) {
-            return content;
-          }
-        }
-      }
-    } catch (_) {}
-    return null;
+    return NewsImageResolver.resolveArticleImage(articleLink);
   }
 
   /// Resolve High Quality Category Fallback Images with Uniqueness

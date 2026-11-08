@@ -225,6 +225,15 @@ bool isBadNewsImage(String? url) {
       lower.endsWith('.svg');
 }
 
+/// Checks if an image is a generic placeholder, bad image, or Unsplash stock photo
+bool isGenericOrPlaceholderImage(String? url) {
+  if (url == null || url.trim().isEmpty) return true;
+  if (isBadNewsImage(url)) return true;
+  final lower = url.trim().toLowerCase();
+  if (lower.contains('images.unsplash.com')) return true;
+  return false;
+}
+
 
 /// Universal image finder that guarantees every single card gets a high quality, UNIQUE game picture.
 /// Uses a deterministic hash of the title or article ID to select a unique picture from the matching pool.

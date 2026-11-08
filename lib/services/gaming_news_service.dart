@@ -10,6 +10,7 @@ import '../models/gaming_news_model.dart';
 import '../data/game_bots_100.dart';
 import '../data/fallback_images.dart';
 import 'translation_service.dart';
+import 'news_image_resolver.dart';
 
 class GamingNewsService {
   static final GamingNewsService _instance = GamingNewsService._internal();
@@ -717,52 +718,9 @@ class GamingNewsService {
     return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  /// Fetch OG Image from article link: Use http.get(articleLink) and parse meta property="og:image"
+  /// Fetch OG Image from article link: Use NewsImageResolver to extract real image from page
   static Future<String?> fetchOgImage(String articleLink) async {
-    if (articleLink.trim().isEmpty || !articleLink.startsWith('http')) return null;
-    try {
-      final res = await http.get(
-        Uri.parse(articleLink),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      ).timeout(const Duration(seconds: 5));
-
-      if (res.statusCode == 200 && res.body.isNotEmpty) {
-        final doc = html_parser.parse(res.body);
-        final metaTags = doc.getElementsByTagName('meta');
-        for (final meta in metaTags) {
-          final prop = meta.attributes['property']?.toLowerCase() ?? '';
-          final name = meta.attributes['name']?.toLowerCase() ?? '';
-          final content = meta.attributes['content']?.trim() ?? '';
-
-          if ((prop == 'og:image' ||
-                  prop == 'og:image:url' ||
-                  prop == 'og:image:secure_url' ||
-                  name == 'twitter:image' ||
-                  name == 'twitter:image:src') &&
-              content.isNotEmpty &&
-              content.startsWith('http') &&
-              !content.contains('icon') &&
-              !content.contains('pixel') &&
-              !content.contains('1x1')) {
-            return content;
-          }
-        }
-
-        // Link tag fallback
-        final linkTags = doc.getElementsByTagName('link');
-        for (final link in linkTags) {
-          final rel = link.attributes['rel']?.toLowerCase() ?? '';
-          final href = link.attributes['href']?.trim() ?? '';
-          if ((rel == 'image_src' || rel == 'apple-touch-icon-precomposed') && href.startsWith('http')) {
-            return href;
-          }
-        }
-      }
-    } catch (_) {}
-    return null;
+    return NewsImageResolver.resolveArticleImage(articleLink);
   }
 
   /// Synchronous image extraction respecting priority order:

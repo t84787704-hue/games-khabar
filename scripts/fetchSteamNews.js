@@ -226,7 +226,7 @@ function getCategoryFallback(title = '', category = '') {
   return { key: 'general', url: FALLBACK_IMAGES.general };
 }
 
-const USER_AGENT = 'Mozilla/5.0';
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 async function getRealImage(articleUrl, item, rawTitle = '', category = '', existing$ = null) {
   let $ = existing$;
@@ -242,6 +242,11 @@ async function getRealImage(articleUrl, item, rawTitle = '', category = '', exis
       const res = await axios.get(articleUrl, {
         headers: {
           'User-Agent': USER_AGENT,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Windows"',
           ...(referer ? { 'Referer': referer } : {})
         },
         timeout: 10000,
@@ -256,9 +261,33 @@ async function getRealImage(articleUrl, item, rawTitle = '', category = '', exis
   let image = "";
   if ($) {
     image = $('meta[property="og:image"]').attr('content')
+         || $('meta[content][property="og:image"]').attr('content')
          || $('meta[name="twitter:image"]').attr('content')
+         || $('meta[content][name="twitter:image"]').attr('content')
+         || $('meta[property="og:image:url"]').attr('content')
          || $('meta[property="og:image:secure_url"]').attr('content')
-         || $('article img').first().attr('src');
+         || $('meta[name="twitter:image:src"]').attr('content')
+         || $('meta[itemprop="image"]').attr('content')
+         || $('link[rel="image_src"]').attr('href')
+         || $('article img').first().attr('src')
+         || $('.featured-image img, .post-thumbnail img, main img').first().attr('src');
+
+    if (!image) {
+      $('script[type="application/ld+json"]').each((_, el) => {
+        try {
+          const json = JSON.parse($(el).html() || '{}');
+          const imgObj = json.image || (Array.isArray(json['@graph']) && json['@graph'].find(g => g.image)?.image);
+          if (typeof imgObj === 'string' && imgObj.startsWith('http')) {
+            image = imgObj;
+          } else if (imgObj && typeof imgObj === 'object') {
+            const candidate = imgObj.url || (Array.isArray(imgObj) && imgObj[0]?.url) || (Array.isArray(imgObj) && typeof imgObj[0] === 'string' ? imgObj[0] : null);
+            if (candidate && candidate.startsWith('http')) {
+              image = candidate;
+            }
+          }
+        } catch (_) {}
+      });
+    }
   }
 
   if (!image && item) {
@@ -281,7 +310,8 @@ async function getRealImage(articleUrl, item, rawTitle = '', category = '', exis
         lower.includes('google') ||
         lower.includes('gstatic') ||
         lower.includes('favicon') ||
-        lower.includes('logo');
+        lower.includes('logo') ||
+        lower.includes('unsplash.com');
 
       if (!isBadImage) {
         console.log(`[Image Success] Real image found for "${rawTitle.substring(0, 45)}": ${abs}`);
@@ -309,7 +339,7 @@ async function fetchFullArticle(url) {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9'
       },
-      timeout: 4500,
+      timeout: 8000,
       maxRedirects: 5
     });
 
@@ -446,6 +476,35 @@ async function run(){
     console.log(`Loaded ${existingIds.size} existing articles from Supabase (Cleaned ${del} Russian).`);
   } catch(e) {
     console.log("Clean fail", e.message);
+  }
+
+  // STEP 0.5 - REPAIR EXISTING ARTICLES WITH GENERIC / UNSPLASH IMAGES
+  try {
+    const { data: unsplashRows } = await supabase
+      .from('steam_news')
+      .select('id, title, url, sourceUrl, imageUrl, image_url')
+      .or('image_url.like.*unsplash.com*,imageUrl.like.*unsplash.com*')
+      .limit(100);
+
+    if (unsplashRows && unsplashRows.length > 0) {
+      console.log(`Repairing ${unsplashRows.length} articles with generic Unsplash images...`);
+      for (const row of unsplashRows) {
+        const targetUrl = row.url || row.sourceUrl;
+        if (!targetUrl || !targetUrl.startsWith('http')) continue;
+        try {
+          const realImg = await getRealImage(targetUrl, null, row.title || '');
+          if (realImg && !realImg.includes('unsplash.com')) {
+            console.log(`[Repaired Real Image] for ${row.id}: ${realImg}`);
+            await supabase.from('steam_news').update({
+              imageUrl: realImg,
+              image_url: realImg
+            }).eq('id', row.id);
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (err) {
+    console.warn("Unsplash repair warning:", err.message);
   }
 
   // STEAM - Latest 5 per game (only fetch new)

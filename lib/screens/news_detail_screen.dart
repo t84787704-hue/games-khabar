@@ -9,6 +9,7 @@ import '../models/news_model.dart';
 import '../data/fallback_images.dart';
 import '../services/gaming_news_service.dart';
 import '../services/app_share_service.dart';
+import '../services/news_image_resolver.dart';
 
 class NewsDetailScreen extends StatefulWidget {
   final Map<String, dynamic>? newsData;
@@ -204,16 +205,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         .toString()
         .trim();
 
-    if (!isBadNewsImage(rawImg)) {
-      _imageUrl = rawImg;
-    } else {
-      _imageUrl = getGameFallbackImage(
-        category: _category,
-        title: _title,
-        content: _description,
-      );
-    }
-
     _sourceUrl = (widget.sourceUrl ??
             nd?['source_url'] ??
             nd?['sourceUrl'] ??
@@ -223,6 +214,30 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             '')
         .toString()
         .trim();
+
+    final resolvedImg = NewsImageResolver.resolveDirect(
+      rawImg,
+      sourceUrl: _sourceUrl,
+      onResolved: (realImg) {
+        if (mounted && _imageUrl != realImg) {
+          setState(() {
+            _imageUrl = realImg;
+          });
+        }
+      },
+    );
+
+    if (resolvedImg.isNotEmpty && !NewsImageResolver.isGenericImage(resolvedImg)) {
+      _imageUrl = resolvedImg;
+    } else if (!isBadNewsImage(rawImg) && !rawImg.contains('images.unsplash.com')) {
+      _imageUrl = rawImg;
+    } else {
+      _imageUrl = getGameFallbackImage(
+        category: _category,
+        title: _title,
+        content: _description,
+      );
+    }
 
     // Source detection
     String rawSource = (widget.source ??
