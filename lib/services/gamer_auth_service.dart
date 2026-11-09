@@ -7,6 +7,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/gamer_user_model.dart';
 import 'supabase_service.dart';
@@ -189,14 +191,86 @@ class GamerAuthService {
     }
   }
 
-  /// Google Sign In (via Supabase OAuth)
-  Future<void> signInWithGoogle() async {
+  /// Google Sign In:
+  /// 1. Tries Native Google Sign-In (via Google Play Services & idToken) using Google Cloud Console SHA-1 & webClientId.
+  /// 2. If Native Sign-In is cancelled by user, returns false cleanly without error.
+  /// 3. If Native Sign-In fails or webClientId is absent, falls back to Supabase Web OAuth Flow.
+  /// 4. Protected with explicit timeouts so UI never hangs indefinitely.
+  Future<bool> signInWithGoogle({String? webClientId}) async {
+    final effectiveWebClientId = (webClientId ?? SupabaseService.webClientId).trim();
+
+    // ─── STEP 1: ATTEMPT NATIVE GOOGLE SIGN-IN (Play Services) ───
     try {
-      await _supabase.auth.signInWithOAuth(
+      debugPrint('[GamerAuthService] Starting Native Google Sign-In (webClientId: "$effectiveWebClientId")');
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        serverClientId: effectiveWebClientId.isNotEmpty ? effectiveWebClientId : null,
+        scopes: const ['email', 'profile'],
+      );
+
+      // Sign out first to ensure account chooser dialog appears cleanly
+      try {
+        await googleSignIn.signOut().timeout(const Duration(seconds: 2));
+      } catch (_) {}
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw TimeoutException('Google Sign-In prompt timed out after 30 seconds'),
+      );
+
+      if (googleUser == null) {
+        debugPrint('[GamerAuthService] Google Sign-In cancelled by user.');
+        return false;
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Retrieving Google authentication tokens timed out'),
+      );
+
+      final String? idToken = googleAuth.idToken;
+      final String? accessToken = googleAuth.accessToken;
+
+      if (idToken != null && idToken.isNotEmpty) {
+        debugPrint('[GamerAuthService] Native Google Sign-In succeeded, authenticating with Supabase signInWithIdToken...');
+        await _supabase.auth.signInWithIdToken(
+          provider: OAuthProvider.google,
+          idToken: idToken,
+          accessToken: accessToken,
+        ).timeout(
+          const Duration(seconds: 20),
+          onTimeout: () => throw TimeoutException('Supabase session exchange timed out'),
+        );
+
+        debugPrint('[GamerAuthService] Supabase signInWithIdToken successfully completed!');
+        return true;
+      } else {
+        debugPrint('[GamerAuthService] idToken is null (likely serverClientId / Web Client ID missing). Falling back to OAuth...');
+      }
+    } on PlatformException catch (pe) {
+      debugPrint('[GamerAuthService] PlatformException during native GoogleSignIn: code=${pe.code}, msg=${pe.message}');
+      if (pe.code == 'sign_in_canceled') {
+        return false;
+      }
+      debugPrint('[GamerAuthService] Attempting Supabase OAuth fallback due to PlatformException (${pe.code})...');
+    } catch (e) {
+      debugPrint('[GamerAuthService] Native GoogleSignIn exception: $e. Falling back to Supabase OAuth...');
+    }
+
+    // ─── STEP 2: FALLBACK TO SUPABASE OAUTH BROWSER FLOW ───
+    try {
+      debugPrint('[GamerAuthService] Launching Supabase OAuth Google flow...');
+      final launched = await _supabase.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: 'io.supabase.gameskhabar://login-callback',
         authScreenLaunchMode: LaunchMode.externalApplication,
+      ).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw TimeoutException('Browser launch timed out'),
       );
+      return launched;
+    } on AuthException catch (ae) {
+      debugPrint('[GamerAuthService] Supabase AuthException: ${ae.message}');
+      throw Exception('Supabase Auth: ${ae.message}');
     } catch (e) {
       debugPrint('[GamerAuthService] Supabase Google OAuth Error: $e');
       rethrow;

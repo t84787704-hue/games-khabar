@@ -5,6 +5,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/gamer_theme.dart';
@@ -54,6 +55,51 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     super.dispose();
   }
 
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+        ),
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ThemeService.bgElevated,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 26),
+            const SizedBox(width: 10),
+            Text('Google Sign-In Failed', style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          message,
+          style: TextStyle(color: ThemeService.textSecondary, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handlePostAuth() async {
     if (_isNavigating) return;
     _isNavigating = true;
@@ -61,6 +107,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     final authUser = SupabaseService.client.auth.currentUser;
     if (authUser == null) {
       _isNavigating = false;
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
@@ -72,7 +119,8 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
               .from('users')
               .select('id, uid')
               .or('username.ilike.$rawRefCode,id.eq.$rawRefCode')
-              .maybeSingle();
+              .maybeSingle()
+              .timeout(const Duration(seconds: 4), onTimeout: () => null);
 
           if (referrer != null) {
             final referrerUid = (referrer['id'] ?? referrer['uid'])?.toString();
@@ -80,7 +128,8 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
               await SupabaseService.client
                   .from('users')
                   .update({'referred_by': referrerUid})
-                  .or('id.eq.${authUser.id},uid.eq.${authUser.id}');
+                  .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
+                  .timeout(const Duration(seconds: 3), onTimeout: () => null);
             }
           }
         } catch (refError) {
@@ -94,13 +143,17 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
             .from('users')
             .select('id, username, display_name, avatar_url, is_banned, banned_reason')
             .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
-            .maybeSingle();
+            .maybeSingle()
+            .timeout(const Duration(seconds: 4), onTimeout: () => null);
       } catch (_) {
-        profile = await SupabaseService.client
-            .from('users')
-            .select()
-            .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
-            .maybeSingle();
+        try {
+          profile = await SupabaseService.client
+              .from('users')
+              .select()
+              .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
+              .maybeSingle()
+              .timeout(const Duration(seconds: 4), onTimeout: () => null);
+        } catch (_) {}
       }
 
       if (!mounted) return;
@@ -118,7 +171,9 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
       final username = rawUsername?.toString().trim() ?? '';
 
       if (profile != null && username.isNotEmpty) {
-        await GamerAuthService().refreshCurrentGamer();
+        try {
+          await GamerAuthService().refreshCurrentGamer().timeout(const Duration(seconds: 4), onTimeout: () => null);
+        } catch (_) {}
         if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
@@ -138,26 +193,86 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
         MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
         (route) => false,
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   Future<void> _signInWithGoogle() async {
+    if (_isLoading) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      await GamerAuthService().signInWithGoogle();
+      final bool signedInOrLaunched = await GamerAuthService().signInWithGoogle();
+      if (!mounted) return;
+
+      if (!signedInOrLaunched && SupabaseService.client.auth.currentUser == null) {
+        // User cancelled account chooser or closed prompt cleanly
+        debugPrint('[GamerAuthScreen] Google Sign-In was cancelled or not completed.');
+        setState(() => _isLoading = false);
+        return;
+      }
+
       if (SupabaseService.client.auth.currentUser != null) {
         await _handlePostAuth();
+      } else {
+        // External browser was launched; reset loading so user is not stuck on spinner if they switch back
+        setState(() => _isLoading = false);
       }
+    } on PlatformException catch (pe) {
+      debugPrint('[GamerAuthScreen] PlatformException: ${pe.code} - ${pe.message}');
+      if (!mounted) return;
+
+      String errorText = 'Google Sign-In Error: ${pe.message ?? pe.code}';
+      if (pe.code == '10' || pe.message?.contains('10') == true || pe.code == 'sign_in_failed') {
+        errorText = 'Google Sign-In configuration error (ApiException: 10).\n\nCheck:\n1. Release SHA-1 matches Google Cloud Console.\n2. Web Client ID is set in SupabaseService.webClientId.';
+      } else if (pe.code == '12500' || pe.message?.contains('12500') == true) {
+        errorText = 'Google Play Services error (ApiException: 12500). Please check your internet or update Google Play Services.';
+      } else if (pe.code == '7' || pe.code == 'network_error') {
+        errorText = 'Network connection error. Please verify your internet connection and try again.';
+      } else if (pe.code == 'sign_in_canceled') {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      setState(() {
+        _errorMessage = errorText;
+        _isLoading = false;
+      });
+      _showErrorDialog(errorText);
+    } on TimeoutException catch (te) {
+      debugPrint('[GamerAuthScreen] TimeoutException: ${te.message}');
+      if (!mounted) return;
+      final errorText = te.message ?? 'Authentication timed out. Please check your internet connection.';
+      setState(() {
+        _errorMessage = errorText;
+        _isLoading = false;
+      });
+      _showErrorSnackBar(errorText);
+    } on AuthException catch (ae) {
+      debugPrint('[GamerAuthScreen] Supabase AuthException: ${ae.message}');
+      if (!mounted) return;
+      final errorText = 'Authentication Error: ${ae.message}';
+      setState(() {
+        _errorMessage = errorText;
+        _isLoading = false;
+      });
+      _showErrorDialog(errorText);
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'err_google_sign_in'.tr(args: [e.toString()]);
-        });
-      }
+      debugPrint('[GamerAuthScreen] Unexpected Google Sign-In error: $e');
+      if (!mounted) return;
+      final rawMsg = e.toString().replaceAll('Exception:', '').trim();
+      final errorText = 'err_google_sign_in'.tr(args: [rawMsg.isNotEmpty ? rawMsg : 'Unknown error']);
+      setState(() {
+        _errorMessage = errorText;
+        _isLoading = false;
+      });
+      _showErrorDialog(errorText);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

@@ -12,6 +12,10 @@ class SupabaseService {
   static const String supabaseUrl = 'https://dxdkitnroypbblazblja.supabase.co';
   static const String supabaseAnonKey = 'sb_publishable_gL8ImGd6TS-gdPOr92leHQ_Cwjiw25Y';
 
+  /// Web Client ID from Google Cloud Console (OAuth 2.0 Client IDs -> Web application)
+  /// Used for Native Google Sign-In with Supabase (signInWithIdToken).
+  static const String webClientId = '713301178464-t3qotjr5fice17jfgbm0av73o0c0im3c.apps.googleusercontent.com';
+
   static final SupabaseClient _fallbackClient = SupabaseClient(supabaseUrl, supabaseAnonKey);
 
   static SupabaseClient get client {
@@ -35,7 +39,13 @@ class SupabaseService {
 
   static Future<void> init() async {
     try {
-      await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+      await Supabase.initialize(
+        url: supabaseUrl,
+        anonKey: supabaseAnonKey,
+        authOptions: const FlutterAuthClientOptions(
+          authFlowType: AuthFlowType.pkce,
+        ),
+      );
     } catch (e) {
       debugPrint('Supabase initialize warning: $e');
     }

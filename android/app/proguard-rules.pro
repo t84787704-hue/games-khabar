@@ -17,6 +17,14 @@
 -dontwarn okio.**
 -dontwarn com.google.android.gms.**
 
+# Google Sign-In & Play Services Auth
+-keep class com.google.android.gms.auth.api.signin.** { *; }
+-keep class com.google.android.gms.common.** { *; }
+-keep class com.google.android.gms.common.api.** { *; }
+-keep class com.google.android.gms.tasks.** { *; }
+-keepattributes *Annotation*
+-dontwarn com.google.android.gms.auth.**
+
 # Google ML Kit Text Recognition
 -dontwarn com.google.mlkit.vision.text.**
 -dontwarn com.google.mlkit.**
