@@ -208,7 +208,10 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     });
 
     try {
-      final bool signedInOrLaunched = await GamerAuthService().signInWithGoogle();
+      final bool signedInOrLaunched = await GamerAuthService().signInWithGoogle().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Sign in request timed out. Please check your internet connection.'),
+      );
       if (!mounted) return;
 
       if (!signedInOrLaunched && SupabaseService.client.auth.currentUser == null) {
@@ -219,7 +222,18 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
       }
 
       if (SupabaseService.client.auth.currentUser != null) {
-        await _handlePostAuth();
+        await _handlePostAuth().timeout(
+          const Duration(seconds: 8),
+          onTimeout: () {
+            debugPrint('[GamerAuthScreen] _handlePostAuth timed out, proceeding to CreateGamerIdScreen');
+            if (mounted) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
+                (route) => false,
+              );
+            }
+          },
+        );
       } else {
         // External browser was launched; reset loading so user is not stuck on spinner if they switch back
         setState(() => _isLoading = false);

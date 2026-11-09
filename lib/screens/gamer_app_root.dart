@@ -85,26 +85,37 @@ class _GamerAppRootState extends State<GamerAppRoot> {
         }
 
         // Logged in → Check profile & banned status
-        return ValueListenableBuilder<GamerUser?>(
-          valueListenable: _authService.currentGamerNotifier,
-          builder: (context, gamer, _) {
-            // Profile abhi fetch nahi hui pehli dafa to chota loader
-            if (gamer == null) {
-              return const _GamerLoadingScreen();
-            }
+        return ValueListenableBuilder<bool>(
+          valueListenable: _authService.isLoadingNotifier,
+          builder: (context, isLoading, _) {
+            return ValueListenableBuilder<GamerUser?>(
+              valueListenable: _authService.currentGamerNotifier,
+              builder: (context, gamer, _) {
+                // If gamer profile exists
+                if (gamer != null) {
+                  // Banned check
+                  if (gamer.isBanned) {
+                    return BannedScreen(reason: gamer.bannedReason);
+                  }
 
-            // Banned check
-            if (gamer.isBanned) {
-              return BannedScreen(reason: gamer.bannedReason);
-            }
+                  // User Profile complete
+                  if (gamer.username.trim().isNotEmpty) {
+                    return const GamerMainNavigationScreen();
+                  }
 
-            // User Profile complete
-            if (gamer.username.trim().isNotEmpty) {
-              return const GamerMainNavigationScreen();
-            }
+                  // Profile missing username (new user needs to create Gamer ID)
+                  return const CreateGamerIdScreen();
+                }
 
-            // Profile missing username
-            return const CreateGamerIdScreen();
+                // If loading completed and gamer is still null, immediately proceed to CreateGamerIdScreen
+                if (!isLoading) {
+                  return const CreateGamerIdScreen();
+                }
+
+                // Loading in progress: show loader with max 4s safety auto-fallback
+                return const _GamerLoadingScreen();
+              },
+            );
           },
         );
       },
@@ -112,8 +123,35 @@ class _GamerAppRootState extends State<GamerAppRoot> {
   }
 }
 
-class _GamerLoadingScreen extends StatelessWidget {
+class _GamerLoadingScreen extends StatefulWidget {
   const _GamerLoadingScreen();
+
+  @override
+  State<_GamerLoadingScreen> createState() => _GamerLoadingScreenState();
+}
+
+class _GamerLoadingScreenState extends State<_GamerLoadingScreen> {
+  Timer? _safetyTimer;
+  bool _showAction = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Safety timeout: Never stay stuck on loading screen longer than 4 seconds!
+    _safetyTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() => _showAction = true);
+        // Force loading state to false so AppRoot transitions to CreateGamerIdScreen
+        GamerAuthService().isLoadingNotifier.value = false;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _safetyTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +201,27 @@ class _GamerLoadingScreen extends StatelessWidget {
                 color: GamerTheme.accentBlue,
               ),
             ),
+            if (_showAction) ...[
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: () {
+                  GamerAuthService().isLoadingNotifier.value = false;
+                },
+                child: const Text(
+                  'Continue to Gamer ID →',
+                  style: TextStyle(color: GamerTheme.accentOrange, fontWeight: FontWeight.bold),
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await GamerAuthService().signOut();
+                },
+                child: const Text(
+                  'Sign Out / Try Again',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ),
+            ],
           ],
         ),
       ),

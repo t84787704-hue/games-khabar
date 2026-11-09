@@ -74,21 +74,24 @@ class GamerAuthService {
             .from('users')
             .select()
             .or('id.eq.$authUserId,uid.eq.$authUserId')
-            .maybeSingle();
+            .maybeSingle()
+            .timeout(const Duration(seconds: 5), onTimeout: () => null);
       } catch (_) {
         try {
           profile = await _supabase
               .from('users')
               .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
               .eq('id', authUserId)
-              .maybeSingle();
+              .maybeSingle()
+              .timeout(const Duration(seconds: 4), onTimeout: () => null);
         } catch (_) {
           try {
             profile = await _supabase
                 .from('users')
                 .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
                 .eq('uid', authUserId)
-                .maybeSingle();
+                .maybeSingle()
+                .timeout(const Duration(seconds: 4), onTimeout: () => null);
           } catch (_) {}
         }
       }
@@ -97,7 +100,25 @@ class GamerAuthService {
         final gamer = GamerUser.fromMap(profile, authUserId);
         currentGamerNotifier.value = gamer;
       } else {
-        currentGamerNotifier.value = null;
+        // User has no row in users table yet (new signup)
+        final initialGamer = GamerUser(
+          uid: authUserId,
+          username: '',
+          displayName: user.userMetadata?['full_name']?.toString() ??
+              user.userMetadata?['name']?.toString() ??
+              (user.email?.split('@').first ?? 'Gamer'),
+          photoUrl: user.userMetadata?['avatar_url']?.toString() ??
+              user.userMetadata?['picture']?.toString() ??
+              '',
+          coverUrl: '',
+          bio: '',
+          favoriteGame: 'BGMI',
+          selectedGame: 'BGMI',
+          selectedRank: 'Bronze',
+          rank: 'Bronze',
+          coins: 100,
+        );
+        currentGamerNotifier.value = initialGamer;
       }
 
       try {
@@ -109,7 +130,21 @@ class GamerAuthService {
       checkAndAwardWelcomeBonus(authUserId);
     } catch (e) {
       debugPrint('[GamerAuthService] Error syncing user: $e');
-      currentGamerNotifier.value = null;
+      if (currentGamerNotifier.value == null) {
+        currentGamerNotifier.value = GamerUser(
+          uid: user.id,
+          username: '',
+          displayName: 'Gamer',
+          photoUrl: '',
+          coverUrl: '',
+          bio: '',
+          favoriteGame: 'BGMI',
+          selectedGame: 'BGMI',
+          selectedRank: 'Bronze',
+          rank: 'Bronze',
+          coins: 100,
+        );
+      }
     } finally {
       isLoadingNotifier.value = false;
     }
@@ -131,21 +166,24 @@ class GamerAuthService {
             .from('users')
             .select()
             .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
-            .maybeSingle();
+            .maybeSingle()
+            .timeout(const Duration(seconds: 5), onTimeout: () => null);
       } catch (_) {
         try {
           profile = await _supabase
               .from('users')
               .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
               .eq('id', authUser.id)
-              .maybeSingle();
+              .maybeSingle()
+              .timeout(const Duration(seconds: 4), onTimeout: () => null);
         } catch (_) {
           try {
             profile = await _supabase
                 .from('users')
                 .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
                 .eq('uid', authUser.id)
-                .maybeSingle();
+                .maybeSingle()
+                .timeout(const Duration(seconds: 4), onTimeout: () => null);
           } catch (_) {}
         }
       }
@@ -153,13 +191,49 @@ class GamerAuthService {
       if (profile != null) {
         final gamer = GamerUser.fromMap(profile, authUser.id);
         currentGamerNotifier.value = gamer;
-        isLoadingNotifier.value = false;
         return gamer;
+      } else {
+        // User has no row in users table yet (new signup)
+        final initialGamer = GamerUser(
+          uid: authUser.id,
+          username: '',
+          displayName: authUser.userMetadata?['full_name']?.toString() ??
+              authUser.userMetadata?['name']?.toString() ??
+              (authUser.email?.split('@').first ?? 'Gamer'),
+          photoUrl: authUser.userMetadata?['avatar_url']?.toString() ??
+              authUser.userMetadata?['picture']?.toString() ??
+              '',
+          coverUrl: '',
+          bio: '',
+          favoriteGame: 'BGMI',
+          selectedGame: 'BGMI',
+          selectedRank: 'Bronze',
+          rank: 'Bronze',
+          coins: 100,
+        );
+        currentGamerNotifier.value = initialGamer;
+        return initialGamer;
       }
     } catch (e) {
       debugPrint('[GamerAuthService] Error refreshing gamer: $e');
+      if (currentGamerNotifier.value == null) {
+        currentGamerNotifier.value = GamerUser(
+          uid: authUser.id,
+          username: '',
+          displayName: 'Gamer',
+          photoUrl: '',
+          coverUrl: '',
+          bio: '',
+          favoriteGame: 'BGMI',
+          selectedGame: 'BGMI',
+          selectedRank: 'Bronze',
+          rank: 'Bronze',
+          coins: 100,
+        );
+      }
+    } finally {
+      isLoadingNotifier.value = false;
     }
-    isLoadingNotifier.value = false;
     return currentGamerNotifier.value;
   }
 
@@ -213,8 +287,8 @@ class GamerAuthService {
       } catch (_) {}
 
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn().timeout(
-        const Duration(seconds: 30),
-        onTimeout: () => throw TimeoutException('Google Sign-In prompt timed out after 30 seconds'),
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Google Sign-In prompt timed out after 15 seconds'),
       );
 
       if (googleUser == null) {
@@ -223,7 +297,7 @@ class GamerAuthService {
       }
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication.timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 8),
         onTimeout: () => throw TimeoutException('Retrieving Google authentication tokens timed out'),
       );
 
@@ -237,14 +311,23 @@ class GamerAuthService {
           idToken: idToken,
           accessToken: accessToken,
         ).timeout(
-          const Duration(seconds: 20),
-          onTimeout: () => throw TimeoutException('Supabase session exchange timed out'),
+          const Duration(seconds: 10),
+          onTimeout: () => throw TimeoutException('Supabase token exchange timed out after 10 seconds'),
         );
+
+        final user = _supabase.auth.currentUser;
+        if (user != null) {
+          authUserNotifier.value = user;
+          await refreshCurrentGamer().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
+        }
 
         debugPrint('[GamerAuthService] Supabase signInWithIdToken successfully completed!');
         return true;
       } else {
-        debugPrint('[GamerAuthService] idToken is null (likely serverClientId / Web Client ID missing). Falling back to OAuth...');
+        debugPrint('[GamerAuthService] idToken is null (serverClientId / Web Client ID missing or misconfigured). Falling back to OAuth...');
       }
     } on PlatformException catch (pe) {
       debugPrint('[GamerAuthService] PlatformException during native GoogleSignIn: code=${pe.code}, msg=${pe.message}');
@@ -264,8 +347,8 @@ class GamerAuthService {
         redirectTo: 'io.supabase.gameskhabar://login-callback',
         authScreenLaunchMode: LaunchMode.externalApplication,
       ).timeout(
-        const Duration(seconds: 20),
-        onTimeout: () => throw TimeoutException('Browser launch timed out'),
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Browser launch timed out after 10 seconds'),
       );
       return launched;
     } on AuthException catch (ae) {
