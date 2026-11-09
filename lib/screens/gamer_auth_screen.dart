@@ -77,7 +77,7 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: ThemeService.bgElevated,
+        backgroundColor: ThemeService.cardElevated,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
