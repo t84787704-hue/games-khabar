@@ -268,7 +268,12 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             '')
         .toString();
 
-    _timeAgo = _formatTimestamp(rawTime);
+    _timeAgo = NewsImageResolver.formatArticleTime({
+      'source_url': _sourceUrl,
+      'created_at': rawTime,
+      'published_at': nd?['published_at'],
+      'timestamp': nd?['timestamp'],
+    });
 
     // Ensure English description is a rich, complete article
     final cleanDesc = _description.trim();
@@ -356,30 +361,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         }
       }
       if (dt == null) return raw;
-      final now = DateTime.now();
-      var diff = now.difference(dt);
-
-      if (diff.isNegative) {
-        final tzOffset = now.timeZoneOffset;
-        if (tzOffset.inMinutes > 0 && diff.inMinutes <= -5) {
-          final candidate = dt.subtract(tzOffset);
-          final candidateDiff = now.difference(candidate);
-          if (!candidateDiff.isNegative || candidateDiff.inSeconds >= -120) {
-            dt = candidate;
-            diff = candidateDiff.isNegative ? Duration.zero : candidateDiff;
-          }
-        }
-        if (diff.isNegative) {
-          if (diff.inSeconds >= -180) return 'Just now';
-          diff = Duration.zero;
-        }
-      }
-
-      if (diff.inMinutes < 1) return 'Just now';
-      if (diff.inMinutes < 60) return '${diff.inMinutes} mins ago';
-      if (diff.inHours < 24) return '${diff.inHours} hrs ago';
-      if (diff.inDays < 7) return '${diff.inDays} days ago';
-      return '${dt.day}/${dt.month}/${dt.year}';
+      return NewsImageResolver.formatRelativeTime(dt);
     } catch (_) {
       return raw;
     }

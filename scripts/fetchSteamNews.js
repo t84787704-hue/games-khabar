@@ -454,6 +454,58 @@ function extractGameName(title, fallback = '') {
   return (segment.length >= 3 && segment.length <= 40) ? segment : fallback;
 }
 
+function extractPublishedDate(item, articleUrl, cheerioDoc) {
+  if (item) {
+    if (item.isoDate) {
+      const d = new Date(item.isoDate);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (item.pubDate) {
+      const d = new Date(item.pubDate);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (item.date) {
+      const ts = typeof item.date === 'number' ? item.date : parseInt(item.date);
+      if (!isNaN(ts) && ts > 0) {
+        return new Date(ts > 10000000000 ? ts : ts * 1000);
+      }
+    }
+  }
+
+  if (cheerioDoc) {
+    const metaDate = cheerioDoc('meta[property="article:published_time"]').attr('content') ||
+      cheerioDoc('meta[name="article:published_time"]').attr('content') ||
+      cheerioDoc('meta[property="og:published_time"]').attr('content') ||
+      cheerioDoc('meta[name="pubdate"]').attr('content') ||
+      cheerioDoc('meta[name="publish-date"]').attr('content') ||
+      cheerioDoc('time[datetime]').attr('datetime');
+    if (metaDate) {
+      const d = new Date(metaDate);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  if (articleUrl) {
+    const match = articleUrl.match(/\/(\d{4})\/(\d{1,2})\/(\d{1,2})\b/);
+    if (match) {
+      const y = parseInt(match[1]);
+      const m = parseInt(match[2]) - 1;
+      const d = parseInt(match[3]);
+      const date = new Date(Date.UTC(y, m, d, 12, 0, 0));
+      if (!isNaN(date.getTime())) return date;
+    }
+    const matchMonth = articleUrl.match(/\/(\d{4})\/(\d{1,2})\b/);
+    if (matchMonth) {
+      const y = parseInt(matchMonth[1]);
+      const m = parseInt(matchMonth[2]) - 1;
+      const date = new Date(Date.UTC(y, m, 15, 12, 0, 0));
+      if (!isNaN(date.getTime())) return date;
+    }
+  }
+
+  return new Date();
+}
+
 async function run(){
   console.log('START FETCH - STEAM NEWS TO SUPABASE');
 
@@ -507,6 +559,40 @@ async function run(){
     console.warn("Unsplash repair warning:", err.message);
   }
 
+  // STEP 0.6 - REPAIR DATES FOR EXISTING ARTICLES IN SUPABASE
+  try {
+    const { data: dateRows } = await supabase
+      .from('steam_news')
+      .select('id, url, sourceUrl, created_at, published_at')
+      .order('id', { ascending: false })
+      .limit(200);
+
+    if (dateRows && dateRows.length > 0) {
+      for (const row of dateRows) {
+        const targetUrl = row.url || row.sourceUrl;
+        if (!targetUrl) continue;
+        const match = targetUrl.match(/\/(\d{4})\/(\d{1,2})\/(\d{1,2})\b/);
+        if (match) {
+          const y = parseInt(match[1]);
+          const m = parseInt(match[2]) - 1;
+          const d = parseInt(match[3]);
+          const realDate = new Date(Date.UTC(y, m, d, 12, 0, 0));
+          const realIso = realDate.toISOString();
+          if (row.published_at !== realIso) {
+            await supabase.from('steam_news').update({
+              published_at: realIso,
+              created_at: realIso,
+              timeAgo: realIso,
+              timestamp: Math.floor(realDate.getTime() / 1000)
+            }).eq('id', row.id);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Date repair warning:", err.message);
+  }
+
   // STEAM - Latest 5 per game (only fetch new)
   for (const [gameName, appId] of Object.entries(allGamesAppIds)) {
     try {
@@ -551,8 +637,9 @@ async function run(){
         if (!img) continue;
 
         const paras = fullText.split('\n\n').filter(p => p.trim().length > 20);
-        const shortDesc = paras.slice(0, 2).join('\n\n') || fullText.substring(0, 300);
-        const nowIso = new Date().toISOString();
+        const steamDate = item.date ? new Date((typeof item.date === 'number' ? item.date : parseInt(item.date)) * 1000) : new Date();
+        const steamIso = steamDate.toISOString();
+        const steamTs = item.date ? parseInt(item.date) : Math.floor(steamDate.getTime() / 1000);
 
         const urduTitle = await translateToUrdu(rawTitle);
         const urduDesc = await translateToUrdu(shortDesc || fullText.substring(0, 300));
@@ -566,8 +653,8 @@ async function run(){
           descriptionMap: { en: fullText, ur: urduDesc || fullText, ro: fullText },
           imageUrl: img,
           image_url: img,
-          created_at: nowIso,
-          published_at: nowIso,
+          created_at: steamIso,
+          published_at: steamIso,
           appId,
           appid: appId,
           url: item.url || "",
@@ -579,8 +666,8 @@ async function run(){
           originalPrice: `Rs. ${originalPriceVal}`,
           originalPriceVal: originalPriceVal,
           priceHistory: priceHistory,
-          timestamp: Math.floor(Date.now() / 1000),
-          timeAgo: nowIso,
+          timestamp: steamTs,
+          timeAgo: steamIso,
           views: 0,
           isFeatured: false,
           isAuto: true,
@@ -646,7 +733,9 @@ async function run(){
         const shortDesc = paras.slice(0, 2).join('\n\n') || articleBody.substring(0, 300);
 
         const detectedGame = extractGameName(rawTitle, src.name);
-        const nowIso = new Date().toISOString();
+        const pubDate = extractPublishedDate(item, articleUrl, cheerioDoc);
+        const pubIso = pubDate.toISOString();
+        const pubTimestamp = Math.floor(pubDate.getTime() / 1000);
 
         const urduTitle = await translateToUrdu(rawTitle);
         const urduDesc = await translateToUrdu(shortDesc || articleBody.substring(0, 300));
@@ -660,14 +749,14 @@ async function run(){
           descriptionMap: { en: articleBody, ur: urduDesc || articleBody, ro: articleBody },
           imageUrl: img,
           image_url: img,
-          created_at: nowIso,
-          published_at: nowIso,
+          created_at: pubIso,
+          published_at: pubIso,
           url: articleUrl,
           sourceUrl: articleUrl,
           gameName: detectedGame,
           category: cat,
-          timestamp: Math.floor(Date.now() / 1000),
-          timeAgo: nowIso,
+          timestamp: pubTimestamp,
+          timeAgo: pubIso,
           views: 0,
           isFeatured: false,
           isAuto: true,

@@ -338,13 +338,20 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
             : rawDesc;
 
         final source = (news['source'] ?? news['game'] ?? news['gameName'] ?? 'Gaming News').toString();
+        final sourceUrl = (news['sourceUrl'] ?? news['url'] ?? '').toString().trim();
         final rawCreatedAt = (news['created_at'] ?? news['published_at'] ?? news['timeAgo'] ?? '').toString();
+        final realDate = NewsImageResolver.resolveArticleDate(
+          sourceUrl,
+          fallbackDate: rawCreatedAt,
+          timestamp: news['timestamp'] is num ? (news['timestamp'] as num).toInt() : null,
+        );
+        final effectiveCreatedAt = realDate.toIso8601String();
+
         final titleUr = news['title_ur'] ?? (news['titleMap'] is Map ? news['titleMap']['ur'] : null);
         final descUr = news['description_ur'] ?? (news['descriptionMap'] is Map ? news['descriptionMap']['ur'] : null);
 
         // Resolve genuine image directly from source website or NewsImageResolver
         final rawImg = (news['imageUrl'] ?? news['image_url'] ?? '').toString().trim();
-        final sourceUrl = (news['sourceUrl'] ?? news['url'] ?? '').toString().trim();
         final realResolvedImg = NewsImageResolver.resolveDirect(
           rawImg,
           sourceUrl: sourceUrl,
@@ -379,12 +386,14 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           'user_avatar': '',
           'likes_count': (news['views'] as num?)?.toInt() ?? 250,
           'comments_count': 0,
-          'created_at': rawCreatedAt.isNotEmpty ? rawCreatedAt : DateTime.now().toIso8601String(),
+          'created_at': effectiveCreatedAt,
+          'published_at': effectiveCreatedAt,
           'is_steam_news': true,
-          'source_url': news['sourceUrl'] ?? news['url'] ?? '',
+          'source_url': sourceUrl,
           'game_name': news['game'] ?? news['gameName'] ?? '',
           'category': news['category'] ?? 'Gaming',
           'source': source,
+          'timestamp': (realDate.millisecondsSinceEpoch / 1000).floor(),
         };
       }).toList();
 
@@ -1715,28 +1724,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       }
     }
 
-    final seconds = diff.inSeconds;
-    final minutes = diff.inMinutes;
-    final hours = diff.inHours;
-    final days = diff.inDays;
-
-    if (seconds < 60) {
-      return 'time_just_now'.tr();
-    } else if (minutes < 60) {
-      return 'time_minutes_ago'.tr(args: ['$minutes']);
-    } else if (hours < 24) {
-      return 'time_hours_ago'.tr(args: ['$hours']);
-    } else if (days < 7) {
-      return 'time_days_ago'.tr(args: ['$days']);
-    } else if (days < 30) {
-      final weeks = (days / 7).floor();
-      return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
-    } else if (days < 365) {
-      final months = (days / 30).floor();
-      return '$months ${months == 1 ? 'month' : 'months'} ago';
-    } else {
-      return '${dt.day}/${dt.month}/${dt.year}';
-    }
+    return NewsImageResolver.formatRelativeTime(dt);
   }
 
   Future<void> _handlePullToRefresh() async {
@@ -2102,7 +2090,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                                 ),
                               ),
                               subtitle: Text(
-                                _formatTimeAgo(post['created_at']),
+                                isSteamNews
+                                    ? NewsImageResolver.formatArticleTime(post)
+                                    : _formatTimeAgo(post['created_at']),
                                 style: TextStyle(fontSize: 12, color: ThemeService.textSecondary),
                               ),
                               trailing: isSteamNews
