@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -50,6 +51,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   File? _pickedImageFile;
   File? _pickedCoverFile;
   bool _isSaving = false;
+  Timer? _usernameDebounce;
+  bool _isCheckingUsername = false;
+  bool? _isUsernameAvailable;
+  String? _usernameStatusText;
+  String _lastCheckedUsername = '';
 
   String _selectedFrame = '';
   List<String> _unlockedFrames = [];
@@ -72,7 +78,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     super.initState();
     if (widget.existingUser != null) {
       final u = widget.existingUser!;
-      _usernameController.text = u.username;
+      final existingUsername = u.username.trim();
+      _usernameController.text = existingUsername;
+      if (existingUsername.isNotEmpty) {
+        _isUsernameAvailable = true;
+      }
       _displayNameController.text = u.displayName;
       _bioController.text = u.bio;
       _selectedGame = GamerTheme.favoriteGames.contains(u.favoriteGame)
@@ -88,8 +98,9 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
               rawUserRank != 'Skip')
           ? rawUserRank
           : 'Bronze';
+      final rawGameId = u.gameId.trim();
       _gameIdController.text =
-          u.gameId.isNotEmpty ? u.gameId : '12345';
+          (!widget.isEditing && rawGameId == '12345') ? '' : rawGameId;
       _photoUrl = u.photoUrl;
       _coverUrl = u.coverUrl;
       _selectedFrame = u.activeFrame;
@@ -111,7 +122,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         if (avatar.isNotEmpty) _photoUrl = avatar;
       }
       _rankController.text = 'Bronze';
-      _gameIdController.text = '12345';
+      _gameIdController.text = '';
     }
     _loadStorePerks();
   }
@@ -139,6 +150,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
   @override
   void dispose() {
+    _usernameDebounce?.cancel();
     _usernameController.dispose();
     _displayNameController.dispose();
     _bioController.dispose();
@@ -146,6 +158,80 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     _gameIdController.dispose();
     _referralCodeController.dispose();
     super.dispose();
+  }
+
+  void _onUsernameChanged(String value) {
+    _usernameDebounce?.cancel();
+    final clean = value.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
+    _lastCheckedUsername = clean;
+
+    if (clean.isEmpty) {
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameAvailable = null;
+        _usernameStatusText = null;
+      });
+      return;
+    }
+
+    if (clean.length < 3) {
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameAvailable = false;
+        _usernameStatusText = 'Username must be at least 3 characters';
+      });
+      return;
+    }
+
+    if (clean.length > 15) {
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameAvailable = false;
+        _usernameStatusText = 'Username cannot exceed 15 characters';
+      });
+      return;
+    }
+
+    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(clean)) {
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameAvailable = false;
+        _usernameStatusText = 'Only letters, numbers & underscores (_) allowed';
+      });
+      return;
+    }
+
+    final currentUid = widget.existingUser?.uid ?? GamerAuthService().currentUid;
+    final existingOwnUsername = widget.existingUser?.username.trim().toLowerCase() ?? '';
+    if (widget.isEditing && existingOwnUsername.isNotEmpty && clean == existingOwnUsername) {
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameAvailable = true;
+        _usernameStatusText = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingUsername = true;
+      _isUsernameAvailable = null;
+      _usernameStatusText = 'Checking availability...';
+    });
+
+    _usernameDebounce = Timer(const Duration(milliseconds: 400), () async {
+      final available = await GamerAuthService().isUsernameAvailable(
+        clean,
+        currentUid: currentUid,
+      );
+      if (!mounted || _lastCheckedUsername != clean) return;
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameAvailable = available;
+        _usernameStatusText = available
+            ? '@$clean is available'
+            : '@$clean is already taken! Try another name.';
+      });
+    });
   }
 
   void _showRankComingSoonBanner() {
@@ -268,12 +354,62 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   }
 
   Future<void> _saveGamerId() async {
-    final rawUsername = _usernameController.text.toLowerCase().trim();
+    final rawUsername = _usernameController.text
+        .trim()
+        .replaceFirst(RegExp(r'^@+'), '')
+        .toLowerCase();
+    final enteredGameId = _gameIdController.text.trim();
     final uid = GamerAuthService().currentUid;
     if (uid == null) return;
 
+    if (rawUsername.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a gamer username'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final isSameExistingUsername = widget.isEditing &&
+        widget.existingUser != null &&
+        rawUsername == widget.existingUser!.username.trim().toLowerCase();
+
+    if (!isSameExistingUsername && !RegExp(r'^[a-z0-9_]{3,15}$').hasMatch(rawUsername)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Username must be 3-15 characters (letters, numbers, _ only)'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
+      if (!isSameExistingUsername) {
+        final available = await GamerAuthService().isUsernameAvailable(
+          rawUsername,
+          currentUid: uid,
+        );
+        if (!available) {
+          if (mounted) {
+            setState(() {
+              _isUsernameAvailable = false;
+              _usernameStatusText = '@$rawUsername is already taken! Try another name.';
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Username @$rawUsername is already taken. Please choose an available name.'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       String finalPhotoUrl = _photoUrl;
       if (_pickedImageFile != null) {
         final uploaded = await GamerAuthService().uploadProfilePhoto(_pickedImageFile!, uid);
@@ -289,10 +425,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final enteredRank = _rankController.text.trim();
       final gamerUser = GamerUser(
         uid: uid,
-        username: rawUsername.isNotEmpty ? rawUsername : (widget.existingUser?.username ?? 'gamer'),
+        username: rawUsername,
         displayName: _displayNameController.text.trim().isNotEmpty
             ? _displayNameController.text.trim()
-            : (rawUsername.isNotEmpty ? rawUsername : 'Gamer'),
+            : rawUsername,
         photoUrl: finalPhotoUrl,
         coverUrl: finalCoverUrl.isNotEmpty ? finalCoverUrl : (widget.existingUser?.coverUrl ?? ''),
         bio: _bioController.text.trim(),
@@ -308,7 +444,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         likesReceived: widget.existingUser?.likesReceived ?? 0,
         reportsCount: widget.existingUser?.reportsCount ?? 0,
         isVerified: widget.existingUser?.isVerified ?? false,
-        gameId: _gameIdController.text.trim().isNotEmpty ? _gameIdController.text.trim() : '12345',
+        gameId: enteredGameId,
         createdAt: widget.existingUser?.createdAt ?? DateTime.now(),
         activeFrame: _selectedFrame,
         unlockedFrames: _unlockedFrames,
@@ -319,6 +455,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       await GamerAuthService().saveGamerProfile(gamerUser);
 
       await SupabaseService.client.from('users').update({
+        'username': gamerUser.username,
         'avatar_url': finalPhotoUrl,
         'cover_url': finalCoverUrl,
         'display_name': gamerUser.displayName,
@@ -699,36 +836,97 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               fontSize: 13,
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 14),
+                          if (_isUsernameAvailable == true) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 14),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                         decoration: BoxDecoration(
                           color: cardColor,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: borderColor),
+                          border: Border.all(
+                            color: _isUsernameAvailable == false
+                                ? Colors.redAccent
+                                : (_isUsernameAvailable == true
+                                    ? const Color(0xFF00C853)
+                                    : borderColor),
+                          ),
                         ),
                         child: Row(
                           children: [
                             Icon(Icons.person, color: subTextColor, size: 18),
                             const SizedBox(width: 10),
+                            Text(
+                              '@',
+                              style: TextStyle(
+                                color: subTextColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
                             Expanded(
-                              child: Text(
-                                '@${_usernameController.text.trim().isNotEmpty ? _usernameController.text.trim() : "tufailm483"}',
+                              child: TextField(
+                                controller: _usernameController,
+                                autocorrect: false,
+                                enableSuggestions: false,
+                                keyboardType: TextInputType.text,
+                                textInputAction: TextInputAction.next,
+                                maxLength: 15,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
+                                ],
+                                onChanged: _onUsernameChanged,
                                 style: TextStyle(
                                   color: primaryTextColor,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
                                 ),
+                                decoration: InputDecoration(
+                                  hintText: 'Enter username',
+                                  hintStyle: TextStyle(
+                                    color: subTextColor.withOpacity(0.6),
+                                    fontWeight: FontWeight.normal,
+                                    fontSize: 13,
+                                  ),
+                                  border: InputBorder.none,
+                                  counterText: '',
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
                               ),
                             ),
-                            const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 18),
+                            if (_isCheckingUsername)
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            else if (_isUsernameAvailable == true)
+                              const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 18)
+                            else if (_isUsernameAvailable == false)
+                              const Icon(Icons.cancel_rounded, color: Colors.redAccent, size: 18),
                           ],
                         ),
                       ),
+                      if (_usernameStatusText != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _usernameStatusText!,
+                          style: TextStyle(
+                            color: _isCheckingUsername
+                                ? subTextColor
+                                : (_isUsernameAvailable == true
+                                    ? const Color(0xFF00C853)
+                                    : Colors.redAccent),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
 
                       const SizedBox(height: 12),
 
@@ -1008,23 +1206,17 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       const SizedBox(height: 14),
 
                       // Game Character ID
-                      Row(
-                        children: [
-                          Text(
-                            'Game Character ID / UID',
-                            style: TextStyle(
-                              color: primaryTextColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(Icons.lock_outline, size: 14, color: subTextColor),
-                        ],
+                      Text(
+                        'Game Character ID / UID',
+                        style: TextStyle(
+                          color: primaryTextColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                       const SizedBox(height: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                         decoration: BoxDecoration(
                           color: cardColor,
                           borderRadius: BorderRadius.circular(10),
@@ -1035,12 +1227,27 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             const Text('🎮', style: TextStyle(fontSize: 16)),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: Text(
-                                _gameIdController.text.isNotEmpty ? _gameIdController.text : '12345',
+                              child: TextField(
+                                controller: _gameIdController,
+                                keyboardType: TextInputType.text,
+                                textInputAction: TextInputAction.next,
+                                maxLength: 30,
                                 style: TextStyle(
                                   color: primaryTextColor,
                                   fontWeight: FontWeight.w900,
                                   fontSize: 14,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: 'Enter your Character ID / UID',
+                                  hintStyle: TextStyle(
+                                    color: subTextColor.withOpacity(0.6),
+                                    fontWeight: FontWeight.normal,
+                                    fontSize: 13,
+                                  ),
+                                  border: InputBorder.none,
+                                  counterText: '',
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
                               ),
                             ),

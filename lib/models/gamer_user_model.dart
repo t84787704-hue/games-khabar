@@ -617,8 +617,15 @@ class GamerUser {
       clipsCount: (data['clipsCount'] as num?)?.toInt() ?? 0,
       squadRoomsCount: (data['squadRoomsCount'] as num?)?.toInt() ?? 0,
       verificationAppliedAt: appliedAt,
-      gameId: (data['bgmiUid'] ?? data['gameId'] ?? data['inGameId'] ?? '')
-          .toString(),
+      gameId: [
+        data['game_id'],
+        data['bgmiUid'],
+        data['gameId'],
+        data['inGameId'],
+      ].map((e) => e?.toString().trim() ?? '').firstWhere(
+            (s) => s.isNotEmpty,
+            orElse: () => '',
+          ),
       coins: (data['coins'] as num?)?.toInt() ?? 100,
       level: userLevel,
       games: parsedGames,
