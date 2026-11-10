@@ -20,6 +20,7 @@ import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'coin_store_screen.dart';
+import 'gamer_auth_screen.dart';
 import 'gamer_main_navigation_screen.dart';
 
 class CreateGamerIdScreen extends StatefulWidget {
@@ -43,6 +44,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   final _rankController = TextEditingController();
   final _gameIdController = TextEditingController();
   final _referralCodeController = TextEditingController();
+  final _usernameFocusNode = FocusNode();
+  final _gameIdFocusNode = FocusNode();
 
   String _selectedGame = 'BGMI';
   String _selectedRankGame = 'BGMI (Battlegrounds Mobile India)';
@@ -76,50 +79,48 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.existingUser != null) {
-      final u = widget.existingUser!;
-      final existingUsername = u.username.trim();
+    final sourceUser = widget.existingUser ?? GamerAuthService().currentGamer;
+    final fbUser = GamerAuthService().currentUser;
+    final meta = fbUser?.userMetadata ?? {};
+    final authName = (meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? '').toString();
+    final authAvatar = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
+
+    if (sourceUser != null) {
+      final existingUsername = sourceUser.username.trim();
       _usernameController.text = existingUsername;
       if (existingUsername.isNotEmpty) {
         _isUsernameAvailable = true;
       }
-      _displayNameController.text = u.displayName;
-      _bioController.text = u.bio;
-      _selectedGame = GamerTheme.favoriteGames.contains(u.favoriteGame)
-          ? u.favoriteGame
+      _displayNameController.text = sourceUser.displayName.trim().isNotEmpty
+          ? sourceUser.displayName
+          : authName;
+      _bioController.text = sourceUser.bio;
+      _selectedGame = GamerTheme.favoriteGames.contains(sourceUser.favoriteGame)
+          ? sourceUser.favoriteGame
           : 'BGMI';
       _selectedRankGame = MobileGamesRankData.resolveGameName(
-        u.selectedGame.isNotEmpty ? u.selectedGame : u.favoriteGame,
+        sourceUser.selectedGame.isNotEmpty ? sourceUser.selectedGame : sourceUser.favoriteGame,
       );
       final rawUserRank =
-          u.selectedRank.isNotEmpty ? u.selectedRank : u.rank;
+          sourceUser.selectedRank.isNotEmpty ? sourceUser.selectedRank : sourceUser.rank;
       _rankController.text = (rawUserRank.isNotEmpty &&
               rawUserRank != 'None' &&
               rawUserRank != 'Skip')
           ? rawUserRank
           : 'Bronze';
-      final rawGameId = u.gameId.trim();
+      final rawGameId = sourceUser.gameId.trim();
       _gameIdController.text =
           (!widget.isEditing && rawGameId == '12345') ? '' : rawGameId;
-      _photoUrl = u.photoUrl;
-      _coverUrl = u.coverUrl;
-      _selectedFrame = u.activeFrame;
-      _unlockedFrames = List<String>.from(u.unlockedFrames);
-      _selectedBadge = u.activeBadge;
-      _unlockedBadges = List<String>.from(u.unlockedBadges);
+      _photoUrl = sourceUser.photoUrl.trim().isNotEmpty ? sourceUser.photoUrl : authAvatar;
+      _coverUrl = sourceUser.coverUrl;
+      _selectedFrame = sourceUser.activeFrame;
+      _unlockedFrames = List<String>.from(sourceUser.unlockedFrames);
+      _selectedBadge = sourceUser.activeBadge;
+      _unlockedBadges = List<String>.from(sourceUser.unlockedBadges);
     } else {
-      final fbUser = GamerAuthService().currentUser;
       if (fbUser != null) {
-        final meta = fbUser.userMetadata ?? {};
-        final fullName = (meta['full_name'] ??
-                meta['name'] ??
-                meta['display_name'] ??
-                '')
-            .toString();
-        final avatar =
-            (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
-        _displayNameController.text = fullName;
-        if (avatar.isNotEmpty) _photoUrl = avatar;
+        _displayNameController.text = authName;
+        if (authAvatar.isNotEmpty) _photoUrl = authAvatar;
       }
       _rankController.text = 'Bronze';
       _gameIdController.text = '';
@@ -151,6 +152,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   @override
   void dispose() {
     _usernameDebounce?.cancel();
+    _usernameFocusNode.dispose();
+    _gameIdFocusNode.dispose();
     _usernameController.dispose();
     _displayNameController.dispose();
     _bioController.dispose();
@@ -162,7 +165,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
   void _onUsernameChanged(String value) {
     _usernameDebounce?.cancel();
-    final clean = value.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
+    final noAt = value.replaceFirst(RegExp(r'^@+'), '').trim();
+    final clean = noAt.toLowerCase();
     _lastCheckedUsername = clean;
 
     if (clean.isEmpty) {
@@ -170,6 +174,24 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         _isCheckingUsername = false;
         _isUsernameAvailable = null;
         _usernameStatusText = null;
+      });
+      return;
+    }
+
+    if (noAt.contains(RegExp(r'\s'))) {
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameAvailable = false;
+        _usernameStatusText = 'Spaces are not allowed — use letters, numbers & _ only';
+      });
+      return;
+    }
+
+    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(clean)) {
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameAvailable = false;
+        _usernameStatusText = 'Only English letters (a-z), numbers (0-9) & underscores (_) allowed';
       });
       return;
     }
@@ -188,15 +210,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         _isCheckingUsername = false;
         _isUsernameAvailable = false;
         _usernameStatusText = 'Username cannot exceed 15 characters';
-      });
-      return;
-    }
-
-    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(clean)) {
-      setState(() {
-        _isCheckingUsername = false;
-        _isUsernameAvailable = false;
-        _usernameStatusText = 'Only letters, numbers & underscores (_) allowed';
       });
       return;
     }
@@ -452,28 +465,15 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         unlockedBadges: _unlockedBadges,
       );
 
-      await GamerAuthService().saveGamerProfile(gamerUser);
+      final saved = await GamerAuthService().saveGamerProfile(gamerUser);
+      if (!saved) {
+        throw Exception('Could not save profile to database. Please try again.');
+      }
 
-      await SupabaseService.client.from('users').update({
-        'username': gamerUser.username,
-        'avatar_url': finalPhotoUrl,
-        'cover_url': finalCoverUrl,
-        'display_name': gamerUser.displayName,
-        'bio': gamerUser.bio,
-        'favorite_game': gamerUser.favoriteGame,
-        'game_id': gamerUser.gameId,
-        'rank': enteredRank,
-        'selected_rank': enteredRank,
-        'active_frame': _selectedFrame,
-        'active_badge': _selectedBadge,
-      }).or('id.eq.$uid,uid.eq.$uid');
-
-      // Hana i ke kālailai kuhikuhi ke ho'okomo 'ia ka pā'ālua
+      // Apply referral bonus if entered during initial account setup
       if (!widget.isEditing && _referralCodeController.text.trim().isNotEmpty) {
         await _processReferralBonus(uid, _referralCodeController.text.trim());
       }
-
-      GamerAuthService().currentGamerNotifier.value = gamerUser;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -482,7 +482,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             backgroundColor: Color(0xFF00C853),
           ),
         );
-        if (widget.isEditing) {
+        if (widget.isEditing && Navigator.of(context).canPop()) {
           Navigator.of(context).pop(true);
         } else {
           Navigator.of(context).pushAndRemoveUntil(
@@ -493,12 +493,77 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final errStr = e.toString();
+        final isDuplicate = errStr.contains('23505') ||
+            errStr.toLowerCase().contains('duplicate key') ||
+            errStr.toLowerCase().contains('users_username_key');
+        final friendlyMessage = isDuplicate
+            ? 'Username @$rawUsername is already taken! Try another name.'
+            : 'Error: ${errStr.replaceFirst("Exception:", "").trim()}';
+        if (isDuplicate) {
+          setState(() {
+            _isUsernameAvailable = false;
+            _usernameStatusText = '@$rawUsername is already taken! Try another name.';
+          });
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(friendlyMessage), backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _handleBackNavigation() async {
+    FocusScope.of(context).unfocus();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    final existingGamer = GamerAuthService().currentGamer;
+    if (existingGamer != null && existingGamer.username.trim().isNotEmpty) {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
+        (route) => false,
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final shouldReturnToLogin = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Profile Setup?'),
+        content: const Text(
+          'Your Gamer ID is not complete yet. Do you want to stay or return to Sign In?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Stay'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF7A00),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Go Back'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldReturnToLogin == true && mounted) {
+      await GamerAuthService().signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const GamerAuthScreen()),
+        (route) => false,
+      );
     }
   }
 
@@ -516,17 +581,24 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         final primaryTextColor = isDark ? Colors.white : const Color(0xFF0F172A);
         final subTextColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
 
-        return Scaffold(
-          backgroundColor: bgColor,
-          appBar: AppBar(
-            backgroundColor: isDark ? const Color(0xFF161B22) : Colors.white,
-            elevation: 0.5,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back, color: primaryTextColor),
-              onPressed: () => Navigator.pop(context),
-            ),
-            title: Text(
-              widget.isEditing ? 'Edit Gamer ID' : 'Create Gamer ID',
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) {
+              _handleBackNavigation();
+            }
+          },
+          child: Scaffold(
+            backgroundColor: bgColor,
+            appBar: AppBar(
+              backgroundColor: isDark ? const Color(0xFF161B22) : Colors.white,
+              elevation: 0.5,
+              leading: IconButton(
+                icon: Icon(Icons.arrow_back, color: primaryTextColor),
+                onPressed: _handleBackNavigation,
+              ),
+              title: Text(
+                widget.isEditing ? 'Edit Gamer ID' : 'Create Gamer ID',
               style: TextStyle(
                 color: primaryTextColor,
                 fontWeight: FontWeight.w900,
@@ -843,73 +915,85 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: _isUsernameAvailable == false
-                                ? Colors.redAccent
-                                : (_isUsernameAvailable == true
-                                    ? const Color(0xFF00C853)
-                                    : borderColor),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.person, color: subTextColor, size: 18),
-                            const SizedBox(width: 10),
-                            Text(
-                              '@',
-                              style: TextStyle(
-                                color: subTextColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _usernameFocusNode.requestFocus(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _isUsernameAvailable == false
+                                  ? Colors.redAccent
+                                  : (_isUsernameAvailable == true
+                                      ? const Color(0xFF00C853)
+                                      : borderColor),
                             ),
-                            Expanded(
-                              child: TextField(
-                                controller: _usernameController,
-                                autocorrect: false,
-                                enableSuggestions: false,
-                                keyboardType: TextInputType.text,
-                                textInputAction: TextInputAction.next,
-                                maxLength: 15,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
-                                ],
-                                onChanged: _onUsernameChanged,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.person, color: subTextColor, size: 18),
+                              const SizedBox(width: 10),
+                              Text(
+                                '@',
                                 style: TextStyle(
-                                  color: primaryTextColor,
+                                  color: subTextColor,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
                                 ),
-                                decoration: InputDecoration(
-                                  hintText: 'Enter username',
-                                  hintStyle: TextStyle(
-                                    color: subTextColor.withOpacity(0.6),
-                                    fontWeight: FontWeight.normal,
-                                    fontSize: 13,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: TextField(
+                                  controller: _usernameController,
+                                  focusNode: _usernameFocusNode,
+                                  autocorrect: false,
+                                  enableSuggestions: false,
+                                  keyboardType: TextInputType.text,
+                                  textInputAction: TextInputAction.next,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.singleLineFormatter,
+                                    LengthLimitingTextInputFormatter(20),
+                                  ],
+                                  onChanged: _onUsernameChanged,
+                                  style: TextStyle(
+                                    color: primaryTextColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
                                   ),
-                                  border: InputBorder.none,
-                                  counterText: '',
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter username',
+                                    hintStyle: TextStyle(
+                                      color: subTextColor.withOpacity(0.6),
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (_isCheckingUsername)
-                              const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            else if (_isUsernameAvailable == true)
-                              const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 18)
-                            else if (_isUsernameAvailable == false)
-                              const Icon(Icons.cancel_rounded, color: Colors.redAccent, size: 18),
-                          ],
+                              if (_isCheckingUsername)
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else if (_isUsernameAvailable == true) ...[
+                                const Icon(Icons.check_circle, color: Color(0xFF00C853), size: 18),
+                                const SizedBox(width: 6),
+                                Icon(Icons.edit_outlined, size: 16, color: subTextColor),
+                              ] else if (_isUsernameAvailable == false) ...[
+                                const Icon(Icons.cancel_rounded, color: Colors.redAccent, size: 18),
+                                const SizedBox(width: 6),
+                                Icon(Icons.edit_outlined, size: 16, color: subTextColor),
+                              ] else
+                                Icon(Icons.edit_outlined, size: 16, color: subTextColor),
+                            ],
+                          ),
                         ),
                       ),
                       if (_usernameStatusText != null) ...[
@@ -1215,44 +1299,49 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: borderColor),
-                        ),
-                        child: Row(
-                          children: [
-                            const Text('🎮', style: TextStyle(fontSize: 16)),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                controller: _gameIdController,
-                                keyboardType: TextInputType.text,
-                                textInputAction: TextInputAction.next,
-                                maxLength: 30,
-                                style: TextStyle(
-                                  color: primaryTextColor,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 14,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: 'Enter your Character ID / UID',
-                                  hintStyle: TextStyle(
-                                    color: subTextColor.withOpacity(0.6),
-                                    fontWeight: FontWeight.normal,
-                                    fontSize: 13,
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _gameIdFocusNode.requestFocus(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              const Text('🎮', style: TextStyle(fontSize: 16)),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: _gameIdController,
+                                  focusNode: _gameIdFocusNode,
+                                  keyboardType: TextInputType.text,
+                                  textInputAction: TextInputAction.next,
+                                  maxLength: 30,
+                                  style: TextStyle(
+                                    color: primaryTextColor,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14,
                                   ),
-                                  border: InputBorder.none,
-                                  counterText: '',
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter your Character ID / UID',
+                                    hintStyle: TextStyle(
+                                      color: subTextColor.withOpacity(0.6),
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
                                 ),
                               ),
-                            ),
-                            Icon(Icons.edit_outlined, size: 16, color: subTextColor),
-                          ],
+                              Icon(Icons.edit_outlined, size: 16, color: subTextColor),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1399,6 +1488,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
               ],
             ),
           ),
+        ),
         );
       },
     );

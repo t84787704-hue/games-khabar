@@ -137,29 +137,16 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
         }
       }
 
-      Map<String, dynamic>? profile;
-      try {
-        profile = await SupabaseService.client
-            .from('users')
-            .select('id, username, display_name, avatar_url, is_banned, banned_reason')
-            .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
-            .maybeSingle()
-            .timeout(const Duration(seconds: 4), onTimeout: () => null);
-      } catch (_) {
-        try {
-          profile = await SupabaseService.client
-              .from('users')
-              .select()
-              .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
-              .maybeSingle()
-              .timeout(const Duration(seconds: 4), onTimeout: () => null);
-        } catch (_) {}
-      }
+      final loadedGamer = await GamerAuthService()
+          .refreshCurrentGamer()
+          .timeout(const Duration(seconds: 7), onTimeout: () => GamerAuthService().currentGamer);
 
       if (!mounted) return;
 
-      if (profile != null && profile['is_banned'] == true) {
-        final reason = profile['banned_reason']?.toString() ?? 'account_suspended'.tr();
+      if (loadedGamer != null && loadedGamer.isBanned) {
+        final reason = loadedGamer.bannedReason?.isNotEmpty == true
+            ? loadedGamer.bannedReason!
+            : 'account_suspended'.tr();
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => BannedScreen(reason: reason)),
           (route) => false,
@@ -167,18 +154,18 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
         return;
       }
 
-      final rawUsername = profile != null ? profile['username'] : null;
-      final username = rawUsername?.toString().trim() ?? '';
-
-      if (profile != null && username.isNotEmpty) {
-        try {
-          await GamerAuthService().refreshCurrentGamer().timeout(const Duration(seconds: 4), onTimeout: () => null);
-        } catch (_) {}
-        if (!mounted) return;
+      if (loadedGamer != null && loadedGamer.username.trim().isNotEmpty) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const GamerMainNavigationScreen()),
           (route) => false,
         );
+        return;
+      }
+
+      // If network error prevented verifying whether profile exists, stay on Auth Screen with error instead of forcing CreateGamerIdScreen
+      if (GamerAuthService().profileLoadErrorNotifier.value && loadedGamer == null) {
+        _isNavigating = false;
+        _showErrorSnackBar('Unable to verify your profile. Please check your internet and try again.');
         return;
       }
 
@@ -189,10 +176,8 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
     } catch (e) {
       debugPrint('[GamerAuthScreen] Post auth check error: $e');
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
-        (route) => false,
-      );
+      _isNavigating = false;
+      _showErrorSnackBar('Could not load profile: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -223,15 +208,10 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
 
       if (SupabaseService.client.auth.currentUser != null) {
         await _handlePostAuth().timeout(
-          const Duration(seconds: 8),
+          const Duration(seconds: 10),
           onTimeout: () {
-            debugPrint('[GamerAuthScreen] _handlePostAuth timed out, proceeding to CreateGamerIdScreen');
-            if (mounted) {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
-                (route) => false,
-              );
-            }
+            _isNavigating = false;
+            throw TimeoutException('Profile sync timed out. Please try signing in again.');
           },
         );
       } else {

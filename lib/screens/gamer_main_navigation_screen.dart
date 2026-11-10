@@ -120,7 +120,10 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
           gamer = await GamerAuthService().refreshCurrentGamer();
         }
       }
-      if (mounted && (gamer == null || gamer.username.trim().isEmpty)) {
+      if (mounted &&
+          !GamerAuthService().profileLoadErrorNotifier.value &&
+          gamer != null &&
+          gamer.username.trim().isEmpty) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const CreateGamerIdScreen()),
         );

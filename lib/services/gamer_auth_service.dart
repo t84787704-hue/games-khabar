@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/gamer_user_model.dart';
 import 'supabase_service.dart';
@@ -25,8 +26,10 @@ class GamerAuthService {
   final ValueNotifier<GamerUser?> currentGamerNotifier = ValueNotifier<GamerUser?>(null);
   final ValueNotifier<bool> isLoadingNotifier = ValueNotifier<bool>(true);
   final ValueNotifier<User?> authUserNotifier = ValueNotifier<User?>(null);
+  final ValueNotifier<bool> profileLoadErrorNotifier = ValueNotifier<bool>(false);
 
   StreamSubscription<AuthState>? _authSubscription;
+  Future<GamerUser?>? _inFlightRefresh;
 
   User? get currentUser => _supabase.auth.currentUser;
   String? get currentUid => _supabase.auth.currentUser?.id;
@@ -35,16 +38,60 @@ class GamerAuthService {
 
   Stream<User?> get authStateChanges => _supabase.auth.onAuthStateChange.map((event) => event.session?.user);
 
+  static String _cacheKey(String uid) => 'cached_gamer_profile_$uid';
+
+  Future<void> _cacheGamerProfile(GamerUser user) async {
+    if (user.uid.isEmpty || user.username.trim().isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKey(user.uid), jsonEncode(user.toMap()));
+    } catch (_) {}
+  }
+
+  Future<GamerUser?> _loadCachedGamerProfile(String uid) async {
+    if (uid.isEmpty) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKey(uid));
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final gamer = GamerUser.fromMap(Map<String, dynamic>.from(decoded), uid);
+        if (gamer.username.trim().isNotEmpty) {
+          return gamer;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _clearCachedGamerProfile(String uid) async {
+    if (uid.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cacheKey(uid));
+    } catch (_) {}
+  }
+
   Future<void> init() async {
     _authSubscription?.cancel();
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) async {
       final user = data.session?.user;
       authUserNotifier.value = user;
       if (user != null) {
-        isLoadingNotifier.value = true;
+        if (currentGamerNotifier.value == null || currentGamerNotifier.value!.uid != user.id) {
+          final cached = await _loadCachedGamerProfile(user.id);
+          if (cached != null) {
+            currentGamerNotifier.value = cached;
+            isLoadingNotifier.value = false;
+          } else {
+            isLoadingNotifier.value = true;
+          }
+        }
         await refreshCurrentGamer();
       } else {
         currentGamerNotifier.value = null;
+        profileLoadErrorNotifier.value = false;
         isLoadingNotifier.value = false;
       }
     });
@@ -55,11 +102,55 @@ class GamerAuthService {
       try {
         NotificationService().subscribeToUser(initialUser.id);
       } catch (_) {}
-      isLoadingNotifier.value = true;
-      await refreshCurrentGamer();
+      final cached = await _loadCachedGamerProfile(initialUser.id);
+      if (cached != null) {
+        currentGamerNotifier.value = cached;
+        profileLoadErrorNotifier.value = false;
+        isLoadingNotifier.value = false;
+        // Refresh silently in background without blocking startup
+        unawaited(refreshCurrentGamer());
+      } else {
+        isLoadingNotifier.value = true;
+        await refreshCurrentGamer();
+      }
     } else {
       currentGamerNotifier.value = null;
+      profileLoadErrorNotifier.value = false;
       isLoadingNotifier.value = false;
+    }
+  }
+
+  Future<(Map<String, dynamic>?, bool)> _fetchProfileRow(String authUserId) async {
+    try {
+      final res = await _supabase
+          .from('users')
+          .select()
+          .or('id.eq.$authUserId,uid.eq.$authUserId')
+          .maybeSingle()
+          .timeout(const Duration(seconds: 6));
+      return (res, true);
+    } catch (_) {
+      try {
+        final res = await _supabase
+            .from('users')
+            .select()
+            .eq('id', authUserId)
+            .maybeSingle()
+            .timeout(const Duration(seconds: 5));
+        return (res, true);
+      } catch (_) {
+        try {
+          final res = await _supabase
+              .from('users')
+              .select()
+              .eq('uid', authUserId)
+              .maybeSingle()
+              .timeout(const Duration(seconds: 5));
+          return (res, true);
+        } catch (_) {
+          return (null, false);
+        }
+      }
     }
   }
 
@@ -67,58 +158,51 @@ class GamerAuthService {
   Future<void> _syncAndLoadUser(User user) async {
     try {
       final authUserId = user.id;
+      final (profile, querySucceeded) = await _fetchProfileRow(authUserId);
 
-      Map<String, dynamic>? profile;
-      try {
-        profile = await _supabase
-            .from('users')
-            .select()
-            .or('id.eq.$authUserId,uid.eq.$authUserId')
-            .maybeSingle()
-            .timeout(const Duration(seconds: 5), onTimeout: () => null);
-      } catch (_) {
-        try {
-          profile = await _supabase
-              .from('users')
-              .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
-              .eq('id', authUserId)
-              .maybeSingle()
-              .timeout(const Duration(seconds: 4), onTimeout: () => null);
-        } catch (_) {
-          try {
-            profile = await _supabase
-                .from('users')
-                .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
-                .eq('uid', authUserId)
-                .maybeSingle()
-                .timeout(const Duration(seconds: 4), onTimeout: () => null);
-          } catch (_) {}
-        }
-      }
-
-      if (profile != null) {
+      if (querySucceeded && profile != null) {
         final gamer = GamerUser.fromMap(profile, authUserId);
         currentGamerNotifier.value = gamer;
+        profileLoadErrorNotifier.value = false;
+        await _cacheGamerProfile(gamer);
+      } else if (querySucceeded && profile == null) {
+        final cached = await _loadCachedGamerProfile(authUserId);
+        if (cached != null) {
+          currentGamerNotifier.value = cached;
+          profileLoadErrorNotifier.value = false;
+        } else {
+          // User genuinely has no row in users table yet (new signup)
+          final initialGamer = GamerUser(
+            uid: authUserId,
+            username: '',
+            displayName: user.userMetadata?['full_name']?.toString() ??
+                user.userMetadata?['name']?.toString() ??
+                (user.email?.split('@').first ?? 'Gamer'),
+            photoUrl: user.userMetadata?['avatar_url']?.toString() ??
+                user.userMetadata?['picture']?.toString() ??
+                '',
+            coverUrl: '',
+            bio: '',
+            favoriteGame: 'BGMI',
+            selectedGame: 'BGMI',
+            selectedRank: 'Bronze',
+            rank: 'Bronze',
+            coins: 100,
+          );
+          currentGamerNotifier.value = initialGamer;
+          profileLoadErrorNotifier.value = false;
+        }
       } else {
-        // User has no row in users table yet (new signup)
-        final initialGamer = GamerUser(
-          uid: authUserId,
-          username: '',
-          displayName: user.userMetadata?['full_name']?.toString() ??
-              user.userMetadata?['name']?.toString() ??
-              (user.email?.split('@').first ?? 'Gamer'),
-          photoUrl: user.userMetadata?['avatar_url']?.toString() ??
-              user.userMetadata?['picture']?.toString() ??
-              '',
-          coverUrl: '',
-          bio: '',
-          favoriteGame: 'BGMI',
-          selectedGame: 'BGMI',
-          selectedRank: 'Bronze',
-          rank: 'Bronze',
-          coins: 100,
-        );
-        currentGamerNotifier.value = initialGamer;
+        // Network error / timeout: preserve existing or cached profile rather than forcing CreateGamerIdScreen
+        final cached = await _loadCachedGamerProfile(authUserId);
+        if (currentGamerNotifier.value != null && currentGamerNotifier.value!.uid == authUserId) {
+          profileLoadErrorNotifier.value = false;
+        } else if (cached != null) {
+          currentGamerNotifier.value = cached;
+          profileLoadErrorNotifier.value = false;
+        } else {
+          profileLoadErrorNotifier.value = true;
+        }
       }
 
       try {
@@ -130,20 +214,14 @@ class GamerAuthService {
       checkAndAwardWelcomeBonus(authUserId);
     } catch (e) {
       debugPrint('[GamerAuthService] Error syncing user: $e');
-      if (currentGamerNotifier.value == null) {
-        currentGamerNotifier.value = GamerUser(
-          uid: user.id,
-          username: '',
-          displayName: 'Gamer',
-          photoUrl: '',
-          coverUrl: '',
-          bio: '',
-          favoriteGame: 'BGMI',
-          selectedGame: 'BGMI',
-          selectedRank: 'Bronze',
-          rank: 'Bronze',
-          coins: 100,
-        );
+      final cached = await _loadCachedGamerProfile(user.id);
+      if (currentGamerNotifier.value != null && currentGamerNotifier.value!.uid == user.id) {
+        profileLoadErrorNotifier.value = false;
+      } else if (cached != null) {
+        currentGamerNotifier.value = cached;
+        profileLoadErrorNotifier.value = false;
+      } else {
+        profileLoadErrorNotifier.value = true;
       }
     } finally {
       isLoadingNotifier.value = false;
@@ -151,48 +229,43 @@ class GamerAuthService {
   }
 
   /// Refresh current gamer profile from Supabase
-  Future<GamerUser?> refreshCurrentGamer() async {
+  Future<GamerUser?> refreshCurrentGamer() {
+    if (_inFlightRefresh != null) return _inFlightRefresh!;
+    final future = _doRefreshCurrentGamer();
+    _inFlightRefresh = future;
+    future.whenComplete(() {
+      if (identical(_inFlightRefresh, future)) {
+        _inFlightRefresh = null;
+      }
+    });
+    return future;
+  }
+
+  Future<GamerUser?> _doRefreshCurrentGamer() async {
     final authUser = SupabaseService.client.auth.currentUser;
     if (authUser == null) {
       currentGamerNotifier.value = null;
+      profileLoadErrorNotifier.value = false;
       isLoadingNotifier.value = false;
       return null;
     }
 
     try {
-      Map<String, dynamic>? profile;
-      try {
-        profile = await _supabase
-            .from('users')
-            .select()
-            .or('id.eq.${authUser.id},uid.eq.${authUser.id}')
-            .maybeSingle()
-            .timeout(const Duration(seconds: 5), onTimeout: () => null);
-      } catch (_) {
-        try {
-          profile = await _supabase
-              .from('users')
-              .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
-              .eq('id', authUser.id)
-              .maybeSingle()
-              .timeout(const Duration(seconds: 4), onTimeout: () => null);
-        } catch (_) {
-          try {
-            profile = await _supabase
-                .from('users')
-                .select('id, username, display_name, avatar_url, cover_url, is_banned, banned_reason')
-                .eq('uid', authUser.id)
-                .maybeSingle()
-                .timeout(const Duration(seconds: 4), onTimeout: () => null);
-          } catch (_) {}
-        }
-      }
+      final (profile, querySucceeded) = await _fetchProfileRow(authUser.id);
 
-      if (profile != null) {
+      if (querySucceeded && profile != null) {
         final gamer = GamerUser.fromMap(profile, authUser.id);
         currentGamerNotifier.value = gamer;
+        profileLoadErrorNotifier.value = false;
+        await _cacheGamerProfile(gamer);
         return gamer;
-      } else {
+      } else if (querySucceeded && profile == null) {
+        final cached = await _loadCachedGamerProfile(authUser.id);
+        if (cached != null) {
+          currentGamerNotifier.value = cached;
+          profileLoadErrorNotifier.value = false;
+          return cached;
+        }
         // User has no row in users table yet (new signup)
         final initialGamer = GamerUser(
           uid: authUser.id,
@@ -212,29 +285,40 @@ class GamerAuthService {
           coins: 100,
         );
         currentGamerNotifier.value = initialGamer;
+        profileLoadErrorNotifier.value = false;
         return initialGamer;
+      } else {
+        // Network error / timeout: preserve existing or cached profile
+        if (currentGamerNotifier.value != null && currentGamerNotifier.value!.uid == authUser.id) {
+          profileLoadErrorNotifier.value = false;
+          return currentGamerNotifier.value;
+        }
+        final cached = await _loadCachedGamerProfile(authUser.id);
+        if (cached != null) {
+          currentGamerNotifier.value = cached;
+          profileLoadErrorNotifier.value = false;
+          return cached;
+        }
+        profileLoadErrorNotifier.value = true;
+        return null;
       }
     } catch (e) {
       debugPrint('[GamerAuthService] Error refreshing gamer: $e');
-      if (currentGamerNotifier.value == null) {
-        currentGamerNotifier.value = GamerUser(
-          uid: authUser.id,
-          username: '',
-          displayName: 'Gamer',
-          photoUrl: '',
-          coverUrl: '',
-          bio: '',
-          favoriteGame: 'BGMI',
-          selectedGame: 'BGMI',
-          selectedRank: 'Bronze',
-          rank: 'Bronze',
-          coins: 100,
-        );
+      if (currentGamerNotifier.value != null && currentGamerNotifier.value!.uid == authUser.id) {
+        profileLoadErrorNotifier.value = false;
+        return currentGamerNotifier.value;
       }
+      final cached = await _loadCachedGamerProfile(authUser.id);
+      if (cached != null) {
+        currentGamerNotifier.value = cached;
+        profileLoadErrorNotifier.value = false;
+        return cached;
+      }
+      profileLoadErrorNotifier.value = true;
+      return null;
     } finally {
       isLoadingNotifier.value = false;
     }
-    return currentGamerNotifier.value;
   }
 
   /// Checks live if a username is available in Supabase
@@ -454,71 +538,100 @@ class GamerAuthService {
     return '';
   }
 
-  /// Creates or updates `users` record in Supabase
-  /// Uses upsert first, then falls back to update by id and uid
+  /// Creates or updates `users` record in Supabase reliably.
+  /// Persists guaranteed base schema columns first (including `username` and `game_id`),
+  /// then best-effort updates optional extended columns so missing columns never break saves.
   Future<bool> saveGamerProfile(GamerUser user) async {
     try {
-      final payload = <String, dynamic>{
-        'id': user.uid,
+      final cleanUsername = user.username.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
+      final cleanGameId = user.gameId.trim();
+      final cleanDisplayName = user.displayName.trim().isNotEmpty ? user.displayName.trim() : cleanUsername;
+      final authEmail = _supabase.auth.currentUser?.email?.trim() ?? '';
+
+      final corePayload = <String, dynamic>{
         'uid': user.uid,
-        'username': user.username,
-        'display_name': user.displayName,
+        if (authEmail.isNotEmpty) 'email': authEmail,
+        'username': cleanUsername,
+        'display_name': cleanDisplayName,
         'avatar_url': user.photoUrl,
         'cover_url': user.coverUrl,
-        'bio': user.bio,
-        'game': (user.favoriteGame.isNotEmpty && user.favoriteGame != 'All Games') ? user.favoriteGame : null,
-        'game_name': user.favoriteGame.isNotEmpty ? user.favoriteGame : null,
-        'rank': user.rank.isNotEmpty ? user.rank : null,
-        'gamer_rank': user.rank.isNotEmpty ? user.rank : null,
-        'selected_rank': user.selectedRank.isNotEmpty ? user.selectedRank : null,
-        'is_rank_verified': user.isRankVerified,
-        'rank_status': user.rankStatus.isNotEmpty ? user.rankStatus : 'none',
-        'rank_proof_url': user.rankScreenshot.isNotEmpty ? user.rankScreenshot : null,
+        'bio': user.bio.trim(),
+        'game_id': cleanGameId,
+        'game_name': user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI',
+        'gamer_rank': user.rank.isNotEmpty ? user.rank : 'Bronze',
+        if (user.rankScreenshot.isNotEmpty) 'rank_proof_url': user.rankScreenshot,
         'coins': user.coins,
         'is_verified': user.isVerified,
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      bool saved = false;
+      Map<String, dynamic>? existingRow;
       try {
-        await _supabase.from('users').upsert(payload);
-        debugPrint('[GamerAuthService] ✅ upsert successful for ${user.uid}');
-        saved = true;
-      } catch (upsertError) {
-        debugPrint('[GamerAuthService] upsert failed, trying update: $upsertError');
+        existingRow = await _supabase
+            .from('users')
+            .select('id, uid')
+            .or('id.eq.${user.uid},uid.eq.${user.uid}')
+            .maybeSingle();
+      } catch (_) {}
 
+      bool coreSaved = false;
+      if (existingRow != null && existingRow['id'] != null) {
+        await _supabase
+            .from('users')
+            .update(corePayload)
+            .eq('id', existingRow['id'].toString());
+        coreSaved = true;
+      } else {
+        final insertPayload = <String, dynamic>{
+          'id': SupabaseService.toUuid(user.uid),
+          ...corePayload,
+        };
         try {
-          await _supabase
-              .from('users')
-              .update(payload)
-              .or('id.eq.${user.uid},uid.eq.${user.uid}');
-          debugPrint('[GamerAuthService] ✅ update successful for ${user.uid}');
-          saved = true;
-        } catch (_) {}
+          await _supabase.from('users').insert(insertPayload);
+          coreSaved = true;
+        } catch (insertError) {
+          debugPrint('[GamerAuthService] insert fallback to upsert: $insertError');
+          await _supabase.from('users').upsert(insertPayload);
+          coreSaved = true;
+        }
       }
 
-      // Safe fallback: Always ensure core avatar, cover, and display name are updated in DB
-      final corePayload = <String, dynamic>{
-        'avatar_url': user.photoUrl,
-        'cover_url': user.coverUrl,
-        'display_name': user.displayName,
-        'bio': user.bio,
+      // Best-effort update for optional extended columns (ignore if any column is absent in DB)
+      final extendedPayload = <String, dynamic>{
+        'favorite_game': user.favoriteGame,
+        'selected_game': user.selectedGame.isNotEmpty ? user.selectedGame : user.favoriteGame,
+        'rank': user.rank.isNotEmpty ? user.rank : 'Bronze',
+        'selected_rank': user.selectedRank.isNotEmpty ? user.selectedRank : 'Bronze',
+        'is_rank_verified': user.isRankVerified,
+        'rank_status': user.rankStatus.isNotEmpty ? user.rankStatus : 'none',
+        'active_frame': user.activeFrame,
+        'active_badge': user.activeBadge,
         'updated_at': DateTime.now().toIso8601String(),
       };
       try {
         await _supabase
             .from('users')
-            .update(corePayload)
+            .update(extendedPayload)
             .or('id.eq.${user.uid},uid.eq.${user.uid}');
-        saved = true;
-      } catch (_) {}
+      } catch (extError) {
+        debugPrint('[GamerAuthService] optional extended update note: $extError');
+      }
 
-      currentGamerNotifier.value = user;
-      await checkAndAwardWelcomeBonus(user.uid);
-      return saved;
+      if (coreSaved) {
+        final savedUser = user.copyWith(
+          username: cleanUsername,
+          displayName: cleanDisplayName,
+          gameId: cleanGameId,
+        );
+        currentGamerNotifier.value = savedUser;
+        profileLoadErrorNotifier.value = false;
+        await _cacheGamerProfile(savedUser);
+        unawaited(checkAndAwardWelcomeBonus(user.uid));
+      }
+      return coreSaved;
     } catch (e) {
       debugPrint('[GamerAuthService] Error saving gamer profile in Supabase: $e');
-      return false;
+      rethrow;
     }
   }
 
@@ -665,6 +778,7 @@ class GamerAuthService {
 
   /// Sign out
   Future<void> logout() async {
+    final uidToClear = currentUid ?? currentGamerNotifier.value?.uid ?? '';
     try {
       await _supabase.auth.signOut();
     } catch (e) {
@@ -673,7 +787,11 @@ class GamerAuthService {
     try {
       await SupabaseService.signOut();
     } catch (_) {}
+    if (uidToClear.isNotEmpty) {
+      await _clearCachedGamerProfile(uidToClear);
+    }
     currentGamerNotifier.value = null;
+    profileLoadErrorNotifier.value = false;
     isLoadingNotifier.value = false;
   }
 

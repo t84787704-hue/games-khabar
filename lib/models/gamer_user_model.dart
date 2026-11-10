@@ -539,11 +539,14 @@ class GamerUser {
     }
 
     final bool rawRankVerified = data['isRankVerified'] == true ||
+        data['is_rank_verified'] == true ||
         parsedGames.any((g) => g.isVerified || g.status == 'approved');
 
     final int userLevel = (data['level'] as num?)?.toInt() ?? 1;
-    final String rawRank =
-        data['tier']?.toString() ?? data['rank']?.toString() ?? '';
+    final String rawRank = data['tier']?.toString() ??
+        data['rank']?.toString() ??
+        data['gamer_rank']?.toString() ??
+        '';
     final String resolvedRank = rawRank.isNotEmpty ? rawRank : 'Bronze';
 
     final DateTime? vipPassExpires = parseDate(
@@ -566,13 +569,22 @@ class GamerUser {
       photoUrl: data['avatar'] ?? data['photoUrl'] ?? data['avatar_url'] ?? '',
       coverUrl: data['coverUrl'] ?? data['cover_url'] ?? '',
       bio: data['bio'] ?? '',
-      favoriteGame: data['favoriteGame'] ?? data['game'] ?? 'BGMI',
+      favoriteGame: data['favoriteGame'] ??
+          data['favorite_game'] ??
+          data['game_name'] ??
+          data['game'] ??
+          'BGMI',
       selectedGame: data['selectedGame']?.toString() ??
+          data['selected_game']?.toString() ??
           data['favoriteGame']?.toString() ??
+          data['favorite_game']?.toString() ??
+          data['game_name']?.toString() ??
           data['game']?.toString() ??
           'BGMI',
       rank: resolvedRank,
-      selectedRank: data['selectedRank']?.toString() ?? resolvedRank,
+      selectedRank: data['selectedRank']?.toString() ??
+          data['selected_rank']?.toString() ??
+          resolvedRank,
       kdRatio: (data['kd'] as num?)?.toDouble() ??
           (data['kdRatio'] as num?)?.toDouble() ??
           0.0,
@@ -600,9 +612,11 @@ class GamerUser {
           ? rawBlueStatus
           : (hasApprovedBlueTick ? 'approved' : 'none'),
       isRankVerified: rawRankVerified ||
-          (data['rankStatus']?.toString().toLowerCase() == 'verified'),
-      rankScreenshot: data['rankScreenshot']?.toString() ?? '',
-      rankStatus: data['rankStatus']?.toString() ??
+          ((data['rankStatus'] ?? data['rank_status'])?.toString().toLowerCase() == 'verified'),
+      rankScreenshot: data['rankScreenshot']?.toString() ??
+          data['rank_proof_url']?.toString() ??
+          '',
+      rankStatus: (data['rankStatus'] ?? data['rank_status'])?.toString() ??
           (rawRankVerified ? 'Verified' : 'None'),
       rankVerifiedBy: data['rankVerifiedBy']?.toString() ?? '',
       rankRejectReason: data['rankRejectReason']?.toString() ?? '',
