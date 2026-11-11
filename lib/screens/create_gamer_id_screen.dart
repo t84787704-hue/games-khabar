@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -152,7 +153,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             _selectedBadge = (data['activeBadge'] as String?) ?? localBadge;
             _unlockedBadges = List<String>.from(data['unlockedBadges'] ?? localBadges);
           }
-          if (_ageController.text.trim().isEmpty) {
+          if (_ageController.text.trim().isEmpty && !_ageFocusNode.hasFocus) {
             final dbAge = data?['age'];
             final parsedDbAge = dbAge is num
                 ? dbAge.toInt()
@@ -1094,53 +1095,108 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _ageFocusNode.requestFocus(),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: cardColor,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.cake_outlined, color: subTextColor, size: 18),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: TextField(
-                                  controller: _ageController,
-                                  focusNode: _ageFocusNode,
-                                  keyboardType: TextInputType.number,
-                                  textInputAction: TextInputAction.next,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(3),
-                                  ],
-                                  style: TextStyle(
-                                    color: primaryTextColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _ageController,
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _ageFocusNode.requestFocus(),
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 10, top: 10, bottom: 10),
+                                child: Icon(Icons.cake_outlined, color: subTextColor, size: 18),
+                              ),
+                            ),
+                            Expanded(
+                              child: TextField(
+                                controller: _ageController,
+                                focusNode: _ageFocusNode,
+                                autocorrect: false,
+                                enableSuggestions: false,
+                                enableIMEPersonalizedLearning: false,
+                                textDirection: ui.TextDirection.ltr,
+                                textAlign: TextAlign.left,
+                                keyboardType: const TextInputType.numberWithOptions(
+                                  signed: false,
+                                  decimal: false,
+                                ),
+                                textInputAction: TextInputAction.next,
+                                scrollPadding: const EdgeInsets.only(bottom: 120),
+                                inputFormatters: [
+                                  _AgeInputFormatter(),
+                                ],
+                                style: TextStyle(
+                                  color: primaryTextColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: 'Enter your age',
+                                  hintStyle: TextStyle(
+                                    color: subTextColor.withOpacity(0.6),
+                                    fontWeight: FontWeight.normal,
+                                    fontSize: 13,
                                   ),
-                                  decoration: InputDecoration(
-                                    hintText: 'Enter your age',
-                                    hintStyle: TextStyle(
-                                      color: subTextColor.withOpacity(0.6),
-                                      fontWeight: FontWeight.normal,
-                                      fontSize: 13,
-                                    ),
-                                    border: InputBorder.none,
-                                    counterText: '',
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
+                                  border: InputBorder.none,
+                                  counterText: '',
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
                               ),
-                              Icon(Icons.edit_outlined, size: 16, color: subTextColor),
-                            ],
-                          ),
+                            ),
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                _ageFocusNode.requestFocus();
+                                _ageController.selection = TextSelection.collapsed(
+                                  offset: _ageController.text.length,
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 8, top: 10, bottom: 10),
+                                child: Icon(Icons.edit_outlined, size: 16, color: subTextColor),
+                              ),
+                            ),
+                          ],
                         ),
+                        builder: (context, ageValue, ageRow) {
+                          final trimmedAge = ageValue.text.trim();
+                          final parsedAgeValue = int.tryParse(trimmedAge);
+                          final hasAgeError = trimmedAge.isNotEmpty &&
+                              ((trimmedAge == '0') ||
+                                  (trimmedAge.length >= 2 &&
+                                      (parsedAgeValue == null ||
+                                          parsedAgeValue < 13 ||
+                                          parsedAgeValue > 100)));
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: cardColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: hasAgeError ? Colors.redAccent : borderColor,
+                                  ),
+                                ),
+                                child: ageRow,
+                              ),
+                              if (hasAgeError) ...[
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Please enter a valid age (13 - 100)',
+                                  style: TextStyle(
+                                    color: Colors.redAccent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
 
                       const SizedBox(height: 14),
@@ -1725,6 +1781,57 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AgeInputFormatter extends TextInputFormatter {
+  static String _normalizeDigits(String input) {
+    final buf = StringBuffer();
+    for (final rune in input.runes) {
+      if (rune >= 0x30 && rune <= 0x39) {
+        buf.writeCharCode(rune);
+      } else if (rune >= 0x0660 && rune <= 0x0669) {
+        buf.writeCharCode(0x30 + (rune - 0x0660));
+      } else if (rune >= 0x06F0 && rune <= 0x06F9) {
+        buf.writeCharCode(0x30 + (rune - 0x06F0));
+      }
+    }
+    return buf.toString();
+  }
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final normalizedFull = _normalizeDigits(newValue.text);
+    if (normalizedFull.length > 3) {
+      if (oldValue.text.length >= 3) {
+        return oldValue.copyWith(composing: TextRange.empty);
+      }
+      final clipped = normalizedFull.substring(0, 3);
+      return TextEditingValue(
+        text: clipped,
+        selection: TextSelection.collapsed(offset: clipped.length),
+        composing: TextRange.empty,
+      );
+    }
+
+    final int rawExtent = newValue.selection.isValid
+        ? newValue.selection.extentOffset.clamp(0, newValue.text.length).toInt()
+        : newValue.text.length;
+    final normalizedBeforeCursor = _normalizeDigits(
+      newValue.text.substring(0, rawExtent),
+    );
+    final int targetOffset = normalizedBeforeCursor.length
+        .clamp(0, normalizedFull.length)
+        .toInt();
+
+    return TextEditingValue(
+      text: normalizedFull,
+      selection: TextSelection.collapsed(offset: targetOffset),
+      composing: TextRange.empty,
     );
   }
 }
