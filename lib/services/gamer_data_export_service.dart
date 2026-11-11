@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'gamer_social_service.dart';
 import 'supabase_service.dart';
 
 /// GDPR / DPDP Act compliant data export service.
@@ -29,6 +30,8 @@ class GamerDataExportService {
     }
 
     final uuid = SupabaseService.toUuid(userId);
+    final socialUuid = GamerSocialService.stringToUuid(userId);
+    final followsTable = await GamerSocialService().resolveFollowsTable();
 
     final Map<String, dynamic> data = {
       'exported_at': DateTime.now().toIso8601String(),
@@ -88,24 +91,24 @@ class GamerDataExportService {
       data['likes'] = [];
     }
 
-    // 5. Squad (follows where user is followed)
+    // 5. Squad (user_follows where user is followed)
     try {
       final squad = await SupabaseService.client
-          .from('follows')
+          .from(followsTable)
           .select()
-          .eq('following_id', uuid);
+          .eq('following_id', socialUuid);
       data['squad'] = squad;
     } catch (e) {
       debugPrint('[Export] squad error: $e');
       data['squad'] = [];
     }
 
-    // 6. Allies (follows initiated by user)
+    // 6. Allies (user_follows initiated by user)
     try {
       final allies = await SupabaseService.client
-          .from('follows')
+          .from(followsTable)
           .select()
-          .eq('follower_id', uuid);
+          .eq('follower_id', socialUuid);
       data['allies'] = allies;
     } catch (e) {
       debugPrint('[Export] allies error: $e');

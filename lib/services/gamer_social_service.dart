@@ -14,12 +14,109 @@ import 'supabase_service.dart';
 import 'gamer_auth_service.dart';
 import 'notification_service.dart';
 
+class SocialGraphUpdate {
+  final String actorUid;
+  final String targetUid;
+  final bool isAllied;
+  final int? targetSquadCount;
+  final int? actorAlliesCount;
+  final DateTime timestamp;
+
+  const SocialGraphUpdate({
+    required this.actorUid,
+    required this.targetUid,
+    required this.isAllied,
+    this.targetSquadCount,
+    this.actorAlliesCount,
+    required this.timestamp,
+  });
+}
+
+class SocialCounts {
+  final int squadCount;
+  final int alliesCount;
+
+  const SocialCounts({
+    required this.squadCount,
+    required this.alliesCount,
+  });
+}
+
+class _SyncPairResult {
+  final int? squadCount;
+  final int? alliesCount;
+
+  const _SyncPairResult({
+    this.squadCount,
+    this.alliesCount,
+  });
+}
+
 class GamerSocialService {
   static final GamerSocialService _instance = GamerSocialService._internal();
   factory GamerSocialService() => _instance;
   GamerSocialService._internal();
 
+  static const String primaryFollowsTable = 'user_follows';
+  static const String legacyFollowsTable = 'follows';
+
+  String _resolvedFollowsTable = primaryFollowsTable;
+  bool _tableProbed = false;
+  String? lastSocialError;
+
+  String get activeFollowsTable => _resolvedFollowsTable;
+
   SupabaseClient get _supabase => SupabaseService.client;
+
+  final StreamController<SocialGraphUpdate> _socialGraphController =
+      StreamController<SocialGraphUpdate>.broadcast();
+
+  Stream<SocialGraphUpdate> get socialGraphUpdatesStream =>
+      _socialGraphController.stream;
+
+  bool _isMissingTableError(Object error) {
+    final msg = error.toString().toLowerCase();
+    if (error is PostgrestException) {
+      if (error.code == '42P01' || error.code == 'PGRST205') return true;
+    }
+    return msg.contains('42p01') ||
+        msg.contains('pgrst205') ||
+        (msg.contains('user_follows') &&
+            (msg.contains('does not exist') ||
+                msg.contains('not find the table') ||
+                msg.contains('schema cache')));
+  }
+
+  Future<String> resolveFollowsTable() async {
+    if (_tableProbed) return _resolvedFollowsTable;
+    try {
+      await _supabase.from(primaryFollowsTable).select('id').limit(1);
+      _resolvedFollowsTable = primaryFollowsTable;
+    } catch (e) {
+      if (_isMissingTableError(e)) {
+        _resolvedFollowsTable = legacyFollowsTable;
+      }
+    }
+    _tableProbed = true;
+    return _resolvedFollowsTable;
+  }
+
+  Future<T> _runFollowsQuery<T>(
+      Future<T> Function(String table) operation) async {
+    final table = await resolveFollowsTable();
+    try {
+      return await operation(table);
+    } catch (e) {
+      if (table == primaryFollowsTable && _isMissingTableError(e)) {
+        debugPrint(
+            '[GamerSocialService] $primaryFollowsTable not found; using $legacyFollowsTable fallback');
+        _resolvedFollowsTable = legacyFollowsTable;
+        _tableProbed = true;
+        return await operation(legacyFollowsTable);
+      }
+      rethrow;
+    }
+  }
 
   static String stringToUuid(String input) {
     if (input.isEmpty) return '00000000-0000-0000-0000-000000000000';
@@ -78,23 +175,78 @@ class GamerSocialService {
   }
 
   // ==========================================
-  // SQUAD & ALLIES SOCIAL SYSTEM (Supabase: follows table)
+  // SQUAD & ALLIES SOCIAL SYSTEM (Supabase: user_follows table)
   // ==========================================
   // DB Mapping:
-  //   - follows.follower_id  -> player adding an ally
-  //   - follows.following_id -> target player whose Squad grows
-  //   - users.followers_count -> Squad count
-  //   - users.following_count -> Allies count
+  //   - user_follows.follower_id  -> player adding an ally
+  //   - user_follows.following_id -> target player whose Squad grows
+  //   - users.followers_count     -> Squad count
+  //   - users.following_count     -> Allies count
 
-  Stream<bool> isAllyStream(String currentUid, String targetUid) async* {
+  Stream<bool> isAllyStream(String currentUid, String targetUid) {
     if (currentUid.isEmpty || targetUid.isEmpty || currentUid == targetUid) {
-      yield false;
-      return;
+      return Stream.value(false);
     }
-    while (true) {
-      yield await isAlly(currentUid, targetUid);
-      await Future.delayed(const Duration(seconds: 4));
+
+    final allySourceUuid = stringToUuid(currentUid);
+    final targetUuid = stringToUuid(targetUid);
+    final controller = StreamController<bool>();
+    StreamSubscription? realtimeSub;
+    StreamSubscription? localSub;
+    bool? lastEmitted;
+
+    void emitIfChanged(bool val) {
+      if (!controller.isClosed && lastEmitted != val) {
+        lastEmitted = val;
+        controller.add(val);
+      }
     }
+
+    controller.onListen = () async {
+      final initial = await isAlly(currentUid, targetUid);
+      emitIfChanged(initial);
+
+      localSub = socialGraphUpdatesStream.listen((event) {
+        final actorUuid = stringToUuid(event.actorUid);
+        final evTargetUuid = stringToUuid(event.targetUid);
+        if (actorUuid == allySourceUuid && evTargetUuid == targetUuid) {
+          emitIfChanged(event.isAllied);
+        }
+      });
+
+      try {
+        final table = await resolveFollowsTable();
+        realtimeSub = _supabase
+            .from(table)
+            .stream(primaryKey: ['id'])
+            .eq('follower_id', allySourceUuid)
+            .listen(
+          (rows) {
+            final found = rows.any(
+              (r) =>
+                  (r['following_id']?.toString().toLowerCase() ?? '') ==
+                  targetUuid,
+            );
+            emitIfChanged(found);
+          },
+          onError: (e) {
+            debugPrint('[GamerSocialService] isAllyStream realtime note: $e');
+          },
+        );
+      } catch (e) {
+        debugPrint('[GamerSocialService] isAllyStream setup note: $e');
+      }
+    };
+
+    controller.onCancel = () async {
+      await realtimeSub?.cancel();
+      await localSub?.cancel();
+      if (!controller.isClosed) {
+        await controller.close();
+      }
+    };
+
+    return controller.stream;
   }
 
   Stream<bool> isFollowingStream(String currentUid, String targetUid) =>
@@ -107,12 +259,12 @@ class GamerSocialService {
     try {
       final allySourceUuid = stringToUuid(currentUid);
       final targetUuid = stringToUuid(targetUid);
-      final res = await _supabase
-          .from('follows')
+      final res = await _runFollowsQuery((table) => _supabase
+          .from(table)
           .select('id')
           .eq('follower_id', allySourceUuid)
           .eq('following_id', targetUuid)
-          .maybeSingle();
+          .maybeSingle());
       return res != null;
     } catch (e) {
       debugPrint('Error checking ally status: $e');
@@ -123,116 +275,237 @@ class GamerSocialService {
   Future<bool> isFollowing(String currentUid, String targetUid) =>
       isAlly(currentUid, targetUid);
 
-  Future<void> addAlly({
+  Future<bool> addAlly({
     required String currentUid,
     required String targetUid,
   }) async {
     if (currentUid == targetUid || currentUid.isEmpty || targetUid.isEmpty) {
-      return;
+      return false;
     }
+    lastSocialError = null;
     try {
       final allySourceUuid = stringToUuid(currentUid);
       final targetUuid = stringToUuid(targetUid);
+      if (allySourceUuid == targetUuid) return false;
 
-      final existing = await _supabase
-          .from('follows')
+      final existing = await _runFollowsQuery((table) => _supabase
+          .from(table)
           .select('id')
           .eq('follower_id', allySourceUuid)
           .eq('following_id', targetUuid)
-          .maybeSingle();
-      if (existing != null) {
-        return;
+          .maybeSingle());
+
+      if (existing == null) {
+        await _runFollowsQuery((table) => _supabase.from(table).insert({
+              'follower_id': allySourceUuid,
+              'following_id': targetUuid,
+            }));
       }
 
-      await _supabase.from('follows').insert({
-        'follower_id': allySourceUuid,
-        'following_id': targetUuid,
-      });
+      final synced = await _syncPairCounts(
+        allySourceUuid: allySourceUuid,
+        targetUuid: targetUuid,
+        rawActorUid: currentUid,
+        rawTargetUid: targetUid,
+      );
 
-      // DB trigger handles followers_count (Squad) & following_count (Allies) on follows table insert
+      if (!_socialGraphController.isClosed) {
+        _socialGraphController.add(SocialGraphUpdate(
+          actorUid: currentUid,
+          targetUid: targetUid,
+          isAllied: true,
+          targetSquadCount: synced?.squadCount,
+          actorAlliesCount: synced?.alliesCount,
+          timestamp: DateTime.now(),
+        ));
+      }
+
       try {
         final currentGamer = GamerAuthService().currentGamer;
-        NotificationService().sendFollowNotification(
+        unawaited(NotificationService().sendFollowNotification(
           targetUserId: targetUid,
           followerId: currentUid,
           followerName: currentGamer?.displayName ?? 'A Gamer',
           followerAvatar: currentGamer?.photoUrl,
-        );
+        ));
       } catch (_) {}
+
+      return true;
     } catch (e) {
+      lastSocialError = e.toString();
       debugPrint('Error adding ally: $e');
+      return false;
     }
   }
 
-  Future<void> followUser({
+  Future<bool> followUser({
     required String currentUid,
     required String targetUid,
   }) =>
       addAlly(currentUid: currentUid, targetUid: targetUid);
 
-  Future<void> removeAlly({
+  Future<bool> removeAlly({
     required String currentUid,
     required String targetUid,
   }) async {
     if (currentUid == targetUid || currentUid.isEmpty || targetUid.isEmpty) {
-      return;
+      return false;
     }
+    lastSocialError = null;
     try {
       final allySourceUuid = stringToUuid(currentUid);
       final targetUuid = stringToUuid(targetUid);
+      if (allySourceUuid == targetUuid) return false;
 
-      await _supabase
-          .from('follows')
+      await _runFollowsQuery((table) => _supabase
+          .from(table)
           .delete()
           .eq('follower_id', allySourceUuid)
-          .eq('following_id', targetUuid);
+          .eq('following_id', targetUuid));
 
-      // DB trigger handles followers_count (Squad) & following_count (Allies) on follows table delete
+      final synced = await _syncPairCounts(
+        allySourceUuid: allySourceUuid,
+        targetUuid: targetUuid,
+        rawActorUid: currentUid,
+        rawTargetUid: targetUid,
+      );
+
+      if (!_socialGraphController.isClosed) {
+        _socialGraphController.add(SocialGraphUpdate(
+          actorUid: currentUid,
+          targetUid: targetUid,
+          isAllied: false,
+          targetSquadCount: synced?.squadCount,
+          actorAlliesCount: synced?.alliesCount,
+          timestamp: DateTime.now(),
+        ));
+      }
+
+      return true;
     } catch (e) {
+      lastSocialError = e.toString();
       debugPrint('Error removing ally: $e');
+      return false;
     }
   }
 
-  Future<void> unfollowUser({
+  Future<bool> unfollowUser({
     required String currentUid,
     required String targetUid,
   }) =>
       removeAlly(currentUid: currentUid, targetUid: targetUid);
 
-  Future<void> _incrementCounter({
-    required String userId,
-    required String column,
-    required int delta,
-  }) async {
-    final rpcName = delta > 0
-        ? (column == 'following_count'
-            ? 'increment_following_count'
-            : 'increment_followers_count')
-        : (column == 'following_count'
-            ? 'decrement_following_count'
-            : 'decrement_followers_count');
-
+  Future<SocialCounts?> fetchSocialCounts(String userId) async {
+    if (userId.isEmpty) return null;
     try {
-      await _supabase.rpc(rpcName, params: {'user_id': userId});
-      return;
+      final userUuid = stringToUuid(userId);
+      final results = await Future.wait([
+        _runFollowsQuery((table) =>
+            _supabase.from(table).select('id').eq('following_id', userUuid)),
+        _runFollowsQuery((table) =>
+            _supabase.from(table).select('id').eq('follower_id', userUuid)),
+      ]);
+      final squadCount = (results[0] as List).length;
+      final alliesCount = (results[1] as List).length;
+      return SocialCounts(squadCount: squadCount, alliesCount: alliesCount);
     } catch (e) {
-      debugPrint('[Counter] RPC $rpcName failed: $e — using manual fallback');
+      debugPrint('[GamerSocialService] fetchSocialCounts error: $e');
+      return null;
     }
+  }
 
+  Future<_SyncPairResult?> _syncPairCounts({
+    required String allySourceUuid,
+    required String targetUuid,
+    String? rawActorUid,
+    String? rawTargetUid,
+  }) async {
     try {
-      final row = await _supabase
-          .from('users')
-          .select(column)
-          .or('id.eq.$userId,uid.eq.$userId')
-          .maybeSingle();
-      final current = (row?[column] as num?)?.toInt() ?? 0;
-      final updated = (current + delta).clamp(0, 999999999);
-      await _supabase
-          .from('users')
-          .update({column: updated})
-          .or('id.eq.$userId,uid.eq.$userId');
+      final results = await Future.wait([
+        _runFollowsQuery((table) =>
+            _supabase.from(table).select('id').eq('following_id', targetUuid)),
+        _runFollowsQuery((table) => _supabase
+            .from(table)
+            .select('id')
+            .eq('follower_id', allySourceUuid)),
+      ]);
+
+      final int targetSquadCount = (results[0] as List).length;
+      final int actorAlliesCount = (results[1] as List).length;
+      bool isDemoTarget = false;
+
+      // Best-effort sync to public.users (idempotent exact count — safe even alongside DB trigger)
+      try {
+        final targetFilter = (rawTargetUid != null &&
+                rawTargetUid.isNotEmpty &&
+                rawTargetUid != targetUuid)
+            ? 'id.eq.$targetUuid,uid.eq.$targetUuid,uid.eq.$rawTargetUid'
+            : 'id.eq.$targetUuid,uid.eq.$targetUuid';
+        final targetRow = await _supabase
+            .from('users')
+            .select()
+            .or(targetFilter)
+            .maybeSingle();
+        isDemoTarget = targetRow?['isDemoAccount'] == true ||
+            targetRow?['is_demo_account'] == true;
+        if (targetRow != null && !isDemoTarget) {
+          final currentDbCount =
+              (targetRow['followers_count'] as num?)?.toInt() ?? -1;
+          if (currentDbCount != targetSquadCount) {
+            await _supabase
+                .from('users')
+                .update({'followers_count': targetSquadCount})
+                .eq('id', targetRow['id'].toString());
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final actorFilter = (rawActorUid != null &&
+                rawActorUid.isNotEmpty &&
+                rawActorUid != allySourceUuid)
+            ? 'id.eq.$allySourceUuid,uid.eq.$allySourceUuid,uid.eq.$rawActorUid'
+            : 'id.eq.$allySourceUuid,uid.eq.$allySourceUuid';
+        final actorRow = await _supabase
+            .from('users')
+            .select()
+            .or(actorFilter)
+            .maybeSingle();
+        if (actorRow != null) {
+          final currentDbAllies =
+              (actorRow['following_count'] as num?)?.toInt() ?? -1;
+          if (currentDbAllies != actorAlliesCount) {
+            await _supabase
+                .from('users')
+                .update({'following_count': actorAlliesCount})
+                .eq('id', actorRow['id'].toString());
+          }
+        }
+      } catch (_) {}
+
+      // Keep local auth gamer profile notifier instantly synchronized
+      try {
+        final authService = GamerAuthService();
+        final cur = authService.currentGamer;
+        if (cur != null) {
+          final curUuid = stringToUuid(cur.uid);
+          if (curUuid == allySourceUuid) {
+            authService.currentGamerNotifier.value =
+                cur.copyWith(followingCount: actorAlliesCount);
+          } else if (curUuid == targetUuid && !isDemoTarget) {
+            authService.currentGamerNotifier.value =
+                cur.copyWith(followersCount: targetSquadCount);
+          }
+        }
+      } catch (_) {}
+
+      return _SyncPairResult(
+        squadCount: isDemoTarget ? null : targetSquadCount,
+        alliesCount: actorAlliesCount,
+      );
     } catch (e) {
-      debugPrint('[Counter] Manual update failed: $e');
+      debugPrint('[GamerSocialService] _syncPairCounts note: $e');
+      return null;
     }
   }
 
@@ -241,13 +514,13 @@ class GamerSocialService {
       yield [];
       return;
     }
+    final playerUuid = stringToUuid(uid);
     while (true) {
       try {
-        final playerUuid = stringToUuid(uid);
-        final res = await _supabase
-            .from('follows')
+        final res = await _runFollowsQuery((table) => _supabase
+            .from(table)
             .select('following_id')
-            .eq('follower_id', playerUuid);
+            .eq('follower_id', playerUuid));
         final list = (res as List)
             .map((item) => item['following_id'].toString())
             .where((id) => id.isNotEmpty && id != playerUuid)
@@ -268,10 +541,10 @@ class GamerSocialService {
     try {
       final targetUuid = stringToUuid(targetUid);
 
-      final squadRows = await _supabase
-          .from('follows')
+      final squadRows = await _runFollowsQuery((table) => _supabase
+          .from(table)
           .select('follower_id')
-          .eq('following_id', targetUuid);
+          .eq('following_id', targetUuid));
 
       if (squadRows.isEmpty) return [];
 
@@ -309,10 +582,10 @@ class GamerSocialService {
     try {
       final playerUuid = stringToUuid(playerUid);
 
-      final allyRows = await _supabase
-          .from('follows')
+      final allyRows = await _runFollowsQuery((table) => _supabase
+          .from(table)
           .select('following_id')
-          .eq('follower_id', playerUuid);
+          .eq('follower_id', playerUuid));
 
       if (allyRows.isEmpty) return [];
 
@@ -324,10 +597,8 @@ class GamerSocialService {
 
       if (allyUuids.isEmpty) return [];
 
-      final userRows = await _supabase
-          .from('users')
-          .select()
-          .inFilter('id', allyUuids);
+      final userRows =
+          await _supabase.from('users').select().inFilter('id', allyUuids);
 
       final users = (userRows as List)
           .map((row) => _rowToGamerUser(row))
@@ -379,6 +650,8 @@ class GamerSocialService {
         verificationStatus: (row['blue_tick_status'] ?? 'none').toString(),
         activeFrame: (row['active_frame'] ?? '').toString(),
         activeBadge: (row['active_badge'] ?? '').toString(),
+        isDemoAccount:
+            row['isDemoAccount'] == true || row['is_demo_account'] == true,
         createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
         isBioPublic: row['is_bio_public'] != false,
         isGamePublic: row['is_game_public'] != false,

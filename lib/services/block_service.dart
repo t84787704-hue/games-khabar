@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'gamer_social_service.dart';
 import 'supabase_service.dart';
 
 class BlockService {
@@ -61,19 +62,35 @@ class BlockService {
       });
 
       try {
-        await _client
-            .from('follows')
-            .delete()
-            .eq('follower_id', SupabaseService.toUuid(currentUid))
-            .eq('following_id', SupabaseService.toUuid(targetUid));
-
-        await _client
-            .from('follows')
-            .delete()
-            .eq('follower_id', SupabaseService.toUuid(targetUid))
-            .eq('following_id', SupabaseService.toUuid(currentUid));
+        await GamerSocialService().removeAlly(
+          currentUid: currentUid,
+          targetUid: targetUid,
+        );
+        await GamerSocialService().removeAlly(
+          currentUid: targetUid,
+          targetUid: currentUid,
+        );
       } catch (e) {
-        debugPrint('[BlockService] unfollow cleanup: $e');
+        debugPrint('[BlockService] removeAlly cleanup: $e');
+      }
+
+      if (GamerSocialService().activeFollowsTable !=
+          GamerSocialService.legacyFollowsTable) {
+        try {
+          await _client
+              .from(GamerSocialService.legacyFollowsTable)
+              .delete()
+              .eq('follower_id', SupabaseService.toUuid(currentUid))
+              .eq('following_id', SupabaseService.toUuid(targetUid));
+
+          await _client
+              .from(GamerSocialService.legacyFollowsTable)
+              .delete()
+              .eq('follower_id', SupabaseService.toUuid(targetUid))
+              .eq('following_id', SupabaseService.toUuid(currentUid));
+        } catch (e) {
+          debugPrint('[BlockService] legacy unfollow cleanup: $e');
+        }
       }
 
       return true;

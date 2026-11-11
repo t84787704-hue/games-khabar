@@ -17,6 +17,7 @@ import 'package:share_plus/share_plus.dart';
 import '../constants/gamer_theme.dart';
 import '../models/gamer_user_model.dart';
 import '../services/theme_service.dart';
+import '../controllers/social_profile_controller.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_social_service.dart';
 import '../services/supabase_service.dart';
@@ -50,6 +51,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   late TabController _tabController;
   final GamerAuthService _authService = GamerAuthService();
   final BlockService _blockService = BlockService();
+  final SocialProfileController _socialController = SocialProfileController();
 
   bool _isBlockedByMe = false;
   bool _isBlockedByThem = false;
@@ -57,6 +59,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   GamerUser? _cachedUser;
   bool _initialFetchDone = false;
   Timer? _refreshTimer;
+
+  bool get _isOwnProfile {
+    final currentUid = _authService.currentUid ?? '';
+    final targetUid = widget.userId ?? currentUid;
+    return currentUid.isNotEmpty &&
+        GamerSocialService.stringToUuid(currentUid) ==
+            GamerSocialService.stringToUuid(targetUid);
+  }
 
   @override
   void initState() {
@@ -72,19 +82,44 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     });
   }
 
+  @override
+  void didUpdateWidget(covariant GamerProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) {
+      setState(() {
+        _cachedUser = null;
+        _initialFetchDone = false;
+        _isBlockedByMe = false;
+        _isBlockedByThem = false;
+      });
+      _checkBlockStatus();
+      _prefetchCurrentUser();
+    }
+  }
+
   void _onGamerChanged() {
-    if (!mounted) return;
+    if (!mounted || !_isOwnProfile) return;
     final updated = GamerAuthService().currentGamer;
     if (updated != null) {
       setState(() {
         _cachedUser = updated;
       });
+      if (_socialController.targetUid.isEmpty) {
+        _socialController.bindProfile(
+          targetUserId: updated.uid,
+          initialUser: updated,
+          currentUid: updated.uid,
+        );
+      } else {
+        _socialController.syncUser(updated);
+      }
     }
   }
 
   Future<void> _refreshSilently() async {
     if (!mounted) return;
-    final uid = widget.userId ?? (_authService.currentUid ?? '');
+    final currentUid = _authService.currentUid ?? '';
+    final uid = widget.userId ?? currentUid;
     if (uid.isEmpty) return;
     try {
       final user = await _fetchGamerFromSupabase(uid);
@@ -92,6 +127,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
         setState(() {
           _cachedUser = user;
         });
+        if (_socialController.targetUid.isEmpty) {
+          await _socialController.bindProfile(
+            targetUserId: user.uid,
+            initialUser: user,
+            currentUid: currentUid,
+          );
+        } else {
+          _socialController.syncUser(user);
+          await _socialController.refresh(currentUid: currentUid);
+        }
       }
     } catch (_) {}
   }
@@ -100,12 +145,14 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   void dispose() {
     GamerAuthService().currentGamerNotifier.removeListener(_onGamerChanged);
     _refreshTimer?.cancel();
+    _socialController.dispose();
     _tabController.dispose();
     super.dispose();
   }
 
   Future<void> _prefetchCurrentUser() async {
-    final uid = widget.userId ?? (_authService.currentUid ?? '');
+    final currentUid = _authService.currentUid ?? '';
+    final uid = widget.userId ?? currentUid;
     if (uid.isEmpty) {
       if (mounted) setState(() => _initialFetchDone = true);
       return;
@@ -117,12 +164,23 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       _cachedUser = user;
       _initialFetchDone = true;
     });
+    if (user != null) {
+      await _socialController.bindProfile(
+        targetUserId: user.uid,
+        initialUser: user,
+        currentUid: currentUid,
+      );
+    }
   }
 
   Future<void> _checkBlockStatus() async {
     final currentUid = _authService.currentUid ?? '';
     final targetUid = widget.userId ?? currentUid;
-    if (currentUid.isEmpty || currentUid == targetUid) return;
+    if (currentUid.isEmpty ||
+        GamerSocialService.stringToUuid(currentUid) ==
+            GamerSocialService.stringToUuid(targetUid)) {
+      return;
+    }
 
     final blocked = await _blockService.isBlocked(
         currentUid: currentUid, targetUid: targetUid);
@@ -153,6 +211,49 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     return null;
   }
 
+  Future<void> _handleToggleAlly(String currentUid) async {
+    if (currentUid.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('login_required_prompt'.tr()),
+          action: SnackBarAction(
+            label: 'btn_login'.tr(),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const GamerAuthScreen()),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (_isBlockedByMe) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('blocked_users_sub'.tr()),
+          backgroundColor: const Color(0xFFFF4655),
+        ),
+      );
+      return;
+    }
+
+    final ok = await _socialController.toggleAlly(currentUid: currentUid);
+    if (!ok && mounted) {
+      final err = _socialController.errorMessage ?? 'action_failed'.tr();
+      _socialController.clearError();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: const Color(0xFFFF4655),
+        ),
+      );
+    }
+  }
+
   void _shareProfile(GamerUser user) {
     final displayName = user.displayName.isNotEmpty ? user.displayName : user.username;
     final game = user.favoriteGame.isNotEmpty ? user.favoriteGame : 'BGMI';
@@ -164,13 +265,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     
     final rankStr = hasValidRank ? user.rank : null;
     final bioStr = user.bio.trim().isNotEmpty ? user.bio.trim() : null;
+    final liveSquadCount = _socialController.targetUid.isNotEmpty
+        ? _socialController.squadCount
+        : user.squadCount;
 
     AppShareService.shareProfile(
       displayName: displayName,
       username: user.username,
       game: game,
       rank: rankStr,
-      squadCount: user.squadCount,
+      squadCount: liveSquadCount,
       postsCount: user.postsCount,
       bio: bioStr,
     );
@@ -355,8 +459,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
   @override
   Widget build(BuildContext context) {
     final currentUid = _authService.currentUid ?? '';
-    final targetUid = widget.userId ?? currentUid;
-    final isOwnProfile = currentUid.isNotEmpty && currentUid == targetUid;
+    final isOwnProfile = _isOwnProfile;
 
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
@@ -541,104 +644,171 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
 
                             const SizedBox(height: 14),
 
-                            Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: ThemeService.card,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: ThemeService.border),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                children: [
-                                  _buildStatColumn('${user.postsCount}', 'posts'.tr(), () {
-                                    _tabController.animateTo(0);
-                                  }),
-                                  Container(height: 24, width: 1, color: ThemeService.border),
-                                  _buildStatColumn('${user.squadCount}', 'squad'.tr(), () async {
-                                    await Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => SquadAlliesScreen(
-                                          userId: user.uid,
-                                          displayName: user.displayName,
-                                          initialTabIndex: 0,
-                                        ),
+                            ListenableBuilder(
+                              listenable: _socialController,
+                              builder: (context, _) {
+                                final liveSquadCount =
+                                    _socialController.targetUid.isNotEmpty
+                                        ? _socialController.squadCount
+                                        : user.squadCount;
+                                final liveAlliesCount =
+                                    _socialController.targetUid.isNotEmpty
+                                        ? _socialController.alliesCount
+                                        : user.alliesCount;
+                                final isAllied = _socialController.isAlly;
+                                final isToggling =
+                                    _socialController.isToggling;
+
+                                return Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: ThemeService.card,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: ThemeService.border),
                                       ),
-                                    );
-                                    _refreshSilently();
-                                  }),
-                                  Container(height: 24, width: 1, color: ThemeService.border),
-                                  _buildStatColumn('${user.alliesCount}', 'allies'.tr(), () async {
-                                    await Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => SquadAlliesScreen(
-                                          userId: user.uid,
-                                          displayName: user.displayName,
-                                          initialTabIndex: 1,
-                                        ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                        children: [
+                                          _buildStatColumn('${user.postsCount}', 'posts'.tr(), () {
+                                            _tabController.animateTo(0);
+                                          }),
+                                          Container(height: 24, width: 1, color: ThemeService.border),
+                                          _buildStatColumn('$liveSquadCount', 'squad'.tr(), () async {
+                                            await Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => SquadAlliesScreen(
+                                                  userId: user.uid,
+                                                  displayName: user.displayName,
+                                                  initialTabIndex: 0,
+                                                ),
+                                              ),
+                                            );
+                                            await _socialController.refresh(currentUid: currentUid);
+                                            _refreshSilently();
+                                          }),
+                                          Container(height: 24, width: 1, color: ThemeService.border),
+                                          _buildStatColumn('$liveAlliesCount', 'allies'.tr(), () async {
+                                            await Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => SquadAlliesScreen(
+                                                  userId: user.uid,
+                                                  displayName: user.displayName,
+                                                  initialTabIndex: 1,
+                                                ),
+                                              ),
+                                            );
+                                            await _socialController.refresh(currentUid: currentUid);
+                                            _refreshSilently();
+                                          }),
+                                        ],
                                       ),
-                                    );
-                                    _refreshSilently();
-                                  }),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                if (isOwnProfile) ...[
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF1877F2),
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                      ),
-                                      icon: const Icon(Icons.edit_rounded, size: 18),
-                                      label: Text('btn_edit_profile'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                      onPressed: () async {
-                                        await Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) => CreateGamerIdScreen(
-                                              isEditing: true,
-                                              existingUser: user,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        if (isOwnProfile) ...[
+                                          Expanded(
+                                            child: ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF1877F2),
+                                                foregroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                              ),
+                                              icon: const Icon(Icons.edit_rounded, size: 18),
+                                              label: Text('btn_edit_profile'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                              onPressed: () async {
+                                                await Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) => CreateGamerIdScreen(
+                                                      isEditing: true,
+                                                      existingUser: user,
+                                                    ),
+                                                  ),
+                                                );
+                                                _refreshSilently();
+                                              },
                                             ),
                                           ),
-                                        );
-                                        _refreshSilently();
-                                      },
+                                          const SizedBox(width: 8),
+                                          OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(
+                                              backgroundColor: ThemeService.cardSecondary,
+                                              foregroundColor: ThemeService.textPrimary,
+                                              side: BorderSide(color: ThemeService.border),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                                            ),
+                                            icon: Icon(Icons.share_rounded, size: 18, color: ThemeService.textSecondary),
+                                            label: Text('share'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            onPressed: () => _shareProfile(user),
+                                          ),
+                                        ] else ...[
+                                          Expanded(
+                                            child: ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: isAllied
+                                                    ? ThemeService.cardSecondary
+                                                    : const Color(0xFF1877F2),
+                                                foregroundColor: isAllied
+                                                    ? ThemeService.textPrimary
+                                                    : Colors.white,
+                                                elevation: 0,
+                                                side: BorderSide(
+                                                  color: isAllied
+                                                      ? ThemeService.border
+                                                      : Colors.transparent,
+                                                ),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                              ),
+                                              icon: isToggling
+                                                  ? SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child: CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: isAllied
+                                                            ? ThemeService.textPrimary
+                                                            : Colors.white,
+                                                      ),
+                                                    )
+                                                  : Icon(
+                                                      isAllied
+                                                          ? Icons.how_to_reg_rounded
+                                                          : Icons.person_add_alt_1_rounded,
+                                                      size: 18,
+                                                    ),
+                                              label: Text(
+                                                isAllied ? 'btn_allied'.tr() : 'btn_add_ally'.tr(),
+                                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                              ),
+                                              onPressed: isToggling
+                                                  ? null
+                                                  : () => _handleToggleAlly(currentUid),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          OutlinedButton.icon(
+                                            style: OutlinedButton.styleFrom(
+                                              backgroundColor: ThemeService.cardSecondary,
+                                              foregroundColor: ThemeService.textPrimary,
+                                              side: BorderSide(color: ThemeService.border),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                                            ),
+                                            icon: Icon(Icons.share_rounded, size: 18, color: ThemeService.textSecondary),
+                                            label: Text('share'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            onPressed: () => _shareProfile(user),
+                                          ),
+                                        ],
+                                      ],
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  OutlinedButton.icon(
-                                    style: OutlinedButton.styleFrom(
-                                      backgroundColor: ThemeService.cardSecondary,
-                                      foregroundColor: ThemeService.textPrimary,
-                                      side: BorderSide(color: ThemeService.border),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                                    ),
-                                    icon: Icon(Icons.share_rounded, size: 18, color: ThemeService.textSecondary),
-                                    label: Text('share'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    onPressed: () => _shareProfile(user),
-                                  ),
-                                ] else ...[
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF1877F2),
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                      ),
-                                      icon: const Icon(Icons.share_rounded, size: 16),
-                                      label: Text('btn_share_profile'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                      onPressed: () => _shareProfile(user),
-                                    ),
-                                  ),
-                                ],
-                              ],
+                                  ],
+                                );
+                              },
                             ),
                           ],
                         ),

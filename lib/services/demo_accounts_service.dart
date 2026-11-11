@@ -396,17 +396,19 @@ class DemoAccountsService {
         final target = demoUsersConfig[targetIndex]['uid'] as String;
         final followDocId = '${current}_$target';
 
-        await SupabaseService.client.from('follows').upsert({
-          'id': followDocId,
-          'followerId': current,
-          'follower_id': current,
-          'followingId': target,
-          'following_id': target,
-          'isDemoFollow': true,
-          'is_demo_follow': true,
-          'createdAt': DateTime.now().toIso8601String(),
-          'created_at': DateTime.now().toIso8601String(),
-        });
+        try {
+          await SupabaseService.client.from('follows').upsert({
+            'id': followDocId,
+            'followerId': current,
+            'follower_id': current,
+            'followingId': target,
+            'following_id': target,
+            'isDemoFollow': true,
+            'is_demo_follow': true,
+            'createdAt': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (_) {}
       }
     }
 
