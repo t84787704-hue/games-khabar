@@ -73,20 +73,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
   Future<void> _loadTournamentData() async {
     try {
-      final initialWinner = _tournament?['winner_team_name'] ??
-          _tournament?['proof_team_name'] ??
-          widget.tournament?['winner_team_name'] ??
-          widget.tournament?['proof_team_name'] ??
-          widget.initialData?['winner_team_name'] ??
-          widget.initialData?['proof_team_name'];
-      final initialWinnerId = _tournament?['winner_team_id'] ??
-          _tournament?['proof_team_id'] ??
-          widget.tournament?['winner_team_id'] ??
-          widget.initialData?['winner_team_id'];
-      final initialStatus = (_tournament?['status'] ?? widget.tournament?['status'] ?? widget.initialData?['status'] ?? '').toString().toLowerCase();
-      final initialProofStatus = (_tournament?['proof_status'] ?? widget.tournament?['proof_status'] ?? widget.initialData?['proof_status'] ?? '').toString().toLowerCase();
-      final bool initialWasCompleted = initialStatus == 'completed' || initialProofStatus == 'approved' || initialWinner != null;
-
       String tId = effectiveTournamentId;
       Map<String, dynamic>? res;
 
@@ -100,12 +86,22 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         } catch (_) {}
       }
 
-      final rawTitle = (_tournament?['title'] ?? _tournament?['name'] ?? widget.tournament?['title'] ?? widget.initialData?['title'] ?? '').toString();
-      final cleanTitle = rawTitle.replaceAll(RegExp(r'🏆\s*Tournament\s*Champion!\s*\([^)]*\)\s*', caseSensitive: false), '').trim();
+      final rawTitle = (_tournament?['title'] ??
+              _tournament?['name'] ??
+              widget.tournament?['title'] ??
+              widget.initialData?['title'] ??
+              '')
+          .toString();
+      final cleanTitle = rawTitle
+          .replaceAll(
+            RegExp(r'🏆\s*Tournament\s*Champion!\s*\([^)]*\)\s*', caseSensitive: false),
+            '',
+          )
+          .trim();
       final searchTitle = cleanTitle.isNotEmpty ? cleanTitle : rawTitle;
 
-      // Fallback: If not found by ID or ID is empty, search by title
-      if (res == null && searchTitle.isNotEmpty) {
+      // Only look up by exact title if no tournament ID was provided at all
+      if (res == null && tId.isEmpty && searchTitle.isNotEmpty) {
         try {
           res = await SupabaseService.client
               .from('tournaments')
@@ -120,148 +116,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       if (res != null) {
         _tournament = Map<String, dynamic>.from(res);
         tId = _tournament!['id']?.toString() ?? tId;
-      }
-
-      // If initially marked completed/won (e.g. from notification), ensure database upcoming row doesn't overwrite it
-      if (initialWasCompleted) {
-        _tournament ??= {};
-        _tournament!['status'] = 'completed';
-        _tournament!['proof_status'] = 'approved';
-        if (initialWinner != null && initialWinner.toString().isNotEmpty) {
-          _tournament!['winner_team_name'] = initialWinner.toString();
-          _tournament!['proof_team_name'] = initialWinner.toString();
-        }
-        if (initialWinnerId != null && initialWinnerId.toString().isNotEmpty) {
-          _tournament!['winner_team_id'] = initialWinnerId.toString();
-        }
-      }
-
-      // Multi-table fallback checks for victory/winner state
-      String? crossCheckedWinnerName;
-      String? crossCheckedWinnerId;
-      bool crossCheckedWon = false;
-
-      // A. Check proof_history table
-      if (tId.isNotEmpty || searchTitle.isNotEmpty) {
-        try {
-          final proofs = await SupabaseService.client
-              .from('proof_history')
-              .select()
-              .or('status.eq.approved,status.eq.accepted')
-              .order('created_at', ascending: false);
-          for (final p in proofs) {
-            final pTid = p['tournament_id']?.toString();
-            final pTitle = (p['tournament_title'] ?? p['tournamentTitle'] ?? '').toString().toLowerCase();
-            if ((tId.isNotEmpty && pTid == tId) ||
-                (searchTitle.isNotEmpty && pTitle.contains(searchTitle.toLowerCase()))) {
-              crossCheckedWon = true;
-              crossCheckedWinnerName = p['username']?.toString() ?? p['team_name']?.toString() ?? p['teamName']?.toString();
-              crossCheckedWinnerId = p['team_id']?.toString() ?? p['teamId']?.toString();
-              break;
-            }
-          }
-        } catch (_) {}
-      }
-
-      // B. Check notifications table for champion/win alert matching this tournament
-      if (!crossCheckedWon && searchTitle.isNotEmpty) {
-        try {
-          final curUid = GamerAuthService().currentGamer?.uid ?? SupabaseService.client.auth.currentUser?.id;
-          final curUuid = curUid != null ? SupabaseService.toUuid(curUid) : '';
-          final notifRows = await SupabaseService.client
-              .from('notifications')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(30);
-
-          for (final n in notifRows) {
-            final nUid = (n['user_id'] ?? n['userId'] ?? '').toString();
-            if (curUid != null && nUid.isNotEmpty && nUid != curUid && nUid != curUuid) {
-              continue;
-            }
-            final nTitle = (n['title'] ?? '').toString().toLowerCase();
-            final nBody = (n['body'] ?? n['message'] ?? '').toString().toLowerCase();
-            final nRawBody = (n['body'] ?? n['message'] ?? '').toString();
-
-            final isChampion = nTitle.contains('champion') || nTitle.contains('won') || nBody.contains('won');
-            if (isChampion && (nBody.contains(searchTitle.toLowerCase()) || nTitle.contains(searchTitle.toLowerCase()))) {
-              crossCheckedWon = true;
-              final match = RegExp(r'team\s+["“]([^"”]+)["”]', caseSensitive: false).firstMatch(nRawBody);
-              if (match != null) {
-                crossCheckedWinnerName = match.group(1);
-              }
-              break;
-            }
-          }
-        } catch (_) {}
-      }
-
-      // C. Check active_matches table
-      if (!crossCheckedWon && searchTitle.isNotEmpty) {
-        try {
-          final matches = await SupabaseService.client
-              .from('active_matches')
-              .select()
-              .eq('status', 'completed')
-              .order('created_at', ascending: false)
-              .limit(10);
-          for (final m in matches) {
-            final mTitle = (m['tournament_title'] ?? m['title'] ?? '').toString().toLowerCase();
-            if (mTitle.contains(searchTitle.toLowerCase())) {
-              crossCheckedWon = true;
-              crossCheckedWinnerName = m['winner_team']?.toString() ?? m['winning_team']?.toString();
-              break;
-            }
-          }
-        } catch (_) {}
-      }
-
-      if (crossCheckedWon) {
-        _tournament ??= {};
-        _tournament!['status'] = 'completed';
-        _tournament!['proof_status'] = 'approved';
-        if (crossCheckedWinnerName != null && crossCheckedWinnerName.isNotEmpty) {
-          _tournament!['winner_team_name'] = crossCheckedWinnerName;
-          _tournament!['proof_team_name'] = crossCheckedWinnerName;
-        }
-        if (crossCheckedWinnerId != null && crossCheckedWinnerId.isNotEmpty) {
-          _tournament!['winner_team_id'] = crossCheckedWinnerId;
-        }
-      }
-
-      final resolvedWinnerName = _tournament?['winner_team_name'] ??
-          _tournament?['proof_team_name'] ??
-          initialWinner ??
-          crossCheckedWinnerName;
-
-      final isNowCompleted = (_tournament?['status'] ?? '').toString().toLowerCase() == 'completed' ||
-          (_tournament?['proof_status'] ?? '').toString().toLowerCase() == 'approved' ||
-          resolvedWinnerName != null;
-
-      if (isNowCompleted) {
-        _tournament ??= {};
-        _tournament!['status'] = 'completed';
-        _tournament!['proof_status'] = 'approved';
-        if (resolvedWinnerName != null && resolvedWinnerName.toString().isNotEmpty) {
-          _tournament!['winner_team_name'] = resolvedWinnerName.toString();
-          _tournament!['proof_team_name'] = resolvedWinnerName.toString();
-        }
-
-        // Self-heal Supabase row in background
-        try {
-          final updatePayload = {
-            'status': 'completed',
-            'proof_status': 'approved',
-            if (resolvedWinnerName != null) 'winner_team_name': resolvedWinnerName.toString(),
-            if (resolvedWinnerName != null) 'proof_team_name': resolvedWinnerName.toString(),
-          };
-          if (tId.isNotEmpty) {
-            SupabaseService.client.from('tournaments').update(updatePayload).eq('id', tId).then((_) {}).catchError((_) {});
-          }
-          if (searchTitle.isNotEmpty && searchTitle != 'Tournament') {
-            SupabaseService.client.from('tournaments').update(updatePayload).ilike('title', searchTitle).then((_) {}).catchError((_) {});
-          }
-        } catch (_) {}
       }
 
       if (tId.isEmpty && res == null && _tournament == null) {
@@ -313,10 +167,12 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         debugPrint('[TournamentDetail] Error loading registrations: $e');
       }
 
-      // Check winning team info
-      final rawStatus = (_tournament?['status'] ?? '').toString().toLowerCase();
-      final proofStatus = (_tournament?['proof_status'] ?? '').toString().toLowerCase();
-      final bool isApproved = proofStatus == 'approved' || proofStatus == 'accepted' || rawStatus == 'completed';
+      // Check winning team info ONLY when the tournament row itself is genuinely completed/approved
+      final rawStatus = (_tournament?['status'] ?? 'upcoming').toString().trim().toLowerCase();
+      final proofStatus = (_tournament?['proof_status'] ?? '').toString().trim().toLowerCase();
+      final bool isApproved = rawStatus == 'completed' ||
+          proofStatus == 'approved' ||
+          proofStatus == 'accepted';
 
       _winnerTeamName = null;
       _winnerTeamTag = null;
@@ -326,19 +182,21 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       if (isApproved) {
         String? winnerTeamId = (_tournament?['winner_team_id'] ??
                 _tournament?['proof_team_id'] ??
-                _tournament?['submitted_team_id'] ??
-                crossCheckedWinnerId)
-            ?.toString();
+                _tournament?['submitted_team_id'])
+            ?.toString()
+            .trim();
 
-        if (_tournament?['proof_team_name'] != null && _tournament?['proof_team_name'].toString().isNotEmpty == true) {
-          _winnerTeamName = _tournament?['proof_team_name']?.toString();
+        if (_tournament?['winner_team_name'] != null &&
+            _tournament!['winner_team_name'].toString().trim().isNotEmpty) {
+          _winnerTeamName = _tournament!['winner_team_name'].toString().trim();
+        } else if (_tournament?['proof_team_name'] != null &&
+            _tournament!['proof_team_name'].toString().trim().isNotEmpty) {
+          _winnerTeamName = _tournament!['proof_team_name'].toString().trim();
         }
-        if (_winnerTeamName == null && _tournament?['winner_team_name'] != null && _tournament?['winner_team_name'].toString().isNotEmpty == true) {
-          _winnerTeamName = _tournament?['winner_team_name']?.toString();
-        }
-        _winnerTeamName ??= resolvedWinnerName?.toString();
 
-        if ((winnerTeamId == null || winnerTeamId.isEmpty) && _winnerTeamName != null && _winnerTeamName!.isNotEmpty) {
+        if ((winnerTeamId == null || winnerTeamId.isEmpty) &&
+            _winnerTeamName != null &&
+            _winnerTeamName!.isNotEmpty) {
           try {
             final foundTeam = await SupabaseService.client
                 .from('teams')
@@ -347,6 +205,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                 .maybeSingle();
             if (foundTeam != null) {
               winnerTeamId = foundTeam['id']?.toString();
+              _winnerTeamName = foundTeam['name']?.toString() ?? _winnerTeamName;
               _winnerTeamTag = foundTeam['tag']?.toString();
               _winnerLeaderId = foundTeam['leader_id']?.toString();
             }
@@ -354,19 +213,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         }
 
         if (winnerTeamId != null && winnerTeamId.isNotEmpty) {
-          // If winner_team_id was not set in database, save it now
-          if (_tournament?['winner_team_id'] == null || _tournament?['winner_team_id'].toString().isEmpty == true) {
-            _tournament!['winner_team_id'] = winnerTeamId;
-            try {
-              SupabaseService.client
-                  .from('tournaments')
-                  .update({'winner_team_id': winnerTeamId, 'status': 'completed', 'proof_status': 'approved'})
-                  .eq('id', tId)
-                  .then((_) {})
-                  .catchError((_) {});
-            } catch (_) {}
-          }
-
           try {
             final tUuid = SupabaseService.toUuid(winnerTeamId);
             final tRes = await SupabaseService.client
@@ -400,17 +246,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
             debugPrint('[TournamentDetail] Error loading winner team info: $e');
           }
 
-          // Dynamic self-healing: Ensure wins, +25 points, and 1000 prize coins are credited!
-          try {
-            TeamService().syncAllTeamsTournamentWins(force: true);
-          } catch (_) {}
-        }
-
-        // Ensure current user is recognized as winning member if they won or received victory notif
-        final currentUid = GamerAuthService().currentGamer?.uid ?? SupabaseService.client.auth.currentUser?.id ?? '';
-        if (currentUid.isNotEmpty && (widget.isRegistered == true || _winnerMemberIds.isEmpty)) {
-          if (!_winnerMemberIds.contains(currentUid)) {
-            _winnerMemberIds.add(currentUid);
+          // Sync wins/points/coins ONLY when DB confirms this exact tournament is completed
+          if (res != null && rawStatus == 'completed') {
+            try {
+              TeamService().syncAllTeamsTournamentWins(force: true);
+            } catch (_) {}
           }
         }
       }
@@ -644,8 +484,8 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         final accentSky = isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
 
         final title = (_tournament?['title'] ?? 'Tournament').toString();
-        final game = (_tournament?['game'] ?? 'Free Fire').toString().toUpperCase();
-        final mode = (_tournament?['game_mode'] ?? 'Squad (4v4)').toString();
+        final game = (_tournament?['game'] ?? _tournament?['game_name'] ?? 'Free Fire').toString().toUpperCase();
+        final mode = (_tournament?['game_mode'] ?? _tournament?['match_format'] ?? 'Squad (4v4)').toString();
         final mapName = (_tournament?['map_name'] ?? _tournament?['map'] ?? 'Erangel').toString();
         final prizePool = (_tournament?['prize_pool'] is num)
             ? (_tournament?['prize_pool'] as num).toInt()
@@ -673,14 +513,23 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
             'Champions';
         final tagDisplay = _winnerTeamTag != null && _winnerTeamTag!.isNotEmpty ? ' [$_winnerTeamTag]' : '';
 
-        final maxTeams = _tournament?['max_teams'] ?? 16;
-        final currentTeams = _registrations.isNotEmpty ? _registrations.length : (_tournament?['current_teams'] ?? 1);
+        final maxTeams = _tournament?['max_teams'] ?? _tournament?['max_slots'] ?? 16;
+        final currentTeams = _registrations.isNotEmpty
+            ? _registrations.length
+            : (_tournament?['current_teams'] ?? _tournament?['joined_teams_count'] ?? 0);
 
         // Check if current user is part of winning team
         final bool isUserInWinningTeam = isTournamentCompleted &&
+            currentUid.isNotEmpty &&
             (_winnerMemberIds.contains(currentUid) ||
-            (_winnerLeaderId != null && _winnerLeaderId == currentUid) ||
-            (currentUid.isNotEmpty && _winnerTeamName != null && (widget.isRegistered == true || _winnerMemberIds.isEmpty)));
+                (_winnerLeaderId != null && _winnerLeaderId == currentUid) ||
+                (_winnerMemberIds.isEmpty &&
+                    _winnerLeaderId == null &&
+                    _registrations.any((r) =>
+                        (r['leader_id']?.toString() == currentUid ||
+                            r['user_id']?.toString() == currentUid) &&
+                        (r['teams']?['name']?.toString().toLowerCase().trim() ==
+                            _winnerTeamName?.toLowerCase().trim()))));
 
         return Scaffold(
           backgroundColor: bg,
@@ -1392,7 +1241,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 final reg = entry.value;
                                 final teamObj = reg['teams'] as Map<String, dynamic>?;
                                 final teamName = teamObj?['name']?.toString() ?? reg['team_name']?.toString() ?? 'Squad #$idx';
-                                final slotNum = reg['slot_number'] ?? (idx + 1);
+                                final slotNum = reg['slot_number'] ?? idx;
                                 final teamId = reg['team_id']?.toString() ?? '';
                                 final isWinner = isTournamentCompleted &&
                                     ((teamId.isNotEmpty &&

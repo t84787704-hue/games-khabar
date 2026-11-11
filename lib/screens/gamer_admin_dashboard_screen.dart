@@ -1852,6 +1852,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           body: defaultUrduMsg,
           type: 'rank_rejected',
         );
+      } catch (_) {}
       if (ok) {
         try {
           await SupabaseService.logProofHistory(
@@ -3428,7 +3429,8 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
           .eq('tournament_id', tournamentId);
     } catch (_) {}
 
-    if (regRes.isEmpty) {
+    final validTeamRegs = regRes.where((r) => r['team_id'] != null && r['team_id'].toString().isNotEmpty).toList();
+    if (validTeamRegs.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No teams registered in this tournament yet!')),
@@ -3436,7 +3438,13 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
       return;
     }
 
-    String? selectedTeamId = regRes.first['team_id']?.toString();
+    final matchedTournament = _tournaments.firstWhere(
+      (t) => t['id']?.toString() == tournamentId,
+      orElse: () => <String, dynamic>{},
+    );
+    final resolvedTitle = (matchedTournament['title'] ?? 'Tournament').toString();
+
+    String? selectedTeamId = validTeamRegs.first['team_id']?.toString();
 
     if (!mounted) return;
     showDialog(
@@ -3466,9 +3474,11 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
                   value: selectedTeamId,
                   dropdownColor: const Color(0xFF161A22),
                   style: const TextStyle(color: Colors.white, fontSize: 13),
-                  items: regRes.map<DropdownMenuItem<String>>((r) {
-                    final tName = r['teams']?['name']?.toString() ?? 'Team #${r['team_id'].toString().substring(0, 5)}';
-                    return DropdownMenuItem(value: r['team_id'].toString(), child: Text(tName));
+                  items: validTeamRegs.map<DropdownMenuItem<String>>((r) {
+                    final rawTid = r['team_id'].toString();
+                    final shortId = rawTid.length >= 5 ? rawTid.substring(0, 5) : rawTid;
+                    final tName = r['teams']?['name']?.toString() ?? 'Team #$shortId';
+                    return DropdownMenuItem(value: rawTid, child: Text(tName));
                   }).toList(),
                   onChanged: (val) {
                     if (val != null) setDState(() => selectedTeamId = val);
@@ -3481,18 +3491,21 @@ class _AdminTournamentsTabState extends State<_AdminTournamentsTab> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black),
                 onPressed: () async {
-                  if (selectedTeamId == null) return;
+                  final targetTeamId = selectedTeamId;
+                  if (targetTeamId == null || targetTeamId.isEmpty) return;
+                  try {
                     // 🏆 Award Winner: +1 win, +25 points, equal coins split, and leaderboard sync
                     await TeamService().awardTournamentWinner(
                       tournamentId: tournamentId,
-                      teamId: selectedTeamId,
+                      teamId: targetTeamId,
                       prizePool: prizePool,
-                      tournamentTitle: 'Tournament Match',
+                      tournamentTitle: resolvedTitle,
                     );
 
                     await _supabase.from('tournaments').update({
                       'status': 'completed',
-                      'winner_team_id': selectedTeamId,
+                      'proof_status': 'approved',
+                      'winner_team_id': targetTeamId,
                     }).eq('id', tournamentId);
 
                     if (context.mounted) Navigator.pop(ctx);

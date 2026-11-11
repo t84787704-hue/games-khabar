@@ -323,6 +323,28 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
         } catch (_) {}
       }
 
+      // Defensive guard: team registration must never auto-complete an upcoming tournament without a declared winner/approved proof
+      try {
+        final preStatus = (tournament['status'] ?? 'upcoming').toString().trim().toLowerCase();
+        if (preStatus != 'completed') {
+          final fresh = await _supabase
+              .from('tournaments')
+              .select('status, winner_team_id, proof_url')
+              .eq('id', tournamentId)
+              .maybeSingle();
+          if (fresh != null) {
+            final postStatus = (fresh['status'] ?? '').toString().trim().toLowerCase();
+            final postWinner = (fresh['winner_team_id'] ?? '').toString().trim();
+            final postProof = (fresh['proof_url'] ?? '').toString().trim();
+            if (postStatus == 'completed' && postWinner.isEmpty && postProof.isEmpty) {
+              await _supabase.from('tournaments').update({
+                'status': preStatus.isNotEmpty ? preStatus : 'upcoming',
+              }).eq('id', tournamentId);
+            }
+          }
+        }
+      } catch (_) {}
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

@@ -805,15 +805,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       } catch (_) {}
     }
 
-    // 2. If not found by ID or ID is empty, search by tournament title
-    if (tournamentMap == null && tTitle != null && tTitle.isNotEmpty) {
+    // 2. Only search by title if notification carried no tournament_id at all
+    if (tournamentMap == null && (tId == null || tId.isEmpty) && tTitle != null && tTitle.isNotEmpty) {
       try {
-        // Look for completed tournament row first if it's a win notification
-        final row = await SupabaseService.client
+        var query = SupabaseService.client
             .from('tournaments')
             .select()
-            .ilike('title', tTitle)
-            .order('status', ascending: true) // completed comes before upcoming
+            .ilike('title', tTitle);
+        if (isWinNotif) {
+          query = query.eq('status', 'completed');
+        }
+        final row = await query
             .order('created_at', ascending: false)
             .limit(1)
             .maybeSingle();
@@ -822,57 +824,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           tId = tournamentMap['id']?.toString() ?? tId;
         }
       } catch (_) {}
-    }
-
-    // 3. Fallback: If still not found, check latest completed tournament in database
-    if (tournamentMap == null && (notif.type.contains('tournament') || isWinNotif)) {
-      try {
-        final row = await SupabaseService.client
-            .from('tournaments')
-            .select()
-            .eq('status', 'completed')
-            .order('created_at', ascending: false)
-            .limit(1)
-            .maybeSingle();
-        if (row != null) {
-          tournamentMap = Map<String, dynamic>.from(row);
-          tId = tournamentMap['id']?.toString() ?? tId;
-          tTitle = tournamentMap['title']?.toString() ?? tTitle;
-        }
-      } catch (_) {}
-    }
-
-    // 4. If victory notification, ensure completed status and winner team info are set!
-    if (isWinNotif) {
-      tournamentMap ??= {};
-      tournamentMap['status'] = 'completed';
-      tournamentMap['proof_status'] = 'approved';
-      if (winTeam != null && winTeam.isNotEmpty) {
-        tournamentMap['winner_team_name'] = winTeam;
-        tournamentMap['proof_team_name'] = winTeam;
-      }
-      if (data['team_id'] != null) {
-        tournamentMap['winner_team_id'] = data['team_id'].toString();
-      }
-      if (tTitle != null && tTitle.isNotEmpty) {
-        tournamentMap['title'] = tTitle;
-      }
-
-      // Persist self-heal in database in background
-      if (tId != null && tId.isNotEmpty) {
-        SupabaseService.client.from('tournaments').update({
-          'status': 'completed',
-          'proof_status': 'approved',
-          if (winTeam != null) 'winner_team_name': winTeam,
-        }).eq('id', tId).then((_) {}).catchError((_) {});
-      }
-      if (tTitle != null && tTitle.isNotEmpty && tTitle != 'Tournament') {
-        SupabaseService.client.from('tournaments').update({
-          'status': 'completed',
-          'proof_status': 'approved',
-          if (winTeam != null) 'winner_team_name': winTeam,
-        }).ilike('title', tTitle).then((_) {}).catchError((_) {});
-      }
     }
 
     if (!mounted) return;
@@ -891,9 +842,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               'proof_status': 'approved',
               if (winTeam != null) 'winner_team_name': winTeam,
               if (winTeam != null) 'proof_team_name': winTeam,
+              if (data['team_id'] != null) 'winner_team_id': data['team_id'].toString(),
             },
           },
-          isRegistered: true,
+          isRegistered: tournamentMap == null ? isWinNotif : false,
         ),
       ),
     );

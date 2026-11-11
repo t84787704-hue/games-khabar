@@ -1005,16 +1005,6 @@ class TeamService {
         } catch (_) {}
       }
 
-      // Also ensure updated by title if title is known (e.g. Free11)
-      if (tournamentTitle.isNotEmpty && tournamentTitle != 'Tournament') {
-        try {
-          await SupabaseService.client
-              .from('tournaments')
-              .update(tournamentUpdatePayload)
-              .ilike('title', tournamentTitle);
-        } catch (_) {}
-      }
-
       // 8. Log proof history
       try {
         await SupabaseService.logProofHistory(
@@ -1051,22 +1041,21 @@ class TeamService {
       final nowIso = DateTime.now().toUtc().toIso8601String();
       final prefs = await SharedPreferences.getInstance();
 
-      // 1. Fetch all completed or approved tournaments
+      // 1. Fetch strictly completed tournaments
       List<dynamic> completedTourns = [];
       try {
         final res = await SupabaseService.client
             .from('tournaments')
             .select()
-            .or('status.eq.completed,proof_status.eq.approved');
+            .eq('status', 'completed');
         if (res is List) completedTourns = res;
       } catch (_) {
         try {
           final res = await SupabaseService.client.from('tournaments').select();
           if (res is List) {
             completedTourns = res.where((t) {
-              final st = (t['status'] ?? '').toString().toLowerCase();
-              final pst = (t['proof_status'] ?? '').toString().toLowerCase();
-              return st == 'completed' || pst == 'approved' || pst == 'accepted';
+              final st = (t['status'] ?? '').toString().trim().toLowerCase();
+              return st == 'completed';
             }).toList();
           }
         } catch (_) {}
@@ -1074,9 +1063,16 @@ class TeamService {
 
       // 2. Group completed tournaments by winner team ID
       final Map<String, List<Map<String, dynamic>>> tournamentsByTeam = {};
+      final Set<String> syncedTournamentIds = {};
       for (final t in completedTourns) {
         if (t is! Map) continue;
         final tMap = Map<String, dynamic>.from(t);
+        final st = (tMap['status'] ?? '').toString().trim().toLowerCase();
+        if (st != 'completed') continue;
+
+        final rawTournId = (tMap['id'] ?? '').toString().trim();
+        if (rawTournId.isEmpty) continue;
+
         String winnerId = (tMap['winner_team_id'] ??
                 tMap['proof_team_id'] ??
                 tMap['submitted_team_id'] ??
@@ -1084,16 +1080,6 @@ class TeamService {
                 '')
             .toString()
             .trim();
-
-        // If winner_team_id was missing in database, persist it now
-        if (winnerId.isNotEmpty && (tMap['winner_team_id'] == null || tMap['winner_team_id'].toString().isEmpty)) {
-          try {
-            await SupabaseService.client.from('tournaments').update({
-              'winner_team_id': winnerId,
-              'status': 'completed',
-            }).eq('id', tMap['id']);
-          } catch (_) {}
-        }
 
         if (winnerId.isEmpty) {
           final wName = (tMap['proof_team_name'] ?? tMap['winner_team_name'] ?? '').toString().trim();
@@ -1112,11 +1098,12 @@ class TeamService {
         }
         if (winnerId.isEmpty) continue;
 
+        syncedTournamentIds.add(rawTournId.toLowerCase());
         final key = winnerId.toLowerCase();
         tournamentsByTeam.putIfAbsent(key, () => []).add(tMap);
       }
 
-      // 2b. Also include approved tournament proofs from proof_history table
+      // 2b. Check approved proof_history ONLY for tournaments confirmed as 'completed' in DB
       try {
         final approvedProofs = await SupabaseService.client
             .from('proof_history')
@@ -1126,28 +1113,38 @@ class TeamService {
         for (final p in approvedProofs) {
           final uName = (p['username'] ?? '').toString().trim();
           final tId = (p['tournament_id'] ?? '').toString().trim();
-          if (uName.isNotEmpty) {
-            try {
-              final teamFound = await SupabaseService.client
-                  .from('teams')
-                  .select('id')
-                  .or('name.ilike.%$uName%,tag.ilike.%$uName%')
-                  .maybeSingle();
-              if (teamFound != null) {
-                final matchedTid = teamFound['id'].toString().toLowerCase();
-                final existingList = tournamentsByTeam.putIfAbsent(matchedTid, () => []);
-                final alreadyHas = existingList.any((item) => (item['id'] ?? '').toString() == tId);
-                if (!alreadyHas && tId.isNotEmpty) {
-                  existingList.add({
-                    'id': tId,
-                    'title': p['proof_type'] ?? 'Tournament Championship',
-                    'prize_pool': 1000,
-                    'created_at': p['created_at'],
-                  });
-                }
-              }
-            } catch (_) {}
-          }
+          if (tId.isEmpty || uName.isEmpty) continue;
+          if (syncedTournamentIds.contains(tId.toLowerCase())) continue;
+
+          try {
+            // Confirm this tournament ID actually exists in DB and has status == 'completed'
+            final tRow = await SupabaseService.client
+                .from('tournaments')
+                .select()
+                .eq('id', tId)
+                .maybeSingle();
+            if (tRow == null) continue;
+            final tStatus = (tRow['status'] ?? '').toString().trim().toLowerCase();
+            if (tStatus != 'completed') continue;
+
+            // Exact case-insensitive match by team name or tag (never substring wildcard)
+            var teamFound = await SupabaseService.client
+                .from('teams')
+                .select('id')
+                .ilike('name', uName)
+                .maybeSingle();
+            teamFound ??= await SupabaseService.client
+                .from('teams')
+                .select('id')
+                .ilike('tag', uName)
+                .maybeSingle();
+
+            if (teamFound != null) {
+              final matchedTid = teamFound['id'].toString().toLowerCase();
+              syncedTournamentIds.add(tId.toLowerCase());
+              tournamentsByTeam.putIfAbsent(matchedTid, () => []).add(Map<String, dynamic>.from(tRow));
+            }
+          } catch (_) {}
         }
       } catch (err) {
         debugPrint('[TeamService] Proof history sync notice: $err');
@@ -1239,6 +1236,8 @@ class TeamService {
                 ? (t['prize_pool'] as num).toInt()
                 : int.tryParse(t['prize_pool']?.toString() ?? '0') ?? 0;
 
+            if (tId.isEmpty) continue;
+
             // Ensure Match & Tournament History record in active_matches
             final matchHistoryUuid = SupabaseService.toUuid('tourn_win_${tId}_$teamUuid');
             try {
@@ -1270,8 +1269,20 @@ class TeamService {
                   alreadyDistributed = true;
                 }
               } catch (_) {
-                final distributedKey = 'tourn_prize_distributed_$tId';
-                alreadyDistributed = prefs.getBool(distributedKey) ?? false;
+                try {
+                  final existingRefTx = await SupabaseService.client
+                      .from('coin_transactions')
+                      .select('id')
+                      .eq('reference_id', tId)
+                      .eq('type', 'tournament_win')
+                      .limit(1);
+                  if (existingRefTx is List && existingRefTx.isNotEmpty) {
+                    alreadyDistributed = true;
+                  }
+                } catch (_) {
+                  final distributedKey = 'tourn_prize_distributed_$tId';
+                  alreadyDistributed = prefs.getBool(distributedKey) ?? false;
+                }
               }
 
               if (!alreadyDistributed) {
