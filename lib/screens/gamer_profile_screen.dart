@@ -170,7 +170,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
       username: user.username,
       game: game,
       rank: rankStr,
-      followersCount: user.followersCount,
+      squadCount: user.squadCount,
       postsCount: user.postsCount,
       bio: bioStr,
     );
@@ -555,28 +555,30 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                     _tabController.animateTo(0);
                                   }),
                                   Container(height: 24, width: 1, color: ThemeService.border),
-                                  _buildStatColumn('${user.followersCount}', 'followers'.tr(), () {
-                                    Navigator.of(context).push(
+                                  _buildStatColumn('${user.squadCount}', 'squad'.tr(), () async {
+                                    await Navigator.of(context).push(
                                       MaterialPageRoute(
-                                        builder: (_) => FollowersFollowingScreen(
+                                        builder: (_) => SquadAlliesScreen(
                                           userId: user.uid,
                                           displayName: user.displayName,
                                           initialTabIndex: 0,
                                         ),
                                       ),
                                     );
+                                    _refreshSilently();
                                   }),
                                   Container(height: 24, width: 1, color: ThemeService.border),
-                                  _buildStatColumn('${user.followingCount}', 'following'.tr(), () {
-                                    Navigator.of(context).push(
+                                  _buildStatColumn('${user.alliesCount}', 'allies'.tr(), () async {
+                                    await Navigator.of(context).push(
                                       MaterialPageRoute(
-                                        builder: (_) => FollowersFollowingScreen(
+                                        builder: (_) => SquadAlliesScreen(
                                           userId: user.uid,
                                           displayName: user.displayName,
                                           initialTabIndex: 1,
                                         ),
                                       ),
                                     );
+                                    _refreshSilently();
                                   }),
                                 ],
                               ),

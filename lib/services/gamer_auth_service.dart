@@ -71,16 +71,39 @@ class GamerAuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_cacheKey(uid));
       await prefs.remove('user_age_$uid');
+      await prefs.remove('user_dob_$uid');
     } catch (_) {}
   }
 
+  int _calculateAgeFromDob(DateTime dob) {
+    final now = DateTime.now();
+    int age = now.year - dob.year;
+    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
+      age--;
+    }
+    return age;
+  }
+
   Future<GamerUser> _hydrateLocalAge(GamerUser gamer) async {
-    if (gamer.age != null || gamer.uid.isEmpty) return gamer;
+    if (gamer.uid.isEmpty) return gamer;
+    if (gamer.age != null && gamer.dateOfBirth != null) return gamer;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final localAge = prefs.getInt('user_age_${gamer.uid}');
-      if (localAge != null) {
-        return gamer.copyWith(age: localAge);
+      DateTime? resolvedDob = gamer.dateOfBirth;
+      int? resolvedAge = gamer.age;
+      if (resolvedDob == null) {
+        final rawDob = prefs.getString('user_dob_${gamer.uid}');
+        if (rawDob != null && rawDob.isNotEmpty) {
+          resolvedDob = DateTime.tryParse(rawDob);
+        }
+      }
+      if (resolvedAge == null && resolvedDob != null) {
+        final computed = _calculateAgeFromDob(resolvedDob);
+        if (computed > 0) resolvedAge = computed;
+      }
+      resolvedAge ??= prefs.getInt('user_age_${gamer.uid}');
+      if (resolvedAge != gamer.age || resolvedDob != gamer.dateOfBirth) {
+        return gamer.copyWith(age: resolvedAge, dateOfBirth: resolvedDob);
       }
     } catch (_) {}
     return gamer;
@@ -620,6 +643,8 @@ class GamerAuthService {
         'active_frame': user.activeFrame,
         'active_badge': user.activeBadge,
         if (user.age != null) 'age': user.age,
+        if (user.dateOfBirth != null)
+          'date_of_birth': user.dateOfBirth!.toIso8601String().split('T').first,
         'updated_at': DateTime.now().toIso8601String(),
       };
       try {
@@ -638,6 +663,14 @@ class GamerAuthService {
             await prefs.setInt('user_age_${user.uid}', user.age!);
           } else {
             await prefs.remove('user_age_${user.uid}');
+          }
+          if (user.dateOfBirth != null) {
+            await prefs.setString(
+              'user_dob_${user.uid}',
+              user.dateOfBirth!.toIso8601String().split('T').first,
+            );
+          } else {
+            await prefs.remove('user_dob_${user.uid}');
           }
         } catch (_) {}
         final savedUser = user.copyWith(

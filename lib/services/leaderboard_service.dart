@@ -44,7 +44,7 @@ class LeaderboardService {
     }
   }
 
-  Stream<List<GamerUser>> getTopPlayersByFollowers({int limit = 15}) {
+  Stream<List<GamerUser>> getTopPlayersBySquad({int limit = 15}) {
     try {
       return SupabaseService.client
           .from('users')
@@ -59,6 +59,9 @@ class LeaderboardService {
       );
     }
   }
+
+  Stream<List<GamerUser>> getTopPlayersByFollowers({int limit = 15}) =>
+      getTopPlayersBySquad(limit: limit);
 
   Stream<List<GamerUser>> getTopKdKings({int limit = 15}) {
     try {

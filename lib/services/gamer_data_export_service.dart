@@ -9,7 +9,7 @@ import 'supabase_service.dart';
 /// - Posts
 /// - Comments
 /// - Likes
-/// - Followers / Following
+/// - Squad / Allies
 /// - Teams & team memberships
 /// - 1v1 challenges
 /// - Coin transactions
@@ -88,28 +88,28 @@ class GamerDataExportService {
       data['likes'] = [];
     }
 
-    // 5. Followers
+    // 5. Squad (follows where user is followed)
     try {
-      final followers = await SupabaseService.client
+      final squad = await SupabaseService.client
           .from('follows')
           .select()
           .eq('following_id', uuid);
-      data['followers'] = followers;
+      data['squad'] = squad;
     } catch (e) {
-      debugPrint('[Export] followers error: $e');
-      data['followers'] = [];
+      debugPrint('[Export] squad error: $e');
+      data['squad'] = [];
     }
 
-    // 6. Following
+    // 6. Allies (follows initiated by user)
     try {
-      final following = await SupabaseService.client
+      final allies = await SupabaseService.client
           .from('follows')
           .select()
           .eq('follower_id', uuid);
-      data['following'] = following;
+      data['allies'] = allies;
     } catch (e) {
-      debugPrint('[Export] following error: $e');
-      data['following'] = [];
+      debugPrint('[Export] allies error: $e');
+      data['allies'] = [];
     }
 
     // 7. Teams (owned)

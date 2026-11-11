@@ -274,7 +274,7 @@ class InAppNotification {
   String get categoryTag {
     switch (type) {
       case 'follow':
-        return 'Follow';
+        return 'Squad';
       case 'post_like':
       case 'like':
         return 'Like';

@@ -159,8 +159,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bool showUid = privacy['show_game_uid'] ?? true;
     bool showStats = privacy['show_match_stats'] ?? true;
     bool allowChallenges = privacy['allow_challenges'] ?? true;
-    bool showFollowers = privacy['show_followers'] ?? true;
-    bool showFollowing = privacy['show_following'] ?? true;
+    bool showSquad = privacy['show_followers'] ?? true;
+    bool showAllies = privacy['show_following'] ?? true;
 
     showModalBottomSheet(
       context: context,
@@ -281,15 +281,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      'show_followers'.tr(),
+                      'show_squad'.tr(),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      'show_followers_sub'.tr(),
+                      'show_squad_sub'.tr(),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
-                    value: showFollowers,
-                    onChanged: (val) => setSheetState(() => showFollowers = val),
+                    value: showSquad,
+                    onChanged: (val) => setSheetState(() => showSquad = val),
                   ),
                   Divider(color: borderDark, height: 1),
 
@@ -297,15 +297,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     contentPadding: EdgeInsets.zero,
                     activeColor: const Color(0xFF1877F2),
                     title: Text(
-                      'show_following'.tr(),
+                      'show_allies'.tr(),
                       style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     subtitle: Text(
-                      'show_following_sub'.tr(),
+                      'show_allies_sub'.tr(),
                       style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5),
                     ),
-                    value: showFollowing,
-                    onChanged: (val) => setSheetState(() => showFollowing = val),
+                    value: showAllies,
+                    onChanged: (val) => setSheetState(() => showAllies = val),
                   ),
                   Divider(color: borderDark, height: 1),
 
@@ -341,8 +341,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           'show_game_uid': showUid,
                           'show_match_stats': showStats,
                           'allow_challenges': allowChallenges,
-                          'show_followers': showFollowers,
-                          'show_following': showFollowing,
+                          'show_followers': showSquad,
+                          'show_following': showAllies,
                         };
                         try {
                           await SupabaseService.client.auth.updateUser(
@@ -357,8 +357,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           if (curUid != null) {
                             await SupabaseService.client.from('users').update({
                               'is_private': isPrivate,
-                              'show_followers': showFollowers,
-                              'show_following': showFollowing,
+                              'show_followers': showSquad,
+                              'show_following': showAllies,
                             }).or('id.eq.$curUid,uid.eq.$curUid');
                           }
                         } catch (e) {

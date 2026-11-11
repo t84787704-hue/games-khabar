@@ -588,23 +588,36 @@ class NotificationService {
     }
   }
 
+  Future<void> sendSquadJoinNotification({
+    required String targetUserId,
+    required String squadMemberId,
+    required String squadMemberName,
+    String? squadMemberAvatar,
+  }) async {
+    await sendNotification(
+      userId: targetUserId,
+      senderId: squadMemberId,
+      senderName: squadMemberName,
+      senderAvatar: squadMemberAvatar,
+      type: 'follow',
+      title: 'notif_new_follower_title'.tr(),
+      body: 'notif_new_follower_body'.tr(args: [squadMemberName]),
+      data: {'follower_id': squadMemberId},
+    );
+  }
+
   Future<void> sendFollowNotification({
     required String targetUserId,
     required String followerId,
     required String followerName,
     String? followerAvatar,
-  }) async {
-    await sendNotification(
-      userId: targetUserId,
-      senderId: followerId,
-      senderName: followerName,
-      senderAvatar: followerAvatar,
-      type: 'follow',
-      title: 'notif_new_follower_title'.tr(),
-      body: 'notif_new_follower_body'.tr(args: [followerName]),
-      data: {'follower_id': followerId},
-    );
-  }
+  }) =>
+      sendSquadJoinNotification(
+        targetUserId: targetUserId,
+        squadMemberId: followerId,
+        squadMemberName: followerName,
+        squadMemberAvatar: followerAvatar,
+      );
 
   Future<void> sendLikeNotification({
     required String targetUserId,

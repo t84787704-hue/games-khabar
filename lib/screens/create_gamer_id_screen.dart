@@ -4,7 +4,14 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' as ui;
+import 'package:flutter/cupertino.dart'
+    show
+        CupertinoDatePicker,
+        CupertinoDatePickerMode,
+        CupertinoTextThemeData,
+        CupertinoTheme,
+        CupertinoThemeData,
+        DatePickerDateOrder;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -44,11 +51,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   final _bioController = TextEditingController();
   final _rankController = TextEditingController();
   final _gameIdController = TextEditingController();
-  final _ageController = TextEditingController();
   final _referralCodeController = TextEditingController();
   final _usernameFocusNode = FocusNode();
   final _gameIdFocusNode = FocusNode();
-  final _ageFocusNode = FocusNode();
+
+  DateTime? _selectedDob;
+  int? _legacyAge;
 
   String _selectedGame = 'BGMI';
   String _selectedRankGame = 'BGMI (Battlegrounds Mobile India)';
@@ -114,8 +122,16 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final rawGameId = sourceUser.gameId.trim();
       _gameIdController.text =
           (!widget.isEditing && rawGameId == '12345') ? '' : rawGameId;
-      _ageController.text =
-          (sourceUser.age != null && sourceUser.age! > 0) ? '${sourceUser.age}' : '';
+      _selectedDob = sourceUser.dateOfBirth != null
+          ? DateTime(
+              sourceUser.dateOfBirth!.year,
+              sourceUser.dateOfBirth!.month,
+              sourceUser.dateOfBirth!.day,
+            )
+          : null;
+      _legacyAge = _selectedDob != null
+          ? _calculateAge(_selectedDob!)
+          : ((sourceUser.age != null && sourceUser.age! > 0) ? sourceUser.age : null);
       _photoUrl = sourceUser.photoUrl.trim().isNotEmpty ? sourceUser.photoUrl : authAvatar;
       _coverUrl = sourceUser.coverUrl;
       _selectedFrame = sourceUser.activeFrame;
@@ -129,7 +145,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       }
       _rankController.text = 'Bronze';
       _gameIdController.text = '';
-      _ageController.text = '';
+      _selectedDob = null;
+      _legacyAge = null;
     }
     _loadStorePerks();
   }
@@ -144,6 +161,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final localBadge = prefs.getString('user_active_badge_$uid') ?? '';
       final localBadges = prefs.getStringList('user_unlocked_badges_$uid') ?? [];
       final localAge = prefs.getInt('user_age_$uid');
+      final rawLocalDob = prefs.getString('user_dob_$uid');
+      final localDob = (rawLocalDob != null && rawLocalDob.isNotEmpty)
+          ? DateTime.tryParse(rawLocalDob)
+          : null;
       final data = await SupabaseService.getUser(uid);
       if (mounted) {
         setState(() {
@@ -153,16 +174,29 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             _selectedBadge = (data['activeBadge'] as String?) ?? localBadge;
             _unlockedBadges = List<String>.from(data['unlockedBadges'] ?? localBadges);
           }
-          if (_ageController.text.trim().isEmpty && !_ageFocusNode.hasFocus) {
-            final dbAge = data?['age'];
-            final parsedDbAge = dbAge is num
-                ? dbAge.toInt()
-                : int.tryParse(dbAge?.toString() ?? '');
-            final resolvedAge = (parsedDbAge != null && parsedDbAge > 0)
-                ? parsedDbAge
-                : localAge;
-            if (resolvedAge != null && resolvedAge > 0) {
-              _ageController.text = '$resolvedAge';
+          if (_selectedDob == null) {
+            final rawDbDob = data?['date_of_birth'] ?? data?['dateOfBirth'] ?? data?['dob'];
+            DateTime? parsedDbDob;
+            if (rawDbDob is DateTime) {
+              parsedDbDob = rawDbDob;
+            } else if (rawDbDob != null) {
+              parsedDbDob = DateTime.tryParse(rawDbDob.toString());
+            }
+            final resolvedDob = parsedDbDob ?? localDob;
+            if (resolvedDob != null) {
+              _selectedDob = DateTime(resolvedDob.year, resolvedDob.month, resolvedDob.day);
+              _legacyAge = _calculateAge(_selectedDob!);
+            } else if (_legacyAge == null) {
+              final dbAge = data?['age'];
+              final parsedDbAge = dbAge is num
+                  ? dbAge.toInt()
+                  : int.tryParse(dbAge?.toString() ?? '');
+              final resolvedAge = (parsedDbAge != null && parsedDbAge > 0)
+                  ? parsedDbAge
+                  : localAge;
+              if (resolvedAge != null && resolvedAge > 0) {
+                _legacyAge = resolvedAge;
+              }
             }
           }
         });
@@ -175,13 +209,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     _usernameDebounce?.cancel();
     _usernameFocusNode.dispose();
     _gameIdFocusNode.dispose();
-    _ageFocusNode.dispose();
     _usernameController.dispose();
     _displayNameController.dispose();
     _bioController.dispose();
     _rankController.dispose();
     _gameIdController.dispose();
-    _ageController.dispose();
     _referralCodeController.dispose();
     super.dispose();
   }
@@ -395,19 +427,16 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         .replaceFirst(RegExp(r'^@+'), '')
         .toLowerCase();
     final enteredGameId = _gameIdController.text.trim();
-    final rawAge = _ageController.text.trim();
-    int? parsedAge;
-    if (rawAge.isNotEmpty) {
-      parsedAge = int.tryParse(rawAge);
-      if (parsedAge == null || parsedAge < 13 || parsedAge > 100) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter a valid age (13 - 100)'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-        return;
-      }
+    final int? parsedAge =
+        _selectedDob != null ? _calculateAge(_selectedDob!) : _legacyAge;
+    if (parsedAge != null && (parsedAge < 13 || parsedAge > 100)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a valid date of birth (13+ years)'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
     }
     final uid = GamerAuthService().currentUid;
     if (uid == null) return;
@@ -496,6 +525,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         isVerified: widget.existingUser?.isVerified ?? false,
         gameId: enteredGameId,
         age: parsedAge,
+        dateOfBirth: _selectedDob,
         createdAt: widget.existingUser?.createdAt ?? DateTime.now(),
         activeFrame: _selectedFrame,
         unlockedFrames: _unlockedFrames,
@@ -1085,118 +1115,80 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 14),
 
-                      // 4. Age
-                      Text(
-                        'Age',
-                        style: TextStyle(
-                          color: primaryTextColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
+                      // 4. Date of Birth (Facebook / TikTok style wheel picker)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Date of Birth',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          if (_selectedDob != null || _legacyAge != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF7A00).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'Age: ${_selectedDob != null ? _calculateAge(_selectedDob!) : _legacyAge}',
+                                style: const TextStyle(
+                                  color: Color(0xFFFF7A00),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 6),
-                      ValueListenableBuilder<TextEditingValue>(
-                        valueListenable: _ageController,
-                        child: Row(
-                          children: [
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => _ageFocusNode.requestFocus(),
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 10, top: 10, bottom: 10),
-                                child: Icon(Icons.cake_outlined, color: subTextColor, size: 18),
-                              ),
-                            ),
-                            Expanded(
-                              child: TextField(
-                                controller: _ageController,
-                                focusNode: _ageFocusNode,
-                                autocorrect: false,
-                                enableSuggestions: false,
-                                enableIMEPersonalizedLearning: false,
-                                textDirection: ui.TextDirection.ltr,
-                                textAlign: TextAlign.left,
-                                keyboardType: const TextInputType.numberWithOptions(
-                                  signed: false,
-                                  decimal: false,
-                                ),
-                                textInputAction: TextInputAction.next,
-                                scrollPadding: const EdgeInsets.only(bottom: 120),
-                                inputFormatters: [
-                                  _AgeInputFormatter(),
-                                ],
-                                style: TextStyle(
-                                  color: primaryTextColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: 'Enter your age',
-                                  hintStyle: TextStyle(
-                                    color: subTextColor.withOpacity(0.6),
-                                    fontWeight: FontWeight.normal,
-                                    fontSize: 13,
-                                  ),
-                                  border: InputBorder.none,
-                                  counterText: '',
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                              ),
-                            ),
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () {
-                                _ageFocusNode.requestFocus();
-                                _ageController.selection = TextSelection.collapsed(
-                                  offset: _ageController.text.length,
-                                );
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 8, top: 10, bottom: 10),
-                                child: Icon(Icons.edit_outlined, size: 16, color: subTextColor),
-                              ),
-                            ),
-                          ],
+                      InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => _showDateOfBirthPicker(
+                          isDark: isDark,
+                          cardColor: cardColor,
+                          secondaryCard: secondaryCard,
+                          borderColor: borderColor,
+                          primaryTextColor: primaryTextColor,
+                          subTextColor: subTextColor,
                         ),
-                        builder: (context, ageValue, ageRow) {
-                          final trimmedAge = ageValue.text.trim();
-                          final parsedAgeValue = int.tryParse(trimmedAge);
-                          final hasAgeError = trimmedAge.isNotEmpty &&
-                              ((trimmedAge == '0') ||
-                                  (trimmedAge.length >= 2 &&
-                                      (parsedAgeValue == null ||
-                                          parsedAgeValue < 13 ||
-                                          parsedAgeValue > 100)));
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: cardColor,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: hasAgeError ? Colors.redAccent : borderColor,
-                                  ),
-                                ),
-                                child: ageRow,
-                              ),
-                              if (hasAgeError) ...[
-                                const SizedBox(height: 4),
-                                const Text(
-                                  'Please enter a valid age (13 - 100)',
+                              Icon(Icons.cake_outlined, color: subTextColor, size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _selectedDob != null
+                                      ? _formatDobDisplay(_selectedDob!)
+                                      : (_legacyAge != null
+                                          ? 'Age $_legacyAge — Tap to set birthday'
+                                          : 'Select your date of birth'),
                                   style: TextStyle(
-                                    color: Colors.redAccent,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                                    color: _selectedDob != null
+                                        ? primaryTextColor
+                                        : subTextColor.withOpacity(0.6),
+                                    fontWeight: _selectedDob != null
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    fontSize: _selectedDob != null ? 14 : 13,
                                   ),
                                 ),
-                              ],
+                              ),
+                              Icon(Icons.keyboard_arrow_down_rounded, color: subTextColor),
                             ],
-                          );
-                        },
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 14),
@@ -1783,55 +1775,347 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       ),
     );
   }
+
+  static const List<String> _dobMonths = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  int _calculateAge(DateTime dob) {
+    final now = DateTime.now();
+    int age = now.year - dob.year;
+    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
+      age--;
+    }
+    return age;
+  }
+
+  String _formatDobDisplay(DateTime dob) {
+    return '${dob.day} ${_dobMonths[dob.month - 1]} ${dob.year}';
+  }
+
+  Future<void> _showDateOfBirthPicker({
+    required bool isDark,
+    required Color cardColor,
+    required Color secondaryCard,
+    required Color borderColor,
+    required Color primaryTextColor,
+    required Color subTextColor,
+  }) async {
+    FocusScope.of(context).unfocus();
+    final now = DateTime.now();
+    final int safeMaxDay = (now.month == 2 && now.day == 29) ? 28 : now.day;
+    final DateTime minDate = DateTime(now.year - 100, now.month, safeMaxDay);
+    final DateTime maxDate = DateTime(now.year - 13, now.month, safeMaxDay);
+
+    DateTime initialDate;
+    if (_selectedDob != null) {
+      initialDate = DateTime(
+        _selectedDob!.year,
+        _selectedDob!.month,
+        _selectedDob!.day,
+      );
+    } else if (_legacyAge != null && _legacyAge! >= 13 && _legacyAge! <= 100) {
+      initialDate = DateTime(now.year - _legacyAge!, now.month, safeMaxDay);
+    } else {
+      initialDate = DateTime(now.year - 18, now.month, safeMaxDay);
+    }
+    if (initialDate.isBefore(minDate)) initialDate = minDate;
+    if (initialDate.isAfter(maxDate)) initialDate = maxDate;
+
+    final picked = await showModalBottomSheet<DateTime>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _DateOfBirthPickerSheet(
+        initialDate: initialDate,
+        minDate: minDate,
+        maxDate: maxDate,
+        isDark: isDark,
+        cardColor: cardColor,
+        secondaryCard: secondaryCard,
+        borderColor: borderColor,
+        primaryTextColor: primaryTextColor,
+        subTextColor: subTextColor,
+      ),
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        _selectedDob = DateTime(picked.year, picked.month, picked.day);
+        _legacyAge = _calculateAge(_selectedDob!);
+      });
+    }
+  }
 }
 
-class _AgeInputFormatter extends TextInputFormatter {
-  static String _normalizeDigits(String input) {
-    final buf = StringBuffer();
-    for (final rune in input.runes) {
-      if (rune >= 0x30 && rune <= 0x39) {
-        buf.writeCharCode(rune);
-      } else if (rune >= 0x0660 && rune <= 0x0669) {
-        buf.writeCharCode(0x30 + (rune - 0x0660));
-      } else if (rune >= 0x06F0 && rune <= 0x06F9) {
-        buf.writeCharCode(0x30 + (rune - 0x06F0));
-      }
-    }
-    return buf.toString();
+class _DateOfBirthPickerSheet extends StatefulWidget {
+  final DateTime initialDate;
+  final DateTime minDate;
+  final DateTime maxDate;
+  final bool isDark;
+  final Color cardColor;
+  final Color secondaryCard;
+  final Color borderColor;
+  final Color primaryTextColor;
+  final Color subTextColor;
+
+  const _DateOfBirthPickerSheet({
+    required this.initialDate,
+    required this.minDate,
+    required this.maxDate,
+    required this.isDark,
+    required this.cardColor,
+    required this.secondaryCard,
+    required this.borderColor,
+    required this.primaryTextColor,
+    required this.subTextColor,
+  });
+
+  @override
+  State<_DateOfBirthPickerSheet> createState() => _DateOfBirthPickerSheetState();
+}
+
+class _DateOfBirthPickerSheetState extends State<_DateOfBirthPickerSheet> {
+  static const List<String> _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  late final ValueNotifier<DateTime> _tempDobNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    _tempDobNotifier = ValueNotifier<DateTime>(widget.initialDate);
   }
 
   @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final normalizedFull = _normalizeDigits(newValue.text);
-    if (normalizedFull.length > 3) {
-      if (oldValue.text.length >= 3) {
-        return oldValue.copyWith(composing: TextRange.empty);
-      }
-      final clipped = normalizedFull.substring(0, 3);
-      return TextEditingValue(
-        text: clipped,
-        selection: TextSelection.collapsed(offset: clipped.length),
-        composing: TextRange.empty,
-      );
+  void dispose() {
+    _tempDobNotifier.dispose();
+    super.dispose();
+  }
+
+  int _calcAge(DateTime dob) {
+    final now = DateTime.now();
+    int age = now.year - dob.year;
+    if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
+      age--;
     }
+    return age;
+  }
 
-    final int rawExtent = newValue.selection.isValid
-        ? newValue.selection.extentOffset.clamp(0, newValue.text.length).toInt()
-        : newValue.text.length;
-    final normalizedBeforeCursor = _normalizeDigits(
-      newValue.text.substring(0, rawExtent),
-    );
-    final int targetOffset = normalizedBeforeCursor.length
-        .clamp(0, normalizedFull.length)
-        .toInt();
-
-    return TextEditingValue(
-      text: normalizedFull,
-      selection: TextSelection.collapsed(offset: targetOffset),
-      composing: TextRange.empty,
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: widget.cardColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: widget.borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: widget.subTextColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    "What's your birthday?",
+                    style: TextStyle(
+                      color: widget.primaryTextColor,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(_tempDobNotifier.value),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        color: Color(0xFFFF7A00),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: widget.borderColor),
+            const SizedBox(height: 12),
+            ValueListenableBuilder<DateTime>(
+              valueListenable: _tempDobNotifier,
+              builder: (context, dob, _) {
+                final age = _calcAge(dob);
+                return Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: widget.secondaryCard,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: widget.borderColor),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.cake_outlined,
+                                color: Color(0xFFFF7A00),
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${dob.day} ${_months[dob.month - 1]} ${dob.year}',
+                                style: TextStyle(
+                                  color: widget.primaryTextColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF7A00).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '$age years old',
+                              style: const TextStyle(
+                                color: Color(0xFFFF7A00),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Scroll Day, Month & Year to set your birthday',
+                      style: TextStyle(
+                        color: widget.subTextColor,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 210,
+              child: CupertinoTheme(
+                data: CupertinoThemeData(
+                  brightness: widget.isDark ? Brightness.dark : Brightness.light,
+                  textTheme: CupertinoTextThemeData(
+                    dateTimePickerTextStyle: TextStyle(
+                      color: widget.primaryTextColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  dateOrder: DatePickerDateOrder.dmy,
+                  initialDateTime: widget.initialDate,
+                  minimumDate: widget.minDate,
+                  maximumDate: widget.maxDate,
+                  backgroundColor: widget.cardColor,
+                  onDateTimeChanged: (newDate) {
+                    var normalized = DateTime(
+                      newDate.year,
+                      newDate.month,
+                      newDate.day,
+                    );
+                    if (normalized.isBefore(widget.minDate)) {
+                      normalized = widget.minDate;
+                    } else if (normalized.isAfter(widget.maxDate)) {
+                      normalized = widget.maxDate;
+                    }
+                    _tempDobNotifier.value = normalized;
+                  },
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(_tempDobNotifier.value),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF7A00),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: const Text(
+                    'Confirm Date of Birth',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

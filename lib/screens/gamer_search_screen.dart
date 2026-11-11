@@ -153,36 +153,36 @@ class _GamerSearchScreenState extends State<GamerSearchScreen> {
           ),
           if (!isSelf)
             StreamBuilder<bool>(
-              stream: _socialService.isFollowingStream(currentUid, user.uid),
+              stream: _socialService.isAllyStream(currentUid, user.uid),
               builder: (context, snap) {
-                final isFollowing = snap.data ?? false;
+                final isAlly = snap.data ?? false;
                 return SizedBox(
                   height: 34,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
-                      backgroundColor: isFollowing ? GamerTheme.cardElevated : GamerTheme.accentBlue,
-                      foregroundColor: isFollowing ? GamerTheme.textGray : GamerTheme.bgDark,
+                      backgroundColor: isAlly ? GamerTheme.cardElevated : GamerTheme.accentBlue,
+                      foregroundColor: isAlly ? GamerTheme.textGray : GamerTheme.bgDark,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: isFollowing ? GamerTheme.borderLight : Colors.transparent),
+                        side: BorderSide(color: isAlly ? GamerTheme.borderLight : Colors.transparent),
                       ),
                     ),
                     onPressed: () async {
                       if (currentUid.isEmpty) return;
-                      if (isFollowing) {
-                        await _socialService.unfollowUser(currentUid: currentUid, targetUid: user.uid);
+                      if (isAlly) {
+                        await _socialService.removeAlly(currentUid: currentUid, targetUid: user.uid);
                       } else {
-                        await _socialService.followUser(currentUid: currentUid, targetUid: user.uid);
+                        await _socialService.addAlly(currentUid: currentUid, targetUid: user.uid);
                       }
                     },
                     child: Text(
-                      isFollowing ? 'btn_following'.tr() : 'btn_follow'.tr(),
+                      isAlly ? 'btn_allied'.tr() : 'btn_add_ally'.tr(),
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 12,
-                        color: isFollowing ? GamerTheme.textWhite : GamerTheme.bgDark,
+                        color: isAlly ? GamerTheme.textWhite : GamerTheme.bgDark,
                       ),
                     ),
                   ),

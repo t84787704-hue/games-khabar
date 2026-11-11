@@ -78,41 +78,52 @@ class GamerSocialService {
   }
 
   // ==========================================
-  // FOLLOW SYSTEM (Supabase)
+  // SQUAD & ALLIES SOCIAL SYSTEM (Supabase: follows table)
   // ==========================================
+  // DB Mapping:
+  //   - follows.follower_id  -> player adding an ally
+  //   - follows.following_id -> target player whose Squad grows
+  //   - users.followers_count -> Squad count
+  //   - users.following_count -> Allies count
 
-  Stream<bool> isFollowingStream(String currentUid, String targetUid) async* {
+  Stream<bool> isAllyStream(String currentUid, String targetUid) async* {
     if (currentUid.isEmpty || targetUid.isEmpty || currentUid == targetUid) {
       yield false;
       return;
     }
     while (true) {
-      yield await isFollowing(currentUid, targetUid);
+      yield await isAlly(currentUid, targetUid);
       await Future.delayed(const Duration(seconds: 4));
     }
   }
 
-  Future<bool> isFollowing(String currentUid, String targetUid) async {
+  Stream<bool> isFollowingStream(String currentUid, String targetUid) =>
+      isAllyStream(currentUid, targetUid);
+
+  Future<bool> isAlly(String currentUid, String targetUid) async {
     if (currentUid.isEmpty || targetUid.isEmpty || currentUid == targetUid) {
       return false;
     }
     try {
-      final followerUuid = stringToUuid(currentUid);
-      final followingUuid = stringToUuid(targetUid);
+      final allySourceUuid = stringToUuid(currentUid);
+      final targetUuid = stringToUuid(targetUid);
       final res = await _supabase
           .from('follows')
           .select('id')
-          .eq('follower_id', followerUuid)
-          .eq('following_id', followingUuid)
+          .eq('follower_id', allySourceUuid)
+          .eq('following_id', targetUuid)
           .maybeSingle();
       return res != null;
     } catch (e) {
-      debugPrint('Error checking follow status: $e');
+      debugPrint('Error checking ally status: $e');
       return false;
     }
   }
 
-  Future<void> followUser({
+  Future<bool> isFollowing(String currentUid, String targetUid) =>
+      isAlly(currentUid, targetUid);
+
+  Future<void> addAlly({
     required String currentUid,
     required String targetUid,
   }) async {
@@ -120,25 +131,25 @@ class GamerSocialService {
       return;
     }
     try {
-      final followerUuid = stringToUuid(currentUid);
-      final followingUuid = stringToUuid(targetUid);
+      final allySourceUuid = stringToUuid(currentUid);
+      final targetUuid = stringToUuid(targetUid);
 
       final existing = await _supabase
           .from('follows')
           .select('id')
-          .eq('follower_id', followerUuid)
-          .eq('following_id', followingUuid)
+          .eq('follower_id', allySourceUuid)
+          .eq('following_id', targetUuid)
           .maybeSingle();
       if (existing != null) {
         return;
       }
 
       await _supabase.from('follows').insert({
-        'follower_id': followerUuid,
-        'following_id': followingUuid,
+        'follower_id': allySourceUuid,
+        'following_id': targetUuid,
       });
 
-      // DB trigger handles followers_count & following_count automatically on follows table insert
+      // DB trigger handles followers_count (Squad) & following_count (Allies) on follows table insert
       try {
         final currentGamer = GamerAuthService().currentGamer;
         NotificationService().sendFollowNotification(
@@ -149,11 +160,17 @@ class GamerSocialService {
         );
       } catch (_) {}
     } catch (e) {
-      debugPrint('Error following user: $e');
+      debugPrint('Error adding ally: $e');
     }
   }
 
-  Future<void> unfollowUser({
+  Future<void> followUser({
+    required String currentUid,
+    required String targetUid,
+  }) =>
+      addAlly(currentUid: currentUid, targetUid: targetUid);
+
+  Future<void> removeAlly({
     required String currentUid,
     required String targetUid,
   }) async {
@@ -161,20 +178,26 @@ class GamerSocialService {
       return;
     }
     try {
-      final followerUuid = stringToUuid(currentUid);
-      final followingUuid = stringToUuid(targetUid);
+      final allySourceUuid = stringToUuid(currentUid);
+      final targetUuid = stringToUuid(targetUid);
 
       await _supabase
           .from('follows')
           .delete()
-          .eq('follower_id', followerUuid)
-          .eq('following_id', followingUuid);
+          .eq('follower_id', allySourceUuid)
+          .eq('following_id', targetUuid);
 
-      // DB trigger handles followers_count & following_count automatically on follows table delete
+      // DB trigger handles followers_count (Squad) & following_count (Allies) on follows table delete
     } catch (e) {
-      debugPrint('Error unfollowing user: $e');
+      debugPrint('Error removing ally: $e');
     }
   }
+
+  Future<void> unfollowUser({
+    required String currentUid,
+    required String targetUid,
+  }) =>
+      removeAlly(currentUid: currentUid, targetUid: targetUid);
 
   Future<void> _incrementCounter({
     required String userId,
@@ -213,21 +236,21 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<String>> getFollowingUserIdsStream(String uid) async* {
+  Stream<List<String>> getAlliesUserIdsStream(String uid) async* {
     if (uid.isEmpty) {
       yield [];
       return;
     }
     while (true) {
       try {
-        final followerUuid = stringToUuid(uid);
+        final playerUuid = stringToUuid(uid);
         final res = await _supabase
             .from('follows')
             .select('following_id')
-            .eq('follower_id', followerUuid);
+            .eq('follower_id', playerUuid);
         final list = (res as List)
             .map((item) => item['following_id'].toString())
-            .where((id) => id.isNotEmpty && id != followerUuid)
+            .where((id) => id.isNotEmpty && id != playerUuid)
             .toList();
         yield list;
       } catch (e) {
@@ -237,30 +260,33 @@ class GamerSocialService {
     }
   }
 
-  Future<List<GamerUser>> getFollowers(String targetUid) async {
+  Stream<List<String>> getFollowingUserIdsStream(String uid) =>
+      getAlliesUserIdsStream(uid);
+
+  Future<List<GamerUser>> getSquadMembers(String targetUid) async {
     if (targetUid.isEmpty) return [];
     try {
       final targetUuid = stringToUuid(targetUid);
 
-      final followRows = await _supabase
+      final squadRows = await _supabase
           .from('follows')
           .select('follower_id')
           .eq('following_id', targetUuid);
 
-      if (followRows.isEmpty) return [];
+      if (squadRows.isEmpty) return [];
 
-      final followerUuids = followRows
+      final squadMemberUuids = squadRows
           .map((r) => r['follower_id']?.toString() ?? '')
           .where((id) => id.isNotEmpty && id != targetUuid)
           .toSet()
           .toList();
 
-      if (followerUuids.isEmpty) return [];
+      if (squadMemberUuids.isEmpty) return [];
 
       final userRows = await _supabase
           .from('users')
           .select()
-          .inFilter('id', followerUuids);
+          .inFilter('id', squadMemberUuids);
 
       final users = (userRows as List)
           .map((row) => _rowToGamerUser(row))
@@ -270,48 +296,54 @@ class GamerSocialService {
 
       return users;
     } catch (e) {
-      debugPrint('[GamerSocialService] getFollowers error: $e');
+      debugPrint('[GamerSocialService] getSquadMembers error: $e');
       return [];
     }
   }
 
-  Future<List<GamerUser>> getFollowing(String followerUid) async {
-    if (followerUid.isEmpty) return [];
-    try {
-      final followerUuid = stringToUuid(followerUid);
+  Future<List<GamerUser>> getFollowers(String targetUid) =>
+      getSquadMembers(targetUid);
 
-      final followRows = await _supabase
+  Future<List<GamerUser>> getAllies(String playerUid) async {
+    if (playerUid.isEmpty) return [];
+    try {
+      final playerUuid = stringToUuid(playerUid);
+
+      final allyRows = await _supabase
           .from('follows')
           .select('following_id')
-          .eq('follower_id', followerUuid);
+          .eq('follower_id', playerUuid);
 
-      if (followRows.isEmpty) return [];
+      if (allyRows.isEmpty) return [];
 
-      final followingUuids = followRows
+      final allyUuids = allyRows
           .map((r) => r['following_id']?.toString() ?? '')
-          .where((id) => id.isNotEmpty && id != followerUuid)
+          .where((id) => id.isNotEmpty && id != playerUuid)
           .toSet()
           .toList();
 
-      if (followingUuids.isEmpty) return [];
+      if (allyUuids.isEmpty) return [];
 
       final userRows = await _supabase
           .from('users')
           .select()
-          .inFilter('id', followingUuids);
+          .inFilter('id', allyUuids);
 
       final users = (userRows as List)
           .map((row) => _rowToGamerUser(row))
           .whereType<GamerUser>()
-          .where((u) => u.uid != followerUuid && u.uid != followerUid)
+          .where((u) => u.uid != playerUuid && u.uid != playerUid)
           .toList();
 
       return users;
     } catch (e) {
-      debugPrint('[GamerSocialService] getFollowing error: $e');
+      debugPrint('[GamerSocialService] getAllies error: $e');
       return [];
     }
   }
+
+  Future<List<GamerUser>> getFollowing(String followerUid) =>
+      getAllies(followerUid);
 
   GamerUser? _rowToGamerUser(Map<String, dynamic> row) {
     try {
@@ -334,8 +366,14 @@ class GamerSocialService {
         isRankVerified: row['is_rank_verified'] == true,
         gameId: (row['game_id'] ?? '').toString(),
         coins: (row['coins'] as num?)?.toInt() ?? 0,
-        followersCount: (row['followers_count'] as num?)?.toInt() ?? 0,
-        followingCount: (row['following_count'] as num?)?.toInt() ?? 0,
+        followersCount:
+            ((row['followers_count'] ?? row['followersCount']) as num?)
+                    ?.toInt() ??
+                0,
+        followingCount:
+            ((row['following_count'] ?? row['followingCount']) as num?)
+                    ?.toInt() ??
+                0,
         postsCount: (row['posts_count'] as num?)?.toInt() ?? 0,
         isVerified: row['is_verified'] == true,
         verificationStatus: (row['blue_tick_status'] ?? 'none').toString(),
@@ -344,6 +382,10 @@ class GamerSocialService {
         createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
         isBioPublic: row['is_bio_public'] != false,
         isGamePublic: row['is_game_public'] != false,
+        isFollowersPublic:
+            (row['is_followers_public'] ?? row['show_followers']) != false,
+        isFollowingPublic:
+            (row['is_following_public'] ?? row['show_following']) != false,
       );
     } catch (e) {
       debugPrint('[GamerSocialService] _rowToGamerUser error: $e');

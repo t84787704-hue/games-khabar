@@ -114,17 +114,19 @@ class AppShareService {
     required String username,
     String? game,
     String? rank,
+    int? squadCount,
     int? followersCount,
     int? postsCount,
     String? bio,
   }) async {
+    final resolvedSquadCount = squadCount ?? followersCount;
     final buffer = StringBuffer();
     buffer.writeln('🎮 Gamer Profile: $displayName (@$username)');
     if (game != null && game.isNotEmpty) {
       buffer.writeln('🕹️ Game: $game ${rank != null ? "($rank)" : ""}');
     }
-    if (followersCount != null || postsCount != null) {
-      buffer.writeln('👥 Followers: ${followersCount ?? 0} | 📝 Posts: ${postsCount ?? 0}');
+    if (resolvedSquadCount != null || postsCount != null) {
+      buffer.writeln('🛡️ Squad: ${resolvedSquadCount ?? 0} | 📝 Posts: ${postsCount ?? 0}');
     }
     if (bio != null && bio.isNotEmpty) {
       buffer.writeln('💬 "$bio"');

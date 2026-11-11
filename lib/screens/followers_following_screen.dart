@@ -9,12 +9,14 @@ import '../services/theme_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_profile_screen.dart';
 
-class FollowersFollowingScreen extends StatefulWidget {
+typedef FollowersFollowingScreen = SquadAlliesScreen;
+
+class SquadAlliesScreen extends StatefulWidget {
   final String userId;
   final String displayName;
-  final int initialTabIndex; // 0 = Followers, 1 = Following
+  final int initialTabIndex; // 0 = Squad, 1 = Allies
 
-  const FollowersFollowingScreen({
+  const SquadAlliesScreen({
     super.key,
     required this.userId,
     required this.displayName,
@@ -22,23 +24,28 @@ class FollowersFollowingScreen extends StatefulWidget {
   });
 
   @override
-  State<FollowersFollowingScreen> createState() => _FollowersFollowingScreenState();
+  State<SquadAlliesScreen> createState() => _SquadAlliesScreenState();
 }
 
-class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> with SingleTickerProviderStateMixin {
+class _SquadAlliesScreenState extends State<SquadAlliesScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final GamerSocialService _socialService = GamerSocialService();
   final GamerAuthService _authService = GamerAuthService();
 
-  List<GamerUser> _followers = [];
-  List<GamerUser> _following = [];
-  bool _loadingFollowers = true;
-  bool _loadingFollowing = true;
+  List<GamerUser> _squadMembers = [];
+  List<GamerUser> _allies = [];
+  bool _loadingSquad = true;
+  bool _loadingAllies = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTabIndex);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 1),
+    );
     _loadData();
   }
 
@@ -70,21 +77,29 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
 
   Future<void> _loadData() async {
     setState(() {
-      _loadingFollowers = true;
-      _loadingFollowing = true;
+      _loadingSquad = true;
+      _loadingAllies = true;
     });
 
     final currentUid = _authService.currentUid ?? '';
-    final followers = await _socialService.getFollowers(widget.userId);
-    final following = await _socialService.getFollowing(widget.userId);
+    final results = await Future.wait<List<GamerUser>>([
+      _socialService.getSquadMembers(widget.userId),
+      _socialService.getAllies(widget.userId),
+    ]);
+    final squadMembers = results[0];
+    final allies = results[1];
 
     if (mounted) {
       setState(() {
-        _followers = followers.where((u) => !_isSelfUser(u, currentUid, widget.userId)).toList();
-        _following = following.where((u) => !_isSelfUser(u, currentUid, widget.userId)).toList();
+        _squadMembers = squadMembers
+            .where((u) => !_isSelfUser(u, currentUid, widget.userId))
+            .toList();
+        _allies = allies
+            .where((u) => !_isSelfUser(u, currentUid, widget.userId))
+            .toList();
 
-        _loadingFollowers = false;
-        _loadingFollowing = false;
+        _loadingSquad = false;
+        _loadingAllies = false;
       });
     }
   }
@@ -99,7 +114,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.people_outline_rounded, color: ThemeService.textSecondary, size: 48),
+            Icon(Icons.groups_outlined, color: ThemeService.textSecondary, size: 48),
             const SizedBox(height: 12),
             Text(emptyLabel, style: TextStyle(color: ThemeService.textSecondary, fontSize: 14)),
           ],
@@ -181,38 +196,44 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
           trailing: isSelf
               ? null
               : StreamBuilder<bool>(
-                  stream: _socialService.isFollowingStream(currentUid, effectiveUserId),
+                  stream: _socialService.isAllyStream(currentUid, effectiveUserId),
                   builder: (context, snap) {
-                    final isFollowing = snap.data ?? false;
+                    final isAlly = snap.data ?? false;
                     return SizedBox(
                       height: 32,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 14),
-                          backgroundColor: isFollowing ? ThemeService.cardSecondary : const Color(0xFF1877F2),
-                          foregroundColor: isFollowing ? ThemeService.textPrimary : Colors.white,
+                          backgroundColor: isAlly ? ThemeService.cardSecondary : const Color(0xFF1877F2),
+                          foregroundColor: isAlly ? ThemeService.textPrimary : Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                             side: BorderSide(
-                              color: isFollowing ? ThemeService.border : Colors.transparent,
+                              color: isAlly ? ThemeService.border : Colors.transparent,
                             ),
                           ),
                         ),
                         onPressed: () async {
-                          if (isFollowing) {
-                            await _socialService.unfollowUser(currentUid: currentUid, targetUid: effectiveUserId);
+                          if (isAlly) {
+                            await _socialService.removeAlly(
+                              currentUid: currentUid,
+                              targetUid: effectiveUserId,
+                            );
                           } else {
-                            await _socialService.followUser(currentUid: currentUid, targetUid: effectiveUserId);
+                            await _socialService.addAlly(
+                              currentUid: currentUid,
+                              targetUid: effectiveUserId,
+                            );
                           }
                           _loadData();
                         },
                         child: Text(
-                          isFollowing ? 'btn_following'.tr() : 'btn_follow'.tr(),
+                          isAlly ? 'btn_allied'.tr() : 'btn_add_ally'.tr(),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
-                            color: isFollowing ? ThemeService.textPrimary : Colors.white,
+                            color: isAlly ? ThemeService.textPrimary : Colors.white,
                           ),
                         ),
                       ),
@@ -241,7 +262,7 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
             elevation: ThemeService.isDarkMode ? 0 : 1,
             iconTheme: IconThemeData(color: ThemeService.textPrimary),
             title: Text(
-              'network_title'.tr(args: [widget.displayName]),
+              'squad_allies_title'.tr(args: [widget.displayName]),
               style: TextStyle(
                 color: ThemeService.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -256,16 +277,16 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> wit
               unselectedLabelColor: ThemeService.textSecondary,
               labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
               tabs: [
-                Tab(text: 'tab_followers_count'.tr(args: ['${_followers.length}'])),
-                Tab(text: 'tab_following_count'.tr(args: ['${_following.length}'])),
+                Tab(text: 'tab_squad_count'.tr(args: ['${_squadMembers.length}'])),
+                Tab(text: 'tab_allies_count'.tr(args: ['${_allies.length}'])),
               ],
             ),
           ),
           body: TabBarView(
             controller: _tabController,
             children: [
-              _buildUserList(_followers, _loadingFollowers, 'no_followers_yet'.tr()),
-              _buildUserList(_following, _loadingFollowing, 'not_following_anyone_yet'.tr()),
+              _buildUserList(_squadMembers, _loadingSquad, 'no_squad_members_yet'.tr()),
+              _buildUserList(_allies, _loadingAllies, 'no_allies_yet'.tr()),
             ],
           ),
         );

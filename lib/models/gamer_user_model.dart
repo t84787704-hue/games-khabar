@@ -174,6 +174,7 @@ class GamerUser {
   final DateTime? verificationAppliedAt;
   final String gameId;
   final int? age;
+  final DateTime? dateOfBirth;
   final int coins;
   final int level;
   final List<UserGameRank> games;
@@ -242,6 +243,7 @@ class GamerUser {
     this.verificationAppliedAt,
     this.gameId = '',
     this.age,
+    this.dateOfBirth,
     this.coins = 100,
     this.level = 1,
     this.games = const [],
@@ -300,6 +302,11 @@ class GamerUser {
           (blueTickStatus == 'approved' || verificationStatus == 'verified'));
 
   bool get isVerifiedBadge => hasBlueTick;
+
+  int get squadCount => followersCount;
+  int get alliesCount => followingCount;
+  bool get isSquadPublic => isFollowersPublic;
+  bool get isAlliesPublic => isFollowingPublic;
 
   String get avatarUrl => photoUrl;
   String get gameName => favoriteGame.isNotEmpty ? favoriteGame : selectedGame;
@@ -500,6 +507,22 @@ class GamerUser {
     final DateTime? created = parseDate(data['createdAt'] ?? data['created_at']);
     final DateTime? appliedAt = parseDate(data['verificationAppliedAt'] ?? data['verification_applied_at']);
     final DateTime? bannedTimestamp = parseDate(data['bannedAt'] ?? data['banned_at']);
+    final DateTime? parsedDob = parseDate(
+      data['dateOfBirth'] ?? data['date_of_birth'] ?? data['dob'],
+    );
+    final int? parsedAgeRaw = data['age'] is num
+        ? (data['age'] as num).toInt()
+        : int.tryParse(data['age']?.toString() ?? '');
+    int? derivedAgeFromDob(DateTime dob) {
+      final now = DateTime.now();
+      int a = now.year - dob.year;
+      if (now.month < dob.month ||
+          (now.month == dob.month && now.day < dob.day)) {
+        a--;
+      }
+      return a > 0 ? a : null;
+    }
+    final int? resolvedAge = parsedAgeRaw ?? (parsedDob != null ? derivedAgeFromDob(parsedDob) : null);
 
     final rawEmail = (data['email'] ?? '').toString().toLowerCase().trim();
     final authUser = SupabaseService.client.auth.currentUser;
@@ -642,9 +665,8 @@ class GamerUser {
             (s) => s.isNotEmpty,
             orElse: () => '',
           ),
-      age: data['age'] is num
-          ? (data['age'] as num).toInt()
-          : int.tryParse(data['age']?.toString() ?? ''),
+      age: resolvedAge,
+      dateOfBirth: parsedDob,
       coins: (data['coins'] as num?)?.toInt() ?? 100,
       level: userLevel,
       games: parsedGames,
@@ -676,8 +698,10 @@ class GamerUser {
       isUidPublic: data['is_uid_public'] == true,
       isCoinsPublic: data['is_coins_public'] == true,
       isMemberSincePublic: data['is_member_since_public'] == true,
-      isFollowingPublic: data['is_following_public'] != false,
-      isFollowersPublic: data['is_followers_public'] != false,
+      isFollowingPublic:
+          (data['is_following_public'] ?? data['show_following']) != false,
+      isFollowersPublic:
+          (data['is_followers_public'] ?? data['show_followers']) != false,
       isBioPublic: data['is_bio_public'] != false,
       isGamePublic: data['is_game_public'] != false,
     );
@@ -732,6 +756,8 @@ class GamerUser {
       'gameId': gameId.trim(),
       'bgmiUid': gameId.trim(),
       if (age != null) 'age': age,
+      if (dateOfBirth != null)
+        'dateOfBirth': dateOfBirth!.toIso8601String(),
       'coins': coins,
       'level': level,
       'appPoints': appPoints,
@@ -816,6 +842,7 @@ class GamerUser {
     DateTime? verificationAppliedAt,
     String? gameId,
     int? age,
+    DateTime? dateOfBirth,
     int? coins,
     int? level,
     List<UserGameRank>? games,
@@ -881,6 +908,7 @@ class GamerUser {
           verificationAppliedAt ?? this.verificationAppliedAt,
       gameId: gameId ?? this.gameId,
       age: age ?? this.age,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       coins: coins ?? this.coins,
       level: level ?? this.level,
       games: games ?? this.games,
