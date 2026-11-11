@@ -70,7 +70,20 @@ class GamerAuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_cacheKey(uid));
+      await prefs.remove('user_age_$uid');
     } catch (_) {}
+  }
+
+  Future<GamerUser> _hydrateLocalAge(GamerUser gamer) async {
+    if (gamer.age != null || gamer.uid.isEmpty) return gamer;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localAge = prefs.getInt('user_age_${gamer.uid}');
+      if (localAge != null) {
+        return gamer.copyWith(age: localAge);
+      }
+    } catch (_) {}
+    return gamer;
   }
 
   Future<void> init() async {
@@ -161,7 +174,7 @@ class GamerAuthService {
       final (profile, querySucceeded) = await _fetchProfileRow(authUserId);
 
       if (querySucceeded && profile != null) {
-        final gamer = GamerUser.fromMap(profile, authUserId);
+        final gamer = await _hydrateLocalAge(GamerUser.fromMap(profile, authUserId));
         currentGamerNotifier.value = gamer;
         profileLoadErrorNotifier.value = false;
         await _cacheGamerProfile(gamer);
@@ -254,7 +267,7 @@ class GamerAuthService {
       final (profile, querySucceeded) = await _fetchProfileRow(authUser.id);
 
       if (querySucceeded && profile != null) {
-        final gamer = GamerUser.fromMap(profile, authUser.id);
+        final gamer = await _hydrateLocalAge(GamerUser.fromMap(profile, authUser.id));
         currentGamerNotifier.value = gamer;
         profileLoadErrorNotifier.value = false;
         await _cacheGamerProfile(gamer);
@@ -606,6 +619,7 @@ class GamerAuthService {
         'rank_status': user.rankStatus.isNotEmpty ? user.rankStatus : 'none',
         'active_frame': user.activeFrame,
         'active_badge': user.activeBadge,
+        if (user.age != null) 'age': user.age,
         'updated_at': DateTime.now().toIso8601String(),
       };
       try {
@@ -618,6 +632,14 @@ class GamerAuthService {
       }
 
       if (coreSaved) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          if (user.age != null) {
+            await prefs.setInt('user_age_${user.uid}', user.age!);
+          } else {
+            await prefs.remove('user_age_${user.uid}');
+          }
+        } catch (_) {}
         final savedUser = user.copyWith(
           username: cleanUsername,
           displayName: cleanDisplayName,

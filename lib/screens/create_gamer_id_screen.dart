@@ -43,9 +43,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   final _bioController = TextEditingController();
   final _rankController = TextEditingController();
   final _gameIdController = TextEditingController();
+  final _ageController = TextEditingController();
   final _referralCodeController = TextEditingController();
   final _usernameFocusNode = FocusNode();
   final _gameIdFocusNode = FocusNode();
+  final _ageFocusNode = FocusNode();
 
   String _selectedGame = 'BGMI';
   String _selectedRankGame = 'BGMI (Battlegrounds Mobile India)';
@@ -111,6 +113,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final rawGameId = sourceUser.gameId.trim();
       _gameIdController.text =
           (!widget.isEditing && rawGameId == '12345') ? '' : rawGameId;
+      _ageController.text =
+          (sourceUser.age != null && sourceUser.age! > 0) ? '${sourceUser.age}' : '';
       _photoUrl = sourceUser.photoUrl.trim().isNotEmpty ? sourceUser.photoUrl : authAvatar;
       _coverUrl = sourceUser.coverUrl;
       _selectedFrame = sourceUser.activeFrame;
@@ -124,6 +128,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       }
       _rankController.text = 'Bronze';
       _gameIdController.text = '';
+      _ageController.text = '';
     }
     _loadStorePerks();
   }
@@ -137,13 +142,28 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final localFrames = prefs.getStringList('user_unlocked_frames_$uid') ?? [];
       final localBadge = prefs.getString('user_active_badge_$uid') ?? '';
       final localBadges = prefs.getStringList('user_unlocked_badges_$uid') ?? [];
+      final localAge = prefs.getInt('user_age_$uid');
       final data = await SupabaseService.getUser(uid);
-      if (data != null && mounted) {
+      if (mounted) {
         setState(() {
-          _selectedFrame = (data['activeFrame'] as String?) ?? localFrame;
-          _unlockedFrames = List<String>.from(data['unlockedFrames'] ?? localFrames);
-          _selectedBadge = (data['activeBadge'] as String?) ?? localBadge;
-          _unlockedBadges = List<String>.from(data['unlockedBadges'] ?? localBadges);
+          if (data != null) {
+            _selectedFrame = (data['activeFrame'] as String?) ?? localFrame;
+            _unlockedFrames = List<String>.from(data['unlockedFrames'] ?? localFrames);
+            _selectedBadge = (data['activeBadge'] as String?) ?? localBadge;
+            _unlockedBadges = List<String>.from(data['unlockedBadges'] ?? localBadges);
+          }
+          if (_ageController.text.trim().isEmpty) {
+            final dbAge = data?['age'];
+            final parsedDbAge = dbAge is num
+                ? dbAge.toInt()
+                : int.tryParse(dbAge?.toString() ?? '');
+            final resolvedAge = (parsedDbAge != null && parsedDbAge > 0)
+                ? parsedDbAge
+                : localAge;
+            if (resolvedAge != null && resolvedAge > 0) {
+              _ageController.text = '$resolvedAge';
+            }
+          }
         });
       }
     } catch (_) {}
@@ -154,11 +174,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     _usernameDebounce?.cancel();
     _usernameFocusNode.dispose();
     _gameIdFocusNode.dispose();
+    _ageFocusNode.dispose();
     _usernameController.dispose();
     _displayNameController.dispose();
     _bioController.dispose();
     _rankController.dispose();
     _gameIdController.dispose();
+    _ageController.dispose();
     _referralCodeController.dispose();
     super.dispose();
   }
@@ -372,6 +394,20 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         .replaceFirst(RegExp(r'^@+'), '')
         .toLowerCase();
     final enteredGameId = _gameIdController.text.trim();
+    final rawAge = _ageController.text.trim();
+    int? parsedAge;
+    if (rawAge.isNotEmpty) {
+      parsedAge = int.tryParse(rawAge);
+      if (parsedAge == null || parsedAge < 13 || parsedAge > 100) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid age (13 - 100)'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+    }
     final uid = GamerAuthService().currentUid;
     if (uid == null) return;
 
@@ -458,6 +494,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         reportsCount: widget.existingUser?.reportsCount ?? 0,
         isVerified: widget.existingUser?.isVerified ?? false,
         gameId: enteredGameId,
+        age: parsedAge,
         createdAt: widget.existingUser?.createdAt ?? DateTime.now(),
         activeFrame: _selectedFrame,
         unlockedFrames: _unlockedFrames,
@@ -867,37 +904,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 18),
 
-                      // Gamer Badge Section
-                      Row(
-                        children: [
-                          const Icon(Icons.shield_outlined, size: 16, color: Color(0xFF1877F2)),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Gamer Badge',
-                            style: TextStyle(
-                              color: primaryTextColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _buildBadgeChip('None', '', Colors.grey),
-                            _buildBadgeChip('PRO ELITE', 'pro_elite', const Color(0xFF1877F2)),
-                            _buildBadgeChip('ASSASSIN 💀', 'kd_assassin', const Color(0xFFE11D48)),
-                            _buildBadgeChip('CHAMP 🏆', 'room_champion', const Color(0xFFF59E0B)),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      // Gamer Username
+                      // 2. Gamer Username
                       Row(
                         children: [
                           Text(
@@ -1012,9 +1019,180 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                       ],
 
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
 
-                      // Favorite Game Dropdown Chip
+                      // 3. Game Character ID / UID
+                      Text(
+                        'Game Character ID / UID',
+                        style: TextStyle(
+                          color: primaryTextColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _gameIdFocusNode.requestFocus(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              const Text('🎮', style: TextStyle(fontSize: 16)),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: _gameIdController,
+                                  focusNode: _gameIdFocusNode,
+                                  keyboardType: TextInputType.text,
+                                  textInputAction: TextInputAction.next,
+                                  maxLength: 30,
+                                  style: TextStyle(
+                                    color: primaryTextColor,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter your Character ID / UID',
+                                    hintStyle: TextStyle(
+                                      color: subTextColor.withOpacity(0.6),
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.edit_outlined, size: 16, color: subTextColor),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Character ID helps teammates search and add you in-game.',
+                        style: TextStyle(color: subTextColor, fontSize: 11),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // 4. Age
+                      Text(
+                        'Age',
+                        style: TextStyle(
+                          color: primaryTextColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _ageFocusNode.requestFocus(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.cake_outlined, color: subTextColor, size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: _ageController,
+                                  focusNode: _ageFocusNode,
+                                  keyboardType: TextInputType.number,
+                                  textInputAction: TextInputAction.next,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(3),
+                                  ],
+                                  style: TextStyle(
+                                    color: primaryTextColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter your age',
+                                    hintStyle: TextStyle(
+                                      color: subTextColor.withOpacity(0.6),
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.edit_outlined, size: 16, color: subTextColor),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // 5. Bio Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Bio (About You)',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          ValueListenableBuilder<TextEditingValue>(
+                            valueListenable: _bioController,
+                            builder: (context, value, _) {
+                              return Text(
+                                '${value.text.length}/100',
+                                style: TextStyle(color: subTextColor, fontSize: 11),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _bioController,
+                        maxLength: 100,
+                        style: TextStyle(color: primaryTextColor, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Tell other gamers your playstyle or online timings...',
+                          hintStyle: TextStyle(color: subTextColor.withOpacity(0.6), fontSize: 12),
+                          filled: true,
+                          fillColor: cardColor,
+                          counterText: '',
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: borderColor),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFFFF7A00)),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // 6. Favorite Game Dropdown Chip
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                         decoration: BoxDecoration(
@@ -1060,7 +1238,84 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 18),
 
-                      // My Game & Rank Proof Header
+                      // 7. Game Rank (Select Your Rank + 3x3 Grid)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Select Your Rank',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const Text(
+                            'BGMI (Battlegrounds Mobile)',
+                            style: TextStyle(
+                              color: Color(0xFFFF7A00),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 3x3 Grid of Ranks
+                      GridView.count(
+                        crossAxisCount: 3,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 2.3,
+                        children: [
+                          _buildRankGridItem('Bronze', isSelected: true),
+                          _buildRankGridItem('Silver', icon: Icons.shield_outlined),
+                          _buildRankGridItem('Gold', icon: Icons.lock_outline),
+                          _buildRankGridItem('Platinum', icon: Icons.shield_outlined),
+                          _buildRankGridItem('Diamond', icon: Icons.shield_outlined),
+                          _buildRankGridItem('Crown', icon: Icons.lock_outline),
+                          _buildRankGridItem('Ace Master', icon: Icons.shield_outlined),
+                          _buildRankGridItem('Ace Dominator', icon: Icons.lock_outline),
+                          _buildRankGridItem('Conqueror', icon: Icons.lock_outline),
+                        ],
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      // 8. Gamer Badge Section
+                      Row(
+                        children: [
+                          const Icon(Icons.shield_outlined, size: 16, color: Color(0xFF1877F2)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Gamer Badge',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildBadgeChip('None', '', Colors.grey),
+                            _buildBadgeChip('PRO ELITE', 'pro_elite', const Color(0xFF1877F2)),
+                            _buildBadgeChip('ASSASSIN 💀', 'kd_assassin', const Color(0xFFE11D48)),
+                            _buildBadgeChip('CHAMP 🏆', 'room_champion', const Color(0xFFF59E0B)),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      // 9. Rank Proof (My Game & Rank Proof + Instruction + Coming Soon)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1130,54 +1385,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 14),
-
-                      // Selected Game & Rank Subtitle
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Select Your Rank',
-                            style: TextStyle(
-                              color: primaryTextColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const Text(
-                            'BGMI (Battlegrounds Mobile)',
-                            style: TextStyle(
-                              color: Color(0xFFFF7A00),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
                       const SizedBox(height: 10),
-
-                      // 3x3 Grid of Ranks
-                      GridView.count(
-                        crossAxisCount: 3,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                        childAspectRatio: 2.3,
-                        children: [
-                          _buildRankGridItem('Bronze', isSelected: true),
-                          _buildRankGridItem('Silver', icon: Icons.shield_outlined),
-                          _buildRankGridItem('Gold', icon: Icons.lock_outline),
-                          _buildRankGridItem('Platinum', icon: Icons.shield_outlined),
-                          _buildRankGridItem('Diamond', icon: Icons.shield_outlined),
-                          _buildRankGridItem('Crown', icon: Icons.lock_outline),
-                          _buildRankGridItem('Ace Master', icon: Icons.shield_outlined),
-                          _buildRankGridItem('Ace Dominator', icon: Icons.lock_outline),
-                          _buildRankGridItem('Conqueror', icon: Icons.lock_outline),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
 
                       // Rank Verification Coming Soon Box
                       Container(
@@ -1238,116 +1446,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             ),
                           ],
                         ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Bio Section
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Bio (About You)',
-                            style: TextStyle(
-                              color: primaryTextColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                          ValueListenableBuilder<TextEditingValue>(
-                            valueListenable: _bioController,
-                            builder: (context, value, _) {
-                              return Text(
-                                '${value.text.length}/100',
-                                style: TextStyle(color: subTextColor, fontSize: 11),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: _bioController,
-                        maxLength: 100,
-                        style: TextStyle(color: primaryTextColor, fontSize: 13),
-                        decoration: InputDecoration(
-                          hintText: 'Tell other gamers your playstyle or online timings...',
-                          hintStyle: TextStyle(color: subTextColor.withOpacity(0.6), fontSize: 12),
-                          filled: true,
-                          fillColor: cardColor,
-                          counterText: '',
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: borderColor),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFFFF7A00)),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      // Game Character ID
-                      Text(
-                        'Game Character ID / UID',
-                        style: TextStyle(
-                          color: primaryTextColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _gameIdFocusNode.requestFocus(),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: cardColor,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Row(
-                            children: [
-                              const Text('🎮', style: TextStyle(fontSize: 16)),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: TextField(
-                                  controller: _gameIdController,
-                                  focusNode: _gameIdFocusNode,
-                                  keyboardType: TextInputType.text,
-                                  textInputAction: TextInputAction.next,
-                                  maxLength: 30,
-                                  style: TextStyle(
-                                    color: primaryTextColor,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 14,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: 'Enter your Character ID / UID',
-                                    hintStyle: TextStyle(
-                                      color: subTextColor.withOpacity(0.6),
-                                      fontWeight: FontWeight.normal,
-                                      fontSize: 13,
-                                    ),
-                                    border: InputBorder.none,
-                                    counterText: '',
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                ),
-                              ),
-                              Icon(Icons.edit_outlined, size: 16, color: subTextColor),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Character ID helps teammates search and add you in-game.',
-                        style: TextStyle(color: subTextColor, fontSize: 11),
                       ),
 
                       // ═════════════════════════════════════════════════════════

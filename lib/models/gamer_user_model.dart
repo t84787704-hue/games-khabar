@@ -173,6 +173,7 @@ class GamerUser {
   final int squadRoomsCount;
   final DateTime? verificationAppliedAt;
   final String gameId;
+  final int? age;
   final int coins;
   final int level;
   final List<UserGameRank> games;
@@ -240,6 +241,7 @@ class GamerUser {
     this.squadRoomsCount = 0,
     this.verificationAppliedAt,
     this.gameId = '',
+    this.age,
     this.coins = 100,
     this.level = 1,
     this.games = const [],
@@ -640,6 +642,9 @@ class GamerUser {
             (s) => s.isNotEmpty,
             orElse: () => '',
           ),
+      age: data['age'] is num
+          ? (data['age'] as num).toInt()
+          : int.tryParse(data['age']?.toString() ?? ''),
       coins: (data['coins'] as num?)?.toInt() ?? 100,
       level: userLevel,
       games: parsedGames,
@@ -726,6 +731,7 @@ class GamerUser {
       'verificationAppliedAt': verificationAppliedAt?.toIso8601String(),
       'gameId': gameId.trim(),
       'bgmiUid': gameId.trim(),
+      if (age != null) 'age': age,
       'coins': coins,
       'level': level,
       'appPoints': appPoints,
@@ -809,6 +815,7 @@ class GamerUser {
     int? squadRoomsCount,
     DateTime? verificationAppliedAt,
     String? gameId,
+    int? age,
     int? coins,
     int? level,
     List<UserGameRank>? games,
@@ -873,6 +880,7 @@ class GamerUser {
       verificationAppliedAt:
           verificationAppliedAt ?? this.verificationAppliedAt,
       gameId: gameId ?? this.gameId,
+      age: age ?? this.age,
       coins: coins ?? this.coins,
       level: level ?? this.level,
       games: games ?? this.games,
