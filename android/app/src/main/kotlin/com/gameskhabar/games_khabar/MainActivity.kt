@@ -3,6 +3,7 @@ package com.gameskhabar.games_khabar
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugins.googlemobileads.NativeAdFactory
+import io.flutter.plugins.googlemobileads.GoogleMobileAdsPlugin
 import com.google.android.gms.ads.nativead.NativeAd
 import com.google.android.gms.ads.nativead.NativeAdView
 import android.view.LayoutInflater
@@ -15,18 +16,21 @@ class MainActivity: FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         val factory = ListTileNativeAdFactory(layoutInflater)
-        GoogleMobileAdsPlugin.registerNativeAdFactory(flutterEngine, "listTile", factory)
-        GoogleMobileAdsPlugin.registerNativeAdFactory(flutterEngine, "list_tile_native_ad", factory)
+        // Yahan se GoogleMobileAdsPlugin hata diya hai
+        registerNativeAdFactory(flutterEngine, "listTile", factory)
+        registerNativeAdFactory(flutterEngine, "list_tile_native_ad", factory)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         super.cleanUpFlutterEngine(flutterEngine)
-        GoogleMobileAdsPlugin.unregisterNativeAdFactory(flutterEngine, "listTile")
-        GoogleMobileAdsPlugin.unregisterNativeAdFactory(flutterEngine, "list_tile_native_ad")
+        // Yahan se bhi GoogleMobileAdsPlugin hata diya hai
+        unregisterNativeAdFactory(flutterEngine, "listTile")
+        unregisterNativeAdFactory(flutterEngine, "list_tile_native_ad")
     }
 }
 
-class ListTileNativeAdFactory(private val layoutInflater: LayoutInflater) : GoogleMobileAdsPlugin.NativeAdFactory {
+// Yahan 'GoogleMobileAdsPlugin.NativeAdFactory' ki jagah sirf 'NativeAdFactory' kar diya hai
+class ListTileNativeAdFactory(private val layoutInflater: LayoutInflater) : NativeAdFactory {
     override fun createNativeAd(nativeAd: NativeAd, customOptions: MutableMap<String, Any>?): NativeAdView {
         val adView = layoutInflater.inflate(R.layout.list_tile_native_ad, null) as NativeAdView
 
