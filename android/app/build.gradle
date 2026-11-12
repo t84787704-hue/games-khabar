@@ -27,10 +27,10 @@ android {
 
     defaultConfig {
         applicationId "com.gameskhabar.games_khabar"
-        minSdk flutter.minSdkVersion
-        targetSdk flutter.targetSdkVersion
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
     }
 
     signingConfigs {
