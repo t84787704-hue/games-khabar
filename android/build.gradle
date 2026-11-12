@@ -4,42 +4,13 @@ allprojects {
         mavenCentral()
         gradlePluginPortal()
     }
-    ext {
-        compileSdkVersion = 35
-        minSdkVersion = 24
-        targetSdkVersion = 35
-    }
 }
 
 rootProject.buildDir = "../build"
 
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
-    project.ext {
-        compileSdkVersion = 35
-        minSdkVersion = 24
-        targetSdkVersion = 35
-    }
-    if (project.name != "app" && !project.hasProperty("flutter")) {
-        project.ext.flutter = [
-            compileSdkVersion: 36,
-            minSdkVersion    : 24,
-            targetSdkVersion : 35,
-            ndkVersion       : "28.2.13676358"
-        ]
-    }
-    afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            try {
-                if (project.android.hasProperty("compileSdkVersion") && project.android.compileSdkVersion == null) {
-                    project.android.compileSdkVersion = 35
-                }
-            } catch (_) {}
-        }
-    }
 }
-
-// Note: evaluationDependsOn(':app') was removed to support modern AGP & Flutter Plugin DSL evaluation
 
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
