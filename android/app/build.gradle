@@ -46,8 +46,11 @@ android {
         release {
             def hasKey = keystorePropertiesFile.exists() && keystoreProperties['storeFile'] && file(keystoreProperties['storeFile']).exists()
             signingConfig = hasKey ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled true
-            shrinkResources true
+            
+            // CRASH FIX: Filhal inko false kar diya hai taake R8 crash na kare
+            minifyEnabled false 
+            shrinkResources false 
+            
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -59,4 +62,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+    // CRASH FIX: google_mobile_ads v9 ke sath aane wala purana WorkManager crash karta hai
+    implementation 'androidx.work:work-runtime:2.11.2'
 }
