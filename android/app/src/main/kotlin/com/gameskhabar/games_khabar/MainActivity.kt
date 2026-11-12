@@ -16,20 +16,22 @@ class MainActivity: FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         val factory = ListTileNativeAdFactory(layoutInflater)
-        // Yahan se GoogleMobileAdsPlugin hata diya hai
-        registerNativeAdFactory(flutterEngine, "listTile", factory)
-        registerNativeAdFactory(flutterEngine, "list_tile_native_ad", factory)
+        
+        // Registration ke liye GoogleMobileAdsPlugin ka istemal karein
+        GoogleMobileAdsPlugin.registerNativeAdFactory(flutterEngine, "listTile", factory)
+        GoogleMobileAdsPlugin.registerNativeAdFactory(flutterEngine, "list_tile_native_ad", factory)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         super.cleanUpFlutterEngine(flutterEngine)
-        // Yahan se bhi GoogleMobileAdsPlugin hata diya hai
-        unregisterNativeAdFactory(flutterEngine, "listTile")
-        unregisterNativeAdFactory(flutterEngine, "list_tile_native_ad")
+        
+        // Unregister bhi isi class se hoga
+        GoogleMobileAdsPlugin.unregisterNativeAdFactory(flutterEngine, "listTile")
+        GoogleMobileAdsPlugin.unregisterNativeAdFactory(flutterEngine, "list_tile_native_ad")
     }
 }
 
-// Yahan 'GoogleMobileAdsPlugin.NativeAdFactory' ki jagah sirf 'NativeAdFactory' kar diya hai
+// Factory class mein interface ka naam 'NativeAdFactory' rahega
 class ListTileNativeAdFactory(private val layoutInflater: LayoutInflater) : NativeAdFactory {
     override fun createNativeAd(nativeAd: NativeAd, customOptions: MutableMap<String, Any>?): NativeAdView {
         val adView = layoutInflater.inflate(R.layout.list_tile_native_ad, null) as NativeAdView
