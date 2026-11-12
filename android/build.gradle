@@ -39,9 +39,7 @@ subprojects {
     }
 }
 
-subprojects {
-    project.evaluationDependsOn(":app")
-}
+// Note: evaluationDependsOn(':app') was removed to support modern AGP & Flutter Plugin DSL evaluation
 
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
