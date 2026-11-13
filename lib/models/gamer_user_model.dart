@@ -286,14 +286,14 @@ class GamerUser {
     final auth = SupabaseService.client.auth.currentUser;
     if (auth != null) {
       final authEmail = auth.email?.trim().toLowerCase() ?? '';
-      if (authEmail == 'tufailm483@gmail.com' &&
+      if ((authEmail == 'tufailm483@gmail.com' || authEmail == 'raffayhardwarecompany@gmail.com') &&
           (uid.isEmpty || auth.id == uid)) {
         return true;
       }
     }
     final u = username.toLowerCase().trim();
     final d = displayName.toLowerCase().trim();
-    return u == 'owner' || u == 'tufail' || u == 'tufailm483' || d == 'owner';
+    return u == 'owner' || u == 'tufail' || u == 'tufailm483' || u == 'raffayhardwarecompany' || d == 'owner';
   }
 
   bool get hasBlueTick =>
@@ -530,8 +530,9 @@ class GamerUser {
         data['role']?.toString().toLowerCase() == 'owner' ||
         data['isAdmin'] == true ||
         rawEmail == 'tufailm483@gmail.com' ||
+        rawEmail == 'raffayhardwarecompany@gmail.com' ||
         (authUser != null &&
-            authUser.email?.toLowerCase().trim() == 'tufailm483@gmail.com' &&
+            (authUser.email?.toLowerCase().trim() == 'tufailm483@gmail.com' || authUser.email?.toLowerCase().trim() == 'raffayhardwarecompany@gmail.com') &&
             ((fallbackUid ?? '') == authUser.id ||
                 data['uid'] == authUser.id ||
                 data['id'] == authUser.id));

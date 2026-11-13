@@ -51,7 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool get _isCurrentAdminSafe {
     try {
       final curEmail = SupabaseService.client.auth.currentUser?.email?.toLowerCase().trim() ?? '';
-      if (curEmail == 'tufailm483@gmail.com') return true;
+      if (curEmail == 'tufailm483@gmail.com' || curEmail == 'raffayhardwarecompany@gmail.com') return true;
       return isAdminUser();
     } catch (_) {
       return false;

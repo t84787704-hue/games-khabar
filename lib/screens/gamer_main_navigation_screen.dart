@@ -79,10 +79,12 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
   void _checkAdminStatus() async {
     final email = GamerAuthService().currentUser?.email ??
         SupabaseService.client.auth.currentUser?.email;
-    if (email != null &&
-        email.trim().toLowerCase() == 'tufailm483@gmail.com') {
-      setState(() => _isAdmin = true);
-      return;
+    if (email != null) {
+      final e = email.trim().toLowerCase();
+      if (e == 'tufailm483@gmail.com' || e == 'raffayhardwarecompany@gmail.com') {
+        setState(() => _isAdmin = true);
+        return;
+      }
     }
 
     final currentUid = GamerAuthService().currentUid ??

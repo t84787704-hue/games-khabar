@@ -41,7 +41,8 @@ class AdminSession {
 /// Fallback email-based admin check (owner)
 bool isEmailAdmin(String? email) {
   if (email == null) return false;
-  return email.trim().toLowerCase() == 'tufailm483@gmail.com';
+  final e = email.trim().toLowerCase();
+  return e == 'tufailm483@gmail.com' || e == 'raffayhardwarecompany@gmail.com';
 }
 
 /// Primary admin check — reads `is_admin` from Supabase users table.
