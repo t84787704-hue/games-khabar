@@ -14,6 +14,7 @@ import '../services/language_service.dart';
 import '../services/streak_service.dart';
 import '../services/app_stay_timer_service.dart';
 import '../widgets/daily_streak_dialog.dart';
+import '../utils/admin_security.dart';
 import 'gamer_feed_screen.dart';
 import 'tournaments_screen.dart'; // 👈 یہ امپورٹ رہنے دیں، شاید کہیں اور استعمال ہو رہا ہو
 import 'teams_screen.dart';
@@ -77,34 +78,44 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
   }
 
   void _checkAdminStatus() async {
-    final email = GamerAuthService().currentUser?.email ??
-        SupabaseService.client.auth.currentUser?.email;
-    if (email != null) {
-      final e = email.trim().toLowerCase();
-      if (e == 'tufailm483@gmail.com' || e == 'raffayhardwarecompany@gmail.com') {
-        setState(() => _isAdmin = true);
-        return;
+    for (int attempt = 0; attempt < 3; attempt++) {
+      if (!mounted) return;
+
+      final email = GamerAuthService().currentUser?.email ??
+          SupabaseService.client.auth.currentUser?.email;
+      if (email != null && isEmailAdmin(email)) {
+        if (mounted && !_isAdmin) {
+          setState(() => _isAdmin = true);
+        }
+        break;
+      }
+
+      final isAdmin = await checkIsAdmin();
+      if (isAdmin) {
+        if (mounted && !_isAdmin) {
+          setState(() => _isAdmin = true);
+        }
+        break;
+      }
+
+      if (attempt < 2) {
+        await Future.delayed(const Duration(milliseconds: 600));
       }
     }
 
-    final currentUid = GamerAuthService().currentUid ??
-        SupabaseService.client.auth.currentUser?.id;
-    if (currentUid != null && currentUid.isNotEmpty) {
-      try {
-        final data = await SupabaseService.getUser(currentUid);
-        if (data != null && mounted) {
-          final isDocAdmin = data['isAdmin'] == true || data['is_admin'] == true;
-          if (isDocAdmin != _isAdmin) {
-            setState(() {
-              _isAdmin = isDocAdmin;
-              if (!_isAdmin && _currentIndex > 4) {
-                _currentIndex = 0;
-              }
-            });
-          }
+    _adminSub?.cancel();
+    try {
+      _adminSub = watchIsAdmin().listen((adminState) {
+        if (mounted && adminState != _isAdmin) {
+          setState(() {
+            _isAdmin = adminState;
+            if (!_isAdmin && _currentIndex > 4) {
+              _currentIndex = 0;
+            }
+          });
         }
-      } catch (_) {}
-    }
+      });
+    } catch (_) {}
   }
 
   @override
