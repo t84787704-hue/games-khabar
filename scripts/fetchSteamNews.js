@@ -100,7 +100,12 @@ const TOP_50_SITES = [
   { name: 'Esports Insider', url: 'https://esportsinsider.com/feed/', fixedCat: 'Multiplayer Games' },
   { name: 'VG247', url: 'https://www.vg247.com/feed', fixedCat: 'Action Games' },
   { name: 'Eurogamer', url: 'https://www.eurogamer.net/feed', fixedCat: 'Action Games' },
-  { name: 'OverTake Racing', url: 'https://www.overtake.gg/news/feed/', fixedCat: 'Racing Games' }
+  { name: 'OverTake Racing', url: 'https://www.overtake.gg/news/feed/', fixedCat: 'Racing Games' },
+  { name: 'HLTV CS2 News', url: 'https://www.hltv.org/rss/news', category: 'esports' },
+  { name: 'Esports News UK', url: 'https://esports-news.co.uk/feed/', category: 'esports' },
+  { name: 'Steam Updates', url: 'https://store.steampowered.com/feeds/news.xml', category: 'patch_notes' },
+  { name: 'IsThereAnyDeal', url: 'https://isthereanydeal.com/deals/rss/', category: 'deals' },
+  { name: 'Reddit GameDeals', url: 'https://www.reddit.com/r/gamedeals/.rss', category: 'deals' }
 ];
 
 function cleanDescription(text) {
@@ -723,7 +728,7 @@ async function run(){
         }
         if (isRussian(articleBody)) continue;
 
-        let cat = src.fixedCat || detectCat(rawTitle) || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length];
+        let cat = src.category || src.fixedCat || detectCat(rawTitle) || APP_CATEGORIES[fbIndex % APP_CATEGORIES.length];
         fbIndex++;
 
         const img = await getImage(articleUrl, item, rawTitle, cat, cheerioDoc);

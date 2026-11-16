@@ -12,6 +12,7 @@ import 'gamer_auth_screen.dart';
 import 'create_gamer_id_screen.dart';
 import 'gamer_main_navigation_screen.dart';
 import 'banned_screen.dart';
+import 'package:in_app_update/in_app_update.dart';
 
 class GamerAppRoot extends StatefulWidget {
   const GamerAppRoot({super.key});
@@ -45,6 +46,9 @@ class _GamerAppRootState extends State<GamerAppRoot> {
 
       // Universally synchronize all teams' tournament wins, points (+25), leaderboard and match history
       TeamService().syncAllTeamsTournamentWins();
+
+      // Check for Google Play Immediate In-App Update (Force Update)
+      await _checkForUpdate();
     } catch (e) {
       debugPrint('[AppRoot] Init error: $e');
     } finally {
@@ -53,6 +57,17 @@ class _GamerAppRootState extends State<GamerAppRoot> {
           _initialCheckDone = true;
         });
       }
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final updateInfo = await InAppUpdate.checkForUpdate();
+      if (updateInfo.updateAvailability == UpdateAvailability.updateAvailable) {
+        await InAppUpdate.performImmediateUpdate();
+      }
+    } catch (e) {
+      debugPrint('[InAppUpdate] Error checking for update: $e');
     }
   }
 

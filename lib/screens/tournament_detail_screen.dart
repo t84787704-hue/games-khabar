@@ -513,6 +513,17 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
             'Champions';
         final tagDisplay = _winnerTeamTag != null && _winnerTeamTag!.isNotEmpty ? ' [$_winnerTeamTag]' : '';
 
+        final roomId = (_tournament?['room_id'] ?? '').toString().trim();
+        final roomPass = (_tournament?['room_password'] ?? _tournament?['room_pass'] ?? '').toString().trim();
+        final matchTimeStr = _tournament?['match_time']?.toString();
+        DateTime? matchTime;
+        if (matchTimeStr != null) {
+          try {
+            matchTime = DateTime.parse(matchTimeStr).toLocal();
+          } catch (_) {}
+        }
+        final String formattedDate = matchTime != null ? DateFormat('dd MMM, hh:mm a').format(matchTime) : 'Scheduled';
+
         final maxTeams = _tournament?['max_teams'] ?? _tournament?['max_slots'] ?? 16;
         final currentTeams = _registrations.isNotEmpty
             ? _registrations.length
@@ -800,6 +811,69 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                   ),
                                 ),
                               ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Room Credentials Card (Room ID & Password)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: roomId.isNotEmpty
+                              ? const Color(0xFF00FF88).withOpacity(0.12)
+                              : const Color(0xFFFF8A00).withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: roomId.isNotEmpty
+                                ? const Color(0xFF00FF88).withOpacity(0.4)
+                                : const Color(0xFFFF8A00).withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              roomId.isNotEmpty ? Icons.vpn_key_rounded : Icons.lock_clock_rounded,
+                              size: 20,
+                              color: roomId.isNotEmpty ? const Color(0xFF00FF88) : const Color(0xFFFF8A00),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Match Time: $formattedDate',
+                                    style: TextStyle(
+                                      color: textSec,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  if (roomId.isNotEmpty) ...[
+                                    Text(
+                                      'Room ID: $roomId • Pass: ${roomPass.isNotEmpty ? roomPass : "No Pass"}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF00FF88),
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w900,
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    Text(
+                                      'Room ID will be shared soon',
+                                      style: TextStyle(
+                                        color: textSec,
+                                        fontSize: 12.5,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
                           ],
                         ),
