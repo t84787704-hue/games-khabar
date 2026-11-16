@@ -28,6 +28,7 @@ import 'gamer_terms_of_service_screen.dart';
 import 'gamer_delete_account_screen.dart';
 import 'gamer_auth_screen.dart';
 import '../services/app_share_service.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -1157,6 +1158,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         },
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: alertRed,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        FirebaseCrashlytics.instance.crash();
+                      },
+                      child: const Text(
+                        'Test Crash',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),

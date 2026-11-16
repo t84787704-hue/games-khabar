@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/game_model.dart';
 import '../services/theme_service.dart';
 
@@ -51,11 +52,14 @@ class GameCard extends StatelessWidget {
                   Positioned.fill(
                     child: ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
-                      child: Image.network(
-                        game.imageUrl,
+                      child: CachedNetworkImage(
+                        imageUrl: game.imageUrl,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
+                        placeholder: (context, url) => Container(
+                          color: ThemeService.cardSecondary,
+                        ),
+                        errorWidget: (context, error, stackTrace) {
                           return Container(
                             color: ThemeService.cardSecondary,
                             child: Center(

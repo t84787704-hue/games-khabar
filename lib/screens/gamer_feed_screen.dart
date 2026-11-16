@@ -44,6 +44,10 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   String currentUsername = 'user_gamer'.tr();
   String currentAvatarUrl = '';
 
+  // Static in-memory cache for high traffic & zero redundant backend queries
+  static List<Map<String, dynamic>>? _globalCachedFeed;
+  static DateTime? _globalFeedCacheTime;
+
   // Announcement Banner Data
   Map<String, dynamic>? _announcement;
   Timer? _timeAgoRefreshTimer;
@@ -55,6 +59,10 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   @override
   void initState() {
     super.initState();
+    if (_globalCachedFeed != null && _globalCachedFeed!.isNotEmpty) {
+      posts = _globalCachedFeed!;
+      isLoading = false;
+    }
     NewsImageResolver.onImageResolved.addListener(_onNewsImageResolved);
     _initScreen();
     _timeAgoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -473,6 +481,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           }
         }
       }
+
+      _globalCachedFeed = combinedFeed;
+      _globalFeedCacheTime = DateTime.now();
 
       if (mounted) {
         setState(() {
