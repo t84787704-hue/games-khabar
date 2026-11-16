@@ -15,6 +15,9 @@ import 'screens/banned_screen.dart';
 import 'screens/gamer_privacy_policy_screen.dart';
 import 'screens/gamer_terms_of_service_screen.dart';
 import 'services/notification_service.dart';
+import 'dart:ui';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 // ✅ Global Notification Plugin Instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -46,6 +49,18 @@ Future<void> showLocalNotification({
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ Initialize Firebase & Crashlytics
+  try {
+    await Firebase.initializeApp();
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  } catch (e) {
+    debugPrint('Firebase initialize/Crashlytics error: $e');
+  }
 
   // ✅ Initialize Supabase
   try {
