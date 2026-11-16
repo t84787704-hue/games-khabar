@@ -1,4 +1,5 @@
 {
+"msg_post_deleted": "Post has been deleted",
 "err_could_not_load_feed": "Could not load feed. Please check your connection.",
 "btn_view": "View",
 "no_comments_yet": "No comments yet. Be the first to comment!",
