@@ -826,6 +826,46 @@ class TeamService {
     return rejectJoinRequest(teamId: teamId, userId: userId);
   }
 
+  /// Leave team (called by team member)
+  Future<bool> leaveTeam({
+    required String teamId,
+    required String userId,
+  }) async {
+    if (teamId.isEmpty || userId.isEmpty) return false;
+    try {
+      final teamUuid = SupabaseService.toUuid(teamId);
+      final userUuid = SupabaseService.toUuid(userId);
+
+      await SupabaseService.client
+          .from("team_members")
+          .delete()
+          .or("team_id.eq.$teamUuid,team_id.eq.$teamId")
+          .or("user_id.eq.$userUuid,user_id.eq.$userId");
+
+      try {
+        final teamRow = await SupabaseService.client
+            .from("teams")
+            .select()
+            .or("id.eq.$teamUuid,id.eq.$teamId")
+            .maybeSingle();
+        if (teamRow != null && teamRow.containsKey("members")) {
+          final membersList = List<String>.from(
+            (teamRow["members"] as List? ?? []).map((e) => e.toString()),
+          )..removeWhere((id) => id == userUuid || id == userId);
+          await SupabaseService.client
+              .from("teams")
+              .update({"members": membersList})
+              .or("id.eq.$teamUuid,id.eq.$teamId");
+        }
+      } catch (_) {}
+
+      return true;
+    } catch (e) {
+      debugPrint("[TeamService] leaveTeam error: $e");
+      return false;
+    }
+  }
+
   /// 🏆 Award Tournament Winner:
   /// 1. Updates team: wins + 1, points + 25
   /// 2. Updates team_rankings for Top 100 Leaderboard: wins + 1, points + 25

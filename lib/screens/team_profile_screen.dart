@@ -1917,7 +1917,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               final isThisLeader = memberId == team.leaderId;
                               final bool isDefaultName = memberName == 'Player' ||
                                   memberName == 'Member' ||
-                                  memberName.isEmpty;
+                                  memberName.isEmpty ||
+                                  memberName.toLowerCase().startsWith('user_');
 
                               return FutureBuilder<Map<String, String>>(
                                 future: isDefaultName
@@ -2027,6 +2028,121 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       builder: (context) {
                         // 1. User is viewing their own team
                         if (isViewedMyTeam) {
+                          final bool isTeamLeader = team.isLeader(currentUid);
+                          if (!isTeamLeader && team.isMember(currentUid)) {
+                            return Row(
+                              children: [
+                                Expanded(
+                                  flex: 1,
+                                  child: Container(
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1877F2).withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                          color: const Color(0xFF1877F2), width: 1.2),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'your_own_team'.tr(),
+                                        style: TextStyle(
+                                          color: Color(0xFF1877F2),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  flex: 1,
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFFF4655),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10)),
+                                        elevation: 0,
+                                      ),
+                                      icon: const Icon(Icons.exit_to_app_rounded, size: 18),
+                                      label: const Text(
+                                        'Leave Team',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13),
+                                      ),
+                                      onPressed: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            backgroundColor: ThemeService.card,
+                                            title: Text('Leave Team?',
+                                                style: TextStyle(
+                                                    color: ThemeService.textPrimary,
+                                                    fontWeight: FontWeight.bold)),
+                                            content: Text(
+                                                'Are you sure you want to leave ${team.name}?',
+                                                style: TextStyle(
+                                                    color: ThemeService.textSecondary)),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(ctx, false),
+                                                child: Text('Cancel',
+                                                    style: TextStyle(
+                                                        color: ThemeService.textSecondary)),
+                                              ),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        const Color(0xFFFF4655)),
+                                                onPressed: () => Navigator.pop(ctx, true),
+                                                child: const Text('Leave',
+                                                    style: TextStyle(
+                                                        color: Colors.white)),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                        if (confirm != true) return;
+
+                                        setState(() => _isActionLoading = true);
+                                        final success = await _teamService.leaveTeam(
+                                          teamId: team.id,
+                                          userId: currentUid,
+                                        );
+                                        setState(() => _isActionLoading = false);
+
+                                        if (mounted) {
+                                          if (success) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('✅ You have left the team'),
+                                                backgroundColor: Color(0xFF2E7D32),
+                                              ),
+                                            );
+                                            Navigator.pop(context);
+                                          } else {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('Failed to leave team'),
+                                                backgroundColor: Color(0xFFFF4655),
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+
                           return Container(
                             width: double.infinity,
                             height: 48,
