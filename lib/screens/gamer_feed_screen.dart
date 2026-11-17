@@ -5,7 +5,9 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:share_plus/share_plus.dart';
@@ -62,12 +64,37 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     if (_globalCachedFeed != null && _globalCachedFeed!.isNotEmpty) {
       posts = _globalCachedFeed!;
       isLoading = false;
+    } else {
+      _loadCachedFeedFromDisk();
     }
     NewsImageResolver.onImageResolved.addListener(_onNewsImageResolved);
     _initScreen();
     _timeAgoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
+  }
+
+  Future<void> _loadCachedFeedFromDisk() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('cached_feed_posts_v1');
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(jsonStr);
+        final List<Map<String, dynamic>> diskPosts = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        if (diskPosts.isNotEmpty && mounted && posts.isEmpty) {
+          setState(() {
+            posts = diskPosts;
+            isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[FeedCache] Corrupt cache detected, clearing automatically: $e');
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('cached_feed_posts_v1');
+      } catch (_) {}
+    }
   }
 
   @override
@@ -485,6 +512,11 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       _globalCachedFeed = combinedFeed;
       _globalFeedCacheTime = DateTime.now();
 
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('cached_feed_posts_v1', jsonEncode(combinedFeed));
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           posts = combinedFeed;
@@ -493,6 +525,29 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       }
     } catch (e) {
       debugPrint('Feed error: $e');
+      // Fallback to disk cache if network/Supabase fails
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final jsonStr = prefs.getString('cached_feed_posts_v1');
+        if (jsonStr != null && jsonStr.isNotEmpty) {
+          final List<dynamic> decoded = jsonDecode(jsonStr);
+          final List<Map<String, dynamic>> diskPosts = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+          if (diskPosts.isNotEmpty && mounted) {
+            setState(() {
+              posts = diskPosts;
+              isLoading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Offline mode: showing cached feed'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+            return;
+          }
+        }
+      } catch (_) {}
+
       if (mounted) {
         setState(() => isLoading = false);
         final errText = e.toString();
