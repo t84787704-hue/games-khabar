@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace "com.gameskhabar.games_khabar"
-    compileSdk flutter.compileSdkVersion
+    compileSdk 34
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -30,7 +30,7 @@ android {
     defaultConfig {
         applicationId "com.gameskhabar.games_khabar"
         minSdk 24
-        targetSdk 35
+        targetSdk 34
         versionCode 1
         versionName "1.0"
     }
@@ -48,11 +48,10 @@ android {
         release {
             def hasKey = keystorePropertiesFile.exists() && keystoreProperties['storeFile'] && file(keystoreProperties['storeFile']).exists()
             signingConfig = hasKey ? signingConfigs.release : signingConfigs.debug
-            
-            // CRASH FIX: Filhal inko false kar diya hai taake R8 crash na kare
+
             minifyEnabled false 
             shrinkResources false 
-            
+
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -64,6 +63,5 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
-    // CRASH FIX: google_mobile_ads v9 ke sath aane wala purana WorkManager crash karta hai
-    implementation 'androidx.work:work-runtime:2.11.2'
+    implementation 'androidx.work:work-runtime:2.9.0'
 }
