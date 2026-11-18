@@ -38,9 +38,8 @@ jobs:
           echo "85642a38d174c49302b00cca0721e87d706dd433" >> "$ANDROID_HOME/licenses/android-sdk-arm-dbt-license" || true
           yes | flutter doctor --android-licenses || true
 
-      - name: Clean and Install dependencies
+      - name: Install dependencies
         run: |
-          flutter clean
           flutter pub get
 
       - name: Decode Keystore and create key.properties
