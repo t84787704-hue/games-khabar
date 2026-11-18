@@ -1,38 +1,32 @@
 package com.gameskhabar.games_khabar
 
-import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugins.googlemobileads.NativeAdFactory
-import io.flutter.plugins.googlemobileads.GoogleMobileAdsPlugin
-import com.google.android.gms.ads.nativead.NativeAd
-import com.google.android.gms.ads.nativead.NativeAdView
 import android.view.LayoutInflater
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugins.googlemobileads.GoogleMobileAdsPlugin
+import com.google.android.gms.ads.nativead.NativeAd
+import com.google.android.gms.ads.nativead.NativeAdView
 
 class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         val factory = ListTileNativeAdFactory(layoutInflater)
-        
-        // Registration ke liye GoogleMobileAdsPlugin ka istemal karein
         GoogleMobileAdsPlugin.registerNativeAdFactory(flutterEngine, "listTile", factory)
         GoogleMobileAdsPlugin.registerNativeAdFactory(flutterEngine, "list_tile_native_ad", factory)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        super.cleanUpFlutterEngine(flutterEngine)
-        
-        // Unregister bhi isi class se hoga
         GoogleMobileAdsPlugin.unregisterNativeAdFactory(flutterEngine, "listTile")
         GoogleMobileAdsPlugin.unregisterNativeAdFactory(flutterEngine, "list_tile_native_ad")
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 }
 
-// Factory class mein interface ka naam 'NativeAdFactory' rahega
-class ListTileNativeAdFactory(private val layoutInflater: LayoutInflater) : NativeAdFactory {
+class ListTileNativeAdFactory(private val layoutInflater: LayoutInflater) : GoogleMobileAdsPlugin.NativeAdFactory {
     override fun createNativeAd(nativeAd: NativeAd, customOptions: MutableMap<String, Any>?): NativeAdView {
         val adView = layoutInflater.inflate(R.layout.list_tile_native_ad, null) as NativeAdView
 
