@@ -1,3 +1,5 @@
+import '../services/supabase_service.dart';
+
 class TeamModel {
   final String id;
   final String name;
@@ -45,8 +47,32 @@ class TeamModel {
   int get totalMatches => wins + losses + draws;
   double get winRate => totalMatches > 0 ? (wins / totalMatches) * 100 : 0.0;
 
-  bool isLeader(String userId) => leaderId == userId;
-  bool isMember(String userId) => members.contains(userId) || leaderId == userId;
+  bool isLeader(String userId) {
+    if (userId.isEmpty || leaderId.isEmpty) return false;
+    final cleanLeader = leaderId.trim().toLowerCase();
+    final cleanUser = userId.trim().toLowerCase();
+    if (cleanLeader == cleanUser) return true;
+    try {
+      return SupabaseService.toUuid(cleanLeader) == SupabaseService.toUuid(cleanUser);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool isMember(String userId) {
+    if (userId.isEmpty) return false;
+    if (isLeader(userId)) return true;
+    final cleanUser = userId.trim().toLowerCase();
+    for (final m in members) {
+      final cleanM = m.trim().toLowerCase();
+      if (cleanM == cleanUser) return true;
+      try {
+        if (SupabaseService.toUuid(cleanM) == SupabaseService.toUuid(cleanUser)) return true;
+      } catch (_) {}
+    }
+    return false;
+  }
+
   bool hasRequestedJoin(String userId) => pendingJoinRequests.contains(userId);
 
   factory TeamModel.fromSupabase(Map<String, dynamic> row) {

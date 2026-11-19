@@ -651,7 +651,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
         return PopScope(
           canPop: false,
-          onPopInvokedWithResult: (didPop, _) {
+          onPopInvoked: (didPop) {
             if (!didPop) {
               _handleBackNavigation();
             }

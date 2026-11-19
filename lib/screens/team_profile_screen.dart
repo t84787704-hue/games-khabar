@@ -56,30 +56,80 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     String avatar = '';
 
     try {
-      final sbProfile = await SupabaseService.client
-          .from('profiles')
-          .select()
-          .eq('id', cleanUid)
+      final userRow = await SupabaseService.client
+          .from('users')
+          .select('full_name, name, display_name, username, gamer_id, game_id, avatar_url')
+          .or('id.eq.$cleanUid,uid.eq.$cleanUid')
           .maybeSingle();
+      if (userRow != null) {
+        final fn = (userRow['full_name'] ?? '').toString().trim();
+        final n = (userRow['name'] ?? '').toString().trim();
+        final dn = (userRow['display_name'] ?? '').toString().trim();
+        final un = (userRow['username'] ?? '').toString().trim();
 
-      if (sbProfile != null) {
-        final u = sbProfile['username']?.toString() ??
-            sbProfile['display_name']?.toString();
-        if (u != null && u.isNotEmpty) {
-          username = u;
+        for (final candidate in [fn, n, dn, un]) {
+          if (candidate.isNotEmpty && candidate.toLowerCase() != 'null' && !candidate.toLowerCase().startsWith('user_')) {
+            username = candidate;
+            break;
+          }
         }
-        final g = sbProfile['gamer_id']?.toString() ??
-            sbProfile['game_id']?.toString();
-        if (g != null && g.isNotEmpty) {
+        if (username == 'Player') {
+          for (final candidate in [fn, n, dn, un]) {
+            if (candidate.isNotEmpty && candidate.toLowerCase() != 'null') {
+              username = candidate;
+              break;
+            }
+          }
+        }
+
+        final g = (userRow['gamer_id'] ?? userRow['game_id'] ?? '').toString().trim();
+        if (g.isNotEmpty && g.toLowerCase() != 'null') {
           gamerId = g;
         }
-        final a = sbProfile['avatar_url']?.toString();
-        if (a != null && a.isNotEmpty) {
+
+        final a = (userRow['avatar_url'] ?? '').toString().trim();
+        if (a.isNotEmpty && a.toLowerCase() != 'null') {
           avatar = a;
         }
       }
     } catch (e) {
-      debugPrint('[TeamProfileScreen] Supabase profile query error: $e');
+      debugPrint('[TeamProfileScreen] users table query error: $e');
+    }
+
+    if (username == 'Player' || gamerId == 'ID not set' || avatar.isEmpty) {
+      try {
+        final sbProfile = await SupabaseService.client
+            .from('profiles')
+            .select()
+            .eq('id', cleanUid)
+            .maybeSingle();
+
+        if (sbProfile != null) {
+          final fn = (sbProfile['full_name'] ?? '').toString().trim();
+          final n = (sbProfile['name'] ?? '').toString().trim();
+          final u = (sbProfile['username'] ?? sbProfile['display_name'] ?? '').toString().trim();
+          
+          if (username == 'Player') {
+            for (final candidate in [fn, n, u]) {
+              if (candidate.isNotEmpty && candidate.toLowerCase() != 'null' && !candidate.toLowerCase().startsWith('user_')) {
+                username = candidate;
+                break;
+              }
+            }
+          }
+          final g = sbProfile['gamer_id']?.toString() ??
+              sbProfile['game_id']?.toString();
+          if (gamerId == 'ID not set' && g != null && g.isNotEmpty) {
+            gamerId = g;
+          }
+          final a = sbProfile['avatar_url']?.toString();
+          if (avatar.isEmpty && a != null && a.isNotEmpty) {
+            avatar = a;
+          }
+        }
+      } catch (e) {
+        debugPrint('[TeamProfileScreen] Supabase profile query error: $e');
+      }
     }
 
     if (gamerId == 'ID not set' || username == 'Player') {
