@@ -1996,6 +1996,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           : memberAvatar;
 
                                   return ListTile(
+                                    onTap: memberId.isNotEmpty
+                                        ? () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => GamerProfileScreen(userId: memberId),
+                                              ),
+                                            );
+                                          }
+                                        : null,
                                     leading: CircleAvatar(
                                       radius: 18,
                                       backgroundColor: cardSec,
