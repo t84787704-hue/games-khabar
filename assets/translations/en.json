@@ -1,4 +1,6 @@
 {
+"no_coin_history_yet": "No Coin History Yet",
+"coin_history_empty_hint": "Your earned and spent coins will appear here.",
 "msg_post_deleted": "Post has been deleted",
 "err_could_not_load_feed": "Could not load feed. Please check your connection.",
 "btn_view": "View",
