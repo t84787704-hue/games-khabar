@@ -123,7 +123,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     if (confirm != true) return;
 
     try {
-      final success = await CoinWalletService.updateCoins(
+      await CoinWalletService.updateCoins(
         userId: _userId,
         amount: -cost,
         type: 'game_currency_redemption',
@@ -131,23 +131,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       );
 
       if (mounted) {
-        if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('🎉 Successfully redeemed $packTitle! Status: Pending Delivery.'),
-              backgroundColor: GamerTheme.neonGreen,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Redemption failed. Please try again.'),
-              backgroundColor: Color(0xFFFF4655),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 Successfully redeemed $packTitle! Status: Pending Delivery.'),
+            backgroundColor: GamerTheme.neonGreen,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -314,7 +304,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Estimated Value: 1,000 G-Coins ≈ 100 PKR / $1.00 Store Value',
+                    'Estimated Value: 1,000 G-Coins ≈ 100 PKR / \$1.00 Store Value',
                     style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
                   ),
                 ),
