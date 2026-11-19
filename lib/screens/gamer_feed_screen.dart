@@ -28,6 +28,7 @@ import '../data/fallback_images.dart';
 import '../services/app_share_service.dart';
 import '../services/gamer_social_service.dart';
 import '../services/news_image_resolver.dart';
+import '../services/language_service.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -832,7 +833,11 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final originalAuthorAvatar = isSteamNews
         ? ''
         : (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
-    final originalContent = (post['content'] ?? post['title'] ?? '').toString();
+    final bool isUrduActive = LanguageService.isUrdu;
+    final cachedUrduTitle = isSteamNews ? (UrduNewsContent.getCachedUrduTitle(postId) ?? post['title_ur']?.toString() ?? '') : '';
+    final originalContent = isUrduActive && cachedUrduTitle.isNotEmpty
+        ? cachedUrduTitle
+        : (post['content'] ?? post['title'] ?? '').toString();
     final originalImage = _resolvePostImage(post);
     final originalGame = (post['game'] ?? post['game_tag'] ?? 'BGMI').toString();
 
@@ -945,7 +950,11 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final originalAuthorAvatar = isSteamNews
         ? ''
         : (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
-    final originalContent = (post['content'] ?? post['title'] ?? '').toString();
+    final bool isUrduActive = LanguageService.isUrdu;
+    final cachedUrduTitle = isSteamNews ? (UrduNewsContent.getCachedUrduTitle(postId) ?? post['title_ur']?.toString() ?? '') : '';
+    final originalContent = isUrduActive && cachedUrduTitle.isNotEmpty
+        ? cachedUrduTitle
+        : (post['content'] ?? post['title'] ?? '').toString();
     final originalImage = _resolvePostImage(post);
     final originalGame = (post['game'] ?? post['game_tag'] ?? 'BGMI').toString();
 
@@ -2170,6 +2179,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                             ),
                             if (isSteamNews && (post['title'] ?? '').toString().isNotEmpty) ...[
                               UrduNewsContent(
+                                newsId: postId,
                                 title: post['title'].toString(),
                                 description: (post['description'] ?? '').toString(),
                                 titleUr: post['title_ur']?.toString(),

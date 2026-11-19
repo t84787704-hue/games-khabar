@@ -3,6 +3,7 @@ import '../services/translation_service.dart';
 import '../services/theme_service.dart';
 
 class UrduNewsContent extends StatefulWidget {
+  final String? newsId;
   final String title;
   final String description;
   final String? titleUr;
@@ -12,6 +13,7 @@ class UrduNewsContent extends StatefulWidget {
 
   const UrduNewsContent({
     super.key,
+    this.newsId,
     required this.title,
     required this.description,
     this.titleUr,
@@ -20,13 +22,23 @@ class UrduNewsContent extends StatefulWidget {
     this.maxDescriptionLines = 3,
   });
 
+  static final Map<String, String> globalUrduCache = {};
+
+  static String? getCachedUrduTitle(String? newsId) {
+    if (newsId == null) return null;
+    return globalUrduCache['t_$newsId'];
+  }
+
+  static String? getCachedUrduDesc(String? newsId) {
+    if (newsId == null) return null;
+    return globalUrduCache['d_$newsId'];
+  }
+
   @override
   State<UrduNewsContent> createState() => _UrduNewsContentState();
 }
 
 class _UrduNewsContentState extends State<UrduNewsContent> {
-  static final Map<String, String> _globalUrduCache = {};
-
   bool _showUrdu = true;
   String? _urduTitle;
   String? _urduDescription;
@@ -41,12 +53,14 @@ class _UrduNewsContentState extends State<UrduNewsContent> {
   @override
   void didUpdateWidget(covariant UrduNewsContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.title != widget.title || oldWidget.description != widget.description) {
+    if (oldWidget.newsId != widget.newsId || oldWidget.title != widget.title || oldWidget.description != widget.description) {
       _resolveTranslations();
     }
   }
 
   void _resolveTranslations() {
+    final cacheKey = widget.newsId ?? widget.title;
+
     // 1. Check if pre-translated Urdu title provided
     if (widget.titleUr != null &&
         widget.titleUr!.trim().isNotEmpty &&
@@ -54,8 +68,8 @@ class _UrduNewsContentState extends State<UrduNewsContent> {
       _urduTitle = widget.titleUr;
     } else if (TranslationService.isTextInLanguage(widget.title, 'ur')) {
       _urduTitle = widget.title;
-    } else if (_globalUrduCache.containsKey('t_${widget.title}')) {
-      _urduTitle = _globalUrduCache['t_${widget.title}'];
+    } else if (UrduNewsContent.globalUrduCache.containsKey('t_$cacheKey')) {
+      _urduTitle = UrduNewsContent.globalUrduCache['t_$cacheKey'];
     }
 
     // 2. Check description
@@ -65,8 +79,8 @@ class _UrduNewsContentState extends State<UrduNewsContent> {
       _urduDescription = widget.descriptionUr;
     } else if (TranslationService.isTextInLanguage(widget.description, 'ur')) {
       _urduDescription = widget.description;
-    } else if (_globalUrduCache.containsKey('d_${widget.description}')) {
-      _urduDescription = _globalUrduCache['d_${widget.description}'];
+    } else if (UrduNewsContent.globalUrduCache.containsKey('d_$cacheKey')) {
+      _urduDescription = UrduNewsContent.globalUrduCache['d_$cacheKey'];
     }
 
     // If both are resolved, return
@@ -88,15 +102,15 @@ class _UrduNewsContentState extends State<UrduNewsContent> {
       if (_urduTitle == null && titleToTranslate.isNotEmpty)
         TranslationService.translateSingle(titleToTranslate, 'ur').then((res) {
           if (res.isNotEmpty && TranslationService.isTextInLanguage(res, 'ur')) {
-            _globalUrduCache['t_$titleToTranslate'] = res;
-            _urduTitle = res;
+            UrduNewsContent.globalUrduCache['t_$cacheKey'] = res;
+            if (mounted) setState(() => _urduTitle = res);
           }
         }),
       if (_urduDescription == null && descSnippet.isNotEmpty)
         TranslationService.translateSingle(descSnippet, 'ur').then((res) {
           if (res.isNotEmpty && TranslationService.isTextInLanguage(res, 'ur')) {
-            _globalUrduCache['d_${widget.description}'] = res;
-            _urduDescription = res;
+            UrduNewsContent.globalUrduCache['d_$cacheKey'] = res;
+            if (mounted) setState(() => _urduDescription = res);
           }
         }),
     ]).then((_) {
