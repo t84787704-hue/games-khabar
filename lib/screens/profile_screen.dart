@@ -22,6 +22,7 @@ import '../services/gamer_auth_service.dart';
 import '../models/gamer_user_model.dart';
 import 'verification_screen.dart';
 import '../widgets/coin_history_sheet.dart';
+import 'coin_wallet_screen.dart';
 import 'blocked_users_screen.dart';
 import 'gamer_download_data_screen.dart';
 import 'gamer_terms_of_service_screen.dart';
@@ -441,8 +442,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   }
                   return GestureDetector(
                     onTap: () {
-                      final uid = GamerAuthService().currentUid ?? '';
-                      CoinHistorySheet.show(context, userId: uid);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CoinWalletScreen()),
+                      );
                     },
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -774,8 +777,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         trailing: Icon(Icons.arrow_forward_ios_rounded, color: textGray, size: 14),
                         onTap: () {
-                          final uid = GamerAuthService().currentUid ?? '';
-                          CoinHistorySheet.show(context, userId: uid);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const CoinWalletScreen()),
+                          );
                         },
                       ),
                       Divider(color: borderDark, height: 1),

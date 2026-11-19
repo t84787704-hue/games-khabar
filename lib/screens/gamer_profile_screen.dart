@@ -23,6 +23,7 @@ import '../services/gamer_social_service.dart';
 import '../services/supabase_service.dart';
 import '../services/language_service.dart';
 import '../services/coin_wallet_service.dart';
+import 'coin_wallet_screen.dart';
 import '../services/app_share_service.dart';
 import '../widgets/gamer_avatar.dart';
 import '../widgets/rank_badge_widget.dart';
@@ -905,11 +906,9 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                                 child: const Icon(Icons.history_rounded, size: 18, color: Color(0xFFFFD700)),
                               ),
                               onTap: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  backgroundColor: Colors.transparent,
-                                  builder: (_) => CoinHistorySheet(userId: user.uid),
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const CoinWalletScreen()),
                                 );
                               },
                             ),

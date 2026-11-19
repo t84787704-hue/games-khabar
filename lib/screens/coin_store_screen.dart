@@ -17,6 +17,7 @@ import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import '../services/app_share_service.dart';
+import 'coin_wallet_screen.dart';
 
 class CoinStoreScreen extends StatefulWidget {
   const CoinStoreScreen({super.key});
@@ -402,6 +403,18 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 ),
               ],
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.account_balance_wallet_rounded, color: GamerTheme.neonGreen),
+                tooltip: 'Coin Wallet',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CoinWalletScreen()),
+                  );
+                },
+              ),
+            ],
           ),
           body: StreamBuilder<CoinWallet>(
             stream: _walletService.walletStream(uid),
