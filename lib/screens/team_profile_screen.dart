@@ -51,7 +51,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       return _profileCache[cleanUid]!;
     }
 
-    String username = 'Player';
+    String username = 'Player'; // Prioritize real name over User_ handles
     String gamerId = 'ID not set';
     String avatar = '';
 
