@@ -494,7 +494,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   const Icon(Icons.play_circle_fill_rounded, color: Colors.black, size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    'btn_earn_100_ad'.tr(),
+                    'Earn +25 Coins',
                     style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11),
                   ),
                 ],
@@ -533,11 +533,11 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
         _buildEarnActionCard(
           icon: Icons.play_circle_filled_rounded,
           iconColor: GamerTheme.accentOrange,
-          badge: 'badge_plus_100_each'.tr(),
+          badge: '+25 Coins',
           badgeColor: GamerTheme.accentOrange,
           title: 'watch_sponsored_ads_title'.tr(),
           subtitle: 'watch_sponsored_ads_sub'.tr(),
-          buttonText: _isWatchingAd ? 'btn_streaming_ad'.tr() : 'btn_watch_ad_100'.tr(),
+          buttonText: _isWatchingAd ? 'btn_streaming_ad'.tr() : 'Watch Ad (+25)',
           buttonColor: GamerTheme.accentOrange,
           textColor: Colors.white,
           onTap: _isWatchingAd ? null : () => _handleWatchAd(uid),

@@ -1039,7 +1039,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                           ),
                           icon: const Icon(Icons.tv_rounded, size: 15),
                           label: const Text(
-                            'Watch (+100)',
+                            'Watch (+25)',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                           onPressed: () async {

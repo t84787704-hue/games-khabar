@@ -54,14 +54,14 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
     try {
       await AdFreeService().showRewardedAdForAction(
         context: context,
-        actionTitle: 'action_watch_ad_100_coins'.tr(),
+        actionTitle: 'Watch Ad (+25 Coins)',
         onRewardEarned: () async {
           await _walletService.rewardAdCoins(_userId);
           if (mounted) {
             setState(() {});
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('msg_100_gcoins_added'.tr()),
+              const SnackBar(
+                content: Text('🎉 +25 G-Coins added successfully!'),
                 backgroundColor: GamerTheme.neonGreen,
                 behavior: SnackBarBehavior.floating,
               ),
@@ -253,10 +253,10 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                     _buildActionCard(
                       icon: Icons.play_circle_fill_rounded,
                       iconColor: GamerTheme.neonGreen,
-                      badgeText: 'badge_plus_100_coins'.tr(),
+                      badgeText: '+25 Coins',
                       title: 'watch_sponsored_ad_title'.tr(),
                       subtitle: 'watch_sponsored_ad_sub'.tr(),
-                      buttonText: _isWatchingAd ? 'btn_loading'.tr() : 'btn_watch_ad_100'.tr(),
+                      buttonText: _isWatchingAd ? 'btn_loading'.tr() : 'Watch Ad (+25)',
                       isLoading: _isWatchingAd,
                       onTap: _isWatchingAd ? null : _watchAd,
                     ),

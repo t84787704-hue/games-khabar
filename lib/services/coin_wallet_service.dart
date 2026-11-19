@@ -576,8 +576,8 @@ class CoinWalletService extends ChangeNotifier {
 
   Future<void> rewardAdCoins(String userId) async {
     final wallet = await getOrCreateWallet(userId);
-    final newCoins = wallet.coins + 100;
-    final newLifetime = wallet.lifetimeEarned + 100;
+    final newCoins = wallet.coins + 25;
+    final newLifetime = wallet.lifetimeEarned + 25;
     final now = DateTime.now();
 
     final updated = wallet.copyWith(
@@ -593,7 +593,7 @@ class CoinWalletService extends ChangeNotifier {
     try {
       await updateCoins(
         userId: userId,
-        amount: 100,
+        amount: 25,
         type: 'ad_reward',
         title: 'wallet_ad_reward_title'.tr(),
         description: 'wallet_ad_reward_desc'.tr(),
@@ -601,7 +601,7 @@ class CoinWalletService extends ChangeNotifier {
       try {
         NotificationService().sendCoinRewardNotification(
           targetUserId: userId,
-          amount: 100,
+          amount: 25,
           reason: 'wallet_ad_reward_reason'.tr(),
           type: 'ad_reward',
         );
