@@ -42,6 +42,20 @@ class GamingNewsService {
     'https://www.sportskeeda.com/esports/feed',
   ];
 
+  bool _isGenuineGamingNewsItem(GamingNewsModel item) {
+    final tEn = item.titleEn.toLowerCase();
+    final tUr = item.titleUr;
+    final cat = item.category.toLowerCase();
+    if (tEn.contains('weekly #1 team') ||
+        tUr.contains('ہفتہ وار #1 ٹیم') ||
+        tEn.contains('weekly_team_reward') ||
+        tEn.contains('notif_') ||
+        cat.contains('notif_')) {
+      return false;
+    }
+    return item.titleEn.trim().isNotEmpty || item.titleUr.trim().isNotEmpty;
+  }
+
   /// Stream of all gaming news from Supabase, sorted by timestamp descending
   Stream<List<GamingNewsModel>> getGamingNewsStream() async* {
     yield _getFallbackSeedArticles();
@@ -52,7 +66,11 @@ class GamingNewsService {
           .order('timestamp', ascending: false)
           .limit(200);
       if ((rows as List).isNotEmpty) {
-        yield rows.map((m) => GamingNewsModel.fromMap(m)).toList();
+        final items = rows
+            .map((m) => GamingNewsModel.fromMap(m))
+            .where(_isGenuineGamingNewsItem)
+            .toList();
+        if (items.isNotEmpty) yield items;
       }
     } catch (_) {}
 
@@ -62,7 +80,10 @@ class GamingNewsService {
           .stream(primaryKey: ['id'])
           .order('timestamp', ascending: false)
           .limit(200)
-          .map((list) => list.map((m) => GamingNewsModel.fromMap(m)).toList());
+          .map((list) => list
+              .map((m) => GamingNewsModel.fromMap(m))
+              .where(_isGenuineGamingNewsItem)
+              .toList());
     } catch (_) {}
   }
 
@@ -379,6 +400,36 @@ class GamingNewsService {
           }
         }
 
+        // Extract JSON-LD articleBody if available before stripping <script> tags
+        String jsonLdBody = '';
+        try {
+          final ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
+          for (final script in ldScripts) {
+            final rawJson = script.text.trim();
+            if (rawJson.contains('articleBody')) {
+              final decoded = jsonDecode(rawJson);
+              if (decoded is Map && decoded['articleBody'] != null) {
+                jsonLdBody = decoded['articleBody'].toString().trim();
+                break;
+              } else if (decoded is List) {
+                for (final entry in decoded) {
+                  if (entry is Map && entry['articleBody'] != null) {
+                    jsonLdBody = entry['articleBody'].toString().trim();
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        } catch (_) {}
+
+        final metaOgDesc = (document
+                    .querySelector('meta[property="og:description"]')
+                    ?.attributes['content'] ??
+                document.querySelector('meta[name="description"]')?.attributes['content'] ??
+                '')
+            .trim();
+
         // Strip non-content and related/sidebar article tags
         for (final tag in [
           'script',
@@ -425,7 +476,7 @@ class GamingNewsService {
           for (final p in pList) {
             final text = p.text.trim();
             // Filter short captions, ads, cookie notices
-            if (text.length > 55 &&
+            if (text.length > 40 &&
                 !text.toLowerCase().contains('cookie') &&
                 !text.toLowerCase().contains('privacy policy') &&
                 !text.toLowerCase().contains('terms of service') &&
@@ -440,15 +491,22 @@ class GamingNewsService {
             }
           }
 
-          if (paragraphs.length >= 2) {
-            // Join 4-7 paragraphs for comprehensive 500-800 words
-            final joined = paragraphs.take(7).join('\n\n');
+          if (paragraphs.isNotEmpty) {
+            final joined = paragraphs.take(10).join('\n\n');
             if (fallbackDescription.trim().isNotEmpty &&
-                !joined.toLowerCase().contains(fallbackDescription.trim().substring(0, (fallbackDescription.trim().length * 0.4).toInt().clamp(1, fallbackDescription.trim().length)).toLowerCase())) {
+                !joined.toLowerCase().contains(
+                    fallbackDescription.trim().substring(0, (fallbackDescription.trim().length * 0.4).toInt().clamp(1, fallbackDescription.trim().length)).toLowerCase())) {
               return '${fallbackDescription.trim()}\n\n$joined';
             }
             return joined;
           }
+        }
+
+        if (jsonLdBody.length > 100) {
+          return jsonLdBody;
+        }
+        if (metaOgDesc.length > fallbackDescription.trim().length) {
+          return metaOgDesc;
         }
       }
     } catch (e) {
@@ -458,31 +516,20 @@ class GamingNewsService {
     return _generateEnrichedArticleText(fallbackTitle, fallbackDescription);
   }
 
-  /// Generate comprehensive 4-5 paragraph article if scraping is blocked or unavailable
+  /// Return genuine article summary/content without injecting generic fallback templates
   String _generateEnrichedArticleText(String title, String summary) {
-    if (title.trim().isEmpty && summary.trim().isEmpty) {
-      return 'Detailed gaming article will appear here shortly.';
-    }
-
     final cleanSummary = summary
+        .replaceAll('notif_gaming_news_fallback', '')
+        .replaceAll('notif_gaming_fallback', '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim()
         .replaceAll(RegExp(r'(\.{2,}|…)+$'), '')
         .trim();
-    final p1 = cleanSummary.isNotEmpty
-        ? cleanSummary
-        : '$title marks an exciting new chapter for the global gaming community, showcasing notable technological leaps, engaging narrative depths, and innovative mechanics.';
 
-    final p2 =
-        'Industry analysts and game studio leads report that state-of-the-art engineering has been implemented across next-generation graphics pipelines, ultra-fast SSD asset streaming, dynamic atmospheric simulations, and responsive artificial intelligence behaviors. Players can expect fluid frame rates, reduced latency, and photorealistic lighting that sets a new benchmark for modern entertainment.';
-
-    final p3 =
-        'Core gameplay systems have been meticulously balanced to deliver both accessible onboarding for newcomers and deep mastery curves for dedicated veterans. The creative team emphasized multi-layered progression mechanics, seamless cooperative multiplayer integration, and extensive customization options that empower players to express their individual playstyles.';
-
-    final p4 =
-        'Community feedback and early previews continue to build massive momentum ahead of launch. With comprehensive cross-platform features, regular post-launch seasonal roadmaps, and dedicated cloud server infrastructure, the title is positioned to become an enduring cornerstone for gaming communities worldwide.';
-
-    return '$p1\n\n$p2\n\n$p3\n\n$p4';
+    if (cleanSummary.isNotEmpty) {
+      return cleanSummary;
+    }
+    return title.trim();
   }
 
   /// Fetch from rss2json or fallback direct XML

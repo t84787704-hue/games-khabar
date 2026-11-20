@@ -79,10 +79,13 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   Future<void> _loadCachedFeedFromDisk() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonStr = prefs.getString('cached_feed_posts_v1');
+      final jsonStr = prefs.getString('cached_feed_posts_v2');
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(jsonStr);
-        final List<Map<String, dynamic>> diskPosts = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+        final List<Map<String, dynamic>> diskPosts = decoded
+            .map((e) => Map<String, dynamic>.from(e))
+            .where((p) => !_isRewardOrInvalidNewsPost(p))
+            .toList();
         if (diskPosts.isNotEmpty && mounted && posts.isEmpty) {
           setState(() {
             posts = diskPosts;
@@ -94,9 +97,28 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       debugPrint('[FeedCache] Corrupt cache detected, clearing automatically: $e');
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('cached_feed_posts_v1');
+        await prefs.remove('cached_feed_posts_v2');
       } catch (_) {}
     }
+  }
+
+  bool _isRewardOrInvalidNewsPost(Map<String, dynamic> item) {
+    final type = (item['type'] ?? '').toString().toLowerCase();
+    final title = (item['title'] ?? item['title_en'] ?? '').toString();
+    final titleUr = (item['title_ur'] ?? '').toString();
+    final content = (item['content'] ?? item['description'] ?? '').toString();
+    final cat = (item['category'] ?? '').toString();
+
+    if (type == 'weekly_team_reward' ||
+        title.contains('Weekly #1 Team') ||
+        titleUr.contains('ہفتہ وار #1 ٹیم') ||
+        content.contains('Weekly #1 Team') ||
+        content.contains('ہفتہ وار #1 ٹیم') ||
+        title.contains('notif_gaming_news_fallback') ||
+        cat.contains('notif_gaming_news_fallback')) {
+      return true;
+    }
+    return false;
   }
 
   @override
@@ -364,10 +386,13 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
       final results = await Future.wait([postsFuture, steamNewsFuture]);
       
-      final fetchedPosts = List<Map<String, dynamic>>.from(results[0] as List);
+      final fetchedPosts = List<Map<String, dynamic>>.from(results[0] as List)
+          .where((p) => !_isRewardOrInvalidNewsPost(p))
+          .toList();
       final steamNewsList = results[1];
 
       final validNewsList = steamNewsList.where((news) {
+        if (_isRewardOrInvalidNewsPost(news)) return false;
         final tMap = news['titleMap'] is Map ? news['titleMap'] as Map : null;
         final dMap = news['descriptionMap'] is Map ? news['descriptionMap'] as Map : null;
         final title = (news['title_en'] ?? tMap?['en'] ?? news['title'] ?? '').toString().trim();
@@ -397,6 +422,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                 news['shortDescription'] ??
                 '')
             .toString()
+            .replaceAll('notif_gaming_news_fallback', '')
+            .replaceAll('notif_gaming_fallback', '')
             .trim();
 
         // Strip leading duplicate title if rawDesc starts with title
@@ -406,20 +433,12 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           rawDesc = rawDesc.substring(title.length).replaceFirst(RegExp(r'^[\s\.\:\-\|]+'), '').trim();
         }
 
-        // Only use fallback text if description is truly empty or just repeats the title
-        final normT = title.replaceAll(RegExp(r'[\s\-_\|\.\u00a0]+'), '').trim().toLowerCase();
-        final normD = rawDesc.replaceAll(RegExp(r'[\s\-_\|\.\u00a0]+'), '').trim().toLowerCase();
-        final bool isDuplicateOrStub = rawDesc.length < 25 || normT == normD;
-
-        if (isDuplicateOrStub) {
-          rawDesc = "$title.\n\n"
-              "This official game update brings key performance improvements, bug fixes, balance tweaks, and community enhancements. "
-              "Players across PC and consoles will experience optimized gameplay and smoother mechanics in this release.\n\n"
-              "Tap 'Read Full Story' to explore complete release notes, visual highlights, and patch details.";
-        }
-
-        final rawShort = (news['shortDescription'] ?? news['summary'] ?? '').toString().trim();
-        final shortDesc = (rawShort.isNotEmpty && rawShort.length >= 30 && rawShort.toLowerCase() != title.toLowerCase())
+        final rawShort = (news['shortDescription'] ?? news['summary'] ?? '')
+            .toString()
+            .replaceAll('notif_gaming_news_fallback', '')
+            .replaceAll('notif_gaming_fallback', '')
+            .trim();
+        final shortDesc = (rawShort.isNotEmpty && rawShort.length >= 25 && rawShort.toLowerCase() != title.toLowerCase())
             ? rawShort
             : (rawDesc.length > 280 ? '${rawDesc.substring(0, 280)}...' : rawDesc);
 
@@ -585,7 +604,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
 
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('cached_feed_posts_v1', jsonEncode(combinedFeed));
+        await prefs.setString('cached_feed_posts_v2', jsonEncode(combinedFeed));
       } catch (_) {}
 
       if (mounted) {
@@ -599,10 +618,13 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       // Fallback to disk cache if network/Supabase fails
       try {
         final prefs = await SharedPreferences.getInstance();
-        final jsonStr = prefs.getString('cached_feed_posts_v1');
+        final jsonStr = prefs.getString('cached_feed_posts_v2');
         if (jsonStr != null && jsonStr.isNotEmpty) {
           final List<dynamic> decoded = jsonDecode(jsonStr);
-          final List<Map<String, dynamic>> diskPosts = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+          final List<Map<String, dynamic>> diskPosts = decoded
+              .map((e) => Map<String, dynamic>.from(e))
+              .where((p) => !_isRewardOrInvalidNewsPost(p))
+              .toList();
           if (diskPosts.isNotEmpty && mounted) {
             setState(() {
               posts = diskPosts;

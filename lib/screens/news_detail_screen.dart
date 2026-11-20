@@ -80,49 +80,63 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     return cleaned;
   }
 
-  String _generateRichUrduArticle(String title, String rawDesc, String category, String gameName) {
-    final game = gameName.isNotEmpty ? gameName : (category.isNotEmpty ? category : 'گیمنگ');
-    final cleanSummary = _stripTrailingEllipsis(rawDesc);
-    final hasValidSummary = cleanSummary.isNotEmpty &&
-        cleanSummary != title.trim() &&
-        TranslationService.isTextInLanguage(cleanSummary, 'ur');
-
-    final p1 = hasValidSummary
-        ? cleanSummary
-        : 'گیمنگ انڈسٹری اور $game کمیونٹی کے لیے یہ ایک نہایت اہم ترین خبر اور آفیشل پیش رفت سامنے آئی ہے۔ '
-            'ڈویلپرز اور پبلشرز نے اس تازہ ترین ریلیز اور اپ ڈیٹ کے حوالے سے تمام اہم نکات جاری کیے ہیں جن کا مقصد کھلاڑیوں کے گیمنگ تجربے کو پہلے سے کہیں زیادہ شاندار بنانا ہے۔';
-
-    final p2 = 'اس آفیشل اپ ڈیٹ میں گیم کے فریم ریٹ کے استحکام، تیز رفتار لوڈنگ اور گرافکس کوالٹی کو اگلی سطح پر لے جانے کے لیے خصوصی آپٹیمائزیشنز کی گئی ہیں۔ '
-        'پلے اسٹیشن 5 (PS5)، ایکس باکس سیریز (Xbox Series X|S) اور جدید پی سی سسٹمز پر گیم پلے کو 60 ایف پی ایس اور 4K ریزولوشن پر بغیر کسی فریم ڈراپ کے چلانے کے لیے جدید ترین رینڈرنگ انجن استعمال کیا گیا ہے۔';
-
-    final p3 = 'اس کے علاوہ، گیمنگ میکینکس اور ملٹی پلیئر نیٹ ورک کوڈ میں بھی نمایاں بہتری لائی گئی ہے۔ '
-        'کھلاڑیوں کے لیے نئے چیلنجز، خصوصی گاڑیوں و آلات کی تخصیص (Customization)، اور ریئل ٹائم فزکس سسٹمز کو اپ گریڈ کیا گیا ہے تاکہ مسابقتی میچز اور سولو ایڈونچرز دونوں میں گیمرز کو مکمل حقیقت پسندی کا احساس ملے۔';
-
-    final p4 = 'کمیونٹی کی جانب سے موصول ہونے والی تجاویز کو مدنظر رکھتے ہوئے، اسٹوڈیو نے آئندہ آنے والے ہفتوں کے لیے ایک تفصیلی روڈ میپ بھی تیار کر لیا ہے۔ '
-        'تمام کھلاڑیوں کو مطلع کیا جاتا ہے کہ وہ اپنے گیم کلائنٹ کو اپ ڈیٹ رکھیں تاکہ وہ لائیو ایونٹس، خصوصی ریوارڈز اور مستقبل کے پیچز سے بھرپور فائدہ اٹھا سکیں۔';
-
-    return '$p1\n\n$p2\n\n$p3\n\n$p4';
+  String _sanitizeLabel(String raw, {String defaultValue = 'Gaming News'}) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty ||
+        trimmed.startsWith('notif_') ||
+        trimmed.contains('notif_gaming_news_fallback') ||
+        trimmed.contains('notif_gaming_fallback')) {
+      return defaultValue;
+    }
+    return trimmed;
   }
 
-  String _generateRichEnglishArticle(String title, String rawDesc, String category, String gameName) {
-    final game = gameName.isNotEmpty ? gameName : (category.isNotEmpty ? category : 'Gaming');
-    final cleanSummary = _stripTrailingEllipsis(rawDesc);
-    final hasValidSummary = cleanSummary.isNotEmpty && cleanSummary.toLowerCase() != title.trim().toLowerCase();
+  /// Strips any legacy boilerplate fallback template paragraphs or raw localization keys
+  /// so only genuine article paragraphs are shown.
+  String _stripBoilerplateTemplates(String rawText) {
+    if (rawText.trim().isEmpty) return '';
+    String cleaned = rawText
+        .replaceAll('notif_gaming_news_fallback', '')
+        .replaceAll('notif_gaming_fallback', '')
+        .replaceAll('notif_latest_news_fallback', '')
+        .replaceAll('notif_read_full_story', '');
 
-    final p1 = hasValidSummary
-        ? cleanSummary
-        : 'An exciting and consequential development has officially unfolded for the $game community. '
-            'Studio leads and game directors have issued an in-depth briefing detailing the architectural milestones, core design philosophies, and gameplay enhancements introduced in this latest deployment.';
+    final paragraphs = cleaned.split(RegExp(r'\n{1,2}'));
+    final genuineParagraphs = <String>[];
 
-    final p2 = 'Engineers have directed concentrated effort toward optimizing native rendering pipelines and maximizing frame stability across next-generation platforms, including PlayStation 5, Xbox Series X|S, and high-performance PC configurations. By streamlining asset loading and multithreaded simulations, players will experience fluid, uninterrupted immersion without latency hurdles.';
+    for (final p in paragraphs) {
+      final trimmed = p.trim();
+      if (trimmed.isEmpty) continue;
+      if (_isBoilerplateParagraph(trimmed)) continue;
+      genuineParagraphs.add(trimmed);
+    }
 
-    final p3 = 'Core game systems and balancing parameters have undergone comprehensive calibration. '
-        'The update introduces newly tuned vehicle handling, authentic simulation dynamics, responsive user interfaces, and robust protections designed to ensure a competitive and fair environment for casual fans and dedicated veterans alike.';
+    return _stripTrailingEllipsis(genuineParagraphs.join('\n\n'));
+  }
 
-    final p4 = 'Following positive initial community feedback across global forums, the development team reaffirmed its long-term roadmap. '
-        'Regular content drops, seasonal events, and subsequent performance hotfixes remain on schedule, with further developer diaries expected to premiere in the coming weeks.';
-
-    return '$p1\n\n$p2\n\n$p3\n\n$p4';
+  bool _isBoilerplateParagraph(String p) {
+    final lower = p.toLowerCase();
+    // Legacy English fallback template markers
+    if (lower.contains('an exciting and consequential development has officially unfolded for the') ||
+        lower.contains('engineers have directed concentrated effort toward optimizing native rendering pipelines') ||
+        lower.contains('core game systems and balancing parameters have undergone comprehensive calibration') ||
+        lower.contains('following positive initial community feedback across global forums, the development team reaffirmed') ||
+        lower.contains('industry analysts and game studio leads report that state-of-the-art engineering has been implemented') ||
+        lower.contains('core gameplay systems have been meticulously balanced to deliver both accessible onboarding') ||
+        lower.contains('community feedback and early previews continue to build massive momentum ahead of launch') ||
+        lower.contains('this official game update brings key performance improvements, bug fixes, balance tweaks') ||
+        lower.contains("tap 'read full story' to explore complete release notes, visual highlights")) {
+      return true;
+    }
+    // Legacy Urdu fallback template markers
+    if (p.contains('کمیونٹی کے لیے یہ ایک نہایت اہم ترین خبر اور آفیشل پیش رفت سامنے آئی ہے') ||
+        p.contains('اس آفیشل اپ ڈیٹ میں گیم کے فریم ریٹ کے استحکام، تیز رفتار لوڈنگ اور گرافکس کوالٹی') ||
+        p.contains('اس کے علاوہ، گیمنگ میکینکس اور ملٹی پلیئر نیٹ ورک کوڈ میں بھی نمایاں بہتری لائی گئی ہے') ||
+        p.contains('کمیونٹی کی جانب سے موصول ہونے والی تجاویز کو مدنظر رکھتے ہوئے، اسٹوڈیو نے آئندہ آنے والے ہفتوں') ||
+        p.contains('صنعت کے تجزیہ کاروں اور گیم اسٹوڈیو کے سربراہان کی رپورٹ کے مطابق اگلی نسل کے گرافکس پائپ لائنز')) {
+      return true;
+    }
+    return false;
   }
 
   /// Verify that scraped text actually belongs to [_title] and is not a different article from a hub/sidebar/redirect
@@ -161,27 +175,28 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   Future<void> _fetchFullScrapedArticle() async {
     if (_sourceUrl.isEmpty || !_sourceUrl.startsWith('http')) return;
-    // Only skip scraping if we already have a genuine, non-fallback multi-paragraph article (> 750 chars)
-    if (_description.trim().length > 750 &&
-        !_description.contains('Engineers have directed concentrated effort toward optimizing native rendering pipelines')) {
+    // Only skip scraping if we already have a genuine multi-paragraph article (> 750 chars)
+    if (_description.trim().length > 750) {
       return;
     }
 
     try {
       final cleanShort = _stripTrailingEllipsis(_shortSummary);
-      final fullText = await GamingNewsService().scrapeFullArticle(
+      final rawScraped = await GamingNewsService().scrapeFullArticle(
         _sourceUrl,
         fallbackTitle: _title,
         fallbackDescription: cleanShort.isNotEmpty ? cleanShort : _stripTrailingEllipsis(_description),
       );
+      final fullText = _stripBoilerplateTemplates(rawScraped);
       if (fullText.isNotEmpty &&
-          fullText.length > 400 &&
+          fullText.length > _description.length &&
           _doesScrapedTextMatchArticle(fullText) &&
           mounted) {
         String combinedEn = fullText.trim();
         if (cleanShort.isNotEmpty &&
             cleanShort.length >= 30 &&
-            !combinedEn.toLowerCase().contains(cleanShort.substring(0, (cleanShort.length * 0.45).toInt().clamp(1, cleanShort.length)).toLowerCase())) {
+            !combinedEn.toLowerCase().contains(
+                cleanShort.substring(0, (cleanShort.length * 0.45).toInt().clamp(1, cleanShort.length)).toLowerCase())) {
           combinedEn = '$cleanShort\n\n$combinedEn';
         }
 
@@ -190,16 +205,19 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         });
         final urduFull = await TranslationService.translateArticle(combinedEn, 'ur');
         if (mounted && urduFull.isNotEmpty && TranslationService.isTextInLanguage(urduFull, 'ur')) {
-          String finalUrdu = urduFull.trim();
-          final cleanUrduShort = _stripTrailingEllipsis(_urduShortSummary ?? '');
+          String finalUrdu = _stripBoilerplateTemplates(urduFull);
+          final cleanUrduShort = _stripBoilerplateTemplates(_urduShortSummary ?? '');
           if (cleanUrduShort.isNotEmpty &&
-              !finalUrdu.contains(cleanUrduShort.substring(0, (cleanUrduShort.length * 0.4).toInt().clamp(1, cleanUrduShort.length)))) {
+              !finalUrdu.contains(
+                  cleanUrduShort.substring(0, (cleanUrduShort.length * 0.4).toInt().clamp(1, cleanUrduShort.length)))) {
             finalUrdu = '$cleanUrduShort\n\n$finalUrdu';
           }
-          setState(() {
-            _urduDescription = finalUrdu;
-            _globalUrduDetailCache['d_$_newsId'] = finalUrdu;
-          });
+          if (finalUrdu.isNotEmpty) {
+            setState(() {
+              _urduDescription = finalUrdu;
+              _globalUrduDetailCache['d_$_newsId'] = finalUrdu;
+            });
+          }
         }
       }
     } catch (e) {
@@ -232,9 +250,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         candidateTitleEn = enFromMap;
       }
     }
-    _title = candidateTitleEn;
+    _title = _sanitizeLabel(candidateTitleEn, defaultValue: '');
 
-    _shortSummary = _stripTrailingEllipsis(
+    _shortSummary = _stripBoilerplateTemplates(
       (nd?['short_description'] ??
               nd?['shortDescription'] ??
               gn?.summary ??
@@ -242,7 +260,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
           .toString(),
     );
 
-    _description = _stripTrailingEllipsis(
+    _description = _stripBoilerplateTemplates(
       (nd?['full_description'] ??
               nd?['content_en'] ??
               dMap?['en'] ??
@@ -255,6 +273,10 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               _shortSummary)
           .toString(),
     );
+
+    if (_description.isEmpty && _shortSummary.isNotEmpty) {
+      _description = _shortSummary;
+    }
 
     if (_shortSummary.isEmpty && _description.isNotEmpty) {
       _shortSummary = _description.length > 320
@@ -303,7 +325,10 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     if (cardCachedUrduDesc != null &&
         cardCachedUrduDesc.trim().isNotEmpty &&
         TranslationService.isTextInLanguage(cardCachedUrduDesc, 'ur')) {
-      _urduShortSummary = _stripTrailingEllipsis(cardCachedUrduDesc);
+      final cleanedCardUr = _stripBoilerplateTemplates(cardCachedUrduDesc);
+      if (cleanedCardUr.isNotEmpty) {
+        _urduShortSummary = cleanedCardUr;
+      }
     }
 
     String? preUrduDesc = nd?['description_ur']?.toString() ??
@@ -315,25 +340,32 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     if (preUrduDesc != null &&
         preUrduDesc.trim().isNotEmpty &&
         TranslationService.isTextInLanguage(preUrduDesc, 'ur')) {
-      _urduDescription = _stripTrailingEllipsis(preUrduDesc);
+      final cleanedPreUr = _stripBoilerplateTemplates(preUrduDesc);
+      if (cleanedPreUr.isNotEmpty) {
+        _urduDescription = cleanedPreUr;
+      }
     }
 
-    _category = (widget.category ??
-            nd?['category'] ??
-            gn?.category ??
-            nm?.category ??
-            'Gaming')
-        .toString()
-        .trim();
+    _category = _sanitizeLabel(
+      (widget.category ??
+              nd?['category'] ??
+              gn?.category ??
+              nm?.category ??
+              'Gaming')
+          .toString(),
+      defaultValue: 'Gaming',
+    );
 
-    _gameName = (widget.gameName ??
-            nd?['game_name'] ??
-            nd?['gameName'] ??
-            gn?.botName ??
-            nm?.gameName ??
-            '')
-        .toString()
-        .trim();
+    _gameName = _sanitizeLabel(
+      (widget.gameName ??
+              nd?['game_name'] ??
+              nd?['gameName'] ??
+              gn?.botName ??
+              nm?.gameName ??
+              '')
+          .toString(),
+      defaultValue: '',
+    );
 
     final rawImg = (widget.imageUrl ??
             nd?['image_url'] ??
@@ -381,6 +413,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         .replaceAll('🎮', '')
         .replaceAll('system_steam', '')
         .trim();
+    rawSource = _sanitizeLabel(rawSource, defaultValue: '');
 
     if (rawSource.isEmpty && _sourceUrl.isNotEmpty) {
       try {
@@ -390,7 +423,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         }
       } catch (_) {}
     }
-    _source = rawSource.isNotEmpty ? rawSource : 'Steam Gaming News';
+    _source = rawSource.isNotEmpty ? rawSource : 'Gaming News';
 
     final rawTime = (widget.timeAgo ??
             nd?['created_at'] ??
@@ -402,7 +435,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
     _timeAgo = NewsImageResolver.formatArticleTime({
       'source_url': _sourceUrl,
-      'created_at': rawTime,
+      'created_at': rawTime.startsWith('notif_') ? '' : rawTime,
       'published_at': nd?['published_at'],
       'timestamp': nd?['timestamp'] ?? nm?.timestamp?.millisecondsSinceEpoch,
     });
@@ -412,17 +445,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         _description.toLowerCase().startsWith(_title.toLowerCase()) &&
         _description.length > _title.length + 15) {
       _description = _description.substring(_title.length).replaceFirst(RegExp(r'^[\s\.\:\-\|]+'), '').trim();
-    }
-
-    // Ensure English description is a rich, complete multi-paragraph article (>= 550 chars), while preserving the card's summary as Paragraph 1
-    final cleanDesc = _stripTrailingEllipsis(_description);
-    final bool isShortOrRepeated = cleanDesc.length < 550 ||
-        cleanDesc.toLowerCase() == _title.toLowerCase();
-
-    if (isShortOrRepeated) {
-      _description = _generateRichEnglishArticle(_title, cleanDesc, _category, _gameName);
-    } else {
-      _description = cleanDesc;
     }
   }
 
@@ -438,34 +460,34 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
     // 2. Check cached full Urdu description for this specific newsId
     if (_globalUrduDetailCache.containsKey('d_$_newsId')) {
-      final cachedFullUr = _globalUrduDetailCache['d_$_newsId']!;
-      if (cachedFullUr.length >= 450) {
+      final cachedFullUr = _stripBoilerplateTemplates(_globalUrduDetailCache['d_$_newsId']!);
+      if (cachedFullUr.isNotEmpty) {
         _urduDescription = cachedFullUr;
       }
     }
 
-    // 3. Ensure Urdu description is a complete multi-paragraph article (>= 450 chars) with the card's exact Urdu summary as Paragraph 1
-    final urTitle = _urduTitle ?? _title;
-    final baseUrduSummary = _stripTrailingEllipsis(_urduDescription ?? _urduShortSummary ?? '');
-    if (baseUrduSummary.length < 450 || baseUrduSummary == urTitle) {
-      _urduDescription = _generateRichUrduArticle(urTitle, baseUrduSummary, _category, _gameName);
-      _globalUrduDetailCache['d_$_newsId'] = _urduDescription!;
-    } else {
-      _urduDescription = baseUrduSummary;
+    if ((_urduDescription == null || _urduDescription!.isEmpty) &&
+        _urduShortSummary != null &&
+        _urduShortSummary!.isNotEmpty) {
+      _urduDescription = _urduShortSummary;
     }
 
-    // 4. If _description is a real multi-paragraph English article (not fallback boilerplate) and we haven't translated its full body yet, translate it now
-    final bool hasRealFullEnglish = _description.length >= 550 &&
-        !_description.contains('Engineers have directed concentrated effort toward optimizing native rendering pipelines');
+    // 3. Determine if we still need to translate the English title or the full English description
+    final bool needsTitleTranslation = _urduTitle == null && _title.isNotEmpty;
+    final bool needsDescTranslation = _description.isNotEmpty &&
+        !TranslationService.isTextInLanguage(_description, 'ur') &&
+        (_urduDescription == null ||
+            _urduDescription!.isEmpty ||
+            (_description.length > _urduDescription!.length + 120));
 
-    if (_urduTitle != null && !hasRealFullEnglish) {
+    if (!needsTitleTranslation && !needsDescTranslation) {
       return;
     }
 
     _isTranslating = true;
 
     Future.wait([
-      if (_urduTitle == null && _title.isNotEmpty)
+      if (needsTitleTranslation)
         TranslationService.translateSingle(_title, 'ur').then((res) {
           if (res.isNotEmpty && TranslationService.isTextInLanguage(res, 'ur')) {
             _globalUrduDetailCache['t_$_newsId'] = res;
@@ -473,17 +495,16 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             if (mounted) setState(() => _urduTitle = res);
           }
         }),
-      if (hasRealFullEnglish && _description.isNotEmpty)
+      if (needsDescTranslation)
         TranslationService.translateArticle(_description, 'ur').then((res) {
-          if (res.isNotEmpty && TranslationService.isTextInLanguage(res, 'ur')) {
-            String finalUrdu = _stripTrailingEllipsis(res);
-            final cleanUrduShort = _stripTrailingEllipsis(_urduShortSummary ?? '');
+          final cleanedUr = _stripBoilerplateTemplates(res);
+          if (cleanedUr.isNotEmpty && TranslationService.isTextInLanguage(cleanedUr, 'ur')) {
+            String finalUrdu = cleanedUr;
+            final cleanUrduShort = _stripBoilerplateTemplates(_urduShortSummary ?? '');
             if (cleanUrduShort.isNotEmpty &&
-                !finalUrdu.contains(cleanUrduShort.substring(0, (cleanUrduShort.length * 0.4).toInt().clamp(1, cleanUrduShort.length)))) {
+                !finalUrdu.contains(
+                    cleanUrduShort.substring(0, (cleanUrduShort.length * 0.4).toInt().clamp(1, cleanUrduShort.length)))) {
               finalUrdu = '$cleanUrduShort\n\n$finalUrdu';
-            }
-            if (finalUrdu.length < 450) {
-              finalUrdu = _generateRichUrduArticle(_urduTitle ?? _title, finalUrdu, _category, _gameName);
             }
             _globalUrduDetailCache['d_$_newsId'] = finalUrdu;
             if (mounted) setState(() => _urduDescription = finalUrdu);

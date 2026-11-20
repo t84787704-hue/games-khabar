@@ -58,52 +58,86 @@ class _UrduNewsContentState extends State<UrduNewsContent> {
     }
   }
 
+  String _cleanText(String raw) {
+    if (raw.trim().isEmpty) return '';
+    String cleaned = raw
+        .replaceAll('notif_gaming_news_fallback', '')
+        .replaceAll('notif_gaming_fallback', '')
+        .replaceAll('notif_latest_news_fallback', '')
+        .replaceAll('notif_read_full_story', '')
+        .trim();
+
+    final lines = cleaned.split(RegExp(r'\n{1,2}'));
+    final kept = <String>[];
+    for (final line in lines) {
+      final t = line.trim();
+      if (t.isEmpty) continue;
+      final lower = t.toLowerCase();
+      if (lower.contains('an exciting and consequential development has officially unfolded for the') ||
+          lower.contains('engineers have directed concentrated effort toward optimizing native rendering pipelines') ||
+          lower.contains('industry analysts and game studio leads report that state-of-the-art engineering') ||
+          lower.contains('this official game update brings key performance improvements, bug fixes, balance tweaks') ||
+          lower.contains("tap 'read full story' to explore complete release notes, visual highlights") ||
+          t.contains('کمیونٹی کے لیے یہ ایک نہایت اہم ترین خبر اور آفیشل پیش رفت سامنے آئی ہے') ||
+          t.contains('اس آفیشل اپ ڈیٹ میں گیم کے فریم ریٹ کے استحکام، تیز رفتار لوڈنگ اور گرافکس کوالٹی')) {
+        continue;
+      }
+      kept.add(t);
+    }
+    return kept.join('\n\n').trim();
+  }
+
   void _resolveTranslations() {
+    final cleanTitleEn = _cleanText(widget.title);
+    final cleanDescEn = _cleanText(widget.description);
+
     final cacheKey = (widget.newsId != null && widget.newsId!.trim().isNotEmpty)
         ? widget.newsId!.trim()
-        : widget.title.trim();
+        : cleanTitleEn;
+
+    final cleanTitleUr = widget.titleUr != null ? _cleanText(widget.titleUr!) : '';
+    final cleanDescUr = widget.descriptionUr != null ? _cleanText(widget.descriptionUr!) : '';
 
     // 1. Check if pre-translated Urdu title provided
-    if (widget.titleUr != null &&
-        widget.titleUr!.trim().isNotEmpty &&
-        TranslationService.isTextInLanguage(widget.titleUr!, 'ur')) {
-      _urduTitle = widget.titleUr!.trim();
+    if (cleanTitleUr.isNotEmpty &&
+        TranslationService.isTextInLanguage(cleanTitleUr, 'ur')) {
+      _urduTitle = cleanTitleUr;
       UrduNewsContent.globalUrduCache['t_$cacheKey'] = _urduTitle!;
-    } else if (TranslationService.isTextInLanguage(widget.title, 'ur')) {
-      _urduTitle = widget.title.trim();
+    } else if (TranslationService.isTextInLanguage(cleanTitleEn, 'ur')) {
+      _urduTitle = cleanTitleEn;
       UrduNewsContent.globalUrduCache['t_$cacheKey'] = _urduTitle!;
     } else if (UrduNewsContent.globalUrduCache.containsKey('t_$cacheKey')) {
-      _urduTitle = UrduNewsContent.globalUrduCache['t_$cacheKey'];
+      _urduTitle = _cleanText(UrduNewsContent.globalUrduCache['t_$cacheKey'] ?? '');
     } else {
       _urduTitle = null;
     }
 
     // 2. Check description
-    if (widget.descriptionUr != null &&
-        widget.descriptionUr!.trim().isNotEmpty &&
-        TranslationService.isTextInLanguage(widget.descriptionUr!, 'ur')) {
-      _urduDescription = widget.descriptionUr!.trim();
+    if (cleanDescUr.isNotEmpty &&
+        TranslationService.isTextInLanguage(cleanDescUr, 'ur')) {
+      _urduDescription = cleanDescUr;
       UrduNewsContent.globalUrduCache['d_$cacheKey'] = _urduDescription!;
-    } else if (TranslationService.isTextInLanguage(widget.description, 'ur')) {
-      _urduDescription = widget.description.trim();
+    } else if (TranslationService.isTextInLanguage(cleanDescEn, 'ur')) {
+      _urduDescription = cleanDescEn;
       UrduNewsContent.globalUrduCache['d_$cacheKey'] = _urduDescription!;
     } else if (UrduNewsContent.globalUrduCache.containsKey('d_$cacheKey')) {
-      _urduDescription = UrduNewsContent.globalUrduCache['d_$cacheKey'];
+      final cachedD = _cleanText(UrduNewsContent.globalUrduCache['d_$cacheKey'] ?? '');
+      _urduDescription = cachedD.isNotEmpty ? cachedD : null;
     } else {
       _urduDescription = null;
     }
 
     // If both are resolved, return
-    if (_urduTitle != null && _urduDescription != null) {
+    if (_urduTitle != null && (_urduDescription != null || cleanDescEn.isEmpty)) {
       return;
     }
 
     // 3. Otherwise translate asynchronously in background
     _isTranslating = true;
-    final titleToTranslate = widget.title.trim();
+    final titleToTranslate = cleanTitleEn;
 
     // Prepare a clean snippet of description for the feed card
-    String descSnippet = widget.description.trim();
+    String descSnippet = cleanDescEn;
     if (descSnippet.length > 350) {
       descSnippet = '${descSnippet.substring(0, 350)}...';
     }
@@ -111,19 +145,21 @@ class _UrduNewsContentState extends State<UrduNewsContent> {
     Future.wait([
       if (_urduTitle == null && titleToTranslate.isNotEmpty)
         TranslationService.translateSingle(titleToTranslate, 'ur').then((res) {
-          if (res.isNotEmpty && TranslationService.isTextInLanguage(res, 'ur')) {
-            UrduNewsContent.globalUrduCache['t_$cacheKey'] = res;
-            if (mounted && ((widget.newsId?.trim() ?? widget.title.trim()) == cacheKey)) {
-              setState(() => _urduTitle = res);
+          final cleanedRes = _cleanText(res);
+          if (cleanedRes.isNotEmpty && TranslationService.isTextInLanguage(cleanedRes, 'ur')) {
+            UrduNewsContent.globalUrduCache['t_$cacheKey'] = cleanedRes;
+            if (mounted && ((widget.newsId?.trim() ?? _cleanText(widget.title)) == cacheKey)) {
+              setState(() => _urduTitle = cleanedRes);
             }
           }
         }),
       if (_urduDescription == null && descSnippet.isNotEmpty)
         TranslationService.translateSingle(descSnippet, 'ur').then((res) {
-          if (res.isNotEmpty && TranslationService.isTextInLanguage(res, 'ur')) {
-            UrduNewsContent.globalUrduCache['d_$cacheKey'] = res;
-            if (mounted && ((widget.newsId?.trim() ?? widget.title.trim()) == cacheKey)) {
-              setState(() => _urduDescription = res);
+          final cleanedRes = _cleanText(res);
+          if (cleanedRes.isNotEmpty && TranslationService.isTextInLanguage(cleanedRes, 'ur')) {
+            UrduNewsContent.globalUrduCache['d_$cacheKey'] = cleanedRes;
+            if (mounted && ((widget.newsId?.trim() ?? _cleanText(widget.title)) == cacheKey)) {
+              setState(() => _urduDescription = cleanedRes);
             }
           }
         }),
@@ -156,13 +192,13 @@ class _UrduNewsContentState extends State<UrduNewsContent> {
 
     // Current displayed title & description
     final bool displayUrdu = _showUrdu && _urduTitle != null && _urduTitle!.isNotEmpty;
-    final currentTitle = displayUrdu ? _urduTitle! : widget.title;
+    final currentTitle = displayUrdu ? _urduTitle! : _cleanText(widget.title);
 
     String currentDesc = '';
     if (displayUrdu && _urduDescription != null && _urduDescription!.isNotEmpty) {
       currentDesc = _urduDescription!;
     } else {
-      currentDesc = widget.description;
+      currentDesc = _cleanText(widget.description);
     }
 
     // If description starts with the exact title, strip the leading duplicate title
@@ -171,15 +207,11 @@ class _UrduNewsContentState extends State<UrduNewsContent> {
       currentDesc = currentDesc.trim().substring(currentTitle.trim().length).replaceFirst(RegExp(r'^[\s\.\:\-\|]+'), '').trim();
     }
 
-    // Clean up only if description is truly identical to title or empty
+    // If description is identical to title, omit duplicate text rather than injecting a generic template
     final normTitle = currentTitle.replaceAll(RegExp(r'[\s\-_\|\.\u00a0]+'), '').trim().toLowerCase();
     final normDesc = currentDesc.replaceAll(RegExp(r'[\s\-_\|\.\u00a0]+'), '').trim().toLowerCase();
-    final bool isRepeated = normDesc.isEmpty || normTitle == normDesc;
-
-    if (isRepeated || currentDesc.trim().length < 25) {
-      currentDesc = displayUrdu
-          ? 'اس گیم کی تازہ ترین آفیشل اپ ڈیٹ، گیم پلے میں تبدیلیاں، اور تمام نئی تفصیلات جانیے۔ مکمل تفصیلات کے لیے نیچے \'Read Full Story\' پر کلک کریں۔'
-          : 'Check out the latest official game patch notes, gameplay balance updates, and upcoming features. Tap \'Read Full Story\' below for full coverage.';
+    if (normDesc.isEmpty || normTitle == normDesc) {
+      currentDesc = '';
     }
 
     final isUrduScript = TranslationService.isTextInLanguage(currentTitle, 'ur');

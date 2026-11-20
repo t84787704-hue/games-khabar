@@ -11,6 +11,8 @@ import 'supabase_store_service.dart';
 import 'supabase_service.dart';
 import 'gamer_auth_service.dart';
 import '../screens/news_detail_screen.dart';
+import '../screens/notifications_screen.dart';
+import '../screens/coin_wallet_screen.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -50,6 +52,18 @@ class NotificationService {
   StreamSubscription? _realtimeNotifSub;
   Timer? _backgroundPollingTimer;
   final Set<String> _seenNotificationIds = {};
+
+  String _trOr(String key, String fallback, {List<String>? args}) {
+    try {
+      final translated = args != null ? key.tr(args: args) : key.tr();
+      if (translated.isEmpty || translated == key || translated.startsWith('notif_')) {
+        return fallback;
+      }
+      return translated;
+    } catch (_) {
+      return fallback;
+    }
+  }
 
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -716,8 +730,12 @@ class NotificationService {
       body = 'notif_challenge_rejected_body'.tr(args: [challengerName]);
     } else {
       type = 'challenge_received';
-      title = 'notif_challenge_received_title'.tr();
-      body = 'notif_challenge_received_body'.tr(args: [challengerName, gameName ?? 'notif_gaming_fallback'.tr()]);
+      title = _trOr('notif_challenge_received_title', 'New Match Challenge');
+      body = _trOr(
+        'notif_challenge_received_body',
+        '$challengerName challenged you in ${gameName ?? 'Gaming'}',
+        args: [challengerName, gameName ?? _trOr('notif_gaming_fallback', 'Gaming')],
+      );
     }
 
     await sendNotification(
@@ -949,18 +967,33 @@ class NotificationService {
         }
 
         for (final data in rows) {
-          final gameName = (data['gameName'] ?? data['game_name'] as String?)?.trim().isNotEmpty == true
-              ? (data['gameName'] ?? data['game_name'] as String).trim()
-              : ((data['category'] as String?)?.trim().isNotEmpty == true
-                  ? (data['category'] as String).trim()
-                  : 'notif_gaming_news_fallback'.tr());
-          final title = data['title']?.toString() ?? 'notif_new_news_fallback_title'.tr();
+          // Only trigger news notifications for genuine news articles, never for team rewards or user reposts
+          final postType = (data['type'] ?? '').toString().toLowerCase();
+          final isRepost = data['is_repost'] == true || data['repost_of_id'] != null;
+          final rawTitle = (data['title'] ?? '').toString().trim();
+          if (isRepost ||
+              rawTitle.isEmpty ||
+              postType == 'weekly_team_reward' ||
+              rawTitle.toLowerCase().contains('weekly #1 team')) {
+            continue;
+          }
+
+          final rawGame = (data['gameName'] ?? data['game_name'])?.toString().trim() ?? '';
+          final rawCat = (data['category'])?.toString().trim() ?? '';
+          final gameName = (rawGame.isNotEmpty && !rawGame.startsWith('notif_'))
+              ? rawGame
+              : ((rawCat.isNotEmpty && !rawCat.startsWith('notif_'))
+                  ? rawCat
+                  : _trOr('notif_gaming_news_fallback', 'Gaming News'));
+          final title = rawTitle;
           final newsId = data['id']?.toString() ?? '';
-          final imageUrl = data['imageUrl'] ?? data['image_url'] as String?;
-          final category = data['category'] as String? ?? 'notif_gaming_fallback'.tr();
+          final imageUrl = (data['imageUrl'] ?? data['image_url'])?.toString();
+          final category = (rawCat.isNotEmpty && !rawCat.startsWith('notif_'))
+              ? rawCat
+              : _trOr('notif_gaming_fallback', 'Gaming');
 
           _showLocalNotification(
-            title: 'notif_new_news_title'.tr(args: [gameName]),
+            title: _trOr('notif_new_news_title', '$gameName News', args: [gameName]),
             body: title,
             newsId: newsId,
             imageUrl: imageUrl,
@@ -978,11 +1011,15 @@ class NotificationService {
     String? imageUrl,
     String? category,
   }) async {
+    final cleanCat = (category != null && category.trim().isNotEmpty && !category.startsWith('notif_'))
+        ? category.trim()
+        : _trOr('notif_gaming_news_fallback', 'Gaming News');
     final payloadData = {
+      'type': 'news',
       'newsId': newsId,
       'title': title,
       'body': body,
-      'category': category ?? 'notif_gaming_news_fallback'.tr(),
+      'category': cleanCat,
       if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
       'click_action': 'FLUTTER_NOTIFICATION_CLICK',
     };
@@ -1000,7 +1037,7 @@ class NotificationService {
       styleInformation: BigTextStyleInformation(
         body,
         contentTitle: title,
-        summaryText: category ?? 'notif_gaming_fallback'.tr(),
+        summaryText: cleanCat,
       ),
     );
 
@@ -1075,14 +1112,49 @@ class NotificationService {
   }
 
   void _handleMessageTap(Map<String, dynamic> data) {
-    final newsId = data['newsId'] ?? data['id'];
-    if (newsId != null && newsId.toString().isNotEmpty) {
+    final context = navigatorKey.currentContext;
+    final type = (data['type'] ?? '').toString().trim().toLowerCase();
+    final titleStr = (data['title'] ?? '').toString();
+
+    // Never route team rewards, coin rewards, or non-news notifications into NewsDetailScreen
+    final isRewardOrTeamNotif = type == 'weekly_team_reward' ||
+        type == 'coin_reward' ||
+        type == 'store_purchase' ||
+        type == 'perk_expiry' ||
+        titleStr.contains('Weekly #1 Team') ||
+        titleStr.contains('ہفتہ وار #1 ٹیم');
+
+    if (isRewardOrTeamNotif) {
+      if (context != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CoinWalletScreen()),
+        );
+      }
+      return;
+    }
+
+    // Only open NewsDetailScreen if it is explicitly a news notification with a newsId
+    final explicitNewsId = data['newsId']?.toString().trim() ?? '';
+    final isNewsNotification = (type == 'news' || data.containsKey('newsId')) &&
+        explicitNewsId.isNotEmpty;
+
+    if (isNewsNotification) {
       _navigateToNewsDetail(
-        newsId.toString(),
-        fallbackTitle: data['title'],
-        fallbackCategory: data['category'],
-        fallbackDesc: data['description'] ?? data['body'],
-        fallbackImage: data['imageUrl'],
+        explicitNewsId,
+        fallbackTitle: data['title']?.toString(),
+        fallbackCategory: data['category']?.toString(),
+        fallbackDesc: (data['description'] ?? data['body'])?.toString(),
+        fallbackImage: data['imageUrl']?.toString(),
+      );
+      return;
+    }
+
+    // For all other in-app notifications (team, squad, challenges, likes, comments, etc.), open NotificationsScreen
+    if (context != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
       );
     }
   }
@@ -1098,16 +1170,37 @@ class NotificationService {
     if (context == null) return;
 
     NewsModel? news = await SupabaseStoreService().getNewsById(newsId);
-    news ??= NewsModel(
-      id: newsId,
-      title: fallbackTitle ?? 'notif_latest_news_fallback'.tr(),
-      description: fallbackDesc ?? 'notif_read_full_story'.tr(),
-      category: fallbackCategory ?? 'notif_gaming_news_fallback'.tr(),
-      imageUrl: fallbackImage ??
-          'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
-      timeAgo: 'notif_just_now'.tr(),
-      views: 1,
-    );
+    if (news == null) {
+      // Do not fabricate a fake news article if it isn't a real news item
+      final cleanTitle = (fallbackTitle ?? '').trim();
+      final cleanDesc = (fallbackDesc ?? '').trim();
+      if (cleanTitle.isEmpty ||
+          cleanTitle.contains('Weekly #1 Team') ||
+          cleanTitle.contains('ہفتہ وار #1 ٹیم') ||
+          cleanTitle.startsWith('notif_')) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+        );
+        return;
+      }
+      final cleanCat = (fallbackCategory != null &&
+              fallbackCategory.trim().isNotEmpty &&
+              !fallbackCategory.startsWith('notif_'))
+          ? fallbackCategory.trim()
+          : 'Gaming News';
+
+      news = NewsModel(
+        id: newsId,
+        title: cleanTitle,
+        description: cleanDesc.startsWith('notif_') ? '' : cleanDesc,
+        category: cleanCat,
+        imageUrl: fallbackImage ??
+            'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
+        timeAgo: _trOr('notif_just_now', 'Just now'),
+        views: 1,
+      );
+    }
 
     Navigator.push(
       context,
