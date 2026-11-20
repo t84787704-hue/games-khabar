@@ -29,6 +29,7 @@ import '../services/app_share_service.dart';
 import '../services/gamer_social_service.dart';
 import '../services/news_image_resolver.dart';
 import '../services/language_service.dart';
+import '../services/translation_service.dart';
 
 class GamerFeedScreen extends StatefulWidget {
   const GamerFeedScreen({super.key});
@@ -820,6 +821,42 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     );
   }
 
+  Future<Map<String, String>> _resolveRepostContentAndImage(Map<String, dynamic> post) async {
+    final postId = post['id']?.toString() ?? '';
+    final bool isSteamNews = post['is_steam_news'] == true;
+    final bool isUrduActive = LanguageService.isUrdu;
+
+    String content = (post['content'] ?? post['title'] ?? '').toString();
+    if (isUrduActive && isSteamNews) {
+      final cached = UrduNewsContent.getCachedUrduTitle(postId) ?? post['title_ur']?.toString() ?? '';
+      if (cached.isNotEmpty) {
+        content = cached;
+      } else {
+        try {
+          final enText = (post['title'] ?? post['content'] ?? '').toString();
+          if (enText.isNotEmpty) {
+            final translated = await TranslationService.translateSingle(enText, 'ur');
+            if (translated.isNotEmpty) {
+              content = translated;
+              UrduNewsContent.globalUrduCache['t_$postId'] = translated;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    final image = (
+      post['image_url'] ??
+      post['imageUrl'] ??
+      post['media_url'] ??
+      post['thumbnail'] ??
+      post['urlToImage'] ??
+      _resolvePostImage(post)
+    ).toString().trim();
+
+    return {'content': content, 'image': image};
+  }
+
   Future<void> _handleInstantRepost(Map<String, dynamic> post) async {
     final postId = post['id']?.toString() ?? '';
     if (postId.isEmpty) return;
@@ -833,12 +870,10 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final originalAuthorAvatar = isSteamNews
         ? ''
         : (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
-    final bool isUrduActive = LanguageService.isUrdu;
-    final cachedUrduTitle = isSteamNews ? (UrduNewsContent.getCachedUrduTitle(postId) ?? post['title_ur']?.toString() ?? '') : '';
-    final originalContent = isUrduActive && cachedUrduTitle.isNotEmpty
-        ? cachedUrduTitle
-        : (post['content'] ?? post['title'] ?? '').toString();
-    final originalImage = _resolvePostImage(post);
+
+    final resolved = await _resolveRepostContentAndImage(post);
+    final originalContent = resolved['content']!;
+    final originalImage = resolved['image']!;
     final originalGame = (post['game'] ?? post['game_tag'] ?? 'BGMI').toString();
 
     setState(() {
@@ -938,7 +973,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
   }
 
-  void _openQuoteRepostDialog(Map<String, dynamic> post) {
+  Future<void> _openQuoteRepostDialog(Map<String, dynamic> post) async {
     final quoteController = TextEditingController();
     final postId = post['id']?.toString() ?? '';
     final postUserId = post['user_id']?.toString() ?? '';
@@ -950,13 +985,13 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     final originalAuthorAvatar = isSteamNews
         ? ''
         : (userProfile?['avatar_url'] ?? post['user_avatar'] ?? '').toString();
-    final bool isUrduActive = LanguageService.isUrdu;
-    final cachedUrduTitle = isSteamNews ? (UrduNewsContent.getCachedUrduTitle(postId) ?? post['title_ur']?.toString() ?? '') : '';
-    final originalContent = isUrduActive && cachedUrduTitle.isNotEmpty
-        ? cachedUrduTitle
-        : (post['content'] ?? post['title'] ?? '').toString();
-    final originalImage = _resolvePostImage(post);
+
+    final resolved = await _resolveRepostContentAndImage(post);
+    final originalContent = resolved['content']!;
+    final originalImage = resolved['image']!;
     final originalGame = (post['game'] ?? post['game_tag'] ?? 'BGMI').toString();
+
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,

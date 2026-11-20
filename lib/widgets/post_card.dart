@@ -132,11 +132,15 @@ class _PostCardState extends State<PostCard> {
           ? (widget.post['gameTag'] ?? widget.post['game_tag'] ?? widget.post['game'] ?? 'Gaming').toString()
           : (widget.post?.gameTag ?? widget.post?.game ?? 'Gaming').toString());
 
-  String? get imageUrl => (widget.post is GamerPost)
-      ? (widget.post as GamerPost).imageUrl
-      : (widget.post is Map
-          ? (widget.post['imageUrl'] ?? widget.post['image_url'])?.toString()
-          : widget.post?.imageUrl?.toString());
+  String? get imageUrl {
+    final direct = (widget.post is GamerPost)
+        ? (widget.post as GamerPost).imageUrl
+        : (widget.post is Map
+            ? (widget.post['imageUrl'] ?? widget.post['image_url'] ?? widget.post['media_url'])?.toString()
+            : widget.post?.imageUrl?.toString());
+    if (direct != null && direct.isNotEmpty) return direct;
+    return originalImageUrl;
+  }
 
   String? get videoUrl => (widget.post is GamerPost)
       ? (widget.post as GamerPost).videoUrl
