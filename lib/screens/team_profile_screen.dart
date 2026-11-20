@@ -2595,19 +2595,30 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     final textPri = ThemeService.textPrimary;
     final textSec = ThemeService.textSecondary;
 
+    final cachedStats = _teamService.getCachedTeamWeeklyStats(team.id);
     return FutureBuilder<Map<String, dynamic>>(
+      initialData: cachedStats,
       future: _teamService.getTeamWeeklyCoinStats(team),
       builder: (context, snap) {
-        final data = snap.data;
-        final int weeklyCoins = (data?['weeklyCoins'] as int?) ?? team.weeklyCoins;
-        final int weeklyRank = (data?['weeklyRank'] as int?) ?? 1;
-        final int totalTeamsInGame = (data?['totalTeamsInGame'] as int?) ?? 1;
-        final int rewardPool = (data?['rewardPool'] as int?) ?? TeamService.weeklyGameRewardPool;
-        final int memberCount = ((data?['memberCount'] as int?) ?? team.memberCount).clamp(1, TeamModel.maxMembers);
-        final int equalShare = (data?['equalRewardShare'] as int?) ?? (rewardPool ~/ memberCount);
-        final String weekRangeLabel = (data?['weekRangeLabel'] ?? TeamService.getWeekRangeLabel()).toString();
+        final data = snap.data ?? cachedStats;
         final List<Map<String, dynamic>> memberBreakdown =
             List<Map<String, dynamic>>.from(data?['memberBreakdown'] ?? const []);
+        final int breakdownSum = memberBreakdown.fold<int>(
+          0,
+          (sum, m) => sum + ((m['weeklyCoins'] as num?)?.toInt() ?? 0),
+        );
+        final int rawWeeklyCoins = (data?['weeklyCoins'] as num?)?.toInt() ?? team.weeklyCoins;
+        int weeklyCoins = rawWeeklyCoins > breakdownSum ? rawWeeklyCoins : breakdownSum;
+        if (team.weeklyCoins > weeklyCoins) weeklyCoins = team.weeklyCoins;
+
+        final int weeklyRank = (data?['weeklyRank'] as num?)?.toInt() ??
+            (team.weeklyRank > 0 ? team.weeklyRank : 1);
+        final int totalTeamsInGame = (data?['totalTeamsInGame'] as num?)?.toInt() ?? 1;
+        final int rewardPool = (data?['rewardPool'] as num?)?.toInt() ?? TeamService.weeklyGameRewardPool;
+        final int memberCount =
+            ((data?['memberCount'] as num?)?.toInt() ?? team.memberCount).clamp(1, TeamModel.maxMembers);
+        final int equalShare = (data?['equalRewardShare'] as num?)?.toInt() ?? (rewardPool ~/ memberCount);
+        final String weekRangeLabel = (data?['weekRangeLabel'] ?? TeamService.getWeekRangeLabel()).toString();
 
         final bool isTopRank = weeklyRank == 1 && weeklyCoins > 0;
 
@@ -2762,9 +2773,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Itemized 4-Member Breakdown Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Itemized 4-Member Breakdown Header (Wrapped cleanly on two lines to avoid right-side clipping)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Member Weekly Contributions (${team.memberCount}/${TeamModel.maxMembers})',
@@ -2774,11 +2785,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       fontSize: 12.5,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     'Ads (+25) & Daily (+50)',
                     style: TextStyle(
                       color: textSec,
-                      fontSize: 10.5,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

@@ -17,6 +17,7 @@ import '../models/team_model.dart';
 import '../services/ad_free_service.dart';
 import '../services/coin_wallet_service.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/supabase_service.dart';
 import '../services/team_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/coin_history_sheet.dart';
@@ -39,23 +40,80 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
   bool _isClaimingDaily = false;
   bool _isWatchingAd = false;
-  Timer? _countdownTimer;
   String _selectedGameTab = 'Free Fire';
   List<TeamModel> _userTeams = [];
   bool _isLoadingTeams = true;
 
-  String get _userId => GamerAuthService().currentUid ?? '';
+  Stream<CoinWallet>? _walletStream;
+  Stream<List<TeamModel>>? _userTeamsStream;
+  Stream<List<CoinTransaction>>? _transactionsStream;
+  String? _cachedStatsTeamId;
+  Future<Map<String, dynamic>>? _teamWeeklyStatsFuture;
+  final Map<String, Future<List<Map<String, dynamic>>>> _gameLeaderboardFutures = {};
+
+  String _resolvedUserId = '';
+
+  String get _userId {
+    final authUid = GamerAuthService().currentUid;
+    if (authUid != null && authUid.trim().isNotEmpty) return authUid.trim();
+    final supaUid = SupabaseService.client.auth.currentUser?.id;
+    if (supaUid != null && supaUid.trim().isNotEmpty) return supaUid.trim();
+    return _resolvedUserId;
+  }
 
   @override
   void initState() {
     super.initState();
+    final uid = _userId;
+    final cachedTeams = uid.isNotEmpty ? _teamService.getCachedUserTeams(uid) : null;
+    if (cachedTeams != null) {
+      _userTeams = cachedTeams;
+      _isLoadingTeams = false;
+    } else {
+      _isLoadingTeams = true;
+    }
+    _initStreams();
     _initWalletAndTeamData();
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
+  }
+
+  void _initStreams() {
+    final uid = _userId;
+    _walletStream = _walletService.walletStream(uid);
+    _userTeamsStream = uid.isNotEmpty
+        ? _teamService.getUserTeamsStream(uid)
+        : const Stream<List<TeamModel>>.empty();
+    _transactionsStream = _walletService.transactionsStream(uid);
+  }
+
+  Future<Map<String, dynamic>> _getOrCreateTeamStatsFuture(TeamModel team) {
+    final cached = _teamService.getCachedTeamWeeklyStats(team.id);
+    if (_teamWeeklyStatsFuture == null || _cachedStatsTeamId != team.id) {
+      _cachedStatsTeamId = team.id;
+      _teamWeeklyStatsFuture = _teamService.getTeamWeeklyCoinStats(team);
+    } else if (cached != null) {
+      return Future.value(cached);
+    }
+    return _teamWeeklyStatsFuture!;
+  }
+
+  Future<List<Map<String, dynamic>>> _getOrCreateGameLeaderboardFuture(String game) {
+    return _gameLeaderboardFutures.putIfAbsent(
+      game,
+      () => _teamService.getGameWeeklyLeaderboard(game),
+    );
   }
 
   Future<void> _initWalletAndTeamData() async {
+    if (_userId.isEmpty) {
+      try {
+        final fetchedUid = await SupabaseService.getCurrentUserId();
+        if (fetchedUid != null && fetchedUid.trim().isNotEmpty) {
+          _resolvedUserId = fetchedUid.trim();
+          _initStreams();
+        }
+      } catch (_) {}
+    }
+
     if (_userId.isNotEmpty) {
       _walletService.getOrCreateWallet(_userId);
       await _loadUserTeams();
@@ -67,7 +125,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   }
 
   Future<void> _loadUserTeams() async {
-    if (_userId.isEmpty) {
+    final uid = _userId;
+    if (uid.isEmpty) {
       if (mounted) {
         setState(() {
           _userTeams = [];
@@ -77,7 +136,14 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       return;
     }
     try {
-      final teams = await _teamService.getUserTeams(_userId);
+      final teams = await _teamService.getUserTeams(uid);
+      if (teams.isNotEmpty) {
+        final primary = teams.first;
+        final stats = _teamService.getCachedTeamWeeklyStats(primary.id) ??
+            await _teamService.getTeamWeeklyCoinStats(primary);
+        _cachedStatsTeamId = primary.id;
+        _teamWeeklyStatsFuture = Future.value(stats);
+      }
       if (mounted) {
         setState(() {
           _userTeams = teams;
@@ -91,7 +157,6 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
   @override
   void dispose() {
-    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -104,6 +169,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         actionTitle: 'Watch Ad (+25 Coins)',
         onRewardEarned: () async {
           await _walletService.rewardAdCoins(_userId);
+          await _loadUserTeams();
           if (mounted) {
             setState(() {});
             final bool hasTeam = _userTeams.isNotEmpty;
@@ -141,6 +207,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     setState(() => _isClaimingDaily = true);
     try {
       final ok = await _walletService.claimDailyBonus(_userId);
+      if (ok) {
+        await _loadUserTeams();
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -173,6 +242,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
   Future<void> _refreshWallet() async {
     if (_userId.isNotEmpty) {
+      _gameLeaderboardFutures.clear();
+      _cachedStatsTeamId = null;
+      _teamWeeklyStatsFuture = null;
       await _walletService.getOrCreateWallet(_userId);
       await _loadUserTeams();
       await _teamService.checkAndDistributeWeeklyGameRewards();
@@ -382,21 +454,25 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             backgroundColor: ThemeService.card,
             onRefresh: _refreshWallet,
             child: StreamBuilder<CoinWallet>(
-              stream: _walletService.walletStream(_userId),
+              stream: _walletStream ?? _walletService.walletStream(_userId),
               builder: (context, walletSnap) {
                 final wallet = walletSnap.data ??
                     _walletService.currentWallet ??
                     CoinWallet.empty(_userId);
 
                 return StreamBuilder<List<TeamModel>>(
-                  stream: _userId.isNotEmpty
-                      ? _teamService.getUserTeamsStream(_userId)
-                      : Stream.value(const []),
+                  stream: _userTeamsStream ??
+                      (_userId.isNotEmpty
+                          ? _teamService.getUserTeamsStream(_userId)
+                          : const Stream<List<TeamModel>>.empty()),
                   builder: (context, teamsSnap) {
-                    final activeTeams = teamsSnap.data ?? _userTeams;
-                    if (teamsSnap.hasData) {
-                      _userTeams = activeTeams;
+                    if (teamsSnap.hasData && _userId.isNotEmpty) {
+                      _userTeams = teamsSnap.data!;
+                      _isLoadingTeams = false;
                     }
+                    final activeTeams =
+                        (teamsSnap.hasData && _userId.isNotEmpty) ? teamsSnap.data! : _userTeams;
+                    final bool isTeamsLoading = _isLoadingTeams;
 
                     return SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -405,11 +481,19 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // 1. Prominent Coin Wallet Card
-                          _buildBalanceCard(wallet, isDark, activeTeams),
+                          _buildBalanceCard(
+                            wallet,
+                            isDark,
+                            activeTeams,
+                            isLoadingTeams: isTeamsLoading,
+                          ),
                           const SizedBox(height: 14),
 
                           // 2. Team Membership Status / Solo User Notice Card
-                          _buildTeamMembershipStatusBanner(activeTeams),
+                          _buildTeamMembershipStatusBanner(
+                            activeTeams,
+                            isLoadingTeams: isTeamsLoading,
+                          ),
                           const SizedBox(height: 16),
 
                           _buildActionButtons(),
@@ -420,7 +504,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           const SizedBox(height: 20),
 
                           // 4. "Redeem Game Currency" & Per-Game Weekly #1 Team Leaderboard
-                          _buildRedeemGameCurrencySection(wallet, activeTeams),
+                          _buildRedeemGameCurrencySection(
+                            wallet,
+                            activeTeams,
+                            isLoadingTeams: isTeamsLoading,
+                          ),
                           const SizedBox(height: 20),
 
                           // 5. Coins & Redemption History List
@@ -446,8 +534,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   Widget _buildBalanceCard(
     CoinWallet wallet,
     bool isDark,
-    List<TeamModel> activeTeams,
-  ) {
+    List<TeamModel> activeTeams, {
+    required bool isLoadingTeams,
+  }) {
     final bool hasTeam = activeTeams.isNotEmpty;
 
     return Container(
@@ -490,23 +579,54 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   letterSpacing: 1.3,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: hasTeam
-                      ? GamerTheme.neonGreen.withOpacity(0.15)
-                      : const Color(0xFFFFB800).withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  hasTeam ? '🛡️ Team Eligible' : '👤 Solo Wallet (Saved)',
-                  style: TextStyle(
-                    color: hasTeam ? GamerTheme.neonGreen : const Color(0xFFFFB800),
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+              if (isLoadingTeams)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: ThemeService.cardSecondary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 10,
+                        height: 10,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.6,
+                          color: ThemeService.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Checking Team...',
+                        style: TextStyle(
+                          color: ThemeService.textSecondary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: hasTeam
+                        ? GamerTheme.neonGreen.withOpacity(0.15)
+                        : const Color(0xFFFFB800).withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    hasTeam ? '🛡️ Team Eligible' : '👤 Solo Wallet (Saved)',
+                    style: TextStyle(
+                      color: hasTeam ? GamerTheme.neonGreen : const Color(0xFFFFB800),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -554,10 +674,86 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     );
   }
 
+  Widget _buildTeamLoadingSkeletonCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ThemeService.border, width: 1.1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: ThemeService.cardSecondary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: GamerTheme.neonGreen,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Checking Active Team Membership...',
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      height: 10,
+                      width: 180,
+                      decoration: BoxDecoration(
+                        color: ThemeService.cardSecondary,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            height: 34,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: ThemeService.cardSecondary,
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Displays either:
+  /// - Loading skeleton placeholder while active team membership is resolving.
   /// - Solo User Notice: confirming personal earned coins are safely kept in balance/history while explaining that team membership is required to redeem or qualify for weekly team rewards.
   /// - Active Team Summary Card: showing the user's 4-member team, game, weekly team coins total, and weekly rank.
-  Widget _buildTeamMembershipStatusBanner(List<TeamModel> activeTeams) {
+  Widget _buildTeamMembershipStatusBanner(
+    List<TeamModel> activeTeams, {
+    required bool isLoadingTeams,
+  }) {
+    if (isLoadingTeams) {
+      return _buildTeamLoadingSkeletonCard();
+    }
+
     if (activeTeams.isEmpty) {
       return Container(
         width: double.infinity,
@@ -633,12 +829,30 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     }
 
     final primaryTeam = activeTeams.first;
+    final cachedStats = _teamService.getCachedTeamWeeklyStats(primaryTeam.id);
     return FutureBuilder<Map<String, dynamic>>(
-      future: _teamService.getTeamWeeklyCoinStats(primaryTeam),
+      initialData: cachedStats,
+      future: _getOrCreateTeamStatsFuture(primaryTeam),
       builder: (context, snap) {
-        final stats = snap.data;
-        final int teamWeeklyCoins = (stats?['weeklyCoins'] as int?) ?? 0;
-        final int weeklyRank = (stats?['weeklyRank'] as int?) ?? 1;
+        final stats = snap.data ?? cachedStats;
+        final int statsWeeklyCoins = (stats?['weeklyCoins'] as num?)?.toInt() ?? 0;
+        final int breakdownCoins = (stats?['memberBreakdown'] is List)
+            ? (stats!['memberBreakdown'] as List).fold<int>(
+                0,
+                (sum, m) => sum + ((m is Map ? (m['weeklyCoins'] as num?)?.toInt() : 0) ?? 0),
+              )
+            : 0;
+        final int memberMapCoins = primaryTeam.memberWeeklyCoins.values.fold<int>(
+          0,
+          (sum, v) => sum + v,
+        );
+        int teamWeeklyCoins = statsWeeklyCoins;
+        if (breakdownCoins > teamWeeklyCoins) teamWeeklyCoins = breakdownCoins;
+        if (primaryTeam.weeklyCoins > teamWeeklyCoins) teamWeeklyCoins = primaryTeam.weeklyCoins;
+        if (memberMapCoins > teamWeeklyCoins) teamWeeklyCoins = memberMapCoins;
+
+        final int weeklyRank = (stats?['weeklyRank'] as num?)?.toInt() ??
+            (primaryTeam.weeklyRank > 0 ? primaryTeam.weeklyRank : 1);
         final int memberCount = primaryTeam.memberCount.clamp(1, TeamModel.maxMembers);
         final int equalShare = (TeamService.weeklyGameRewardPool / memberCount).floor();
 
@@ -957,8 +1171,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
   Widget _buildRedeemGameCurrencySection(
     CoinWallet wallet,
-    List<TeamModel> activeTeams,
-  ) {
+    List<TeamModel> activeTeams, {
+    required bool isLoadingTeams,
+  }) {
     final games = ['Free Fire', 'PUBG Mobile', 'Valorant', 'COD Mobile'];
     final bool hasTeam = activeTeams.isNotEmpty;
 
@@ -999,14 +1214,24 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            Text(
-              hasTeam ? 'Team Verified ✅' : 'Requires Active Team 🔒',
-              style: TextStyle(
-                color: hasTeam ? GamerTheme.neonGreen : const Color(0xFFFFB800),
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
+            if (isLoadingTeams)
+              Text(
+                'Checking Team...',
+                style: TextStyle(
+                  color: ThemeService.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+            else
+              Text(
+                hasTeam ? 'Team Verified ✅' : 'Requires Active Team 🔒',
+                style: TextStyle(
+                  color: hasTeam ? GamerTheme.neonGreen : const Color(0xFFFFB800),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -1047,7 +1272,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             final cost = pack['cost'] as int;
             final icon = pack['icon'] as String;
             final canAfford = wallet.coins >= cost;
-            final canRedeem = hasTeam && canAfford;
+            final canRedeem = !isLoadingTeams && hasTeam && canAfford;
             final progress = (wallet.coins / cost).clamp(0.0, 1.0);
 
             return Container(
@@ -1100,19 +1325,25 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                !hasTeam
-                                    ? '🛡️ Join a Team to Redeem'
-                                    : (canAfford
-                                        ? '✅ Eligible'
-                                        : '🔒 Need ${cost - wallet.coins} more'),
+                                isLoadingTeams
+                                    ? '⏳ Checking team...'
+                                    : (!hasTeam
+                                        ? '🛡️ Join a Team to Redeem'
+                                        : (canAfford
+                                            ? '✅ Eligible'
+                                            : '🔒 Need ${cost - wallet.coins} more')),
                                 style: TextStyle(
-                                  color: !hasTeam
-                                      ? const Color(0xFFFFB800)
-                                      : (canAfford
-                                          ? GamerTheme.neonGreen
-                                          : ThemeService.textSecondary),
+                                  color: isLoadingTeams
+                                      ? ThemeService.textSecondary
+                                      : (!hasTeam
+                                          ? const Color(0xFFFFB800)
+                                          : (canAfford
+                                              ? GamerTheme.neonGreen
+                                              : ThemeService.textSecondary)),
                                   fontSize: 11,
-                                  fontWeight: !hasTeam ? FontWeight.bold : FontWeight.normal,
+                                  fontWeight: (!isLoadingTeams && !hasTeam)
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1137,32 +1368,39 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   const SizedBox(width: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: canRedeem
-                          ? GamerTheme.neonGreen
-                          : (!hasTeam
-                              ? const Color(0xFFFFB800).withOpacity(0.2)
-                              : ThemeService.cardSecondary),
-                      foregroundColor: canRedeem
-                          ? Colors.black
-                          : (!hasTeam
-                              ? const Color(0xFFFFB800)
-                              : ThemeService.textSecondary),
+                      backgroundColor: isLoadingTeams
+                          ? ThemeService.cardSecondary
+                          : (canRedeem
+                              ? GamerTheme.neonGreen
+                              : (!hasTeam
+                                  ? const Color(0xFFFFB800).withOpacity(0.2)
+                                  : ThemeService.cardSecondary)),
+                      foregroundColor: isLoadingTeams
+                          ? ThemeService.textSecondary
+                          : (canRedeem
+                              ? Colors.black
+                              : (!hasTeam
+                                  ? const Color(0xFFFFB800)
+                                  : ThemeService.textSecondary)),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
                     ),
-                    onPressed: () =>
-                        _redeemPack(_selectedGameTab, title, cost, wallet, activeTeams),
+                    onPressed: isLoadingTeams
+                        ? null
+                        : () => _redeemPack(_selectedGameTab, title, cost, wallet, activeTeams),
                     child: Text(
-                      !hasTeam ? 'Join Team' : 'Redeem',
+                      isLoadingTeams ? '...' : (!hasTeam ? 'Join Team' : 'Redeem'),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
-                        color: canRedeem
-                            ? Colors.black
-                            : (!hasTeam
-                                ? const Color(0xFFFFB800)
-                                : ThemeService.textSecondary),
+                        color: isLoadingTeams
+                            ? ThemeService.textSecondary
+                            : (canRedeem
+                                ? Colors.black
+                                : (!hasTeam
+                                    ? const Color(0xFFFFB800)
+                                    : ThemeService.textSecondary)),
                       ),
                     ),
                   ),
@@ -1178,11 +1416,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   /// Displays the current week's #1 Team & Weekly Prize Pool for [game]
   Widget _buildPerGameWeeklyTopTeamCard(String game) {
     final weekLabel = TeamService.getWeekRangeLabel();
+    final cachedLeaderboard = _teamService.getCachedGameWeeklyLeaderboard(game);
 
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _teamService.getGameWeeklyLeaderboard(game),
+      initialData: cachedLeaderboard,
+      future: _getOrCreateGameLeaderboardFuture(game),
       builder: (context, snap) {
-        final entries = snap.data ?? const [];
+        final entries = snap.data ?? cachedLeaderboard ?? const [];
         final topEntry = entries.isNotEmpty ? entries.first : null;
         final String topTeamName = topEntry != null
             ? '${topEntry['teamName']} [${topEntry['teamTag']}]'
@@ -1276,7 +1516,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ),
         const SizedBox(height: 8),
         StreamBuilder<List<CoinTransaction>>(
-          stream: _walletService.transactionsStream(_userId),
+          stream: _transactionsStream ?? _walletService.transactionsStream(_userId),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
               return const Center(

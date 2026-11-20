@@ -23,6 +23,46 @@ class TeamService {
     'COD Mobile',
   ];
 
+  final Map<String, List<TeamModel>> _userTeamsCache = {};
+  final Map<String, Map<String, dynamic>> _teamWeeklyStatsCache = {};
+  final Map<String, List<Map<String, dynamic>>> _gameLeaderboardCache = {};
+
+  /// Returns cached active teams for [userId], or null if not yet fetched in this session.
+  List<TeamModel>? getCachedUserTeams(String userId) {
+    final clean = userId.trim();
+    if (clean.isEmpty) return null;
+    return _userTeamsCache[clean] ??
+        _userTeamsCache[clean.toLowerCase()] ??
+        _userTeamsCache[SupabaseService.toUuid(clean)] ??
+        _userTeamsCache[SupabaseService.toUuid(clean).toLowerCase()];
+  }
+
+  /// Returns cached weekly coin stats for [teamId], or null if not yet fetched.
+  Map<String, dynamic>? getCachedTeamWeeklyStats(String teamId) {
+    final clean = teamId.trim();
+    if (clean.isEmpty) return null;
+    final uuidLower = SupabaseService.toUuid(clean).toLowerCase();
+    return _teamWeeklyStatsCache[clean] ??
+        _teamWeeklyStatsCache[clean.toLowerCase()] ??
+        _teamWeeklyStatsCache[uuidLower];
+  }
+
+  void _storeTeamWeeklyStatsCache(String teamId, Map<String, dynamic> stats) {
+    final clean = teamId.trim();
+    if (clean.isEmpty) return;
+    final uuid = SupabaseService.toUuid(clean);
+    _teamWeeklyStatsCache[clean] = stats;
+    _teamWeeklyStatsCache[clean.toLowerCase()] = stats;
+    _teamWeeklyStatsCache[uuid] = stats;
+    _teamWeeklyStatsCache[uuid.toLowerCase()] = stats;
+  }
+
+  /// Returns cached per-game weekly leaderboard for [game], or null if not yet fetched.
+  List<Map<String, dynamic>>? getCachedGameWeeklyLeaderboard(String game) {
+    final clean = game.trim();
+    return _gameLeaderboardCache[clean] ?? _gameLeaderboardCache[clean.toLowerCase()];
+  }
+
   /// Normalizes game names so e.g. 'PUBG' and 'PUBG Mobile' or 'COD' and 'COD Mobile' match
   static bool matchesGameName(String teamGame, String targetGame) {
     final a = teamGame.trim().toLowerCase();
@@ -197,15 +237,16 @@ class TeamService {
     }
   }
 
-  /// Get all teams where user is leader or member
+  /// Get all teams where user is leader or member (enriched with weekly team coin stats & rank)
   Future<List<TeamModel>> getUserTeams(String userId) async {
     if (userId.isEmpty) return [];
     try {
-      final userUuid = SupabaseService.toUuid(userId);
+      final cleanUid = userId.trim();
+      final userUuid = SupabaseService.toUuid(cleanUid);
       final memberRows = await SupabaseService.client
           .from("team_members")
           .select("team_id")
-          .or("user_id.eq.$userUuid,user_id.eq.$userId");
+          .or("user_id.eq.$userUuid,user_id.eq.$cleanUid");
 
       final teamIds = <String>{};
       for (final r in memberRows) {
@@ -216,29 +257,69 @@ class TeamService {
       final res = await SupabaseService.client
           .from("teams")
           .select()
-          .or("leader_id.eq.$userId,leader_id.eq.$userUuid");
+          .or("leader_id.eq.$cleanUid,leader_id.eq.$userUuid");
 
-      final result = <TeamModel>[];
+      final rawResult = <TeamModel>[];
       final seenIds = <String>{};
       for (final r in res) {
         final t = await _enrichTeamRow(r);
-        seenIds.add(t.id);
-        result.add(t);
+        seenIds.add(t.id.toLowerCase());
+        seenIds.add(SupabaseService.toUuid(t.id).toLowerCase());
+        rawResult.add(t);
       }
 
       for (final tid in teamIds) {
-        if (!seenIds.contains(tid)) {
+        final tidLower = tid.toLowerCase();
+        final tidUuidLower = SupabaseService.toUuid(tid).toLowerCase();
+        if (!seenIds.contains(tidLower) && !seenIds.contains(tidUuidLower)) {
           final t = await getTeam(tid);
           if (t != null) {
-            seenIds.add(t.id);
-            result.add(t);
+            seenIds.add(t.id.toLowerCase());
+            seenIds.add(SupabaseService.toUuid(t.id).toLowerCase());
+            rawResult.add(t);
           }
         }
       }
+
+      // Attach synced weekly team coins, rank, and member breakdown so CoinWalletScreen
+      // and TeamProfileScreen always show the exact same Weekly Team Coins total immediately.
+      final result = <TeamModel>[];
+      for (final t in rawResult) {
+        try {
+          final stats = await getTeamWeeklyCoinStats(t);
+          final int syncedWeeklyCoins = (stats['weeklyCoins'] as num?)?.toInt() ?? t.weeklyCoins;
+          final int syncedWeeklyRank = (stats['weeklyRank'] as num?)?.toInt() ?? t.weeklyRank;
+          final Map<String, int> syncedMemberCoins = stats['memberCoins'] is Map
+              ? (stats['memberCoins'] as Map).map(
+                  (k, v) => MapEntry(k.toString(), (v as num?)?.toInt() ?? 0),
+                )
+              : t.memberWeeklyCoins;
+          final Map<String, String> syncedMemberNames = stats['memberNames'] is Map
+              ? (stats['memberNames'] as Map).map(
+                  (k, v) => MapEntry(k.toString(), v.toString()),
+                )
+              : t.memberNames;
+          result.add(
+            t.copyWith(
+              weeklyCoins: syncedWeeklyCoins,
+              weeklyRank: syncedWeeklyRank,
+              memberWeeklyCoins: syncedMemberCoins,
+              memberNames: syncedMemberNames,
+            ),
+          );
+        } catch (_) {
+          result.add(t);
+        }
+      }
+
+      _userTeamsCache[cleanUid] = result;
+      _userTeamsCache[cleanUid.toLowerCase()] = result;
+      _userTeamsCache[userUuid] = result;
+      _userTeamsCache[userUuid.toLowerCase()] = result;
       return result;
     } catch (e) {
       debugPrint("[TeamService] getUserTeams error: $e");
-      return [];
+      return getCachedUserTeams(userId) ?? [];
     }
   }
 
@@ -247,6 +328,10 @@ class TeamService {
     if (userId.isEmpty) {
       yield [];
       return;
+    }
+    final cached = getCachedUserTeams(userId);
+    if (cached != null) {
+      yield cached;
     }
     while (true) {
       try {
@@ -264,33 +349,58 @@ class TeamService {
     String? gameFilter,
     String? searchQuery,
   }) async {
-    final rows = await SupabaseService.client
+    final allRows = await SupabaseService.client
         .from("teams")
         .select()
         .order("points", ascending: false);
 
+    if (allRows.isEmpty) return <TeamModel>[];
+
+    // Filter rows early by gameFilter / searchQuery so we only enrich relevant teams
+    final rows = allRows.where((rawRow) {
+      if (gameFilter != null && gameFilter.isNotEmpty && gameFilter != "All") {
+        final rowGame = (rawRow["game"] ?? "Free Fire").toString();
+        if (!matchesGameName(rowGame, gameFilter)) return false;
+      }
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        final q = searchQuery.trim().toLowerCase();
+        final name = (rawRow["name"] ?? "").toString().toLowerCase();
+        final tag = (rawRow["tag"] ?? "").toString().toLowerCase();
+        if (!name.contains(q) && !tag.contains(q)) return false;
+      }
+      return true;
+    }).toList();
+
     if (rows.isEmpty) return <TeamModel>[];
 
-    final teamIds = rows
-        .map((r) => (r["id"] ?? "").toString())
-        .where((id) => id.isNotEmpty)
-        .toList();
+    final lookupTeamIds = <String>{};
+    for (final r in rows) {
+      final id = (r["id"] ?? "").toString().trim();
+      if (id.isNotEmpty) {
+        lookupTeamIds.add(id);
+        try {
+          lookupTeamIds.add(SupabaseService.toUuid(id));
+        } catch (_) {}
+      }
+    }
 
     final Map<String, List<String>> membersByTeam = {};
     final Map<String, List<String>> pendingByTeam = {};
 
-    if (teamIds.isNotEmpty) {
+    if (lookupTeamIds.isNotEmpty) {
       try {
         final memberRows = await SupabaseService.client
             .from("team_members")
             .select("team_id, user_id, role")
-            .inFilter("team_id", teamIds);
+            .inFilter("team_id", lookupTeamIds.toList());
         for (final m in memberRows) {
-          final tid = (m["team_id"] ?? "").toString();
-          final uid = (m["user_id"] ?? "").toString();
+          final tid = (m["team_id"] ?? "").toString().trim();
+          final uid = (m["user_id"] ?? "").toString().trim();
           if (tid.isEmpty || uid.isEmpty) continue;
-          final list = membersByTeam.putIfAbsent(tid, () => []);
-          if (!list.contains(uid)) list.add(uid);
+          for (final key in {tid, tid.toLowerCase(), SupabaseService.toUuid(tid).toLowerCase()}) {
+            final list = membersByTeam.putIfAbsent(key, () => []);
+            if (!list.contains(uid)) list.add(uid);
+          }
         }
       } catch (e) {
         debugPrint("[TeamService] members fetch error: $e");
@@ -300,14 +410,16 @@ class TeamService {
         final reqRows = await SupabaseService.client
             .from("team_join_requests")
             .select("team_id, user_id, status")
-            .inFilter("team_id", teamIds);
+            .inFilter("team_id", lookupTeamIds.toList());
         for (final r in reqRows) {
-          final tid = (r["team_id"] ?? "").toString();
-          final uid = (r["user_id"] ?? "").toString();
+          final tid = (r["team_id"] ?? "").toString().trim();
+          final uid = (r["user_id"] ?? "").toString().trim();
           final status = (r["status"] ?? "pending").toString().toLowerCase();
           if (tid.isEmpty || uid.isEmpty || status != "pending") continue;
-          final list = pendingByTeam.putIfAbsent(tid, () => []);
-          if (!list.contains(uid)) list.add(uid);
+          for (final key in {tid, tid.toLowerCase(), SupabaseService.toUuid(tid).toLowerCase()}) {
+            final list = pendingByTeam.putIfAbsent(key, () => []);
+            if (!list.contains(uid)) list.add(uid);
+          }
         }
       } catch (e) {
         debugPrint("[TeamService] team_join_requests batch fetch error: $e");
@@ -356,21 +468,46 @@ class TeamService {
     }
 
     final enriched = rows.map((rawRow) {
-      final tid = (rawRow["id"] ?? "").toString();
-      final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString();
+      final tid = (rawRow["id"] ?? "").toString().trim();
+      final tidUuidLower = SupabaseService.toUuid(tid).toLowerCase();
+      final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
 
-      final rawMembers = List<String>.from(membersByTeam[tid] ?? <String>[]);
-      final members = <String>[];
-      if (leaderId.isNotEmpty) {
-        members.add(leaderId);
-      }
-      for (final m in rawMembers) {
-        if (m.isNotEmpty && !members.contains(m) && members.length < maxTeamMembers) {
-          members.add(m);
+      final rawMembers = <String>[
+        ...(membersByTeam[tid] ?? const <String>[]),
+        ...(membersByTeam[tid.toLowerCase()] ?? const <String>[]),
+        ...(membersByTeam[tidUuidLower] ?? const <String>[]),
+      ];
+      if (rawRow["members"] is List) {
+        for (final m in (rawRow["members"] as List)) {
+          final uid = m.toString().trim();
+          if (uid.isNotEmpty) rawMembers.add(uid);
         }
       }
 
-      final pending = List<String>.from(pendingByTeam[tid] ?? <String>[]);
+      final members = <String>[];
+      final seenMemberUuids = <String>{};
+      void addMemberUnique(String uid) {
+        final clean = uid.trim();
+        if (clean.isEmpty || members.length >= maxTeamMembers) return;
+        final uuidKey = SupabaseService.toUuid(clean).toLowerCase();
+        if (seenMemberUuids.contains(uuidKey) || members.contains(clean)) return;
+        seenMemberUuids.add(uuidKey);
+        members.add(clean);
+      }
+
+      if (leaderId.isNotEmpty) {
+        addMemberUnique(leaderId);
+      }
+      for (final m in rawMembers) {
+        addMemberUnique(m);
+      }
+
+      final pending = List<String>.from(
+        pendingByTeam[tid] ??
+            pendingByTeam[tid.toLowerCase()] ??
+            pendingByTeam[tidUuidLower] ??
+            <String>[],
+      );
       if (rawRow["pending_join_requests"] is List) {
         for (final p in (rawRow["pending_join_requests"] as List)) {
           final pStr = p.toString().trim();
@@ -406,23 +543,7 @@ class TeamService {
       );
     }).toList();
 
-    var filtered = enriched;
-    if (gameFilter != null &&
-        gameFilter.isNotEmpty &&
-        gameFilter != "All") {
-      filtered = filtered
-          .where((t) => matchesGameName(t.game, gameFilter))
-          .toList();
-    }
-    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-      final q = searchQuery.trim().toLowerCase();
-      filtered = filtered
-          .where((t) =>
-              t.name.toLowerCase().contains(q) ||
-              t.tag.toLowerCase().contains(q))
-          .toList();
-    }
-    return filtered;
+    return enriched;
   }
 
   /// Get stream of all teams with optional game filter and search query
@@ -1515,6 +1636,10 @@ class TeamService {
         final teamWeekKey = 'weekly_team_member_${weekKey}_${team.id}_$cleanUid';
         final currentTeamMemberCoins = prefs.getInt(teamWeekKey) ?? 0;
         await prefs.setInt(teamWeekKey, currentTeamMemberCoins + amount);
+        // Refresh cached weekly stats for this team
+        try {
+          await getTeamWeeklyCoinStats(team);
+        } catch (_) {}
       }
     } catch (e) {
       debugPrint('[TeamService] recordMemberWeeklyCoinContribution note: $e');
@@ -1530,10 +1655,11 @@ class TeamService {
     for (final uid in userIds) {
       final clean = uid.trim();
       if (clean.isEmpty) continue;
-      queryIds.add(clean);
       try {
         queryIds.add(SupabaseService.toUuid(clean));
-      } catch (_) {}
+      } catch (_) {
+        queryIds.add(clean);
+      }
     }
 
     try {
@@ -1600,6 +1726,7 @@ class TeamService {
     final weekKey = getWeekCycleKey(forDate);
 
     final Map<String, String> uuidToOriginalLower = {};
+    final List<String> uuidLookupIds = [];
     final List<String> allLookupIds = [];
 
     for (final rawId in userIds) {
@@ -1610,21 +1737,17 @@ class TeamService {
       if (!allLookupIds.contains(clean)) allLookupIds.add(clean);
       try {
         final asUuid = SupabaseService.toUuid(clean);
-        uuidToOriginalLower[asUuid.toLowerCase()] = lower;
+        final asUuidLower = asUuid.toLowerCase();
+        coinsByUserLower.putIfAbsent(asUuidLower, () => 0);
+        uuidToOriginalLower[asUuidLower] = lower;
+        if (!uuidLookupIds.contains(asUuid)) uuidLookupIds.add(asUuid);
         if (!allLookupIds.contains(asUuid)) allLookupIds.add(asUuid);
       } catch (_) {}
     }
 
-    // 1. Query coin_transactions from Supabase for this weekly window
-    try {
-      final txRows = await SupabaseService.client
-          .from('coin_transactions')
-          .select('user_id, amount, type, created_at')
-          .inFilter('user_id', allLookupIds)
-          .gte('created_at', weekStart.toIso8601String())
-          .lte('created_at', weekEnd.toIso8601String());
-
+    void accumulateRows(Iterable<dynamic> txRows) {
       for (final r in txRows) {
+        if (r is! Map) continue;
         final amount = (r['amount'] as num?)?.toInt() ?? 0;
         if (amount <= 0) continue;
         final type = (r['type'] ?? '').toString();
@@ -1632,9 +1755,24 @@ class TeamService {
 
         final txUidLower = (r['user_id'] ?? '').toString().trim().toLowerCase();
         final targetKey = uuidToOriginalLower[txUidLower] ?? txUidLower;
-        if (coinsByUserLower.containsKey(targetKey)) {
-          coinsByUserLower[targetKey] = (coinsByUserLower[targetKey] ?? 0) + amount;
+        coinsByUserLower[targetKey] = (coinsByUserLower[targetKey] ?? 0) + amount;
+        if (txUidLower != targetKey) {
+          coinsByUserLower[txUidLower] = coinsByUserLower[targetKey]!;
         }
+      }
+    }
+
+    // 1. Query coin_transactions from Supabase for this weekly window (using valid UUIDs first)
+    final queryIds = uuidLookupIds.isNotEmpty ? uuidLookupIds : allLookupIds;
+    try {
+      final txRows = await SupabaseService.client
+          .from('coin_transactions')
+          .select('user_id, amount, type, created_at')
+          .inFilter('user_id', queryIds)
+          .gte('created_at', weekStart.toIso8601String())
+          .lte('created_at', weekEnd.toIso8601String());
+      if (txRows is Iterable) {
+        accumulateRows(txRows);
       }
     } catch (e) {
       debugPrint('[TeamService] _getUsersWeeklyEarnedCoins Supabase query note: $e');
@@ -1647,11 +1785,15 @@ class TeamService {
         final clean = rawId.trim();
         if (clean.isEmpty) continue;
         final lower = clean.toLowerCase();
-        final localVal = prefs.getInt('weekly_user_coins_${weekKey}_$clean') ?? 0;
-        final dbVal = coinsByUserLower[lower] ?? 0;
-        if (localVal > dbVal) {
-          coinsByUserLower[lower] = localVal;
-        }
+        final asUuid = SupabaseService.toUuid(clean);
+        final asUuidLower = asUuid.toLowerCase();
+        final localVal1 = prefs.getInt('weekly_user_coins_${weekKey}_$clean') ?? 0;
+        final localVal2 = prefs.getInt('weekly_user_coins_${weekKey}_$asUuid') ?? 0;
+        final localVal = localVal1 > localVal2 ? localVal1 : localVal2;
+        final dbVal = coinsByUserLower[lower] ?? coinsByUserLower[asUuidLower] ?? 0;
+        final bestVal = localVal > dbVal ? localVal : dbVal;
+        coinsByUserLower[lower] = bestVal;
+        coinsByUserLower[asUuidLower] = bestVal;
       }
     } catch (_) {}
 
@@ -1665,56 +1807,65 @@ class TeamService {
     DateTime? forDate,
   }) async {
     final leaderboard = await getGameWeeklyLeaderboard(team.game, forDate: forDate);
-    final teamIdLower = team.id.toLowerCase();
+    final teamIdLower = team.id.trim().toLowerCase();
     final teamUuidLower = SupabaseService.toUuid(team.id).toLowerCase();
 
     Map<String, dynamic>? matchedEntry;
     for (final entry in leaderboard) {
-      final eId = (entry['teamId'] ?? '').toString().toLowerCase();
+      final eId = (entry['teamId'] ?? '').toString().trim().toLowerCase();
       final eUuid = SupabaseService.toUuid(eId).toLowerCase();
       if (eId == teamIdLower || eUuid == teamUuidLower) {
-        matchedEntry = entry;
+        matchedEntry = Map<String, dynamic>.from(entry);
         break;
       }
     }
 
-    if (matchedEntry != null) {
-      return {
-        ...matchedEntry,
-        'totalTeamsInGame': leaderboard.length,
-        'weekRangeLabel': getWeekRangeLabel(forDate),
-        'weekKey': getWeekCycleKey(forDate),
-        'rewardPool': weeklyGameRewardPool,
-      };
+    // Also compute direct roster coins from the passed team's enriched members so that
+    // TeamProfileScreen and CoinWalletScreen always compute the exact same member sum.
+    final roster = <String>[];
+    final seenRosterUuids = <String>{};
+    void addRosterMember(String uid) {
+      final clean = uid.trim();
+      if (clean.isEmpty || roster.length >= maxTeamMembers) return;
+      final uuidKey = SupabaseService.toUuid(clean).toLowerCase();
+      if (seenRosterUuids.contains(uuidKey)) return;
+      seenRosterUuids.add(uuidKey);
+      roster.add(clean);
     }
 
-    // Fallback if team wasn't in the list yet
-    final roster = <String>[];
-    if (team.leaderId.isNotEmpty) roster.add(team.leaderId);
+    if (team.leaderId.isNotEmpty) addRosterMember(team.leaderId);
     for (final m in team.cappedMembers) {
-      if (m.isNotEmpty && !roster.contains(m) && roster.length < maxTeamMembers) {
-        roster.add(m);
+      addRosterMember(m);
+    }
+    if (matchedEntry != null && matchedEntry['memberIds'] is List) {
+      for (final m in (matchedEntry['memberIds'] as List)) {
+        addRosterMember(m.toString());
       }
     }
 
     final weeklyByUser = await _getUsersWeeklyEarnedCoins(roster, forDate: forDate);
     final handlesByUser = await _fetchPublicHandlesForUsers(roster);
 
-    int totalWeeklyCoins = 0;
-    final List<Map<String, dynamic>> memberBreakdown = [];
+    int directTotalWeeklyCoins = 0;
+    final List<Map<String, dynamic>> directMemberBreakdown = [];
+    final Map<String, String> directMemberNames = {};
+    final Map<String, int> directMemberCoins = {};
 
     for (final uid in roster) {
       final lower = uid.trim().toLowerCase();
       final uuidLower = SupabaseService.toUuid(uid).toLowerCase();
       final earned = weeklyByUser[lower] ?? weeklyByUser[uuidLower] ?? 0;
-      totalWeeklyCoins += earned;
+      directTotalWeeklyCoins += earned;
 
       final handleInfo = handlesByUser[lower] ?? handlesByUser[uuidLower];
       final isLeader = team.isLeader(uid);
       final publicHandle = handleInfo?['handle'] ??
           (isLeader ? sanitizePublicHandle(team.leaderName, fallback: 'Leader') : 'Gamer');
 
-      memberBreakdown.add({
+      directMemberNames[uid] = publicHandle;
+      directMemberCoins[uid] = earned;
+
+      directMemberBreakdown.add({
         'userId': uid,
         'handle': publicHandle,
         'gamerId': handleInfo?['gamerId'] ?? publicHandle,
@@ -1724,22 +1875,62 @@ class TeamService {
       });
     }
 
+    directMemberBreakdown.sort((a, b) =>
+        ((b['weeklyCoins'] as int?) ?? 0).compareTo((a['weeklyCoins'] as int?) ?? 0));
+
+    if (matchedEntry != null) {
+      final int entryCoins = (matchedEntry['weeklyCoins'] as num?)?.toInt() ?? 0;
+      final int resolvedWeeklyCoins =
+          directTotalWeeklyCoins > entryCoins ? directTotalWeeklyCoins : entryCoins;
+      final int memberCount =
+          (roster.isNotEmpty ? roster.length : ((matchedEntry['memberCount'] as int?) ?? 1))
+              .clamp(1, maxTeamMembers);
+
+      final res = {
+        ...matchedEntry,
+        'weeklyCoins': resolvedWeeklyCoins,
+        'memberCount': memberCount,
+        'equalRewardShare': (weeklyGameRewardPool / memberCount).floor(),
+        'memberIds': roster.isNotEmpty ? roster : matchedEntry['memberIds'],
+        'memberNames': directMemberNames.isNotEmpty ? directMemberNames : matchedEntry['memberNames'],
+        'memberCoins': directMemberCoins.isNotEmpty ? directMemberCoins : matchedEntry['memberCoins'],
+        'memberBreakdown': directMemberBreakdown.isNotEmpty
+            ? directMemberBreakdown
+            : matchedEntry['memberBreakdown'],
+        'totalTeamsInGame': leaderboard.length,
+        'weekRangeLabel': getWeekRangeLabel(forDate),
+        'weekKey': getWeekCycleKey(forDate),
+        'rewardPool': weeklyGameRewardPool,
+      };
+      if (forDate == null) {
+        _storeTeamWeeklyStatsCache(team.id, res);
+      }
+      return res;
+    }
+
     final memberCount = roster.isNotEmpty ? roster.length : 1;
-    return {
+    final fallbackRes = {
       'teamId': team.id,
       'teamName': team.name,
       'teamTag': team.tag,
       'game': team.game,
-      'weeklyCoins': totalWeeklyCoins,
-      'weeklyRank': leaderboard.length + 1,
-      'totalTeamsInGame': leaderboard.length + 1,
+      'weeklyCoins': directTotalWeeklyCoins,
+      'weeklyRank': leaderboard.isEmpty ? 1 : (leaderboard.length + 1),
+      'totalTeamsInGame': leaderboard.isEmpty ? 1 : (leaderboard.length + 1),
       'memberCount': memberCount,
       'equalRewardShare': (weeklyGameRewardPool / memberCount).floor(),
       'rewardPool': weeklyGameRewardPool,
       'weekRangeLabel': getWeekRangeLabel(forDate),
       'weekKey': getWeekCycleKey(forDate),
-      'memberBreakdown': memberBreakdown,
+      'memberIds': roster,
+      'memberNames': directMemberNames,
+      'memberCoins': directMemberCoins,
+      'memberBreakdown': directMemberBreakdown,
     };
+    if (forDate == null) {
+      _storeTeamWeeklyStatsCache(team.id, fallbackRes);
+    }
+    return fallbackRes;
   }
 
   /// Returns the Per-Game Weekly Team Coins Leaderboard for [game].
@@ -1772,11 +1963,19 @@ class TeamService {
       final List<Map<String, dynamic>> entries = [];
       for (final t in allTeams) {
         final roster = <String>[];
-        if (t.leaderId.isNotEmpty) roster.add(t.leaderId);
+        final seenUuids = <String>{};
+        void addMember(String uid) {
+          final clean = uid.trim();
+          if (clean.isEmpty || roster.length >= maxTeamMembers) return;
+          final uuidKey = SupabaseService.toUuid(clean).toLowerCase();
+          if (seenUuids.contains(uuidKey)) return;
+          seenUuids.add(uuidKey);
+          roster.add(clean);
+        }
+
+        if (t.leaderId.isNotEmpty) addMember(t.leaderId);
         for (final m in t.cappedMembers) {
-          if (m.isNotEmpty && !roster.contains(m) && roster.length < maxTeamMembers) {
-            roster.add(m);
-          }
+          addMember(m);
         }
 
         int teamWeeklyTotal = 0;
@@ -1856,16 +2055,29 @@ class TeamService {
         final rank = i + 1;
         entries[i]['weeklyRank'] = rank;
         entries[i]['rank'] = rank;
+        entries[i]['totalTeamsInGame'] = entries.length;
+        entries[i]['weekRangeLabel'] = getWeekRangeLabel(forDate);
+        entries[i]['weekKey'] = getWeekCycleKey(forDate);
         final currentTeam = entries[i]['team'];
         if (currentTeam is TeamModel) {
           entries[i]['team'] = currentTeam.copyWith(weeklyRank: rank);
         }
+        if (forDate == null) {
+          final tid = (entries[i]['teamId'] ?? '').toString();
+          if (tid.isNotEmpty) {
+            _storeTeamWeeklyStatsCache(tid, entries[i]);
+          }
+        }
       }
 
+      if (forDate == null) {
+        _gameLeaderboardCache[game.trim()] = entries;
+        _gameLeaderboardCache[game.trim().toLowerCase()] = entries;
+      }
       return entries;
     } catch (e) {
       debugPrint('[TeamService] getGameWeeklyLeaderboard error: $e');
-      return [];
+      return getCachedGameWeeklyLeaderboard(game) ?? [];
     }
   }
 

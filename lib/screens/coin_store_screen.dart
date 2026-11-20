@@ -39,10 +39,18 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
   bool _isClaimingDaily = false;
   bool _isWatchingAd = false;
 
+  Stream<CoinWallet>? _walletStream;
+  Stream<List<TeamModel>>? _userTeamsStream;
+  Stream<List<CoinTransaction>>? _transactionsStream;
+
   @override
   void initState() {
     super.initState();
     final uid = _authService.currentUid ?? 'guest';
+    _walletStream = _walletService.walletStream(uid);
+    _userTeamsStream = TeamService().getUserTeamsStream(uid);
+    _transactionsStream = _walletService.transactionsStream(uid);
+
     _walletService.getOrCreateWallet(uid).then((wallet) {
       if (mounted) {
         _lastClaimTime = wallet.lastDailyBonusClaim;
@@ -420,7 +428,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
             ],
           ),
           body: StreamBuilder<CoinWallet>(
-            stream: _walletService.walletStream(uid),
+            stream: _walletStream ?? _walletService.walletStream(uid),
             builder: (context, snapshot) {
               final wallet = snapshot.data ?? _walletService.currentWallet ?? CoinWallet.empty(uid);
 
@@ -517,9 +525,51 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         StreamBuilder<List<TeamModel>>(
-          stream: TeamService().getUserTeamsStream(uid),
+          initialData: TeamService().getCachedUserTeams(uid),
+          stream: _userTeamsStream ?? TeamService().getUserTeamsStream(uid),
           builder: (context, teamSnap) {
-            final teams = teamSnap.data ?? [];
+            final cachedTeams = TeamService().getCachedUserTeams(uid);
+            final bool isLoadingTeams =
+                teamSnap.connectionState == ConnectionState.waiting &&
+                !teamSnap.hasData &&
+                cachedTeams == null;
+
+            if (isLoadingTeams) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: ThemeService.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: GamerTheme.neonGreen,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Checking Active Team Membership...',
+                        style: TextStyle(
+                          color: ThemeService.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final teams = teamSnap.data ?? cachedTeams ?? const <TeamModel>[];
             final isSolo = teams.isEmpty;
             final activeTeam = isSolo ? null : teams.first;
             return Container(
@@ -657,7 +707,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
         ),
         const SizedBox(height: 12),
         StreamBuilder<List<CoinTransaction>>(
-          stream: _walletService.transactionsStream(uid),
+          stream: _transactionsStream ?? _walletService.transactionsStream(uid),
           builder: (context, txSnap) {
             final txList = txSnap.data ?? [];
             if (txList.isEmpty) {
