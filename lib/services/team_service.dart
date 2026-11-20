@@ -15,6 +15,27 @@ class TeamService {
 
   static const int maxTeamMembers = TeamModel.maxMembers; // 4 members max
   static const int weeklyGameRewardPool = 1000; // 1,000 G-Coins per game every week
+  static const List<String> supportedGames = [
+    'PUBG Mobile',
+    'Free Fire',
+    'BGMI',
+    'Valorant',
+    'COD Mobile',
+  ];
+
+  /// Normalizes game names so e.g. 'PUBG' and 'PUBG Mobile' or 'COD' and 'COD Mobile' match
+  static bool matchesGameName(String teamGame, String targetGame) {
+    final a = teamGame.trim().toLowerCase();
+    final b = targetGame.trim().toLowerCase();
+    if (a == b) return true;
+    if ((a == 'pubg' || a == 'pubg mobile') && (b == 'pubg' || b == 'pubg mobile')) {
+      return true;
+    }
+    if ((a == 'cod' || a == 'cod mobile') && (b == 'cod' || b == 'cod mobile')) {
+      return true;
+    }
+    return false;
+  }
 
   /// Privacy & Data Minimization (Play Policy):
   /// Never expose email addresses, phone numbers, real names/addresses, or private credentials.
@@ -390,7 +411,7 @@ class TeamService {
         gameFilter.isNotEmpty &&
         gameFilter != "All") {
       filtered = filtered
-          .where((t) => t.game.toLowerCase() == gameFilter.toLowerCase())
+          .where((t) => matchesGameName(t.game, gameFilter))
           .toList();
     }
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
@@ -1760,6 +1781,8 @@ class TeamService {
 
         int teamWeeklyTotal = 0;
         final List<Map<String, dynamic>> memberBreakdown = [];
+        final Map<String, String> memberNamesMap = {};
+        final Map<String, int> memberCoinsMap = {};
 
         for (final uid in roster) {
           final lower = uid.trim().toLowerCase();
@@ -1771,6 +1794,9 @@ class TeamService {
           final isLeader = t.isLeader(uid);
           final publicHandle = handleInfo?['handle'] ??
               (isLeader ? sanitizePublicHandle(t.leaderName, fallback: 'Leader') : 'Gamer');
+
+          memberNamesMap[uid] = publicHandle;
+          memberCoinsMap[uid] = earned;
 
           memberBreakdown.add({
             'userId': uid,
@@ -1787,7 +1813,15 @@ class TeamService {
             ((b['weeklyCoins'] as int?) ?? 0).compareTo((a['weeklyCoins'] as int?) ?? 0));
 
         final mCount = roster.isNotEmpty ? roster.length : 1;
+        final enrichedTeam = t.copyWith(
+          members: roster,
+          memberNames: memberNamesMap,
+          weeklyCoins: teamWeeklyTotal,
+          memberWeeklyCoins: memberCoinsMap,
+        );
+
         entries.add({
+          'team': enrichedTeam,
           'teamId': t.id,
           'teamName': t.name,
           'teamTag': t.tag,
@@ -1801,6 +1835,8 @@ class TeamService {
           'rewardPool': weeklyGameRewardPool,
           'leaderHandle': sanitizePublicHandle(t.leaderName, fallback: 'Leader'),
           'memberIds': roster,
+          'memberNames': memberNamesMap,
+          'memberCoins': memberCoinsMap,
           'memberBreakdown': memberBreakdown,
         });
       }
@@ -1817,7 +1853,13 @@ class TeamService {
       });
 
       for (int i = 0; i < entries.length; i++) {
-        entries[i]['weeklyRank'] = i + 1;
+        final rank = i + 1;
+        entries[i]['weeklyRank'] = rank;
+        entries[i]['rank'] = rank;
+        final currentTeam = entries[i]['team'];
+        if (currentTeam is TeamModel) {
+          entries[i]['team'] = currentTeam.copyWith(weeklyRank: rank);
+        }
       }
 
       return entries;

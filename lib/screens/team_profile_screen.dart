@@ -16,9 +16,17 @@ import 'private_match_room_screen.dart';
 import '../services/app_share_service.dart';
 
 class TeamProfileScreen extends StatefulWidget {
-  final String teamId;
+  final String? _teamId;
+  final TeamModel? team;
 
-  const TeamProfileScreen({super.key, required this.teamId});
+  const TeamProfileScreen({
+    super.key,
+    String? teamId,
+    this.team,
+  }) : _teamId = teamId;
+
+  String get teamId =>
+      (_teamId != null && _teamId!.isNotEmpty) ? _teamId! : (team?.id ?? '');
 
   @override
   State<TeamProfileScreen> createState() => _TeamProfileScreenState();

@@ -21,6 +21,7 @@ class TeamModel {
   final String leaderName;
   final String leaderAvatar;
   final List<String> members;
+  final Map<String, String> memberNames;
   final List<Map<String, dynamic>> memberDetails;
   final List<String> pendingJoinRequests;
 
@@ -46,6 +47,7 @@ class TeamModel {
     this.leaderName = '',
     this.leaderAvatar = '',
     this.members = const [],
+    this.memberNames = const {},
     this.memberDetails = const [],
     this.pendingJoinRequests = const [],
     this.weeklyCoins = 0,
@@ -143,16 +145,32 @@ class TeamModel {
 
     final rawMemberDetails = row['memberDetails'];
     final List<Map<String, dynamic>> detailsList = [];
+    final Map<String, String> namesMap = {};
     if (rawMemberDetails is List) {
       for (final item in rawMemberDetails) {
         if (item is Map && detailsList.length < maxMembers) {
           final mapItem = Map<String, dynamic>.from(item);
           if (mapItem['name'] != null) {
-            mapItem['name'] = sanitizePublicHandle(mapItem['name']?.toString());
+            final cleanName = sanitizePublicHandle(mapItem['name']?.toString());
+            mapItem['name'] = cleanName;
+            final uid = (mapItem['id'] ?? mapItem['uid'] ?? mapItem['userId'] ?? '').toString().trim();
+            if (uid.isNotEmpty) {
+              namesMap[uid] = cleanName;
+            }
           }
           detailsList.add(mapItem);
         }
       }
+    }
+
+    final rawMemberNames = row['member_names'] ?? row['memberNames'];
+    if (rawMemberNames is Map) {
+      rawMemberNames.forEach((k, v) {
+        final key = k.toString().trim();
+        if (key.isNotEmpty) {
+          namesMap[key] = sanitizePublicHandle(v?.toString(), fallback: 'Gamer');
+        }
+      });
     }
 
     final rawWeeklyMap = row['member_weekly_coins'] ?? row['memberWeeklyCoins'];
@@ -164,6 +182,11 @@ class TeamModel {
     }
 
     final rawLeaderName = (row['leader_name'] ?? row['leaderName'] ?? '').toString();
+    final cleanLeaderName = sanitizePublicHandle(rawLeaderName, fallback: 'Leader');
+    final leaderIdStr = (row['leader_id'] ?? '').toString().trim();
+    if (leaderIdStr.isNotEmpty && !namesMap.containsKey(leaderIdStr)) {
+      namesMap[leaderIdStr] = cleanLeaderName;
+    }
 
     return TeamModel(
       id: (row['id'] ?? '').toString(),
@@ -173,15 +196,16 @@ class TeamModel {
       game: (row['game'] ?? 'BGMI').toString(),
       description: (row['description'] ?? '').toString(),
       requirements: (row['requirements'] ?? '').toString(),
-      leaderId: (row['leader_id'] ?? '').toString(),
+      leaderId: leaderIdStr,
       wins: (row['wins'] as num?)?.toInt() ?? 0,
       losses: (row['losses'] as num?)?.toInt() ?? 0,
       draws: (row['draws'] as num?)?.toInt() ?? 0,
       points: (row['points'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ?? DateTime.now(),
-      leaderName: sanitizePublicHandle(rawLeaderName, fallback: 'Leader'),
+      leaderName: cleanLeaderName,
       leaderAvatar: (row['leader_avatar'] ?? '').toString(),
       members: membersList,
+      memberNames: namesMap,
       memberDetails: detailsList,
       pendingJoinRequests: reqList,
       weeklyCoins: (row['weekly_coins'] as num?)?.toInt() ?? 0,
@@ -222,6 +246,7 @@ class TeamModel {
     String? leaderName,
     String? leaderAvatar,
     List<String>? members,
+    Map<String, String>? memberNames,
     List<Map<String, dynamic>>? memberDetails,
     List<String>? pendingJoinRequests,
     int? weeklyCoins,
@@ -251,6 +276,7 @@ class TeamModel {
           : this.leaderName,
       leaderAvatar: leaderAvatar ?? this.leaderAvatar,
       members: capped,
+      memberNames: memberNames ?? this.memberNames,
       memberDetails: memberDetails ?? this.memberDetails,
       pendingJoinRequests: pendingJoinRequests ?? this.pendingJoinRequests,
       weeklyCoins: weeklyCoins ?? this.weeklyCoins,

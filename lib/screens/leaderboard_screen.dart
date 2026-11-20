@@ -302,7 +302,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _buildPlayPolicyWeeklyBanner() {
-    final cycleLabel = _teamService.getWeekRangeLabel();
+    final cycleLabel = TeamService.getWeekRangeLabel();
     final pool = TeamService.weeklyGameRewardPool;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
@@ -430,7 +430,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
         final sanitizedName =
             TeamModel.sanitizePublicHandle(team.name, fallback: 'Team');
-        final displayName = team.tag != null && team.tag!.trim().isNotEmpty
+        final displayName = team.tag.trim().isNotEmpty
             ? '$sanitizedName [${team.tag}]'
             : sanitizedName;
 
@@ -440,7 +440,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => TeamProfileScreen(team: team),
+                builder: (_) => TeamProfileScreen(teamId: team.id),
               ),
             );
           },
