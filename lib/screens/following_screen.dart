@@ -9,6 +9,7 @@ import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../widgets/news_card.dart';
 import '../widgets/price_tracker_card.dart';
+import 'news_detail_screen.dart';
 
 class FollowingScreen extends StatefulWidget {
   const FollowingScreen({super.key});
@@ -46,6 +47,20 @@ class _FollowingScreenState extends State<FollowingScreen> {
 
   void _navigateToDetail(NewsModel news) {
     _storeService.incrementView(news.id);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NewsDetailScreen(
+          newsModel: news,
+          title: news.getTitle('en'),
+          description: news.getDescription('en'),
+          imageUrl: news.effectiveImageUrl,
+          source: news.store,
+          sourceUrl: news.sourceUrl,
+          category: news.category,
+          gameName: news.gameName,
+        ),
+      ),
+    );
   }
 
   void _addCustomGame() {
@@ -399,6 +414,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
                       (context, index) {
                         final item = followedList[index];
                         return NewsCard(
+                          key: ValueKey('following_news_${item.id}'),
                           news: item,
                           langCode: langCode,
                           isRtl: isRtl,

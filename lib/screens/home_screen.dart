@@ -131,8 +131,8 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(
         builder: (_) => NewsDetailScreen(
           newsModel: news,
-          title: news.title,
-          description: news.description,
+          title: news.getTitle('en'),
+          description: news.getDescription('en'),
           imageUrl: news.effectiveImageUrl,
           source: news.store,
           sourceUrl: news.sourceUrl,
@@ -766,6 +766,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               (context, index) {
                                                 final item = remainingNews[index];
                                                 return NewsCard(
+                                                  key: ValueKey('home_news_${item.id}'),
                                                   news: item,
                                                   langCode: langCode,
                                                   isRtl: isRtl,

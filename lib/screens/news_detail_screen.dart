@@ -10,6 +10,7 @@ import '../data/fallback_images.dart';
 import '../services/gaming_news_service.dart';
 import '../services/app_share_service.dart';
 import '../services/news_image_resolver.dart';
+import '../widgets/urdu_news_content.dart';
 
 class NewsDetailScreen extends StatefulWidget {
   final Map<String, dynamic>? newsData;
@@ -46,8 +47,10 @@ class NewsDetailScreen extends StatefulWidget {
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
   static final Map<String, String> _globalUrduDetailCache = {};
 
+  late String _newsId;
   late String _title;
   late String _description;
+  late String _shortSummary;
   late String _imageUrl;
   late String _source;
   late String _sourceUrl;
@@ -58,6 +61,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   bool _showUrdu = true;
   String? _urduTitle;
   String? _urduDescription;
+  String? _urduShortSummary;
   bool _isTranslating = false;
 
   @override
@@ -70,10 +74,15 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   String _generateRichUrduArticle(String title, String rawDesc, String category, String gameName) {
     final game = gameName.isNotEmpty ? gameName : (category.isNotEmpty ? category : 'گیمنگ');
+    final cleanSummary = rawDesc.trim();
+    final hasValidSummary = cleanSummary.isNotEmpty &&
+        cleanSummary != title.trim() &&
+        TranslationService.isTextInLanguage(cleanSummary, 'ur');
 
-    final p1 = '$title\n\n'
-        'گیمنگ انڈسٹری اور $game کمیونٹی کے لیے یہ ایک نہایت اہم ترین خبر اور آفیشل پیش رفت سامنے آئی ہے۔ '
-        'ڈویلپرز اور پبلشرز نے اس تازہ ترین ریلیز اور اپ ڈیٹ کے حوالے سے تمام اہم نکات جاری کیے ہیں جن کا مقصد کھلاڑیوں کے گیمنگ تجربے کو پہلے سے کہیں زیادہ شاندار بنانا ہے۔';
+    final p1 = hasValidSummary
+        ? cleanSummary
+        : 'گیمنگ انڈسٹری اور $game کمیونٹی کے لیے یہ ایک نہایت اہم ترین خبر اور آفیشل پیش رفت سامنے آئی ہے۔ '
+            'ڈویلپرز اور پبلشرز نے اس تازہ ترین ریلیز اور اپ ڈیٹ کے حوالے سے تمام اہم نکات جاری کیے ہیں جن کا مقصد کھلاڑیوں کے گیمنگ تجربے کو پہلے سے کہیں زیادہ شاندار بنانا ہے۔';
 
     final p2 = 'اس آفیشل اپ ڈیٹ میں گیم کے فریم ریٹ کے استحکام، تیز رفتار لوڈنگ اور گرافکس کوالٹی کو اگلی سطح پر لے جانے کے لیے خصوصی آپٹیمائزیشنز کی گئی ہیں۔ '
         'پلے اسٹیشن 5 (PS5)، ایکس باکس سیریز (Xbox Series X|S) اور جدید پی سی سسٹمز پر گیم پلے کو 60 ایف پی ایس اور 4K ریزولوشن پر بغیر کسی فریم ڈراپ کے چلانے کے لیے جدید ترین رینڈرنگ انجن استعمال کیا گیا ہے۔';
@@ -89,10 +98,13 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   String _generateRichEnglishArticle(String title, String rawDesc, String category, String gameName) {
     final game = gameName.isNotEmpty ? gameName : (category.isNotEmpty ? category : 'Gaming');
+    final cleanSummary = rawDesc.trim();
+    final hasValidSummary = cleanSummary.isNotEmpty && cleanSummary.toLowerCase() != title.trim().toLowerCase();
 
-    final p1 = '$title\n\n'
-        'An exciting and consequential development has officially unfolded for the $game community. '
-        'Studio leads and game directors have issued an in-depth briefing detailing the architectural milestones, core design philosophies, and gameplay enhancements introduced in this latest deployment.';
+    final p1 = hasValidSummary
+        ? cleanSummary
+        : 'An exciting and consequential development has officially unfolded for the $game community. '
+            'Studio leads and game directors have issued an in-depth briefing detailing the architectural milestones, core design philosophies, and gameplay enhancements introduced in this latest deployment.';
 
     final p2 = 'Engineers have directed concentrated effort toward optimizing native rendering pipelines and maximizing frame stability across next-generation platforms, including PlayStation 5, Xbox Series X|S, and high-performance PC configurations. By streamlining asset loading and multithreaded simulations, players will experience fluid, uninterrupted immersion without latency hurdles.';
 
@@ -105,23 +117,81 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     return '$p1\n\n$p2\n\n$p3\n\n$p4';
   }
 
+  /// Verify that scraped text actually belongs to [_title] and is not a different article from a hub/sidebar/redirect
+  bool _doesScrapedTextMatchArticle(String scrapedText) {
+    if (scrapedText.trim().isEmpty) return false;
+    if (_title.trim().isEmpty) return true;
+
+    final stopWords = {
+      'the', 'and', 'for', 'with', 'from', 'that', 'this', 'have', 'will', 'your',
+      'about', 'into', 'after', 'over', 'more', 'what', 'when', 'where', 'which',
+      'game', 'games', 'gaming', 'news', 'update', 'new', 'gta', 'grand', 'theft',
+      'auto', 'rockstar', 'call', 'duty', 'pubg', 'free', 'fire', 'fortnite',
+      'valorant', 'minecraft', 'xbox', 'ps5', 'playstation', 'pc', 'steam', 'official'
+    };
+
+    final titleWords = _title
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((w) => w.length >= 4 && !stopWords.contains(w))
+        .toSet();
+
+    if (titleWords.isEmpty) return true;
+
+    final lowerScraped = scrapedText.toLowerCase();
+    int matchedCount = 0;
+    for (final w in titleWords) {
+      if (lowerScraped.contains(w)) {
+        matchedCount++;
+      }
+    }
+
+    // Require at least 35% of distinctive subject words (or at least 2 words) from the title to appear in the scraped text
+    final requiredMatches = (titleWords.length >= 4) ? 2 : 1;
+    return matchedCount >= requiredMatches;
+  }
+
   Future<void> _fetchFullScrapedArticle() async {
     if (_sourceUrl.isEmpty || !_sourceUrl.startsWith('http')) return;
+    // If we already have a substantial multi-paragraph article from the database (> 500 chars), do not overwrite it!
+    if (_description.trim().length > 500 &&
+        !_description.contains('Engineers have directed concentrated effort toward optimizing native rendering pipelines')) {
+      return;
+    }
+
     try {
       final fullText = await GamingNewsService().scrapeFullArticle(
         _sourceUrl,
         fallbackTitle: _title,
-        fallbackDescription: _description,
+        fallbackDescription: _shortSummary.isNotEmpty ? _shortSummary : _description,
       );
-      if (fullText.isNotEmpty && fullText.length > 400 && mounted) {
+      if (fullText.isNotEmpty &&
+          fullText.length > 400 &&
+          _doesScrapedTextMatchArticle(fullText) &&
+          mounted) {
+        // Ensure the exact short summary from the card is preserved at the top if not already present
+        String combinedEn = fullText.trim();
+        if (_shortSummary.isNotEmpty &&
+            _shortSummary.length >= 30 &&
+            !combinedEn.toLowerCase().contains(_shortSummary.substring(0, (_shortSummary.length * 0.5).toInt().clamp(1, _shortSummary.length)).toLowerCase())) {
+          combinedEn = '$_shortSummary\n\n$combinedEn';
+        }
+
         setState(() {
-          _description = fullText;
+          _description = combinedEn;
         });
-        final urduFull = await TranslationService.translateArticle(fullText, 'ur');
+        final urduFull = await TranslationService.translateArticle(combinedEn, 'ur');
         if (mounted && urduFull.isNotEmpty && TranslationService.isTextInLanguage(urduFull, 'ur')) {
+          String finalUrdu = urduFull.trim();
+          if (_urduShortSummary != null &&
+              _urduShortSummary!.isNotEmpty &&
+              !finalUrdu.contains(_urduShortSummary!.substring(0, (_urduShortSummary!.length * 0.4).toInt().clamp(1, _urduShortSummary!.length)))) {
+            finalUrdu = '${_urduShortSummary!}\n\n$finalUrdu';
+          }
           setState(() {
-            _urduDescription = urduFull;
-            _globalUrduDetailCache['d_$_title'] = urduFull;
+            _urduDescription = finalUrdu;
+            _globalUrduDetailCache['d_$_newsId'] = finalUrdu;
           });
         }
       }
@@ -135,7 +205,12 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     final gn = widget.gamingNews;
     final nm = widget.newsModel;
 
-    _title = (widget.title ??
+    final tMap = (nd != null && nd['titleMap'] is Map) ? nd['titleMap'] as Map : nm?.titleMap;
+    final dMap = (nd != null && nd['descriptionMap'] is Map) ? nd['descriptionMap'] as Map : nm?.descriptionMap;
+
+    String candidateTitleEn = (nd?['title_en'] ??
+            tMap?['en'] ??
+            widget.title ??
             nd?['title'] ??
             gn?.titleEn ??
             nm?.getTitle('en') ??
@@ -144,34 +219,87 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         .toString()
         .trim();
 
-    _description = (widget.description ??
+    if (TranslationService.isTextInLanguage(candidateTitleEn, 'ur')) {
+      final enFromMap = (tMap?['en'] ?? tMap?['ro'] ?? gn?.titleEn ?? '').toString().trim();
+      if (enFromMap.isNotEmpty && !TranslationService.isTextInLanguage(enFromMap, 'ur')) {
+        candidateTitleEn = enFromMap;
+      }
+    }
+    _title = candidateTitleEn;
+
+    _shortSummary = (nd?['short_description'] ??
+            nd?['shortDescription'] ??
+            gn?.summary ??
+            '')
+        .toString()
+        .trim();
+
+    _description = (nd?['full_description'] ??
+            nd?['content_en'] ??
+            dMap?['en'] ??
+            widget.description ??
             nd?['description'] ??
             nd?['content'] ??
             gn?.contentEn ??
             nm?.getDescription('en') ??
             nm?.description ??
+            _shortSummary)
+        .toString()
+        .trim();
+
+    if (_shortSummary.isEmpty && _description.isNotEmpty) {
+      _shortSummary = _description.length > 320 ? _description.substring(0, 320) : _description;
+    }
+
+    _sourceUrl = (widget.sourceUrl ??
+            nd?['source_url'] ??
+            nd?['sourceUrl'] ??
+            nd?['url'] ??
+            gn?.sourceUrl ??
+            nm?.sourceUrl ??
             '')
         .toString()
         .trim();
 
-    // Check pre-translated fields cleanly
-    String? preUrduTitle = nd?['title_ur']?.toString();
-    if (preUrduTitle == null && nd != null && nd['titleMap'] is Map) {
-      preUrduTitle = (nd['titleMap'] as Map)['ur']?.toString();
+    final rawId = (nd?['id'] ?? gn?.id ?? nm?.id ?? '').toString().trim();
+    _newsId = rawId.isNotEmpty
+        ? rawId
+        : (_sourceUrl.isNotEmpty ? _sourceUrl : _title);
+
+    // Check pre-translated or cached Urdu title from the tapped card first
+    String? preUrduTitle = UrduNewsContent.getCachedUrduTitle(rawId) ??
+        nd?['title_ur']?.toString() ??
+        tMap?['ur']?.toString() ??
+        gn?.titleUr ??
+        nm?.titleMap['ur'];
+
+    if ((preUrduTitle == null || preUrduTitle.trim().isEmpty) &&
+        nd?['title'] != null &&
+        TranslationService.isTextInLanguage(nd!['title'].toString(), 'ur')) {
+      preUrduTitle = nd['title'].toString();
     }
-    preUrduTitle ??= gn?.titleUr ?? nm?.titleMap['ur'];
 
     if (preUrduTitle != null &&
         preUrduTitle.trim().isNotEmpty &&
         TranslationService.isTextInLanguage(preUrduTitle, 'ur')) {
       _urduTitle = preUrduTitle.trim();
+      _globalUrduDetailCache['t_$_newsId'] = _urduTitle!;
     }
 
-    String? preUrduDesc = nd?['description_ur']?.toString();
-    if (preUrduDesc == null && nd != null && nd['descriptionMap'] is Map) {
-      preUrduDesc = (nd['descriptionMap'] as Map)['ur']?.toString();
+    // Check pre-translated or cached Urdu description from the tapped card
+    final cardCachedUrduDesc = UrduNewsContent.getCachedUrduDesc(rawId) ??
+        nd?['short_description_ur']?.toString();
+    if (cardCachedUrduDesc != null &&
+        cardCachedUrduDesc.trim().isNotEmpty &&
+        TranslationService.isTextInLanguage(cardCachedUrduDesc, 'ur')) {
+      _urduShortSummary = cardCachedUrduDesc.trim();
     }
-    preUrduDesc ??= gn?.contentUr ?? nm?.descriptionMap['ur'];
+
+    String? preUrduDesc = nd?['description_ur']?.toString() ??
+        dMap?['ur']?.toString() ??
+        gn?.contentUr ??
+        nm?.descriptionMap['ur'] ??
+        _urduShortSummary;
 
     if (preUrduDesc != null &&
         preUrduDesc.trim().isNotEmpty &&
@@ -200,17 +328,8 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             nd?['image_url'] ??
             nd?['imageUrl'] ??
             gn?.effectiveImageUrl ??
+            nm?.effectiveImageUrl ??
             nm?.imageUrl ??
-            '')
-        .toString()
-        .trim();
-
-    _sourceUrl = (widget.sourceUrl ??
-            nd?['source_url'] ??
-            nd?['sourceUrl'] ??
-            nd?['url'] ??
-            gn?.sourceUrl ??
-            nm?.sourceUrl ??
             '')
         .toString()
         .trim();
@@ -236,6 +355,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
         category: _category,
         title: _title,
         content: _description,
+        docId: _newsId,
       );
     }
 
@@ -265,6 +385,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             nd?['created_at'] ??
             nd?['published_at'] ??
             nd?['timeAgo'] ??
+            nm?.timeAgo ??
             '')
         .toString();
 
@@ -272,14 +393,20 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       'source_url': _sourceUrl,
       'created_at': rawTime,
       'published_at': nd?['published_at'],
-      'timestamp': nd?['timestamp'],
+      'timestamp': nd?['timestamp'] ?? nm?.timestamp?.millisecondsSinceEpoch,
     });
 
-    // Ensure English description is a rich, complete article
+    // Strip leading duplicate title from _description if present
+    if (_title.isNotEmpty &&
+        _description.toLowerCase().startsWith(_title.toLowerCase()) &&
+        _description.length > _title.length + 15) {
+      _description = _description.substring(_title.length).replaceFirst(RegExp(r'^[\s\.\:\-\|]+'), '').trim();
+    }
+
+    // Only expand with supplementary paragraphs if description is very short (< 180 chars), while preserving the original summary as Paragraph 1!
     final cleanDesc = _description.trim();
-    final bool isShortOrRepeated = cleanDesc.length < 350 ||
-        cleanDesc.toLowerCase() == _title.toLowerCase() ||
-        (_title.length > 20 && cleanDesc.toLowerCase().contains(_title.toLowerCase().substring(0, 20)));
+    final bool isShortOrRepeated = cleanDesc.length < 180 ||
+        cleanDesc.toLowerCase() == _title.toLowerCase();
 
     if (isShortOrRepeated) {
       _description = _generateRichEnglishArticle(_title, cleanDesc, _category, _gameName);
@@ -287,28 +414,29 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   void _resolveUrduContent() {
-    // Check if title is already in Urdu
+    // 1. Resolve Urdu title
     if (_urduTitle == null) {
       if (TranslationService.isTextInLanguage(_title, 'ur')) {
         _urduTitle = _title;
-      } else if (_globalUrduDetailCache.containsKey('t_$_title')) {
-        _urduTitle = _globalUrduDetailCache['t_$_title'];
+      } else if (_globalUrduDetailCache.containsKey('t_$_newsId')) {
+        _urduTitle = _globalUrduDetailCache['t_$_newsId'];
       }
     }
 
-    // Check if Urdu description is already rich
-    final urTitle = _urduTitle ?? _title;
-    final cleanUrduDesc = (_urduDescription ?? '').trim();
-    final bool isUrduShortOrRepeated = cleanUrduDesc.length < 350 ||
-        cleanUrduDesc == urTitle ||
-        (urTitle.length > 20 && cleanUrduDesc.contains(urTitle.substring(0, 20)));
-
-    if (isUrduShortOrRepeated) {
-      _urduDescription = _generateRichUrduArticle(urTitle, cleanUrduDesc, _category, _gameName);
-      _globalUrduDetailCache['d_$_title'] = _urduDescription!;
+    // 2. Check cached Urdu description for this specific newsId
+    if (_urduDescription == null && _globalUrduDetailCache.containsKey('d_$_newsId')) {
+      _urduDescription = _globalUrduDetailCache['d_$_newsId'];
     }
 
-    if (_urduTitle != null && _urduDescription != null) {
+    // If Urdu description exists and is short (< 180 chars), keep the exact Urdu summary as Paragraph 1 and append supporting context
+    final urTitle = _urduTitle ?? _title;
+    final cleanUrduDesc = (_urduDescription ?? '').trim();
+    if (cleanUrduDesc.isNotEmpty && cleanUrduDesc.length < 180 && cleanUrduDesc != urTitle) {
+      _urduDescription = _generateRichUrduArticle(urTitle, cleanUrduDesc, _category, _gameName);
+      _globalUrduDetailCache['d_$_newsId'] = _urduDescription!;
+    }
+
+    if (_urduTitle != null && _urduDescription != null && _urduDescription!.trim().length >= 180) {
       return;
     }
 
@@ -318,15 +446,22 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       if (_urduTitle == null && _title.isNotEmpty)
         TranslationService.translateSingle(_title, 'ur').then((res) {
           if (res.isNotEmpty && TranslationService.isTextInLanguage(res, 'ur')) {
-            _globalUrduDetailCache['t_$_title'] = res;
+            _globalUrduDetailCache['t_$_newsId'] = res;
+            UrduNewsContent.globalUrduCache['t_$_newsId'] = res;
             if (mounted) setState(() => _urduTitle = res);
           }
         }),
-      if (_urduDescription == null && _description.isNotEmpty)
+      if ((_urduDescription == null || _urduDescription!.trim().length < 180) && _description.isNotEmpty)
         TranslationService.translateArticle(_description, 'ur').then((res) {
           if (res.isNotEmpty && TranslationService.isTextInLanguage(res, 'ur')) {
-            _globalUrduDetailCache['d_$_title'] = res;
-            if (mounted) setState(() => _urduDescription = res);
+            String finalUrdu = res.trim();
+            if (_urduShortSummary != null &&
+                _urduShortSummary!.isNotEmpty &&
+                !finalUrdu.contains(_urduShortSummary!.substring(0, (_urduShortSummary!.length * 0.4).toInt().clamp(1, _urduShortSummary!.length)))) {
+              finalUrdu = '${_urduShortSummary!}\n\n$finalUrdu';
+            }
+            _globalUrduDetailCache['d_$_newsId'] = finalUrdu;
+            if (mounted) setState(() => _urduDescription = finalUrdu);
           }
         }),
     ]).then((_) {

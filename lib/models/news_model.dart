@@ -243,31 +243,76 @@ class NewsModel {
       }
     }
 
-    Map<String, String> parseTextMap(dynamic val, String fallback) {
-      if (val is Map) {
-        final res = <String, String>{};
-        val.forEach((k, v) {
-          if (v!= null) res[k.toString()] = v.toString();
+    Map<String, String> parseTextMap(dynamic primaryMap, dynamic fallbackVal, String defaultStr, {dynamic urduOverride}) {
+      Map<String, String> res = {};
+      if (primaryMap is Map) {
+        primaryMap.forEach((k, v) {
+          if (v != null && v.toString().trim().isNotEmpty) {
+            res[k.toString()] = v.toString();
+          }
         });
-        if (res.containsKey('roman') &&!res.containsKey('ro')) res['ro'] = res['roman']!;
-        if (res.containsKey('ro') &&!res.containsKey('roman')) res['roman'] = res['ro']!;
-        return res;
-      } else if (val is String && val.isNotEmpty) {
-        return _createDefaultMap(val);
       }
-      return _createDefaultMap(fallback);
+      if (res.isEmpty && fallbackVal is Map) {
+        fallbackVal.forEach((k, v) {
+          if (v != null && v.toString().trim().isNotEmpty) {
+            res[k.toString()] = v.toString();
+          }
+        });
+      }
+      if (res.isEmpty) {
+        final str = (fallbackVal is String && fallbackVal.trim().isNotEmpty) ? fallbackVal.trim() : defaultStr;
+        res = _createDefaultMap(str);
+      } else {
+        final fallbackStr = (fallbackVal is String && fallbackVal.trim().isNotEmpty)
+            ? fallbackVal.trim()
+            : (res['en'] ?? res['roman'] ?? res['ro'] ?? res.values.first);
+        for (final key in ['en', 'roman', 'ro', 'ur', 'hi', 'bn', 'ar', 'zh', 'zh-cn']) {
+          if (!res.containsKey(key) || res[key]!.trim().isEmpty) {
+            res[key] = fallbackStr;
+          }
+        }
+      }
+      if (fallbackVal is String && fallbackVal.trim().isNotEmpty) {
+        if (TranslationService.isTextInLanguage(fallbackVal, 'ur')) {
+          res['ur'] = fallbackVal.trim();
+        } else if (res['en'] == null || TranslationService.isTextInLanguage(res['en']!, 'ur')) {
+          res['en'] = fallbackVal.trim();
+          res['ro'] = fallbackVal.trim();
+          res['roman'] = fallbackVal.trim();
+        }
+      }
+      if (urduOverride is String && urduOverride.trim().isNotEmpty && TranslationService.isTextInLanguage(urduOverride, 'ur')) {
+        res['ur'] = urduOverride.trim();
+      }
+      if (res.containsKey('roman') && !res.containsKey('ro')) res['ro'] = res['roman']!;
+      if (res.containsKey('ro') && !res.containsKey('roman')) res['roman'] = res['ro']!;
+      return res;
     }
+
+    final parsedTitleMap = parseTextMap(
+      data['titleMap'],
+      data['title_en'] ?? data['title'],
+      '',
+      urduOverride: data['title_ur'] ?? (data['title'] is String && TranslationService.isTextInLanguage(data['title'], 'ur') ? data['title'] : null),
+    );
+    final parsedDescMap = parseTextMap(
+      data['descriptionMap'],
+      data['content_en'] ?? data['fullContent_en'] ?? data['content'] ?? data['description'] ?? data['shortDescription'],
+      '',
+      urduOverride: data['description_ur'] ?? data['content_ur'] ?? data['fullContent_ur'],
+    );
 
     final cat = (data['category'] ?? 'Gaming').toString();
     String img = '';
     if (data['imageUrl'] is String) img = (data['imageUrl'] as String).trim();
-    if (img.isEmpty && data['appId']!= null) {
+    if (img.isEmpty && data['image_url'] is String) img = (data['image_url'] as String).trim();
+    if (img.isEmpty && data['appId'] != null) {
       img = 'https://cdn.akamai.steamstatic.com/steam/apps/${data['appId']}/header.jpg';
     }
     if (img.isEmpty || img.contains('picsum.photos')) {
       img = getGameFallbackImage(
         category: cat,
-        title: (data['title'] is Map ? (data['title']['en'] ?? data['title']['roman']) : data['title'])?.toString(),
+        title: parsedTitleMap['en'] ?? parsedTitleMap['roman'],
         docId: docId,
       );
     }
@@ -322,10 +367,10 @@ class NewsModel {
 
     return NewsModel(
       id: docId.isNotEmpty ? docId : (data['id']?.toString() ?? ''),
-      titleMap: parseTextMap(data['title'], ''),
-      descriptionMap: parseTextMap(data['content']!= null? data['content'] : data['description'], ''),
+      titleMap: parsedTitleMap,
+      descriptionMap: parsedDescMap,
       category: data['category'] is String? data['category'] as String : 'Gaming News',
-      gameName: data['gameName'] is String? data['gameName'] as String : null,
+      gameName: data['gameName'] is String ? data['gameName'] as String : (data['game'] is String ? data['game'] as String : null),
       imageUrl: img,
       videoUrl: data['videoUrl'] is String? data['videoUrl'] as String : null,
       youtubeId: data['youtubeId'] is String? data['youtubeId'] as String : null,
@@ -338,13 +383,13 @@ class NewsModel {
       timeLeft: data['timeLeft'] is String? data['timeLeft'] as String : null,
       storeName: data['storeName'] is String? data['storeName'] as String : null,
       downloadSize: data['downloadSize'] is String? data['downloadSize'] as String : null,
-      sourceUrl: data['sourceUrl'] is String? data['sourceUrl'] as String : null,
+      sourceUrl: (data['sourceUrl'] ?? data['source_url'] ?? data['url'])?.toString(),
       isAuto: isAuto,
       timestamp: ts,
       appId: appId,
       currentPrice: currentPrice,
       originalPriceVal: originalPriceVal,
-      store: store,
+      store: store ?? (data['source'] is String ? data['source'] as String : null),
       priceHistory: priceHistory,
       releaseDate: releaseDate,
     );
@@ -443,86 +488,6 @@ class NewsModel {
   }
 
   factory NewsModel.fromJson(Map<String, dynamic> json) {
-    DateTime? ts = _parseDateTime(json['timestamp'] ?? json['timestampMillis']);
-
-    Map<String, String> parseTextMap(dynamic val, String fallback) {
-      if (val is Map) {
-        final res = <String, String>{};
-        val.forEach((k, v) {
-          if (v!= null) res[k.toString()] = v.toString();
-        });
-        return res;
-      } else if (val is String && val.isNotEmpty) {
-        return _createDefaultMap(val);
-      }
-      return _createDefaultMap(fallback);
-    }
-
-    final cat = (json['category'] ?? 'Gaming').toString();
-    String img = '';
-    if (json['imageUrl'] is String) img = (json['imageUrl'] as String).trim();
-    if (img.isEmpty && json['appId']!= null) {
-      img = 'https://cdn.akamai.steamstatic.com/steam/apps/${json['appId']}/header.jpg';
-    }
-    if (img.isEmpty || img.contains('picsum.photos')) {
-      img = getGameFallbackImage(
-        category: cat,
-        title: (json['title'] is Map ? (json['title']['en'] ?? json['title']['roman']) : json['title'])?.toString(),
-        docId: (json['id'] ?? '').toString(),
-      );
-    }
-
-    int views = 0;
-    if (json['views'] is num) views = (json['views'] as num).toInt();
-
-    double? currentPrice;
-    if (json['currentPrice'] is num) {
-      currentPrice = (json['currentPrice'] as num).toDouble();
-    } else if (json['currentPrice'] is String) {
-      currentPrice = double.tryParse((json['currentPrice'] as String).replaceAll(RegExp(r'[^0-9.]'), ''));
-    }
-
-    double? originalPriceVal;
-    if (json['originalPriceVal'] is num) {
-      originalPriceVal = (json['originalPriceVal'] as num).toDouble();
-    } else if (json['originalPrice'] is num) {
-      originalPriceVal = (json['originalPrice'] as num).toDouble();
-    } else if (json['originalPrice'] is String) {
-      originalPriceVal = double.tryParse((json['originalPrice'] as String).replaceAll(RegExp(r'[^0-9.]'), ''));
-    }
-
-    String? store = json['store'] is String ? json['store'] as String : null;
-
-    List<Map<String, dynamic>>? priceHistory;
-    if (json['priceHistory'] is List) {
-      priceHistory = (json['priceHistory'] as List).map((e) {
-        if (e is Map) {
-          return Map<String, dynamic>.from(e);
-        }
-        return <String, dynamic>{};
-      }).where((e) => e.isNotEmpty).toList();
-    }
-
-    DateTime? releaseDate = _parseDateTime(json['releaseDate']);
-
-    return NewsModel(
-      id: json['id'] is String? json['id'] as String : '',
-      titleMap: parseTextMap(json['title'], ''),
-      descriptionMap: parseTextMap(json['content']!= null? json['content'] : json['description'], ''),
-      category: json['category'] is String? json['category'] as String : 'Gaming News',
-      gameName: json['gameName'] is String? json['gameName'] as String : null,
-      imageUrl: img,
-      videoUrl: json['videoUrl'] is String? json['videoUrl'] as String : null,
-      youtubeId: json['youtubeId'] is String? json['youtubeId'] as String : null,
-      timeAgo: json['timeAgo'] is String? json['timeAgo'] as String : 'Recently',
-      views: views,
-      appId: json['appId'] is num? (json['appId'] as num).toInt() : null,
-      timestamp: ts,
-      currentPrice: currentPrice,
-      originalPriceVal: originalPriceVal,
-      store: store,
-      priceHistory: priceHistory,
-      releaseDate: releaseDate,
-    );
+    return NewsModel.fromSupabase(json);
   }
 }

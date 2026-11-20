@@ -204,6 +204,7 @@ class NewsCard extends StatelessWidget {
 
                           // English Title
                           TranslatedNewsTitle(
+                            key: ValueKey('title_${news.id}'),
                             news: news,
                             langCode: langCode,
                             maxLines: 2,
@@ -220,6 +221,7 @@ class NewsCard extends StatelessWidget {
 
                           // Short 2-line Urdu summary under title
                           UrduSummaryText(
+                            key: ValueKey('urdu_sum_${news.id}'),
                             news: news,
                             maxLines: 2,
                           ),

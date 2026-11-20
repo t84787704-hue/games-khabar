@@ -195,10 +195,41 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   }
 
   void _openNewsDetail(Map<String, dynamic> post) {
+    final postId = (post['id'] ?? '').toString().trim();
+    final enrichedPost = Map<String, dynamic>.from(post);
+
+    final cachedUrduTitle = UrduNewsContent.getCachedUrduTitle(postId);
+    final cachedUrduDesc = UrduNewsContent.getCachedUrduDesc(postId);
+
+    if (cachedUrduTitle != null && cachedUrduTitle.trim().isNotEmpty) {
+      enrichedPost['title_ur'] = cachedUrduTitle.trim();
+    }
+    if (cachedUrduDesc != null && cachedUrduDesc.trim().isNotEmpty) {
+      // Only override if description_ur wasn't already a full multi-paragraph Urdu article
+      final existingUr = (enrichedPost['description_ur'] ?? '').toString().trim();
+      if (existingUr.isEmpty || existingUr.length < cachedUrduDesc.length) {
+        enrichedPost['description_ur'] = cachedUrduDesc.trim();
+      }
+      enrichedPost['short_description_ur'] = cachedUrduDesc.trim();
+    }
+
+    final resolvedImg = _resolvePostImage(post);
+    if (resolvedImg.isNotEmpty) {
+      enrichedPost['image_url'] = resolvedImg;
+      enrichedPost['imageUrl'] = resolvedImg;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NewsDetailScreen(
-          newsData: post,
+          newsData: enrichedPost,
+          title: (enrichedPost['title'] ?? '').toString(),
+          description: (enrichedPost['full_description'] ?? enrichedPost['description'] ?? '').toString(),
+          imageUrl: resolvedImg,
+          source: (enrichedPost['source'] ?? '').toString(),
+          sourceUrl: (enrichedPost['source_url'] ?? enrichedPost['sourceUrl'] ?? '').toString(),
+          category: (enrichedPost['category'] ?? '').toString(),
+          gameName: (enrichedPost['game_name'] ?? enrichedPost['gameName'] ?? '').toString(),
         ),
       ),
     );
@@ -340,24 +371,49 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       final fetchedPosts = List<Map<String, dynamic>>.from(results[0] as List);
       final steamNewsList = results[1];
 
-      // Format Steam News items to look like feed posts so they seamlessly blend into the feed
       final validNewsList = steamNewsList.where((news) {
-        final title = (news['title'] ?? '').toString().trim();
-        final rawDesc = (news['description'] ?? news['shortDescription'] ?? '').toString().trim();
+        final tMap = news['titleMap'] is Map ? news['titleMap'] as Map : null;
+        final dMap = news['descriptionMap'] is Map ? news['descriptionMap'] as Map : null;
+        final title = (news['title_en'] ?? tMap?['en'] ?? news['title'] ?? '').toString().trim();
+        final rawDesc = (news['content_en'] ?? dMap?['en'] ?? news['description'] ?? news['shortDescription'] ?? '').toString().trim();
         return title.isNotEmpty && rawDesc.isNotEmpty && rawDesc.length >= 20;
       }).toList();
 
       final formattedSteamNews = validNewsList.map((news) {
-        final title = (news['title'] ?? '').toString().trim();
-        String rawDesc = (news['description'] ?? news['shortDescription'] ?? '').toString().trim();
+        final tMap = news['titleMap'] is Map ? Map<String, dynamic>.from(news['titleMap'] as Map) : null;
+        final dMap = news['descriptionMap'] is Map ? Map<String, dynamic>.from(news['descriptionMap'] as Map) : null;
 
-        // Clean up whitespace & special characters to accurately check if description is a duplicate of title
+        final rawTitleField = (news['title'] ?? '').toString().trim();
+        final bool rawTitleIsUrdu = rawTitleField.isNotEmpty && TranslationService.isTextInLanguage(rawTitleField, 'ur');
+
+        String titleEn = (news['title_en'] ?? tMap?['en'] ?? tMap?['ro'] ?? '').toString().trim();
+        if (titleEn.isEmpty || TranslationService.isTextInLanguage(titleEn, 'ur')) {
+          titleEn = !rawTitleIsUrdu && rawTitleField.isNotEmpty
+              ? rawTitleField
+              : (tMap?['en'] ?? rawTitleField).toString().trim();
+        }
+        final title = titleEn.isNotEmpty ? titleEn : rawTitleField;
+
+        String rawDesc = (news['content_en'] ??
+                news['fullContent_en'] ??
+                dMap?['en'] ??
+                news['description'] ??
+                news['shortDescription'] ??
+                '')
+            .toString()
+            .trim();
+
+        // Strip leading duplicate title if rawDesc starts with title
+        if (title.isNotEmpty &&
+            rawDesc.toLowerCase().startsWith(title.toLowerCase()) &&
+            rawDesc.length > title.length + 15) {
+          rawDesc = rawDesc.substring(title.length).replaceFirst(RegExp(r'^[\s\.\:\-\|]+'), '').trim();
+        }
+
+        // Only use fallback text if description is truly empty or just repeats the title
         final normT = title.replaceAll(RegExp(r'[\s\-_\|\.\u00a0]+'), '').trim().toLowerCase();
         final normD = rawDesc.replaceAll(RegExp(r'[\s\-_\|\.\u00a0]+'), '').trim().toLowerCase();
-        final bool isDuplicateOrStub = rawDesc.length < 140 ||
-            normT == normD ||
-            normD.startsWith(normT.substring(0, (normT.length * 0.6).toInt().clamp(1, normT.length))) ||
-            (normT.length > 20 && normD.contains(normT.substring(0, 20)));
+        final bool isDuplicateOrStub = rawDesc.length < 25 || normT == normD;
 
         if (isDuplicateOrStub) {
           rawDesc = "$title.\n\n"
@@ -366,8 +422,9 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
               "Tap 'Read Full Story' to explore complete release notes, visual highlights, and patch details.";
         }
 
-        final shortDesc = (news['shortDescription'] ?? '').toString().trim().isNotEmpty && (news['shortDescription'] ?? '').toString().trim().length >= 80
-            ? news['shortDescription'].toString().trim()
+        final rawShort = (news['shortDescription'] ?? news['summary'] ?? '').toString().trim();
+        final shortDesc = (rawShort.isNotEmpty && rawShort.length >= 30 && rawShort.toLowerCase() != title.toLowerCase())
+            ? rawShort
             : (rawDesc.length > 280 ? '${rawDesc.substring(0, 280)}...' : rawDesc);
 
         final contentText = title.isNotEmpty
@@ -375,7 +432,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
             : rawDesc;
 
         final source = (news['source'] ?? news['game'] ?? news['gameName'] ?? 'Gaming News').toString();
-        final sourceUrl = (news['sourceUrl'] ?? news['url'] ?? '').toString().trim();
+        final sourceUrl = (news['sourceUrl'] ?? news['source_url'] ?? news['url'] ?? '').toString().trim();
         final rawCreatedAt = (news['created_at'] ?? news['published_at'] ?? news['timeAgo'] ?? '').toString();
         final realDate = NewsImageResolver.resolveArticleDate(
           sourceUrl,
@@ -384,8 +441,19 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         );
         final effectiveCreatedAt = realDate.toIso8601String();
 
-        final titleUr = news['title_ur'] ?? (news['titleMap'] is Map ? news['titleMap']['ur'] : null);
-        final descUr = news['description_ur'] ?? (news['descriptionMap'] is Map ? news['descriptionMap']['ur'] : null);
+        String? titleUr = (news['title_ur'] ?? tMap?['ur'])?.toString().trim();
+        if ((titleUr == null || titleUr.isEmpty || !TranslationService.isTextInLanguage(titleUr, 'ur')) && rawTitleIsUrdu) {
+          titleUr = rawTitleField;
+        }
+
+        String? descUr = (news['description_ur'] ?? news['content_ur'] ?? dMap?['ur'])?.toString().trim();
+        if (descUr != null && !TranslationService.isTextInLanguage(descUr, 'ur')) {
+          descUr = null;
+        }
+
+        final uniqueNewsId = (news['id'] != null && news['id'].toString().trim().isNotEmpty)
+            ? 'steam_${news['id'].toString().trim()}'
+            : 'steam_${(sourceUrl.isNotEmpty ? sourceUrl : title).hashCode.abs()}';
 
         // Resolve genuine image directly from source website or NewsImageResolver
         final rawImg = (news['imageUrl'] ?? news['image_url'] ?? '').toString().trim();
@@ -406,18 +474,22 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                     category: news['category']?.toString(),
                     title: title,
                     content: rawDesc,
-                    docId: news['id']?.toString(),
+                    docId: uniqueNewsId,
                   );
 
         return {
-          'id': 'steam_${news['id'] ?? DateTime.now().millisecondsSinceEpoch}',
+          'id': uniqueNewsId,
           'content': contentText,
           'title': title,
-          'description': rawDesc,
+          'description': shortDesc,
+          'full_description': rawDesc,
           'short_description': shortDesc,
           'title_ur': titleUr,
           'description_ur': descUr,
+          'titleMap': tMap,
+          'descriptionMap': dMap,
           'image_url': cleanImage,
+          'imageUrl': cleanImage,
           'user_id': 'system_steam',
           'username': '$source 🎮',
           'user_avatar': '',
@@ -427,6 +499,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
           'published_at': effectiveCreatedAt,
           'is_steam_news': true,
           'source_url': sourceUrl,
+          'sourceUrl': sourceUrl,
           'game_name': news['game'] ?? news['gameName'] ?? '',
           'category': news['category'] ?? 'Gaming',
           'source': source,
@@ -2118,6 +2191,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                       final String? origImage = post['original_image_url']?.toString();
 
                       return Card(
+                        key: ValueKey('feed_card_$postId'),
                         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
                         elevation: 0,
                         color: isSteamNews ? ThemeService.cardSecondary.withOpacity(0.5) : ThemeService.card,
@@ -2214,9 +2288,10 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
                             ),
                             if (isSteamNews && (post['title'] ?? '').toString().isNotEmpty) ...[
                               UrduNewsContent(
+                                key: ValueKey('urdu_news_$postId'),
                                 newsId: postId,
                                 title: post['title'].toString(),
-                                description: (post['description'] ?? '').toString(),
+                                description: (post['short_description'] ?? post['description'] ?? '').toString(),
                                 titleUr: post['title_ur']?.toString(),
                                 descriptionUr: post['description_ur']?.toString(),
                                 onTap: () => _openNewsDetail(post),

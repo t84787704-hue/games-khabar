@@ -355,7 +355,31 @@ class GamingNewsService {
       if (htmlBody.isNotEmpty) {
         final document = html_parser.parse(htmlBody);
 
-        // Strip non-content tags
+        // If fallbackTitle is provided, verify that the page title / h1 actually matches the requested article
+        if (fallbackTitle.trim().isNotEmpty) {
+          final pageHeading = '${document.querySelector('title')?.text ?? ''} ${document.querySelector('h1')?.text ?? ''}'.toLowerCase();
+          if (pageHeading.trim().isNotEmpty) {
+            final stopWords = {
+              'the', 'and', 'for', 'with', 'from', 'that', 'this', 'have', 'will', 'your',
+              'about', 'into', 'after', 'over', 'more', 'what', 'when', 'where', 'which',
+              'game', 'games', 'gaming', 'news', 'update', 'new', 'official'
+            };
+            final titleKeywords = fallbackTitle
+                .toLowerCase()
+                .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+                .split(RegExp(r'\s+'))
+                .where((w) => w.length >= 4 && !stopWords.contains(w))
+                .toSet();
+            if (titleKeywords.length >= 2) {
+              final headingMatches = titleKeywords.where((w) => pageHeading.contains(w)).length;
+              if (headingMatches == 0) {
+                return _generateEnrichedArticleText(fallbackTitle, fallbackDescription);
+              }
+            }
+          }
+        }
+
+        // Strip non-content and related/sidebar article tags
         for (final tag in [
           'script',
           'style',
@@ -368,18 +392,29 @@ class GamingNewsService {
           'iframe',
           'button',
           'figure',
-          'figcaption'
+          'figcaption',
+          '.related',
+          '.recommended',
+          '.read-more',
+          '.more-stories',
+          '.sidebar',
+          '[data-testid*="related"]',
+          '[class*="related"]',
+          '[class*="recommended"]',
+          '[class*="trending"]'
         ]) {
-          document.querySelectorAll(tag).forEach((el) => el.remove());
+          try {
+            document.querySelectorAll(tag).forEach((el) => el.remove());
+          } catch (_) {}
         }
 
-        final container = document.querySelector('article') ??
-            document.querySelector('[itemprop="articleBody"]') ??
+        final container = document.querySelector('[itemprop="articleBody"]') ??
             document.querySelector('.article-content') ??
             document.querySelector('.article__content') ??
             document.querySelector('.article-body') ??
             document.querySelector('.entry-content') ??
             document.querySelector('.post-content') ??
+            document.querySelector('article') ??
             document.querySelector('main') ??
             document.body;
 
@@ -399,14 +434,20 @@ class GamingNewsService {
                 !text.toLowerCase().contains('follow us on') &&
                 !text.toLowerCase().contains('all rights reserved') &&
                 !text.toLowerCase().contains('click here') &&
-                !text.toLowerCase().contains('read next:')) {
+                !text.toLowerCase().contains('read next:') &&
+                !text.toLowerCase().contains('related:')) {
               paragraphs.add(text);
             }
           }
 
-          if (paragraphs.length >= 3) {
+          if (paragraphs.length >= 2) {
             // Join 4-7 paragraphs for comprehensive 500-800 words
-            return paragraphs.take(7).join('\n\n');
+            final joined = paragraphs.take(7).join('\n\n');
+            if (fallbackDescription.trim().isNotEmpty &&
+                !joined.toLowerCase().contains(fallbackDescription.trim().substring(0, (fallbackDescription.trim().length * 0.4).toInt().clamp(1, fallbackDescription.trim().length)).toLowerCase())) {
+              return '${fallbackDescription.trim()}\n\n$joined';
+            }
+            return joined;
           }
         }
       }
