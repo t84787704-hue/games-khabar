@@ -447,7 +447,7 @@ class _TeamCardState extends State<TeamCard> {
                           ),
                           const SizedBox(height: 1.5),
                           Text(
-                            "Leader: ${team.leaderName}",
+                            "Leader: @${TeamModel.sanitizePublicHandle(team.leaderName)}",
                             style: TextStyle(
                               color: ThemeService.textSecondary,
                               fontSize: 11,
@@ -460,7 +460,7 @@ class _TeamCardState extends State<TeamCard> {
                               const Icon(Icons.group_rounded, color: Color(0xFF1877F2), size: 12),
                               const SizedBox(width: 3),
                               Text(
-                                "${team.memberCount} Members",
+                                "${team.memberCount}/${TeamModel.maxMembers} Members",
                                 style: TextStyle(
                                   color: ThemeService.textSecondary,
                                   fontSize: 10.5,

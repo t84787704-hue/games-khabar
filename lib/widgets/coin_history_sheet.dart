@@ -526,17 +526,27 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
   Widget _buildTransactionCard(CoinTransaction tx) {
     final isCredit = tx.amount > 0;
+    final isWeeklyTeamReward = tx.type == 'weekly_team_reward';
+    final isRedemption = tx.type == 'game_currency_redemption' || tx.type == 'store_purchase';
     final isEscrowHold = tx.type == 'escrow_hold' || tx.type == 'room_host_hold' || tx.type == 'tournament_entry';
     final isRelease = tx.type == 'escrow_release' || tx.type == 'escrow_transferred';
 
-    final Color badgeColor = isCredit
-        ? GamerTheme.neonGreen
-        : (isRelease ? const Color(0xFF00E5FF) : (isEscrowHold ? GamerTheme.accentOrange : GamerTheme.redAccent));
+    final Color badgeColor = isWeeklyTeamReward
+        ? const Color(0xFFFFD700)
+        : isCredit
+            ? GamerTheme.neonGreen
+            : (isRelease ? const Color(0xFF00E5FF) : (isEscrowHold ? GamerTheme.accentOrange : GamerTheme.redAccent));
 
     final IconData typeIcon = _getIconForType(tx.type, isCredit);
-    final String badgeText = isCredit
-        ? 'tag_earned'.tr()
-        : (isRelease ? 'tag_released'.tr() : (isEscrowHold ? 'tag_escrow'.tr() : 'tag_spent'.tr()));
+    final String badgeText = isWeeklyTeamReward
+        ? 'WEEKLY #1 TEAM'
+        : isCredit
+            ? 'tag_earned'.tr()
+            : (isRelease
+                ? 'tag_released'.tr()
+                : (isEscrowHold
+                    ? 'tag_escrow'.tr()
+                    : (isRedemption ? 'REDEEMED' : 'tag_spent'.tr())));
     final String amountText = isCredit
         ? '+${'coins_amount_format'.tr(args: [tx.amount.toString()])}'
         : '-${'coins_amount_format'.tr(args: [tx.amount.abs().toString()])}';
@@ -708,10 +718,12 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
       case 'escrow_release':
       case 'escrow_transferred':
         return Icons.verified_user_rounded;
+      case 'weekly_team_reward':
       case 'win_prize':
       case 'team_prize':
       case 'win_reward':
         return Icons.emoji_events_rounded;
+      case 'game_currency_redemption':
       case 'store_purchase':
         return Icons.shopping_bag_rounded;
       case 'ad_reward':
@@ -1028,7 +1040,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                         iconColor: const Color(0xFF00FF88),
                         title: 'Sponsored Video Ad',
                         subtitle: 'Watch a short 5-second video to earn instant coins',
-                        coinsBadge: '+100 Coins',
+                        coinsBadge: '+25 Coins',
                         actionWidget: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00FF88),
@@ -1053,7 +1065,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   if (mounted) {
                                     ScaffoldMessenger.of(parentContext).showSnackBar(
                                       const SnackBar(
-                                        content: Text('🎉 +100 G-Coins Added to Your Wallet!'),
+                                        content: Text('🎉 +25 G-Coins Added to Your Wallet!'),
                                         backgroundColor: Color(0xFF00FF88),
                                       ),
                                     );

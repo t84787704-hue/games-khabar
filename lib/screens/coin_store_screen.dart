@@ -17,7 +17,10 @@ import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import '../services/app_share_service.dart';
+import '../services/team_service.dart';
+import '../models/team_model.dart';
 import 'coin_wallet_screen.dart';
+import 'teams_screen.dart';
 
 class CoinStoreScreen extends StatefulWidget {
   const CoinStoreScreen({super.key});
@@ -345,7 +348,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'watch_5s_earn_100_desc'.tr(),
+                          'Watch 5s sponsored clip to earn +25 G-Coins',
                           style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
                         ),
                       ],
@@ -513,6 +516,91 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        StreamBuilder<List<TeamModel>>(
+          stream: TeamService().getUserTeamsStream(uid),
+          builder: (context, teamSnap) {
+            final teams = teamSnap.data ?? [];
+            final isSolo = teams.isEmpty;
+            final activeTeam = isSolo ? null : teams.first;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isSolo
+                    ? GamerTheme.accentOrange.withOpacity(0.1)
+                    : GamerTheme.neonGreen.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isSolo
+                      ? GamerTheme.accentOrange.withOpacity(0.45)
+                      : GamerTheme.neonGreen.withOpacity(0.35),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        isSolo ? Icons.info_outline_rounded : Icons.groups_rounded,
+                        color: isSolo ? GamerTheme.accentOrange : GamerTheme.neonGreen,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          isSolo
+                              ? 'Solo User Notice • Team Required for Redemptions'
+                              : 'Active 4-Member Team: ${activeTeam!.name} (${activeTeam.game})',
+                          style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    isSolo
+                        ? 'Coins you earn from ads or daily check-in are always saved in your personal balance and history. Join or create an active team (up to 4 members) to redeem rewards or compete for weekly #1 team prizes.'
+                        : 'Coins you earn here are credited to your personal balance and automatically added to your team\'s weekly coin total for ${activeTeam!.game} (${activeTeam.memberCount}/${TeamModel.maxMembers} members).',
+                    style: TextStyle(
+                      color: ThemeService.textSecondary,
+                      fontSize: 11.5,
+                      height: 1.35,
+                    ),
+                  ),
+                  if (isSolo) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 32,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: GamerTheme.accentOrange,
+                          side: const BorderSide(color: GamerTheme.accentOrange),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TeamsScreen()),
+                          );
+                        },
+                        icon: const Icon(Icons.group_add_rounded, size: 15),
+                        label: const Text(
+                          'Join or Create a Team',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
         _buildEarnActionCard(
           icon: Icons.calendar_today_rounded,
           iconColor: GamerTheme.neonGreen,

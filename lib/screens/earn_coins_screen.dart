@@ -16,6 +16,9 @@ import '../services/gamer_auth_service.dart';
 import '../services/ad_free_service.dart';
 import '../services/theme_service.dart';
 import '../services/app_share_service.dart';
+import '../services/team_service.dart';
+import '../models/team_model.dart';
+import 'teams_screen.dart';
 
 class EarnCoinsScreen extends StatefulWidget {
   const EarnCoinsScreen({Key? key}) : super(key: key);
@@ -238,6 +241,91 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildBalanceBanner(wallet.coins, isDark),
+                    const SizedBox(height: 14),
+                    StreamBuilder<List<TeamModel>>(
+                      stream: TeamService().getUserTeamsStream(_userId),
+                      builder: (context, teamSnap) {
+                        final teams = teamSnap.data ?? [];
+                        final isSolo = teams.isEmpty;
+                        final activeTeam = isSolo ? null : teams.first;
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: isSolo
+                                ? GamerTheme.accentOrange.withOpacity(0.1)
+                                : GamerTheme.neonGreen.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSolo
+                                  ? GamerTheme.accentOrange.withOpacity(0.45)
+                                  : GamerTheme.neonGreen.withOpacity(0.35),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    isSolo ? Icons.info_outline_rounded : Icons.groups_rounded,
+                                    color: isSolo ? GamerTheme.accentOrange : GamerTheme.neonGreen,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      isSolo
+                                          ? 'Solo User Notice • Personal Coins Saved'
+                                          : '4-Member Team Weekly Tracking: ${activeTeam!.name} (${activeTeam.game})',
+                                      style: TextStyle(
+                                        color: ThemeService.textPrimary,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                isSolo
+                                    ? 'All coins you earn here are safely stored in your personal balance and history. Joining an active team (up to 4 members) is required to redeem rewards or qualify for weekly per-game #1 team rewards.'
+                                    : 'Every coin you earn from ads or daily check-in is added to your personal balance and counted toward your team\'s weekly total for ${activeTeam!.game}. Each week\'s #1 team per game shares the weekly reward equally.',
+                                style: TextStyle(
+                                  color: ThemeService.textSecondary,
+                                  fontSize: 11.5,
+                                  height: 1.35,
+                                ),
+                              ),
+                              if (isSolo) ...[
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  height: 32,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: GamerTheme.accentOrange,
+                                      side: const BorderSide(color: GamerTheme.accentOrange),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const TeamsScreen()),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.group_add_rounded, size: 15),
+                                    label: const Text(
+                                      'Join or Create a Team',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                     const SizedBox(height: 20),
                     Text(
                       'ways_to_earn_title'.tr(),
@@ -249,7 +337,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // 1. WATCH AD (+100 COINS, UNLIMITED)
+                    // 1. WATCH AD (+25 COINS, UNLIMITED)
                     _buildActionCard(
                       icon: Icons.play_circle_fill_rounded,
                       iconColor: GamerTheme.neonGreen,

@@ -15,6 +15,7 @@ import 'gamer_auth_service.dart';
 import 'coin_reward_service.dart';
 import 'notification_service.dart';
 import 'supabase_service.dart';
+import 'team_service.dart';
 
 class CoinWalletService extends ChangeNotifier {
   static final CoinWalletService _instance = CoinWalletService._internal();
@@ -229,10 +230,15 @@ class CoinWalletService extends ChangeNotifier {
       if (inEscrowChange != null && inEscrowChange != 0) {
         userUpdate['in_escrow'] = newEscrow;
       }
-      if (type == 'win_reward' || type == 'win_prize' || type == 'team_prize') {
+      if (type == 'win_reward' ||
+          type == 'win_prize' ||
+          type == 'team_prize' ||
+          type == 'weekly_team_reward') {
         if (amount > 0) {
           userUpdate['total_winnings'] = currentWinnings + amount;
-          userUpdate['wins'] = currentWins + 1;
+          if (type != 'weekly_team_reward') {
+            userUpdate['wins'] = currentWins + 1;
+          }
           userUpdate['last_reward_at'] = now.toIso8601String();
         }
       }
@@ -360,6 +366,15 @@ class CoinWalletService extends ChangeNotifier {
       }
 
       _checkTeamEligibility(userId, newCoins);
+
+      // Record member's weekly coin contribution for their team's game (if amount > 0)
+      if (amount > 0 && TeamService.isEligibleTeamCoinActivity(type)) {
+        await TeamService().recordMemberWeeklyCoinContribution(
+          userId: userId,
+          amount: amount,
+          activityType: type,
+        );
+      }
 
     } catch (e) {
       debugPrint('CoinWalletService updateCoins error: $e');
@@ -1015,6 +1030,15 @@ class CoinWalletService extends ChangeNotifier {
     required int costCoins,
     Map<String, dynamic>? metadata,
   }) async {
+    final userTeams = await TeamService().getUserTeams(userId);
+    if (userTeams.isEmpty) {
+      return {
+        'success': false,
+        'error':
+            'Team Membership Required: Only players in an active team (up to 4 members) can redeem rewards. Your earned coins remain safely saved in your personal balance and history.',
+      };
+    }
+
     final wallet = await getOrCreateWallet(userId);
     if (wallet.coins < costCoins) {
       return {

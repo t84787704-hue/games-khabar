@@ -1,6 +1,8 @@
 import '../services/supabase_service.dart';
 
 class TeamModel {
+  static const int maxMembers = 4;
+
   final String id;
   final String name;
   final String tag;
@@ -22,6 +24,11 @@ class TeamModel {
   final List<Map<String, dynamic>> memberDetails;
   final List<String> pendingJoinRequests;
 
+  // Weekly Team Coins tracking fields (up to 4 members, tracked per game)
+  final int weeklyCoins;
+  final int weeklyRank;
+  final Map<String, int> memberWeeklyCoins;
+
   const TeamModel({
     required this.id,
     required this.name,
@@ -41,11 +48,48 @@ class TeamModel {
     this.members = const [],
     this.memberDetails = const [],
     this.pendingJoinRequests = const [],
+    this.weeklyCoins = 0,
+    this.weeklyRank = 0,
+    this.memberWeeklyCoins = const {},
   });
 
-  int get memberCount => members.length;
+  /// Enforces up to 4 active members per team
+  List<String> get cappedMembers =>
+      members.length > maxMembers ? members.sublist(0, maxMembers) : members;
+
+  int get memberCount => cappedMembers.length;
+  bool get isFull => memberCount >= maxMembers;
   int get totalMatches => wins + losses + draws;
   double get winRate => totalMatches > 0 ? (wins / totalMatches) * 100 : 0.0;
+
+  /// Privacy & Data Minimization (Play Policy):
+  /// Sanitizes a display name/handle so emails, phone numbers, or sensitive data are never exposed.
+  static String sanitizePublicHandle(String? raw, {String fallback = 'Gamer'}) {
+    if (raw == null) return fallback;
+    var cleaned = raw.trim();
+    if (cleaned.isEmpty || cleaned.toLowerCase() == 'null') return fallback;
+
+    // Never expose email addresses: strip @domain
+    if (cleaned.contains('@')) {
+      final beforeAt = cleaned.split('@').first.trim();
+      cleaned = beforeAt.isNotEmpty ? beforeAt : fallback;
+    }
+
+    // Never expose phone numbers (7+ digits sequence)
+    final digitsOnly = cleaned.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.length >= 7 && digitsOnly.length >= (cleaned.length * 0.6)) {
+      final suffix = digitsOnly.length >= 4
+          ? digitsOnly.substring(digitsOnly.length - 4)
+          : digitsOnly;
+      return 'Gamer_$suffix';
+    }
+
+    if (cleaned.toLowerCase().startsWith('user_') && cleaned.length > 12) {
+      return 'Gamer_${cleaned.substring(5, 9).toUpperCase()}';
+    }
+
+    return cleaned;
+  }
 
   bool isLeader(String userId) {
     if (userId.isEmpty || leaderId.isEmpty) return false;
@@ -63,7 +107,7 @@ class TeamModel {
     if (userId.isEmpty) return false;
     if (isLeader(userId)) return true;
     final cleanUser = userId.trim().toLowerCase();
-    for (final m in members) {
+    for (final m in cappedMembers) {
       final cleanM = m.trim().toLowerCase();
       if (cleanM == cleanUser) return true;
       try {
@@ -80,11 +124,16 @@ class TeamModel {
     final List<String> membersList = [];
     if (rawMembers is List) {
       for (final m in rawMembers) {
-        if (m != null) membersList.add(m.toString());
+        if (m != null) {
+          final uid = m.toString().trim();
+          if (uid.isNotEmpty && !membersList.contains(uid) && membersList.length < maxMembers) {
+            membersList.add(uid);
+          }
+        }
       }
     }
 
-    final rawRequests = row['pendingJoinRequests'];
+    final rawRequests = row['pendingJoinRequests'] ?? row['pending_join_requests'];
     final List<String> reqList = [];
     if (rawRequests is List) {
       for (final r in rawRequests) {
@@ -96,11 +145,25 @@ class TeamModel {
     final List<Map<String, dynamic>> detailsList = [];
     if (rawMemberDetails is List) {
       for (final item in rawMemberDetails) {
-        if (item is Map) {
-          detailsList.add(Map<String, dynamic>.from(item));
+        if (item is Map && detailsList.length < maxMembers) {
+          final mapItem = Map<String, dynamic>.from(item);
+          if (mapItem['name'] != null) {
+            mapItem['name'] = sanitizePublicHandle(mapItem['name']?.toString());
+          }
+          detailsList.add(mapItem);
         }
       }
     }
+
+    final rawWeeklyMap = row['member_weekly_coins'] ?? row['memberWeeklyCoins'];
+    final Map<String, int> weeklyMap = {};
+    if (rawWeeklyMap is Map) {
+      rawWeeklyMap.forEach((k, v) {
+        weeklyMap[k.toString()] = (v as num?)?.toInt() ?? 0;
+      });
+    }
+
+    final rawLeaderName = (row['leader_name'] ?? row['leaderName'] ?? '').toString();
 
     return TeamModel(
       id: (row['id'] ?? '').toString(),
@@ -116,11 +179,14 @@ class TeamModel {
       draws: (row['draws'] as num?)?.toInt() ?? 0,
       points: (row['points'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()) ?? DateTime.now(),
-      leaderName: (row['leader_name'] ?? '').toString(),
+      leaderName: sanitizePublicHandle(rawLeaderName, fallback: 'Leader'),
       leaderAvatar: (row['leader_avatar'] ?? '').toString(),
       members: membersList,
       memberDetails: detailsList,
       pendingJoinRequests: reqList,
+      weeklyCoins: (row['weekly_coins'] as num?)?.toInt() ?? 0,
+      weeklyRank: (row['weekly_rank'] as num?)?.toInt() ?? 0,
+      memberWeeklyCoins: weeklyMap,
     );
   }
 
@@ -158,7 +224,14 @@ class TeamModel {
     List<String>? members,
     List<Map<String, dynamic>>? memberDetails,
     List<String>? pendingJoinRequests,
+    int? weeklyCoins,
+    int? weeklyRank,
+    Map<String, int>? memberWeeklyCoins,
   }) {
+    final nextMembers = members ?? this.members;
+    final capped = nextMembers.length > maxMembers
+        ? nextMembers.sublist(0, maxMembers)
+        : nextMembers;
     return TeamModel(
       id: id,
       name: name ?? this.name,
@@ -173,11 +246,16 @@ class TeamModel {
       draws: draws ?? this.draws,
       points: points ?? this.points,
       createdAt: createdAt,
-      leaderName: leaderName ?? this.leaderName,
+      leaderName: leaderName != null
+          ? sanitizePublicHandle(leaderName, fallback: 'Leader')
+          : this.leaderName,
       leaderAvatar: leaderAvatar ?? this.leaderAvatar,
-      members: members ?? this.members,
+      members: capped,
       memberDetails: memberDetails ?? this.memberDetails,
       pendingJoinRequests: pendingJoinRequests ?? this.pendingJoinRequests,
+      weeklyCoins: weeklyCoins ?? this.weeklyCoins,
+      weeklyRank: weeklyRank ?? this.weeklyRank,
+      memberWeeklyCoins: memberWeeklyCoins ?? this.memberWeeklyCoins,
     );
   }
 }

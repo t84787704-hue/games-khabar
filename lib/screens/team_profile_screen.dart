@@ -40,51 +40,54 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   void initState() {
     super.initState();
     _teamService.syncAllTeamsTournamentWins();
+    _teamService.checkAndDistributeWeeklyGameRewards();
   }
 
+  /// Privacy & Data Minimization (Play Policy):
+  /// Fetches only public gaming handles/IDs and avatars. Never exposes emails, phone numbers, or real names.
   Future<Map<String, String>> _fetchUserProfile(String uid) async {
     final cleanUid = uid.trim();
     if (cleanUid.isEmpty) {
-      return {'username': 'Player', 'gamerId': 'ID not set', 'avatar': ''};
+      return {'username': 'Gamer', 'gamerId': 'ID not set', 'avatar': ''};
     }
     if (_profileCache.containsKey(cleanUid)) {
       return _profileCache[cleanUid]!;
     }
 
-    String username = 'Player'; // Prioritize real name over User_ handles
+    String username = 'Gamer';
     String gamerId = 'ID not set';
     String avatar = '';
 
     try {
       final userRow = await SupabaseService.client
           .from('users')
-          .select('full_name, name, display_name, username, gamer_id, game_id, avatar_url')
+          .select('username, gamer_id, game_id, display_name, avatar_url')
           .or('id.eq.$cleanUid,uid.eq.$cleanUid')
           .maybeSingle();
       if (userRow != null) {
-        final fn = (userRow['full_name'] ?? '').toString().trim();
-        final n = (userRow['name'] ?? '').toString().trim();
-        final dn = (userRow['display_name'] ?? '').toString().trim();
         final un = (userRow['username'] ?? '').toString().trim();
+        final gid = (userRow['gamer_id'] ?? userRow['game_id'] ?? '').toString().trim();
+        final dn = (userRow['display_name'] ?? '').toString().trim();
 
-        for (final candidate in [fn, n, dn, un]) {
-          if (candidate.isNotEmpty && candidate.toLowerCase() != 'null' && !candidate.toLowerCase().startsWith('user_')) {
-            username = candidate;
+        for (final candidate in [un, gid, dn]) {
+          if (candidate.isNotEmpty &&
+              candidate.toLowerCase() != 'null' &&
+              !candidate.toLowerCase().startsWith('user_')) {
+            username = TeamModel.sanitizePublicHandle(candidate, fallback: 'Gamer');
             break;
           }
         }
-        if (username == 'Player') {
-          for (final candidate in [fn, n, dn, un]) {
+        if (username == 'Gamer') {
+          for (final candidate in [un, gid, dn]) {
             if (candidate.isNotEmpty && candidate.toLowerCase() != 'null') {
-              username = candidate;
+              username = TeamModel.sanitizePublicHandle(candidate, fallback: 'Gamer');
               break;
             }
           }
         }
 
-        final g = (userRow['gamer_id'] ?? userRow['game_id'] ?? '').toString().trim();
-        if (g.isNotEmpty && g.toLowerCase() != 'null') {
-          gamerId = g;
+        if (gid.isNotEmpty && gid.toLowerCase() != 'null') {
+          gamerId = TeamModel.sanitizePublicHandle(gid, fallback: 'ID not set');
         }
 
         final a = (userRow['avatar_url'] ?? '').toString().trim();
@@ -96,31 +99,30 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       debugPrint('[TeamProfileScreen] users table query error: $e');
     }
 
-    if (username == 'Player' || gamerId == 'ID not set' || avatar.isEmpty) {
+    if (username == 'Gamer' || gamerId == 'ID not set' || avatar.isEmpty) {
       try {
         final sbProfile = await SupabaseService.client
             .from('profiles')
-            .select()
+            .select('username, display_name, gamer_id, game_id, avatar_url')
             .eq('id', cleanUid)
             .maybeSingle();
 
         if (sbProfile != null) {
-          final fn = (sbProfile['full_name'] ?? '').toString().trim();
-          final n = (sbProfile['name'] ?? '').toString().trim();
           final u = (sbProfile['username'] ?? sbProfile['display_name'] ?? '').toString().trim();
-          
-          if (username == 'Player') {
-            for (final candidate in [fn, n, u]) {
-              if (candidate.isNotEmpty && candidate.toLowerCase() != 'null' && !candidate.toLowerCase().startsWith('user_')) {
-                username = candidate;
+          final g = (sbProfile['gamer_id'] ?? sbProfile['game_id'] ?? '').toString().trim();
+
+          if (username == 'Gamer') {
+            for (final candidate in [u, g]) {
+              if (candidate.isNotEmpty &&
+                  candidate.toLowerCase() != 'null' &&
+                  !candidate.toLowerCase().startsWith('user_')) {
+                username = TeamModel.sanitizePublicHandle(candidate, fallback: 'Gamer');
                 break;
               }
             }
           }
-          final g = sbProfile['gamer_id']?.toString() ??
-              sbProfile['game_id']?.toString();
-          if (gamerId == 'ID not set' && g != null && g.isNotEmpty) {
-            gamerId = g;
+          if (gamerId == 'ID not set' && g.isNotEmpty && g.toLowerCase() != 'null') {
+            gamerId = TeamModel.sanitizePublicHandle(g, fallback: 'ID not set');
           }
           final a = sbProfile['avatar_url']?.toString();
           if (avatar.isEmpty && a != null && a.isNotEmpty) {
@@ -132,19 +134,19 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       }
     }
 
-    if (gamerId == 'ID not set' || username == 'Player') {
+    if (gamerId == 'ID not set' || username == 'Gamer') {
       try {
         final gUser = await GamerAuthService().getUserProfile(cleanUid);
         if (gUser != null) {
-          if (username == 'Player') {
+          if (username == 'Gamer') {
             if (gUser.username.isNotEmpty) {
-              username = gUser.username;
+              username = TeamModel.sanitizePublicHandle(gUser.username, fallback: 'Gamer');
             } else if (gUser.displayName.isNotEmpty) {
-              username = gUser.displayName;
+              username = TeamModel.sanitizePublicHandle(gUser.displayName, fallback: 'Gamer');
             }
           }
           if (gamerId == 'ID not set' && gUser.gameId.isNotEmpty) {
-            gamerId = gUser.gameId;
+            gamerId = TeamModel.sanitizePublicHandle(gUser.gameId, fallback: 'ID not set');
           }
           if (avatar.isEmpty && gUser.photoUrl.isNotEmpty) {
             avatar = gUser.photoUrl;
@@ -154,8 +156,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     }
 
     final result = {
-      'username': username,
-      'gamerId': gamerId,
+      'username': TeamModel.sanitizePublicHandle(username, fallback: 'Gamer'),
+      'gamerId': gamerId == 'ID not set'
+          ? 'ID not set'
+          : TeamModel.sanitizePublicHandle(gamerId, fallback: 'Gamer'),
       'avatar': avatar,
     };
     _profileCache[cleanUid] = result;
@@ -312,6 +316,18 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Future<void> _handleJoinRequest(TeamModel team, String currentUid) async {
+    if (team.isFull) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This team is already full (4/4 members). Each team supports up to 4 members.'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+      return;
+    }
+
     final effectiveUid = currentUid.trim().isNotEmpty
         ? currentUid.trim()
         : (GamerAuthService().currentUid ??
@@ -330,13 +346,18 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     }
 
     final currentGamer = GamerAuthService().currentGamer;
-    final userName =
-        currentGamer?.displayName ?? currentGamer?.username ?? 'Gamer';
+    final userName = TeamModel.sanitizePublicHandle(
+      currentGamer?.username.isNotEmpty == true
+          ? currentGamer!.username
+          : currentGamer?.displayName,
+      fallback: 'Gamer',
+    );
 
     setState(() => _isActionLoading = true);
     final success = await _teamService.requestToJoinTeam(
       teamId: team.id,
       userId: effectiveUid,
+      userName: userName,
     );
     setState(() {
       _isActionLoading = false;
@@ -355,9 +376,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Failed to send join request'),
-              backgroundColor: Color(0xFFFF4655)),
+          SnackBar(
+            content: Text(team.isFull
+                ? 'Team is full (4/4 members).'
+                : 'Failed to send join request'),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
         );
       }
     }
@@ -1778,6 +1802,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           ),
                         const SizedBox(height: 16),
 
+                        // Weekly Team Coins & Per-Game Rank Summary Card (4-Member Breakdown)
+                        _buildWeeklyTeamCoinsSection(team),
+                        const SizedBox(height: 16),
+
                         if (team.description.isNotEmpty) ...[
                           _buildSectionHeader('Description'),
                           Container(
@@ -1902,16 +1930,30 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                     userId: uid),
                                           ),
                                           IconButton(
-                                            icon: const Icon(
+                                            icon: Icon(
                                                 Icons.check_rounded,
-                                                color: Color(0xFF00FF88),
+                                                color: team.isFull
+                                                    ? Colors.grey
+                                                    : const Color(0xFF00FF88),
                                                 size: 22),
-                                            onPressed: () =>
-                                                _teamService.acceptJoinRequest(
-                                              teamId: team.id,
-                                              userId: uid,
-                                              userName: displayUsername,
-                                            ),
+                                            onPressed: () async {
+                                              if (team.isFull) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Team is already at maximum capacity (4/4 members).',
+                                                    ),
+                                                    backgroundColor: Color(0xFFFF4655),
+                                                  ),
+                                                );
+                                                return;
+                                              }
+                                              await _teamService.acceptJoinRequest(
+                                                teamId: team.id,
+                                                userId: uid,
+                                                userName: displayUsername,
+                                              );
+                                            },
                                           ),
                                         ],
                                       ),
@@ -1924,7 +1966,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           const SizedBox(height: 16),
                         ],
 
-                        _buildSectionHeader('Team Members (${team.memberCount})'),
+                        _buildSectionHeader('Team Members (${team.memberCount}/${TeamModel.maxMembers})'),
                         Container(
                           decoration: BoxDecoration(
                             color: cardColor,
@@ -2367,12 +2409,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                   Builder(builder: (context) {
                                     final bool isRequested =
                                         hasRequested || _hasRequestedLocally;
+                                    final bool isTeamFull = team.isFull;
                                     return Expanded(
                                       flex: 2,
                                       child: SizedBox(
                                         height: 46,
                                         child: OutlinedButton.icon(
                                           onPressed: (isRequested ||
+                                                  isTeamFull ||
                                                   _isActionLoading)
                                               ? null
                                               : () => _handleJoinRequest(
@@ -2391,24 +2435,32 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                     BorderRadius.circular(10)),
                                           ),
                                           icon: Icon(
-                                            isRequested
-                                                ? Icons.hourglass_top_rounded
-                                                : Icons.person_add_rounded,
+                                            isTeamFull
+                                                ? Icons.group_off_rounded
+                                                : (isRequested
+                                                    ? Icons.hourglass_top_rounded
+                                                    : Icons.person_add_rounded),
                                             size: 16,
-                                            color: isRequested
-                                                ? const Color(0xFFFFB800)
-                                                : const Color(0xFF00FF88),
+                                            color: isTeamFull
+                                                ? textSec
+                                                : (isRequested
+                                                    ? const Color(0xFFFFB800)
+                                                    : const Color(0xFF00FF88)),
                                           ),
                                           label: Text(
-                                            isRequested
-                                                ? 'Requested ⏳'
-                                                : 'Join Team',
+                                            isTeamFull
+                                                ? 'Full (4/4)'
+                                                : (isRequested
+                                                    ? 'Requested ⏳'
+                                                    : 'Join Team'),
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 12,
-                                              color: isRequested
-                                                  ? const Color(0xFFFFB800)
-                                                  : textPri,
+                                              color: isTeamFull
+                                                  ? textSec
+                                                  : (isRequested
+                                                      ? const Color(0xFFFFB800)
+                                                      : textPri),
                                             ),
                                           ),
                                         ),
@@ -2527,6 +2579,388 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   },
 );
 }
+
+  Widget _buildWeeklyTeamCoinsSection(TeamModel team) {
+    final cardColor = ThemeService.card;
+    final cardSec = ThemeService.cardSecondary;
+    final borderColor = ThemeService.border;
+    final textPri = ThemeService.textPrimary;
+    final textSec = ThemeService.textSecondary;
+
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _teamService.getTeamWeeklyCoinStats(team),
+      builder: (context, snap) {
+        final data = snap.data;
+        final int weeklyCoins = (data?['weeklyCoins'] as int?) ?? team.weeklyCoins;
+        final int weeklyRank = (data?['weeklyRank'] as int?) ?? 1;
+        final int totalTeamsInGame = (data?['totalTeamsInGame'] as int?) ?? 1;
+        final int rewardPool = (data?['rewardPool'] as int?) ?? TeamService.weeklyGameRewardPool;
+        final int memberCount = ((data?['memberCount'] as int?) ?? team.memberCount).clamp(1, TeamModel.maxMembers);
+        final int equalShare = (data?['equalRewardShare'] as int?) ?? (rewardPool ~/ memberCount);
+        final String weekRangeLabel = (data?['weekRangeLabel'] ?? TeamService.getWeekRangeLabel()).toString();
+        final List<Map<String, dynamic>> memberBreakdown =
+            List<Map<String, dynamic>>.from(data?['memberBreakdown'] ?? const []);
+
+        final bool isTopRank = weeklyRank == 1 && weeklyCoins > 0;
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isTopRank
+                  ? const Color(0xFFFFD700).withOpacity(0.6)
+                  : const Color(0xFF00FF88).withOpacity(0.35),
+              width: 1.3,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title & Weekly Cycle Badge
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFD700).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text('🪙', style: TextStyle(fontSize: 18)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Weekly Team Coins (${team.game})',
+                          style: TextStyle(
+                            color: textPri,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Cycle: $weekRangeLabel • Up to ${TeamModel.maxMembers} Members',
+                          style: TextStyle(
+                            color: textSec,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: isTopRank
+                          ? const Color(0xFFFFD700).withOpacity(0.2)
+                          : const Color(0xFF00FF88).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isTopRank ? const Color(0xFFFFD700) : const Color(0xFF00FF88),
+                      ),
+                    ),
+                    child: Text(
+                      '${weeklyRank == 1 ? '🥇 ' : ''}Rank #$weeklyRank / $totalTeamsInGame',
+                      style: TextStyle(
+                        color: isTopRank ? const Color(0xFFFFD700) : const Color(0xFF00FF88),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Combined Weekly Total & Equal Division Summary Banner
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cardSec,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'COMBINED WEEKLY COINS',
+                            style: TextStyle(
+                              color: textSec,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${NumberFormat('#,###').format(weeklyCoins)} G-Coins',
+                            style: const TextStyle(
+                              color: Color(0xFFFFD700),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(height: 34, width: 1, color: borderColor),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '#1 TEAM WEEKLY PRIZE',
+                            style: TextStyle(
+                              color: textSec,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${NumberFormat('#,###').format(rewardPool)} Coins',
+                            style: const TextStyle(
+                              color: Color(0xFF00FF88),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          Text(
+                            'Equal Share: +$equalShare / member',
+                            style: TextStyle(
+                              color: textSec,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Itemized 4-Member Breakdown Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Member Weekly Contributions (${team.memberCount}/${TeamModel.maxMembers})',
+                    style: TextStyle(
+                      color: textPri,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                  Text(
+                    'Ads (+25) & Daily (+50)',
+                    style: TextStyle(
+                      color: textSec,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              if (snap.connectionState == ConnectionState.waiting && memberBreakdown.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF00FF88),
+                      ),
+                    ),
+                  ),
+                )
+              else if (memberBreakdown.isEmpty)
+                ...team.cappedMembers.map((uid) {
+                  final isMemberLeader = team.isLeader(uid);
+                  final fallbackHandle = isMemberLeader
+                      ? TeamModel.sanitizePublicHandle(team.leaderName, fallback: 'Leader')
+                      : 'Gamer';
+                  return _buildMemberContributionRow(
+                    handle: fallbackHandle,
+                    role: isMemberLeader ? 'Leader' : 'Member',
+                    coins: team.memberWeeklyCoins[uid] ?? 0,
+                    totalTeamCoins: weeklyCoins,
+                    textPri: textPri,
+                    textSec: textSec,
+                    cardSec: cardSec,
+                  );
+                })
+              else
+                ...memberBreakdown.take(TeamModel.maxMembers).map((m) {
+                  final handle = TeamModel.sanitizePublicHandle(
+                    m['handle']?.toString(),
+                    fallback: 'Gamer',
+                  );
+                  final role = (m['role'] ?? 'Member').toString();
+                  final coins = (m['weeklyCoins'] as int?) ?? 0;
+                  return _buildMemberContributionRow(
+                    handle: handle,
+                    role: role,
+                    coins: coins,
+                    totalTeamCoins: weeklyCoins,
+                    textPri: textPri,
+                    textSec: textSec,
+                    cardSec: cardSec,
+                  );
+                }),
+
+              const SizedBox(height: 10),
+              // Transparent Rules & Play Policy Privacy Disclosure
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1877F2).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF1877F2).withOpacity(0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.verified_user_outlined, color: Color(0xFF1877F2), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Per-Game Weekly Rule & Privacy Notice: Every member\'s earned G-Coins count toward both their personal balance and their team\'s weekly total for ${team.game}. At week\'s end, the #1 team in ${team.game} splits $rewardPool G-Coins equally among its members (up to 4). Only public gaming handles, team rank, and coin contributions are shown.',
+                        style: TextStyle(
+                          color: textSec,
+                          fontSize: 10.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMemberContributionRow({
+    required String handle,
+    required String role,
+    required int coins,
+    required int totalTeamCoins,
+    required Color textPri,
+    required Color textSec,
+    required Color cardSec,
+  }) {
+    final isLeaderRole = role.toLowerCase() == 'leader' || role.toLowerCase() == 'owner';
+    final double shareRatio =
+        totalTeamCoins > 0 ? (coins / totalTeamCoins).clamp(0.0, 1.0) : 0.0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cardSec,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: isLeaderRole
+                    ? const Color(0xFFFF6B00).withOpacity(0.2)
+                    : const Color(0xFF00FF88).withOpacity(0.15),
+                child: Text(
+                  handle.isNotEmpty ? handle[0].toUpperCase() : 'G',
+                  style: TextStyle(
+                    color: isLeaderRole ? const Color(0xFFFF6B00) : const Color(0xFF00FF88),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        handle,
+                        style: TextStyle(
+                          color: textPri,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isLeaderRole
+                            ? const Color(0xFFFF6B00).withOpacity(0.18)
+                            : Colors.white10,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        isLeaderRole ? '👑 LEADER' : 'MEMBER',
+                        style: TextStyle(
+                          color: isLeaderRole ? const Color(0xFFFF6B00) : textSec,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '+${NumberFormat('#,###').format(coins)} Coins',
+                style: TextStyle(
+                  color: coins > 0 ? const Color(0xFF00FF88) : textSec,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: shareRatio,
+              minHeight: 4,
+              backgroundColor: Colors.black26,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isLeaderRole ? const Color(0xFFFF6B00) : const Color(0xFF00FF88),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSectionHeader(String title) {
     return Padding(
