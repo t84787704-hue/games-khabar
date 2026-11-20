@@ -365,16 +365,12 @@ class CoinWalletService extends ChangeNotifier {
         _instance._saveToLocal(_instance._currentWallet!);
       }
 
-      _checkTeamEligibility(userId, newCoins);
-
-      // Record member's weekly coin contribution for their team's game (if amount > 0)
-      if (amount > 0 && TeamService.isEligibleTeamCoinActivity(type)) {
-        await TeamService().recordMemberWeeklyCoinContribution(
-          userId: userId,
-          amount: amount,
-          activityType: type,
-        );
+      if (type != 'team_weekly_contribution' &&
+          type != 'game_currency_redemption' &&
+          type != 'weekly_team_reward') {
+        _checkTeamEligibility(userId, newCoins);
       }
+
 
     } catch (e) {
       debugPrint('CoinWalletService updateCoins error: $e');

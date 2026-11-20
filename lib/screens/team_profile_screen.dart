@@ -2614,10 +2614,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         final int weeklyRank = (data?['weeklyRank'] as num?)?.toInt() ??
             (team.weeklyRank > 0 ? team.weeklyRank : 1);
         final int totalTeamsInGame = (data?['totalTeamsInGame'] as num?)?.toInt() ?? 1;
-        final int rewardPool = (data?['rewardPool'] as num?)?.toInt() ?? TeamService.weeklyGameRewardPool;
+        final int rewardPool = TeamService.weeklyGameRewardPkr;
         final int memberCount =
             ((data?['memberCount'] as num?)?.toInt() ?? team.memberCount).clamp(1, TeamModel.maxMembers);
-        final int equalShare = (data?['equalRewardShare'] as num?)?.toInt() ?? (rewardPool ~/ memberCount);
+        final int equalShare = TeamService.getEqualPkrShare(memberCount);
+        final String currencyLabel = TeamService.getGameCurrencyLabel(team.game);
         final String weekRangeLabel = (data?['weekRangeLabel'] ?? TeamService.getWeekRangeLabel()).toString();
 
         final bool isTopRank = weeklyRank == 1 && weeklyCoins > 0;
@@ -2750,15 +2751,15 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${NumberFormat('#,###').format(rewardPool)} Coins',
+                            '${NumberFormat('#,###').format(rewardPool)} PKR ($currencyLabel)',
                             style: const TextStyle(
                               color: Color(0xFF00FF88),
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
                           Text(
-                            'Equal Share: +$equalShare / member',
+                            'Equal Share: $equalShare PKR / member',
                             style: TextStyle(
                               color: textSec,
                               fontSize: 10.5,
@@ -2787,7 +2788,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Ads (+25) & Daily (+50)',
+                    'Manual Contributions from Personal Wallet • Resets Weekly to 0',
                     style: TextStyle(
                       color: textSec,
                       fontSize: 11,
@@ -2863,7 +2864,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Per-Game Weekly Rule & Privacy Notice: Every member\'s earned G-Coins count toward both their personal balance and their team\'s weekly total for ${team.game}. At week\'s end, the #1 team in ${team.game} splits $rewardPool G-Coins equally among its members (up to 4). Only public gaming handles, team rank, and coin contributions are shown.',
+                        'Weekly 7-Day Rule & Privacy Notice: Earned G-Coins go to each member\'s Personal Wallet first. Members manually contribute coins from their Personal Wallet to boost ${team.name}\'s weekly total for ${team.game}. At week\'s end, the #1 team in ${team.game} receives ${NumberFormat('#,###').format(rewardPool)} PKR equivalent in $currencyLabel divided equally among its active members (up to 4). Weekly team coin scores reset to 0 each new week while personal wallets stay safe. Only public gaming handles, team rank, and coin contributions are shown.',
                         style: TextStyle(
                           color: textSec,
                           fontSize: 10.5,

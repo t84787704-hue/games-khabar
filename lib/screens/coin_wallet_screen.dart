@@ -1,13 +1,16 @@
 // ===============================================================================
 // COIN WALLET & REWARDS SCREEN — Google Play Policy Compliant Setup
-// - 4-Member Team Coin Tracking & Per-Game Weekly #1 Equal Reward Division
-// - Team Membership Requirement for Redemptions & Solo User Coin Protection
+// - Weekly (7-Day) Cycle Focused on Free Fire & PUBG Mobile
+// - 1,500 PKR Equivalent #1 Team Prize Divided Equally Among Up to 4 Members
+// - Personal Wallet First + Manual Team Contribution (All/Max, Custom, or 0)
+// - Winner-Only (#1 Team) Redemption, Personal Coin Safety & Weekly Reset to 0
 // - Strict Privacy & Data Minimization (Public Gaming Handles Only)
 // File: lib/screens/coin_wallet_screen.dart
 // ===============================================================================
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../constants/gamer_theme.dart';
@@ -37,10 +40,13 @@ class CoinWalletScreen extends StatefulWidget {
 class _CoinWalletScreenState extends State<CoinWalletScreen> {
   final CoinWalletService _walletService = CoinWalletService();
   final TeamService _teamService = TeamService();
+  final TextEditingController _customContributionCtrl = TextEditingController();
 
   bool _isClaimingDaily = false;
   bool _isWatchingAd = false;
+  bool _isContributingCoins = false;
   String _selectedGameTab = 'Free Fire';
+  String _selectedContributionMode = 'custom'; // 'all', 'custom', 'zero'
   List<TeamModel> _userTeams = [];
   bool _isLoadingTeams = true;
 
@@ -157,6 +163,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
   @override
   void dispose() {
+    _customContributionCtrl.dispose();
     super.dispose();
   }
 
@@ -177,8 +184,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               SnackBar(
                 content: Text(
                   hasTeam
-                      ? '🎉 +25 G-Coins added to your wallet & your team\'s weekly total!'
-                      : '🎉 +25 G-Coins saved to your personal wallet! Join a team to redeem rewards.',
+                      ? '🎉 +25 G-Coins added to your Personal Wallet! Choose how many to contribute to your Team Profile below.'
+                      : '🎉 +25 G-Coins safely saved in your Personal Wallet!',
                 ),
                 backgroundColor: GamerTheme.neonGreen,
                 behavior: SnackBarBehavior.floating,
@@ -215,8 +222,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           SnackBar(
             content: Text(ok
                 ? (_userTeams.isNotEmpty
-                    ? '🎁 +50 G-Coins daily bonus added to your wallet & weekly team coins!'
-                    : '🎁 +50 G-Coins saved to your personal wallet! Join a team to redeem rewards.')
+                    ? '🎁 +50 G-Coins daily bonus added to your Personal Wallet! Choose how many to contribute to your Team Profile below.'
+                    : '🎁 +50 G-Coins safely saved in your Personal Wallet!')
                 : ('daily_bonus_already_claimed'.tr() != 'daily_bonus_already_claimed'
                     ? 'daily_bonus_already_claimed'.tr()
                     : 'Already claimed today! Come back tomorrow.')),
@@ -240,6 +247,76 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     }
   }
 
+  Future<void> _handleContributeToTeam({
+    required TeamModel team,
+    required CoinWallet wallet,
+    required int amount,
+  }) async {
+    if (_isContributingCoins) return;
+    FocusScope.of(context).unfocus();
+
+    if (amount < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid contribution amount (0 or higher).'),
+          backgroundColor: Color(0xFFFF4655),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (amount > wallet.coins) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Insufficient Personal Wallet balance! Available: ${NumberFormat('#,###').format(wallet.coins)} G-Coins.',
+          ),
+          backgroundColor: const Color(0xFFFF4655),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isContributingCoins = true);
+    try {
+      final res = await _teamService.contributePersonalCoinsToTeam(
+        userId: _userId,
+        team: team,
+        amount: amount,
+      );
+      _gameLeaderboardFutures.clear();
+      _cachedStatsTeamId = null;
+      _teamWeeklyStatsFuture = null;
+      await _loadUserTeams();
+      if (mounted) {
+        setState(() {});
+        final bool ok = res['success'] == true;
+        final String msg = (res['message'] ?? 'Contribution processed.').toString();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: ok ? GamerTheme.neonGreen : const Color(0xFFFF4655),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Contribution failed: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isContributingCoins = false);
+    }
+  }
+
   Future<void> _refreshWallet() async {
     if (_userId.isNotEmpty) {
       _gameLeaderboardFutures.clear();
@@ -252,7 +329,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     }
   }
 
-  void _showTeamRequiredForRedemptionDialog() {
+  void _showWinnerOnlyRedemptionDialog({
+    required String gameName,
+    required bool hasTeam,
+    int? currentRank,
+    String? activeTeamName,
+  }) {
+    final currencyLabel = TeamService.getGameCurrencyLabel(gameName);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -263,23 +346,32 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ),
         title: Row(
           children: [
-            const Icon(Icons.groups_rounded, color: Color(0xFFFFB800), size: 26),
+            Icon(
+              hasTeam ? Icons.emoji_events_rounded : Icons.groups_rounded,
+              color: const Color(0xFFFFB800),
+              size: 26,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Team Membership Required',
+                hasTeam
+                    ? 'Rank #1 Team Required to Redeem'
+                    : 'Active Team & Rank #1 Required',
                 style: TextStyle(
                   color: ThemeService.textPrimary,
                   fontWeight: FontWeight.w900,
-                  fontSize: 16,
+                  fontSize: 15.5,
                 ),
               ),
             ),
           ],
         ),
         content: Text(
-          'Only users who belong to an active team (up to 4 members) can redeem rewards or qualify for Per-Game Weekly #1 Team Rewards.\n\n'
-          'Your earned G-Coins remain safely stored in your personal balance and history. Join or create an active team now to unlock reward redemptions!',
+          hasTeam
+              ? 'Weekly game-currency reward redemption (${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR equivalent in $currencyLabel, divided equally among up to 4 members) is strictly unlocked for members of the Rank #1 team in $gameName.\n\n'
+                  'Your team (${activeTeamName ?? 'Active Team'}) is currently Rank #${currentRank ?? '-'} in $gameName. Contribute G-Coins from your Personal Wallet to help your team reach Rank #1! All personal G-Coins in your Personal Wallet remain 100% safe across weekly resets.'
+              : 'Weekly game-currency reward redemption (${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR equivalent in $currencyLabel, divided equally among up to 4 active members) is strictly unlocked for members of the Rank #1 team in $gameName.\n\n'
+                  'All G-Coins in your Personal Wallet remain 100% safe in your balance and history. Join or create a 4-member Free Fire or PUBG team and contribute coins to compete for Rank #1!',
           style: TextStyle(
             color: ThemeService.textSecondary,
             fontSize: 13,
@@ -289,7 +381,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Later', style: TextStyle(color: ThemeService.textSecondary)),
+            child: Text('Got It', style: TextStyle(color: ThemeService.textSecondary)),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -297,17 +389,27 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            icon: const Icon(Icons.shield_rounded, size: 16),
-            label: const Text(
-              'Join / View Teams',
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+            icon: Icon(
+              hasTeam ? Icons.leaderboard_rounded : Icons.shield_rounded,
+              size: 16,
+            ),
+            label: Text(
+              hasTeam ? 'View Weekly Leaderboard' : 'Join / Create Team',
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const TeamsScreen()),
-              ).then((_) => _loadUserTeams());
+              if (hasTeam) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                ).then((_) => _loadUserTeams());
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TeamsScreen()),
+                ).then((_) => _loadUserTeams());
+              }
             },
           ),
         ],
@@ -322,16 +424,48 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     CoinWallet wallet,
     List<TeamModel> activeTeams,
   ) async {
-    // Rule 4: Block reward redemption for users who are not in an active team
+    // 1. Must belong to an active team
     if (activeTeams.isEmpty) {
-      _showTeamRequiredForRedemptionDialog();
+      _showWinnerOnlyRedemptionDialog(
+        gameName: gameName,
+        hasTeam: false,
+      );
+      return;
+    }
+
+    // 2. Find user's team for this game (or primary team) and verify Rank #1 status
+    TeamModel? matchingTeam;
+    for (final t in activeTeams) {
+      if (TeamService.matchesGameName(t.game, gameName)) {
+        matchingTeam = t;
+        break;
+      }
+    }
+    final activeTeam = matchingTeam ?? activeTeams.first;
+    final bool matchesSelectedGame = TeamService.matchesGameName(activeTeam.game, gameName);
+
+    final stats = _teamService.getCachedTeamWeeklyStats(activeTeam.id) ??
+        await _teamService.getTeamWeeklyCoinStats(activeTeam);
+    final int weeklyRank = (stats['weeklyRank'] as num?)?.toInt() ??
+        (activeTeam.weeklyRank > 0 ? activeTeam.weeklyRank : 2);
+    final int teamWeeklyCoins = (stats['weeklyCoins'] as num?)?.toInt() ?? activeTeam.weeklyCoins;
+    final bool isRankOneWinner = matchesSelectedGame && weeklyRank == 1 && teamWeeklyCoins > 0;
+
+    // Rule 3: Winner-Only Redemption — strictly members of the #1 team in that game
+    if (!isRankOneWinner) {
+      _showWinnerOnlyRedemptionDialog(
+        gameName: gameName,
+        hasTeam: true,
+        currentRank: matchesSelectedGame ? weeklyRank : null,
+        activeTeamName: '${activeTeam.name} [${activeTeam.tag}] (${activeTeam.game})',
+      );
       return;
     }
 
     if (wallet.coins < cost) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Insufficient G-Coins! You need ${cost - wallet.coins} more coins.'),
+          content: Text('Insufficient Personal Wallet G-Coins! You need ${cost - wallet.coins} more coins.'),
           backgroundColor: const Color(0xFFFF4655),
           behavior: SnackBarBehavior.floating,
         ),
@@ -339,7 +473,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       return;
     }
 
-    final activeTeam = activeTeams.first;
+    final int memberCount = activeTeam.memberCount.clamp(1, TeamModel.maxMembers);
+    final int equalPkrShare = TeamService.getEqualPkrShare(memberCount);
+    final String currencyLabel = TeamService.getGameCurrencyLabel(gameName);
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -347,12 +483,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Confirm Redemption',
+          'Confirm #1 Team Winner Redemption',
           style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'Redeem $packTitle for $gameName for $cost G-Coins?\n\n'
-          'Active Team: ${activeTeam.name} [${activeTeam.tag}] (${activeTeam.memberCount}/${TeamModel.maxMembers} members)',
+          'Redeem $packTitle ($currencyLabel) for $gameName for $cost G-Coins?\n\n'
+          '🥇 Rank #1 Team: ${activeTeam.name} [${activeTeam.tag}] ($memberCount/${TeamModel.maxMembers} members)\n'
+          '🏆 Weekly #1 Prize Pool: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR Equivalent ($equalPkrShare PKR / member)',
           style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
         ),
         actions: [
@@ -364,7 +501,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: GamerTheme.neonGreen),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text(
-              'Confirm',
+              'Confirm Claim',
               style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
             ),
           ),
@@ -379,15 +516,15 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         userId: _userId,
         amount: -cost,
         type: 'game_currency_redemption',
-        title: '🎁 Redeemed $gameName - $packTitle',
+        title: '🎁 #1 Team Redeemed $gameName - $packTitle',
         description:
-            'Reward Redemption ($packTitle • $gameName) via Team ${activeTeam.name} [${activeTeam.tag}] • Status: Pending Delivery',
+            'Rank #1 Weekly Winner Redemption ($packTitle • $gameName • $equalPkrShare PKR Share of 1,500 PKR) via Team ${activeTeam.name} [${activeTeam.tag}] • Status: Pending Delivery',
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🎉 Successfully redeemed $packTitle! Status: Pending Delivery.'),
+            content: Text('🎉 Successfully redeemed $packTitle as Rank #1 Team Member! Status: Pending Delivery.'),
             backgroundColor: GamerTheme.neonGreen,
             behavior: SnackBarBehavior.floating,
           ),
@@ -480,7 +617,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. Prominent Coin Wallet Card
+                          // 1. Prominent Personal Coin Wallet Card
                           _buildBalanceCard(
                             wallet,
                             isDark,
@@ -489,8 +626,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          // 2. Team Membership Status / Solo User Notice Card
+                          // 2. Team Membership Status + Manual Personal-to-Team Contribution Card
                           _buildTeamMembershipStatusBanner(
+                            wallet,
                             activeTeams,
                             isLoadingTeams: isTeamsLoading,
                           ),
@@ -499,11 +637,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           _buildActionButtons(),
                           const SizedBox(height: 20),
 
-                          // 3. Clear "Earn Coins" Cards (+25 Ad Watch, +50 Daily Bonus)
+                          // 3. Clear "Earn Coins" Cards (+25 Ad Watch, +50 Daily Bonus -> Personal Wallet First)
                           _buildEarnCoinsSection(),
                           const SizedBox(height: 20),
 
-                          // 4. "Redeem Game Currency" & Per-Game Weekly #1 Team Leaderboard
+                          // 4. "Redeem Game Currency" (Free Fire & PUBG • #1 Team Winner-Only Redemption)
                           _buildRedeemGameCurrencySection(
                             wallet,
                             activeTeams,
@@ -571,7 +709,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'PERSONAL G-COINS BALANCE',
+                'PERSONAL G-COINS WALLET',
                 style: TextStyle(
                   color: ThemeService.textSecondary,
                   fontSize: 11,
@@ -619,7 +757,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    hasTeam ? '🛡️ Team Eligible' : '👤 Solo Wallet (Saved)',
+                    hasTeam ? '🛡️ Active Team Member' : '👤 Personal Wallet (Protected)',
                     style: TextStyle(
                       color: hasTeam ? GamerTheme.neonGreen : const Color(0xFFFFB800),
                       fontSize: 10,
@@ -654,15 +792,16 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline_rounded, color: GamerTheme.neonGreen, size: 16),
+                const Icon(Icons.shield_rounded, color: GamerTheme.neonGreen, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Estimated Value: 1,000 G-Coins ≈ 100 PKR / \$1.00 Store Value',
+                    'All earned coins go to your Personal Wallet first & stay 100% safe across weekly resets. Weekly #1 Team Prize: 1,500 PKR Equivalent (Free Fire & PUBG).',
                     style: TextStyle(
                       color: ThemeService.textSecondary,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
+                      height: 1.35,
                     ),
                   ),
                 ),
@@ -744,9 +883,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
   /// Displays either:
   /// - Loading skeleton placeholder while active team membership is resolving.
-  /// - Solo User Notice: confirming personal earned coins are safely kept in balance/history while explaining that team membership is required to redeem or qualify for weekly team rewards.
-  /// - Active Team Summary Card: showing the user's 4-member team, game, weekly team coins total, and weekly rank.
+  /// - Solo User Notice: confirming personal earned coins are safely kept in Personal Wallet while explaining how to join a Free Fire or PUBG team for the 1,500 PKR weekly competition.
+  /// - Active Team Summary + Manual Coin Contribution Card: allowing the user to contribute All/Max, a custom amount, or 0 (Keep in Personal Wallet) to their Team Profile.
   Widget _buildTeamMembershipStatusBanner(
+    CoinWallet wallet,
     List<TeamModel> activeTeams, {
     required bool isLoadingTeams,
   }) {
@@ -779,7 +919,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Solo Player Notice • Team Required to Redeem',
+                    'Solo Player Notice • Personal Coins 100% Safe',
                     style: TextStyle(
                       color: ThemeService.textPrimary,
                       fontWeight: FontWeight.w900,
@@ -791,8 +931,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'All G-Coins you earn from watching ads (+25) or daily bonuses (+50) are safely saved in your personal balance and history. '
-              'However, you must belong to an active Team (up to 4 members) to redeem rewards or qualify for Per-Game Weekly #1 Team Rewards.',
+              'All G-Coins you earn from watching ads (+25) or daily bonuses (+50) go directly into your Personal Wallet and remain safely stored across weekly resets. '
+              'To compete for the weekly 1,500 PKR equivalent #1 Team Prize in Free Fire or PUBG Mobile (and unlock #1 team reward redemption), join or create a 4-member team.',
               style: TextStyle(
                 color: ThemeService.textSecondary,
                 fontSize: 11.5,
@@ -854,7 +994,21 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         final int weeklyRank = (stats?['weeklyRank'] as num?)?.toInt() ??
             (primaryTeam.weeklyRank > 0 ? primaryTeam.weeklyRank : 1);
         final int memberCount = primaryTeam.memberCount.clamp(1, TeamModel.maxMembers);
-        final int equalShare = (TeamService.weeklyGameRewardPool / memberCount).floor();
+        final int equalPkrShare = TeamService.getEqualPkrShare(memberCount);
+        final String currencyLabel = TeamService.getGameCurrencyLabel(primaryTeam.game);
+        final String weekLabel = TeamService.getWeekRangeLabel();
+        final bool isRankOneWinner = weeklyRank == 1 && teamWeeklyCoins > 0;
+
+        // Calculate current user's weekly contribution to this team
+        int myWeeklyContrib = 0;
+        if (stats?['memberCoins'] is Map) {
+          final map = stats!['memberCoins'] as Map;
+          final uidClean = _userId.trim();
+          final uidUuid = SupabaseService.toUuid(uidClean);
+          myWeeklyContrib = (map[uidClean] as num?)?.toInt() ??
+              (map[uidUuid] as num?)?.toInt() ??
+              0;
+        }
 
         return Container(
           width: double.infinity,
@@ -862,7 +1016,12 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           decoration: BoxDecoration(
             color: ThemeService.card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.45), width: 1.2),
+            border: Border.all(
+              color: isRankOneWinner
+                  ? const Color(0xFFFFD700).withOpacity(0.65)
+                  : GamerTheme.neonGreen.withOpacity(0.45),
+              width: 1.2,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -872,10 +1031,16 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: GamerTheme.neonGreen.withOpacity(0.15),
+                      color: isRankOneWinner
+                          ? const Color(0xFFFFD700).withOpacity(0.18)
+                          : GamerTheme.neonGreen.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.verified_rounded, color: GamerTheme.neonGreen, size: 20),
+                    child: Icon(
+                      isRankOneWinner ? Icons.emoji_events_rounded : Icons.verified_rounded,
+                      color: isRankOneWinner ? const Color(0xFFFFD700) : GamerTheme.neonGreen,
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -893,10 +1058,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Game: ${primaryTeam.game} • Members: $memberCount/${TeamModel.maxMembers} • Redemption Unlocked',
+                          'Game: ${primaryTeam.game} • Members: $memberCount/${TeamModel.maxMembers} • ${isRankOneWinner ? '#1 Winner Redemption Unlocked 🔓' : 'Reach #1 to Redeem ($weekLabel)'}',
                           style: TextStyle(
-                            color: ThemeService.textSecondary,
+                            color: isRankOneWinner ? GamerTheme.neonGreen : ThemeService.textSecondary,
                             fontSize: 11,
+                            fontWeight: isRankOneWinner ? FontWeight.w700 : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -910,7 +1076,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
                     ),
                     child: Text(
-                      'Rank #$weeklyRank',
+                      '${weeklyRank == 1 ? '🥇 ' : ''}Rank #$weeklyRank',
                       style: const TextStyle(
                         color: Color(0xFFFFD700),
                         fontWeight: FontWeight.w900,
@@ -922,33 +1088,64 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               ),
               const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: ThemeService.cardSecondary,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
                   children: [
-                    Text(
-                      'Weekly Team Coins: ${NumberFormat('#,###').format(teamWeeklyCoins)}',
-                      style: const TextStyle(
-                        color: Color(0xFFFFD700),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Weekly Team Coins: ${NumberFormat('#,###').format(teamWeeklyCoins)}',
+                          style: const TextStyle(
+                            color: Color(0xFFFFD700),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          'Your Weekly Contrib: +${NumberFormat('#,###').format(myWeeklyContrib)}',
+                          style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      '#1 Prize Share: +$equalShare Coins',
-                      style: const TextStyle(
-                        color: GamerTheme.neonGreen,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11.5,
-                      ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '#1 Weekly Prize: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR ($currencyLabel)',
+                          style: const TextStyle(
+                            color: GamerTheme.neonGreen,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11.2,
+                          ),
+                        ),
+                        Text(
+                          'Equal Share: $equalPkrShare PKR / member',
+                          style: TextStyle(
+                            color: ThemeService.textSecondary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+
+              // Manual Personal-to-Team Contribution Controls
+              _buildManualTeamContributionBox(primaryTeam, wallet),
+
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
@@ -973,7 +1170,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       MaterialPageRoute(
                         builder: (_) => TeamProfileScreen(teamId: primaryTeam.id),
                       ),
-                    );
+                    ).then((_) => _loadUserTeams());
                   },
                 ),
               ),
@@ -981,6 +1178,226 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// Interactive box inside the Wallet screen allowing the user to manually transfer/contribute
+  /// personal G-Coins to their active Team Profile (`All / Max`, custom amount, or `0` to keep in Personal Wallet).
+  Widget _buildManualTeamContributionBox(TeamModel team, CoinWallet wallet) {
+    final int availableCoins = wallet.coins.clamp(0, 999999999);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: ThemeService.cardSecondary.withOpacity(0.75),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.swap_horiz_rounded, color: GamerTheme.neonGreen, size: 18),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Contribute Personal Coins to Team (${team.game})',
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Choose how many coins from your Personal Wallet (${NumberFormat('#,###').format(availableCoins)} available) to add to ${team.name}\'s weekly score. Weekly team scores reset to 0 every Monday; uncontributed coins stay safely in your Personal Wallet.',
+            style: TextStyle(
+              color: ThemeService.textSecondary,
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _contributionPresetChip(
+                label: 'All / Max (${NumberFormat('#,###').format(availableCoins)})',
+                isSelected: _selectedContributionMode == 'all',
+                onTap: () {
+                  setState(() {
+                    _selectedContributionMode = 'all';
+                    _customContributionCtrl.text = availableCoins.toString();
+                  });
+                },
+              ),
+              if (availableCoins >= 100)
+                _contributionPresetChip(
+                  label: '+100 Coins',
+                  isSelected: _selectedContributionMode == '100',
+                  onTap: () {
+                    setState(() {
+                      _selectedContributionMode = '100';
+                      _customContributionCtrl.text = '100';
+                    });
+                  },
+                ),
+              if (availableCoins >= 500)
+                _contributionPresetChip(
+                  label: '+500 Coins',
+                  isSelected: _selectedContributionMode == '500',
+                  onTap: () {
+                    setState(() {
+                      _selectedContributionMode = '500';
+                      _customContributionCtrl.text = '500';
+                    });
+                  },
+                ),
+              _contributionPresetChip(
+                label: 'Keep in Personal Wallet (0)',
+                isSelected: _selectedContributionMode == 'zero',
+                onTap: () {
+                  setState(() {
+                    _selectedContributionMode = 'zero';
+                    _customContributionCtrl.text = '0';
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _customContributionCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (val) {
+                      if (_selectedContributionMode != 'custom') {
+                        setState(() => _selectedContributionMode = 'custom');
+                      }
+                    },
+                    style: TextStyle(
+                      color: ThemeService.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Enter amount (0 – $availableCoins)',
+                      hintStyle: TextStyle(
+                        color: ThemeService.textSecondary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.normal,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.monetization_on_outlined,
+                        color: Color(0xFFFFD700),
+                        size: 17,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      filled: true,
+                      fillColor: ThemeService.card,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: ThemeService.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: ThemeService.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: GamerTheme.neonGreen, width: 1.3),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: GamerTheme.neonGreen,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  icon: _isContributingCoins
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.black,
+                          ),
+                        )
+                      : const Icon(Icons.shield_rounded, size: 16),
+                  label: Text(
+                    _isContributingCoins ? 'Sending...' : 'Contribute',
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                  ),
+                  onPressed: _isContributingCoins
+                      ? null
+                      : () {
+                          final rawText = _customContributionCtrl.text.trim();
+                          final int parsed = rawText.isEmpty
+                              ? (_selectedContributionMode == 'all' ? availableCoins : 0)
+                              : (int.tryParse(rawText) ?? -1);
+                          _handleContributeToTeam(
+                            team: team,
+                            wallet: wallet,
+                            amount: parsed,
+                          );
+                        },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _contributionPresetChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? GamerTheme.neonGreen.withOpacity(0.2)
+              : ThemeService.card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? GamerTheme.neonGreen : ThemeService.border,
+            width: isSelected ? 1.3 : 1.0,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? GamerTheme.neonGreen : ThemeService.textPrimary,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
     );
   }
 
@@ -1060,7 +1477,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '⚡ Earn Free Coins (Personal + Team Weekly Coins)',
+          '⚡ Earn Free Coins (Added to Personal Wallet First)',
           style: TextStyle(
             color: ThemeService.textPrimary,
             fontSize: 16,
@@ -1174,27 +1591,44 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     List<TeamModel> activeTeams, {
     required bool isLoadingTeams,
   }) {
-    final games = ['Free Fire', 'PUBG Mobile', 'Valorant', 'COD Mobile'];
+    final games = TeamService.supportedGames; // ['Free Fire', 'PUBG Mobile']
+    if (!games.contains(_selectedGameTab)) {
+      _selectedGameTab = games.first;
+    }
     final bool hasTeam = activeTeams.isNotEmpty;
+
+    // Check if the user belongs to the Rank #1 team in _selectedGameTab
+    TeamModel? matchingGameTeam;
+    for (final t in activeTeams) {
+      if (TeamService.matchesGameName(t.game, _selectedGameTab)) {
+        matchingGameTeam = t;
+        break;
+      }
+    }
+    final TeamModel? evaluatedTeam = matchingGameTeam ?? (activeTeams.isNotEmpty ? activeTeams.first : null);
+    final cachedTeamStats = evaluatedTeam != null
+        ? _teamService.getCachedTeamWeeklyStats(evaluatedTeam.id)
+        : null;
+    final int teamRankInGame = (cachedTeamStats?['weeklyRank'] as num?)?.toInt() ??
+        (evaluatedTeam?.weeklyRank ?? 0);
+    final int teamWeeklyCoinsInGame = (cachedTeamStats?['weeklyCoins'] as num?)?.toInt() ??
+        (evaluatedTeam?.weeklyCoins ?? 0);
+    final bool isRankOneInSelectedGame = hasTeam &&
+        evaluatedTeam != null &&
+        TeamService.matchesGameName(evaluatedTeam.game, _selectedGameTab) &&
+        teamRankInGame == 1 &&
+        teamWeeklyCoinsInGame > 0;
 
     final packsMap = {
       'Free Fire': [
-        {'title': '100 Diamonds', 'cost': 500, 'icon': '💎'},
-        {'title': '310 Diamonds', 'cost': 1400, 'icon': '💎'},
-        {'title': '520 Diamonds', 'cost': 2200, 'icon': '💎'},
+        {'title': '100 Diamonds (375 PKR Share)', 'cost': 500, 'icon': '💎'},
+        {'title': '310 Diamonds (750 PKR Share)', 'cost': 1400, 'icon': '💎'},
+        {'title': '520 Diamonds (1,500 PKR #1 Pool)', 'cost': 2200, 'icon': '💎'},
       ],
       'PUBG Mobile': [
-        {'title': '60 UC', 'cost': 600, 'icon': '🪙'},
-        {'title': '325 UC', 'cost': 2800, 'icon': '🪙'},
-        {'title': '660 UC', 'cost': 5400, 'icon': '🪙'},
-      ],
-      'Valorant': [
-        {'title': '100 VP', 'cost': 1000, 'icon': '🔺'},
-        {'title': '475 VP', 'cost': 4500, 'icon': '🔺'},
-      ],
-      'COD Mobile': [
-        {'title': '80 CP', 'cost': 800, 'icon': '🎖️'},
-        {'title': '420 CP', 'cost': 3900, 'icon': '🎖️'},
+        {'title': '60 UC (375 PKR Share)', 'cost': 600, 'icon': '🪙'},
+        {'title': '325 UC (750 PKR Share)', 'cost': 2800, 'icon': '🪙'},
+        {'title': '660 UC (1,500 PKR #1 Pool)', 'cost': 5400, 'icon': '🪙'},
       ],
     };
 
@@ -1206,14 +1640,18 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              '🎮 Redeem Game Currency',
-              style: TextStyle(
-                color: ThemeService.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Text(
+                '🎮 Redeem Game Currency (#1 Team)',
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 8),
             if (isLoadingTeams)
               Text(
                 'Checking Team...',
@@ -1225,9 +1663,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               )
             else
               Text(
-                hasTeam ? 'Team Verified ✅' : 'Requires Active Team 🔒',
+                isRankOneInSelectedGame
+                    ? '🥇 #1 Team Unlocked'
+                    : (hasTeam ? 'Requires Rank #1 🏆' : 'Requires #1 Team 🔒'),
                 style: TextStyle(
-                  color: hasTeam ? GamerTheme.neonGreen : const Color(0xFFFFB800),
+                  color: isRankOneInSelectedGame
+                      ? GamerTheme.neonGreen
+                      : const Color(0xFFFFB800),
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                 ),
@@ -1235,7 +1677,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        // Game Category Selector Tabs
+        // Two Weekly Competition Games Tabs: Free Fire & PUBG Mobile
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -1261,18 +1703,18 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ),
         const SizedBox(height: 12),
 
-        // Per-Game Weekly #1 Team Reward Banner for selected game
+        // Per-Game Weekly #1 Team Reward Banner (1,500 PKR Equivalent) for selected game
         _buildPerGameWeeklyTopTeamCard(_selectedGameTab),
         const SizedBox(height: 12),
 
-        // Reward Packs List
+        // Reward Packs List (Winner-Only Redemption)
         Column(
           children: currentPacks.map((pack) {
             final title = pack['title'] as String;
             final cost = pack['cost'] as int;
             final icon = pack['icon'] as String;
             final canAfford = wallet.coins >= cost;
-            final canRedeem = !isLoadingTeams && hasTeam && canAfford;
+            final canRedeem = !isLoadingTeams && isRankOneInSelectedGame && canAfford;
             final progress = (wallet.coins / cost).clamp(0.0, 1.0);
 
             return Container(
@@ -1283,7 +1725,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: canRedeem
-                      ? GamerTheme.neonGreen.withOpacity(0.4)
+                      ? GamerTheme.neonGreen.withOpacity(0.45)
                       : ThemeService.border,
                 ),
               ),
@@ -1308,7 +1750,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           style: TextStyle(
                             color: ThemeService.textPrimary,
                             fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontSize: 13.5,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -1318,30 +1760,32 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               'Cost: $cost Coins',
                               style: const TextStyle(
                                 color: Color(0xFFFFD700),
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 isLoadingTeams
                                     ? '⏳ Checking team...'
                                     : (!hasTeam
-                                        ? '🛡️ Join a Team to Redeem'
-                                        : (canAfford
-                                            ? '✅ Eligible'
-                                            : '🔒 Need ${cost - wallet.coins} more')),
+                                        ? '🛡️ Join a Team (#1 Wins)'
+                                        : (!isRankOneInSelectedGame
+                                            ? '🏆 Rank #1 Team Only'
+                                            : (canAfford
+                                                ? '✅ #1 Winner Eligible'
+                                                : '🔒 Need ${cost - wallet.coins} more'))),
                                 style: TextStyle(
                                   color: isLoadingTeams
                                       ? ThemeService.textSecondary
-                                      : (!hasTeam
+                                      : (!isRankOneInSelectedGame
                                           ? const Color(0xFFFFB800)
                                           : (canAfford
                                               ? GamerTheme.neonGreen
                                               : ThemeService.textSecondary)),
                                   fontSize: 11,
-                                  fontWeight: (!isLoadingTeams && !hasTeam)
+                                  fontWeight: (!isLoadingTeams && !isRankOneInSelectedGame)
                                       ? FontWeight.bold
                                       : FontWeight.normal,
                                 ),
@@ -1372,14 +1816,14 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           ? ThemeService.cardSecondary
                           : (canRedeem
                               ? GamerTheme.neonGreen
-                              : (!hasTeam
+                              : (!isRankOneInSelectedGame
                                   ? const Color(0xFFFFB800).withOpacity(0.2)
                                   : ThemeService.cardSecondary)),
                       foregroundColor: isLoadingTeams
                           ? ThemeService.textSecondary
                           : (canRedeem
                               ? Colors.black
-                              : (!hasTeam
+                              : (!isRankOneInSelectedGame
                                   ? const Color(0xFFFFB800)
                                   : ThemeService.textSecondary)),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1390,7 +1834,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         ? null
                         : () => _redeemPack(_selectedGameTab, title, cost, wallet, activeTeams),
                     child: Text(
-                      isLoadingTeams ? '...' : (!hasTeam ? 'Join Team' : 'Redeem'),
+                      isLoadingTeams
+                          ? '...'
+                          : (!hasTeam
+                              ? 'Join Team'
+                              : (!isRankOneInSelectedGame ? '#1 Only' : 'Redeem')),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
@@ -1398,7 +1846,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                             ? ThemeService.textSecondary
                             : (canRedeem
                                 ? Colors.black
-                                : (!hasTeam
+                                : (!isRankOneInSelectedGame
                                     ? const Color(0xFFFFB800)
                                     : ThemeService.textSecondary)),
                       ),
@@ -1413,10 +1861,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     );
   }
 
-  /// Displays the current week's #1 Team & Weekly Prize Pool for [game]
+  /// Displays the current 7-day week's #1 Team & 1,500 PKR Equivalent Weekly Prize Pool for [game]
   Widget _buildPerGameWeeklyTopTeamCard(String game) {
     final weekLabel = TeamService.getWeekRangeLabel();
     final cachedLeaderboard = _teamService.getCachedGameWeeklyLeaderboard(game);
+    final currencyLabel = TeamService.getGameCurrencyLabel(game);
 
     return FutureBuilder<List<Map<String, dynamic>>>(
       initialData: cachedLeaderboard,
@@ -1429,7 +1878,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             : 'No ranked team yet';
         final int topWeeklyCoins = (topEntry?['weeklyCoins'] as int?) ?? 0;
         final int topMemberCount = ((topEntry?['memberCount'] as int?) ?? 4).clamp(1, 4);
-        final int equalShare = (TeamService.weeklyGameRewardPool / topMemberCount).floor();
+        final int equalPkrShare = TeamService.getEqualPkrShare(topMemberCount);
 
         return Container(
           width: double.infinity,
@@ -1437,7 +1886,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           decoration: BoxDecoration(
             color: ThemeService.card,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
+            border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.45)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1448,11 +1897,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '$game Weekly #1 Team Reward (${NumberFormat('#,###').format(TeamService.weeklyGameRewardPool)} Coins)',
+                      '$game Weekly #1 Prize (1,500 PKR Equivalent • $currencyLabel)',
                       style: TextStyle(
                         color: ThemeService.textPrimary,
                         fontWeight: FontWeight.w900,
-                        fontSize: 12.5,
+                        fontSize: 12.2,
                       ),
                     ),
                   ),
@@ -1468,9 +1917,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                topEntry != null
-                    ? 'Current #1 in $game: $topTeamName • ${NumberFormat('#,###').format(topWeeklyCoins)} Weekly Coins ($topMemberCount/4 members • +$equalShare Coins each at week\'s end)'
-                    : 'At the end of the weekly cycle, the #1 team in $game divides ${TeamService.weeklyGameRewardPool} G-Coins equally among its members (up to 4).',
+                topEntry != null && topWeeklyCoins > 0
+                    ? 'Current #1 in $game: $topTeamName • ${NumberFormat('#,###').format(topWeeklyCoins)} Weekly Team Coins ($topMemberCount/4 active members • $equalPkrShare PKR equivalent in $currencyLabel each at week\'s end)'
+                    : 'At the end of the 7-day weekly cycle ($weekLabel), the #1 team in $game receives 1,500 PKR equivalent in $currencyLabel divided equally among its active members (up to 4). Weekly team scores reset to 0 each new week.',
                 style: TextStyle(
                   color: ThemeService.textSecondary,
                   fontSize: 11,
@@ -1538,7 +1987,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    'No transaction history yet. Earn or redeem coins to start!',
+                    'No transaction history yet. Earn or contribute coins to start!',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
                   ),
@@ -1557,17 +2006,22 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   Widget _buildTxTile(CoinTransaction tx) {
     final isCredit = tx.amount > 0;
     final isWeeklyReward = tx.type == 'weekly_team_reward';
+    final isTeamContribution = tx.type == 'team_weekly_contribution';
     final isRedemption = tx.type == 'game_currency_redemption' || tx.type == 'store_purchase';
 
     final Color color = isWeeklyReward
         ? const Color(0xFFFFD700)
-        : (isCredit ? GamerTheme.neonGreen : GamerTheme.redAccent);
+        : (isTeamContribution
+            ? GamerTheme.accentBlue
+            : (isCredit ? GamerTheme.neonGreen : GamerTheme.redAccent));
 
-    String statusLabel = isCredit ? 'Earned' : 'Spent';
+    String statusLabel = isCredit ? 'Added to Personal Wallet' : 'Spent';
     if (isWeeklyReward) {
-      statusLabel = 'Weekly #1 Team Share';
+      statusLabel = 'Weekly #1 Prize Share';
+    } else if (isTeamContribution) {
+      statusLabel = 'Contributed to Team';
     } else if (isRedemption) {
-      statusLabel = 'Redeemed';
+      statusLabel = '#1 Team Redeemed';
     }
 
     return Container(
@@ -1579,7 +2033,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         border: Border.all(
           color: isWeeklyReward
               ? const Color(0xFFFFD700).withOpacity(0.45)
-              : ThemeService.border,
+              : (isTeamContribution
+                  ? GamerTheme.accentBlue.withOpacity(0.45)
+                  : ThemeService.border),
         ),
       ),
       child: Row(
@@ -1593,7 +2049,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             child: Icon(
               isWeeklyReward
                   ? Icons.emoji_events_rounded
-                  : (isCredit ? Icons.add_rounded : Icons.redeem_rounded),
+                  : (isTeamContribution
+                      ? Icons.shield_rounded
+                      : (isCredit ? Icons.add_rounded : Icons.redeem_rounded)),
               color: color,
               size: 18,
             ),
@@ -1683,7 +2141,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'How G-Coins, Weekly Team Rewards & Privacy Work',
+                  'How G-Coins, 1,500 PKR Weekly Team Prize & Privacy Work',
                   style: TextStyle(
                     color: ThemeService.textPrimary,
                     fontWeight: FontWeight.w900,
@@ -1695,18 +2153,18 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           ),
           const SizedBox(height: 10),
           _disclosureBullet(
-            '1. Personal & 4-Member Team Coin Tracking:',
-            'Each team supports up to 4 members. Watching a rewarded ad awards +25 G-Coins and claiming the daily login bonus awards +50 G-Coins to your personal balance and history, while also recording your weekly coin contribution for your team\'s game.',
+            '1. Weekly (7-Day) Cycle, Two Games & 1,500 PKR Equivalent Prize:',
+            'The weekly team competition runs on a 7-day cycle (Monday 00:00 UTC – Sunday 23:59 UTC) focused on Free Fire and PUBG Mobile. At the end of each week, the #1 team in Free Fire and the #1 team in PUBG Mobile each receive 1,500 PKR equivalent in that game\'s in-game currency (Free Fire Diamonds or PUBG UC), divided equally among that winning #1 team\'s active members (up to 4 members per team).',
           ),
           const SizedBox(height: 6),
           _disclosureBullet(
-            '2. Per-Game Weekly #1 Team & Equal Division:',
-            'Weekly team coins are tracked separately for each game (e.g., PUBG Mobile, Free Fire, BGMI, Valorant, COD Mobile). At the end of each weekly cycle, the #1 team with the highest weekly coins in each game divides that game\'s 1,000 G-Coins weekly reward equally among its members.',
+            '2. Personal Wallet First + Manual Team Contribution:',
+            'All G-Coins earned from watching ads (+25), daily bonuses (+50), or activities go directly into your Personal Wallet first. Inside this Wallet screen, you choose how many personal coins to contribute to your active Team Profile for the weekly competition (All / Max, a custom amount, or keep them in your Personal Wallet / contribute 0).',
           ),
           const SizedBox(height: 6),
           _disclosureBullet(
-            '3. Team Requirement & Solo Player Protection:',
-            'Only users who belong to an active team can redeem rewards or qualify for weekly team rewards. If a solo user earns coins while not in a team, all earned coins remain visible in their personal balance and history until they join a team.',
+            '3. Winner-Only Redemption, Personal Coin Safety & Weekly Reset:',
+            'Weekly game-currency reward redemption is unlocked strictly for members of the #1 team in that game for that weekly cycle. Non-#1 teams\' and solo players\' personal G-Coins remain 100% safe in their Personal Wallet balance and history. Weekly team coin scores and weekly member contributions reset to 0 at the start of each new weekly cycle while preserving past results.',
           ),
           const SizedBox(height: 6),
           _disclosureBullet(

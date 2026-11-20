@@ -14,14 +14,31 @@ class TeamService {
   TeamService._internal();
 
   static const int maxTeamMembers = TeamModel.maxMembers; // 4 members max
-  static const int weeklyGameRewardPool = 1000; // 1,000 G-Coins per game every week
+  static const int weeklyGameRewardPkr = 1500; // 1,500 PKR equivalent in-game currency per game every week (updated from 3,000 PKR)
+  static const int weeklyGameRewardPool = 1500; // 1,500 PKR equivalent prize pool per game
   static const List<String> supportedGames = [
-    'PUBG Mobile',
     'Free Fire',
-    'BGMI',
-    'Valorant',
-    'COD Mobile',
+    'PUBG Mobile',
   ];
+
+  /// Returns the in-game currency name for a supported weekly game
+  static String getGameCurrencyLabel(String game) {
+    if (matchesGameName(game, 'PUBG Mobile')) {
+      return 'PUBG UC';
+    }
+    return 'Free Fire Diamonds';
+  }
+
+  /// Calculates each active member's equal PKR-equivalent share of the 1,500 PKR weekly #1 team prize
+  static int getEqualPkrShare(int memberCount) {
+    final clamped = memberCount.clamp(1, maxTeamMembers);
+    return (weeklyGameRewardPkr / clamped).floor();
+  }
+
+  /// Checks whether [game] is one of the two weekly competition games (Free Fire or PUBG)
+  static bool isWeeklyCompetitionGame(String game) {
+    return matchesGameName(game, 'Free Fire') || matchesGameName(game, 'PUBG Mobile');
+  }
 
   final Map<String, List<TeamModel>> _userTeamsCache = {};
   final Map<String, Map<String, dynamic>> _teamWeeklyStatsCache = {};
@@ -1578,29 +1595,122 @@ class TeamService {
     return '${start.day} ${months[start.month - 1]} – ${end.day} ${months[end.month - 1]}';
   }
 
-  /// Eligible coin earning types that count toward a member's Weekly Team Coin contribution
+  /// Eligible transaction types that count toward a member's Weekly Team Coin contribution.
+  /// Under the Personal Wallet First + Manual Team Contribution rule, earned coins go to the
+  /// user's Personal Wallet first, and only manual contributions ('team_weekly_contribution')
+  /// transferred from the Personal Wallet count toward the team's weekly competition score.
   static bool isEligibleTeamCoinActivity(String type) {
     final clean = type.trim().toLowerCase();
-    const excluded = {
-      'weekly_team_reward',
-      'refund',
-      'escrow_refund',
-      'room_host_refund',
-      'escrow_release',
-      'escrow_cleared',
-      'escrow_transferred',
-      'store_purchase',
-      'game_currency_redemption',
-      'room_host_hold',
-      'tournament_entry',
-      'entry_fee',
-      'escrow_hold',
-    };
-    return !excluded.contains(clean);
+    return clean == 'team_weekly_contribution';
   }
 
-  /// Records a member's earned coins toward their active team's weekly coin contribution for their team's game.
-  /// Solo users (not in any team) keep their personal coins in their personal wallet and history.
+  /// Ensures weekly caches are reset cleanly when a new 7-day weekly cycle begins,
+  /// while preserving all personal wallet balances and past transaction history.
+  Future<void> _ensureWeeklyCycleReset() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentWeekKey = getWeekCycleKey();
+      final lastActiveWeekKey = prefs.getString('active_weekly_cycle_key');
+      if (lastActiveWeekKey != currentWeekKey) {
+        _teamWeeklyStatsCache.clear();
+        _gameLeaderboardCache.clear();
+        await prefs.setString('active_weekly_cycle_key', currentWeekKey);
+      }
+    } catch (_) {}
+  }
+
+  /// Transfers [amount] G-Coins from [userId]'s Personal Wallet to their active [team]'s
+  /// weekly competition score for the current 7-day cycle.
+  /// - If [amount] == 0, keeps all coins in the Personal Wallet without deducting.
+  /// - If [amount] > 0, deducts [amount] from Personal Wallet and adds [amount] to the
+  ///   member's weekly contribution and the team's weekly total for that game.
+  Future<Map<String, dynamic>> contributePersonalCoinsToTeam({
+    required String userId,
+    required TeamModel team,
+    required int amount,
+  }) async {
+    final cleanUid = userId.trim();
+    if (cleanUid.isEmpty) {
+      return {
+        'success': false,
+        'contributed': 0,
+        'message': 'Please sign in to contribute coins to your team.',
+      };
+    }
+
+    await _ensureWeeklyCycleReset();
+
+    if (amount <= 0) {
+      return {
+        'success': true,
+        'contributed': 0,
+        'keptInWallet': true,
+        'message': '0 G-Coins contributed. Your coins remain safely stored in your Personal Wallet.',
+      };
+    }
+
+    final wallet = await CoinWalletService().getOrCreateWallet(cleanUid);
+    if (wallet.coins < amount) {
+      return {
+        'success': false,
+        'contributed': 0,
+        'message': 'Insufficient Personal Wallet balance. Available: ${wallet.coins} G-Coins.',
+      };
+    }
+
+    final weekKey = getWeekCycleKey();
+    final weekLabel = getWeekRangeLabel();
+    final userUuid = SupabaseService.toUuid(cleanUid);
+
+    // 1. Deduct from Personal Wallet & record transaction in history
+    await CoinWalletService.updateCoins(
+      userId: cleanUid,
+      amount: -amount,
+      type: 'team_weekly_contribution',
+      roomId: 'team_contrib_${weekKey}_${team.id}',
+      title: '🛡️ Team Weekly Contribution (${team.name} [${team.tag}])',
+      description:
+          'Transferred $amount G-Coins from Personal Wallet to Team "${team.name} [${team.tag}]" for ${team.game} Weekly Competition ($weekLabel)',
+    );
+
+    // 2. Increment local weekly contribution counter for instant UI sync
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userContribKey = 'weekly_user_contrib_${weekKey}_$cleanUid';
+      final uuidContribKey = 'weekly_user_contrib_${weekKey}_$userUuid';
+      final current1 = prefs.getInt(userContribKey) ?? 0;
+      final current2 = prefs.getInt(uuidContribKey) ?? 0;
+      final currentBest = current1 > current2 ? current1 : current2;
+      final updatedTotal = currentBest + amount;
+      await prefs.setInt(userContribKey, updatedTotal);
+      await prefs.setInt(uuidContribKey, updatedTotal);
+
+      final teamMemberKey = 'weekly_team_member_${weekKey}_${team.id}_$cleanUid';
+      final currentTeamMember = prefs.getInt(teamMemberKey) ?? 0;
+      await prefs.setInt(teamMemberKey, currentTeamMember + amount);
+    } catch (e) {
+      debugPrint('[TeamService] contributePersonalCoinsToTeam prefs note: $e');
+    }
+
+    // 3. Invalidate and refresh weekly leaderboard & team stats cache
+    _teamWeeklyStatsCache.clear();
+    _gameLeaderboardCache.clear();
+    final updatedStats = await getTeamWeeklyCoinStats(team);
+    await getUserTeams(cleanUid);
+
+    return {
+      'success': true,
+      'contributed': amount,
+      'keptInWallet': false,
+      'newPersonalBalance': (wallet.coins - amount).clamp(0, 999999999),
+      'teamWeeklyCoins': (updatedStats['weeklyCoins'] as num?)?.toInt() ?? amount,
+      'weeklyRank': (updatedStats['weeklyRank'] as num?)?.toInt() ?? 1,
+      'message':
+          'Successfully contributed $amount G-Coins from your Personal Wallet to ${team.name} [${team.tag}]!',
+    };
+  }
+
+  /// Legacy helper preserved for compatibility; routes only explicit team_weekly_contribution activities.
   Future<void> recordMemberWeeklyCoinContribution({
     required String userId,
     required int amount,
@@ -1615,31 +1725,11 @@ class TeamService {
       final cleanUid = userId.trim();
       final userUuid = SupabaseService.toUuid(cleanUid);
 
-      // 1. Always increment local weekly earned tracker for this user ID & UUID
-      final userWeekKey = 'weekly_user_coins_${weekKey}_$cleanUid';
+      final userWeekKey = 'weekly_user_contrib_${weekKey}_$cleanUid';
       final currentLocal = prefs.getInt(userWeekKey) ?? 0;
       await prefs.setInt(userWeekKey, currentLocal + amount);
       if (userUuid != cleanUid) {
-        await prefs.setInt('weekly_user_coins_${weekKey}_$userUuid', currentLocal + amount);
-      }
-
-      // 2. If the user belongs to an active team (up to 4 members), record for their team & game
-      final userTeams = await getUserTeams(cleanUid);
-      for (final team in userTeams) {
-        final cappedMembers = team.cappedMembers;
-        final isInCappedRoster = team.isLeader(cleanUid) ||
-            cappedMembers.any((m) =>
-                m.trim().toLowerCase() == cleanUid.toLowerCase() ||
-                SupabaseService.toUuid(m) == userUuid);
-        if (!isInCappedRoster) continue;
-
-        final teamWeekKey = 'weekly_team_member_${weekKey}_${team.id}_$cleanUid';
-        final currentTeamMemberCoins = prefs.getInt(teamWeekKey) ?? 0;
-        await prefs.setInt(teamWeekKey, currentTeamMemberCoins + amount);
-        // Refresh cached weekly stats for this team
-        try {
-          await getTeamWeeklyCoinStats(team);
-        } catch (_) {}
+        await prefs.setInt('weekly_user_contrib_${weekKey}_$userUuid', currentLocal + amount);
       }
     } catch (e) {
       debugPrint('[TeamService] recordMemberWeeklyCoinContribution note: $e');
@@ -1713,11 +1803,15 @@ class TeamService {
     return result;
   }
 
-  /// Calculates weekly coins earned by each user in [userIds] during the week of [forDate]
+  /// Calculates weekly coins manually contributed by each user in [userIds] during the 7-day week of [forDate].
+  /// Resets automatically to 0 at the start of each new weekly cycle (Monday 00:00 UTC).
   Future<Map<String, int>> _getUsersWeeklyEarnedCoins(
     List<String> userIds, {
     DateTime? forDate,
   }) async {
+    if (forDate == null) {
+      await _ensureWeeklyCycleReset();
+    }
     final Map<String, int> coinsByUserLower = {};
     if (userIds.isEmpty) return coinsByUserLower;
 
@@ -1748,27 +1842,30 @@ class TeamService {
     void accumulateRows(Iterable<dynamic> txRows) {
       for (final r in txRows) {
         if (r is! Map) continue;
-        final amount = (r['amount'] as num?)?.toInt() ?? 0;
-        if (amount <= 0) continue;
-        final type = (r['type'] ?? '').toString();
-        if (!isEligibleTeamCoinActivity(type)) continue;
+        final type = (r['type'] ?? '').toString().trim().toLowerCase();
+        if (type != 'team_weekly_contribution') continue;
+
+        final rawAmount = (r['amount'] as num?)?.toInt() ?? 0;
+        final contributedAmount = rawAmount.abs();
+        if (contributedAmount <= 0) continue;
 
         final txUidLower = (r['user_id'] ?? '').toString().trim().toLowerCase();
         final targetKey = uuidToOriginalLower[txUidLower] ?? txUidLower;
-        coinsByUserLower[targetKey] = (coinsByUserLower[targetKey] ?? 0) + amount;
+        coinsByUserLower[targetKey] = (coinsByUserLower[targetKey] ?? 0) + contributedAmount;
         if (txUidLower != targetKey) {
           coinsByUserLower[txUidLower] = coinsByUserLower[targetKey]!;
         }
       }
     }
 
-    // 1. Query coin_transactions from Supabase for this weekly window (using valid UUIDs first)
+    // 1. Query manual team_weekly_contribution transactions from Supabase for this weekly window
     final queryIds = uuidLookupIds.isNotEmpty ? uuidLookupIds : allLookupIds;
     try {
       final txRows = await SupabaseService.client
           .from('coin_transactions')
           .select('user_id, amount, type, created_at')
           .inFilter('user_id', queryIds)
+          .eq('type', 'team_weekly_contribution')
           .gte('created_at', weekStart.toIso8601String())
           .lte('created_at', weekEnd.toIso8601String());
       if (txRows is Iterable) {
@@ -1778,7 +1875,7 @@ class TeamService {
       debugPrint('[TeamService] _getUsersWeeklyEarnedCoins Supabase query note: $e');
     }
 
-    // 2. Merge with local SharedPreferences counter if higher (ensures instant UI updates offline/online)
+    // 2. Merge with local SharedPreferences manual contribution counter for this weekKey if higher
     try {
       final prefs = await SharedPreferences.getInstance();
       for (final rawId in userIds) {
@@ -1787,8 +1884,8 @@ class TeamService {
         final lower = clean.toLowerCase();
         final asUuid = SupabaseService.toUuid(clean);
         final asUuidLower = asUuid.toLowerCase();
-        final localVal1 = prefs.getInt('weekly_user_coins_${weekKey}_$clean') ?? 0;
-        final localVal2 = prefs.getInt('weekly_user_coins_${weekKey}_$asUuid') ?? 0;
+        final localVal1 = prefs.getInt('weekly_user_contrib_${weekKey}_$clean') ?? 0;
+        final localVal2 = prefs.getInt('weekly_user_contrib_${weekKey}_$asUuid') ?? 0;
         final localVal = localVal1 > localVal2 ? localVal1 : localVal2;
         final dbVal = coinsByUserLower[lower] ?? coinsByUserLower[asUuidLower] ?? 0;
         final bestVal = localVal > dbVal ? localVal : dbVal;
@@ -2081,34 +2178,24 @@ class TeamService {
     }
   }
 
-  /// At the end of each weekly cycle, identifies the #1 team with the highest weekly coins
-  /// in each game separately, divides that game's weekly reward equally among that winning
-  /// team's members (up to 4 members), updates their balances, and records the reward
-  /// distribution in their coins/redemption history with clear labels.
+  /// At the end of each 7-day weekly cycle, identifies the #1 team with the highest weekly coins
+  /// in Free Fire and PUBG Mobile separately, divides that game's 1,500 PKR equivalent in-game
+  /// currency reward equally among that winning #1 team's active members (up to 4 members),
+  /// and records the reward distribution in their redemption/transaction history with clear labels.
   static bool _isCheckingWeeklyRewards = false;
   Future<void> checkAndDistributeWeeklyGameRewards() async {
     if (_isCheckingWeeklyRewards) return;
     _isCheckingWeeklyRewards = true;
 
     try {
+      await _ensureWeeklyCycleReset();
       final prefs = await SharedPreferences.getInstance();
       final currentWeekStart = getWeekStartUtc();
       final previousWeekDate = currentWeekStart.subtract(const Duration(days: 3));
       final prevWeekKey = getWeekCycleKey(previousWeekDate);
       final prevWeekLabel = getWeekRangeLabel(previousWeekDate);
 
-      final allTeams = await _fetchAllTeamsEnriched();
-      if (allTeams.isEmpty) return;
-
-      // Collect all distinct games that have active teams
-      final distinctGames = <String>{};
-      for (final t in allTeams) {
-        if (t.game.trim().isNotEmpty) {
-          distinctGames.add(t.game.trim());
-        }
-      }
-
-      for (final game in distinctGames) {
+      for (final game in supportedGames) {
         final gameSlug = game.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
         final payoutRefId = 'weekly_top1_${prevWeekKey}_$gameSlug';
         final localPaidKey = 'paid_$payoutRefId';
@@ -2136,7 +2223,7 @@ class TeamService {
           continue;
         }
 
-        // Evaluate previous week's leaderboard for this specific game
+        // Evaluate previous week's leaderboard for this specific game (Free Fire or PUBG Mobile)
         final prevGameLeaderboard = await getGameWeeklyLeaderboard(
           game,
           forDate: previousWeekDate,
@@ -2146,7 +2233,7 @@ class TeamService {
         final topTeamEntry = prevGameLeaderboard.first;
         final topWeeklyCoins = (topTeamEntry['weeklyCoins'] as int?) ?? 0;
         if (topWeeklyCoins <= 0) {
-          // Mark checked if no team earned coins in that week for this game
+          // Mark checked if no team contributed coins in that week for this game
           await prefs.setBool(localPaidKey, true);
           continue;
         }
@@ -2159,29 +2246,30 @@ class TeamService {
 
         if (memberIds.isEmpty) continue;
 
-        final int memberCount = memberIds.length;
-        final int equalShare = (weeklyGameRewardPool / memberCount).floor();
+        final int memberCount = memberIds.length.clamp(1, maxTeamMembers);
+        final int equalPkrShare = getEqualPkrShare(memberCount);
+        final String currencyLabel = getGameCurrencyLabel(game);
 
-        if (equalShare > 0) {
+        if (equalPkrShare > 0) {
           for (final uid in memberIds) {
             try {
               await CoinWalletService.updateCoins(
                 userId: uid,
-                amount: equalShare,
+                amount: equalPkrShare,
                 type: 'weekly_team_reward',
                 roomId: payoutRefId,
-                title: '🏆 Weekly #1 Team Reward ($game)',
+                title: '🏆 Weekly #1 Team Prize ($game • $equalPkrShare PKR $currencyLabel)',
                 description:
-                    'Equal Share (1/$memberCount of $weeklyGameRewardPool G-Coins) • #1 Team "$winningTeamName [$winningTeamTag]" in $game ($prevWeekLabel • $topWeeklyCoins Team Coins)',
+                    'Equal Share (1/$memberCount of $weeklyGameRewardPkr PKR Equivalent in $currencyLabel) • #1 Team "$winningTeamName [$winningTeamTag]" in $game ($prevWeekLabel • $topWeeklyCoins Weekly Team Coins)',
               );
 
               try {
                 await NotificationService().sendNotification(
                   userId: uid,
                   type: 'weekly_team_reward',
-                  title: '🏆 Weekly #1 Team in $game! (+$equalShare G-Coins)',
+                  title: '🏆 Weekly #1 Team in $game! ($equalPkrShare PKR $currencyLabel)',
                   body:
-                      'Your team "$winningTeamName" finished Rank #1 in $game for $prevWeekLabel! Your equal share (+$equalShare G-Coins) has been credited to your wallet.',
+                      'Your team "$winningTeamName" finished Rank #1 in $game for $prevWeekLabel! Your equal share ($equalPkrShare PKR equivalent in $currencyLabel • 1/$memberCount of 1,500 PKR) has been awarded.',
                   priority: 'high',
                 );
               } catch (_) {}

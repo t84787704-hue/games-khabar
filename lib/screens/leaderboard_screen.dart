@@ -303,7 +303,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   Widget _buildPlayPolicyWeeklyBanner() {
     final cycleLabel = TeamService.getWeekRangeLabel();
-    final pool = TeamService.weeklyGameRewardPool;
+    final pool = TeamService.weeklyGameRewardPkr;
+    final currencyLabel = TeamService.getGameCurrencyLabel(_selectedGame);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
       child: Container(
@@ -341,7 +342,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         color: const Color(0xFFFFD700).withOpacity(0.45)),
                   ),
                   child: Text(
-                    '#1 Prize: +${NumberFormat('#,###').format(pool)} Coins',
+                    '#1 Prize: ${NumberFormat('#,###').format(pool)} PKR',
                     style: const TextStyle(
                       color: Color(0xFFFFD700),
                       fontWeight: FontWeight.w900,
@@ -353,7 +354,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Each team (up to 4 members) earns weekly coins when members watch ads or claim daily bonuses. At the end of the weekly cycle, the #1 team in $_selectedGame shares the +${NumberFormat('#,###').format(pool)} G-Coins prize equally among its members. Public gaming handles & coin totals only — private personal data is never shown.',
+              'Coins earned from ads or bonuses go into each player\'s Personal Wallet first. Members manually contribute coins from their Personal Wallet to their team (up to 4 members). At the end of the 7-day cycle, the #1 team in $_selectedGame receives ${NumberFormat('#,###').format(pool)} PKR equivalent in $currencyLabel divided equally among its active members. Weekly team scores reset to 0 each new week. Public gaming handles & coin totals only.',
               style: TextStyle(
                 color: ThemeService.textSecondary,
                 fontSize: 11,
@@ -396,7 +397,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Create or join a 4-member $_selectedGame team and earn coins via daily check-in or rewarded ads to lead this week\'s chart.',
+                  'Create or join a 4-member $_selectedGame team and contribute coins from your Personal Wallet to compete for the 1,500 PKR equivalent #1 Team Prize.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: ThemeService.textSecondary,
@@ -423,8 +424,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         final int memberCount =
             ((entry['memberCount'] as num?)?.toInt() ?? team.memberCount)
                 .clamp(1, TeamModel.maxMembers);
-        final int equalShare = (entry['equalRewardShare'] as num?)?.toInt() ??
-            (TeamService.weeklyGameRewardPool ~/ memberCount);
+        final int equalShare = TeamService.getEqualPkrShare(memberCount);
         final Map<String, int> memberCoins =
             (entry['memberCoins'] as Map<String, int>?) ?? const {};
 
@@ -516,7 +516,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              '#1 Equal Split: +$equalShare / member',
+                              '#1 Equal Split: $equalShare PKR / member',
                               style: const TextStyle(
                                 color: Color(0xFFFFD700),
                                 fontWeight: FontWeight.w800,

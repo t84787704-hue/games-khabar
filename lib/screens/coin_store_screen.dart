@@ -614,8 +614,8 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   const SizedBox(height: 6),
                   Text(
                     isSolo
-                        ? 'Coins you earn from ads or daily check-in are always saved in your personal balance and history. Join or create an active team (up to 4 members) to redeem rewards or compete for weekly #1 team prizes.'
-                        : 'Coins you earn here are credited to your personal balance and automatically added to your team\'s weekly coin total for ${activeTeam!.game} (${activeTeam.memberCount}/${TeamModel.maxMembers} members).',
+                        ? 'Coins you earn from ads or daily check-in go directly into your Personal Wallet and remain safely stored across weekly resets. Join or create an active 4-member Free Fire or PUBG team to contribute coins and compete for the weekly 1,500 PKR equivalent #1 Team Prize.'
+                        : 'Coins you earn here go into your Personal Wallet first. Open your G-Coins Wallet to choose how many personal coins to contribute to ${activeTeam!.name} (${activeTeam.game} • ${activeTeam.memberCount}/${TeamModel.maxMembers} members) for the weekly 1,500 PKR equivalent #1 Team Prize.',
                     style: TextStyle(
                       color: ThemeService.textSecondary,
                       fontSize: 11.5,
