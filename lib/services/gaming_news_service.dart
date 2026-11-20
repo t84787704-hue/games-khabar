@@ -464,7 +464,11 @@ class GamingNewsService {
       return 'Detailed gaming article will appear here shortly.';
     }
 
-    final cleanSummary = summary.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final cleanSummary = summary
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .replaceAll(RegExp(r'(\.{2,}|…)+$'), '')
+        .trim();
     final p1 = cleanSummary.isNotEmpty
         ? cleanSummary
         : '$title marks an exciting new chapter for the global gaming community, showcasing notable technological leaps, engaging narrative depths, and innovative mechanics.';

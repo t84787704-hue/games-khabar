@@ -205,12 +205,8 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
       enrichedPost['title_ur'] = cachedUrduTitle.trim();
     }
     if (cachedUrduDesc != null && cachedUrduDesc.trim().isNotEmpty) {
-      // Only override if description_ur wasn't already a full multi-paragraph Urdu article
-      final existingUr = (enrichedPost['description_ur'] ?? '').toString().trim();
-      if (existingUr.isEmpty || existingUr.length < cachedUrduDesc.length) {
-        enrichedPost['description_ur'] = cachedUrduDesc.trim();
-      }
-      enrichedPost['short_description_ur'] = cachedUrduDesc.trim();
+      final cleanCachedUr = cachedUrduDesc.trim().replaceAll(RegExp(r'\.{2,}$'), '').trim();
+      enrichedPost['short_description_ur'] = cleanCachedUr;
     }
 
     final resolvedImg = _resolvePostImage(post);
