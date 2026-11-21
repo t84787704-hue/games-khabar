@@ -35,13 +35,19 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
   bool _isClaimingDaily = false;
   bool _isRegisteringReferral = false;
 
+  Stream<CoinWallet>? _walletStream;
+  Stream<List<TeamModel>>? _userTeamsStream;
+
   String get _userId => GamerAuthService().currentUid ?? '';
 
   @override
   void initState() {
     super.initState();
-    if (_userId.isNotEmpty) {
-      _walletService.getOrCreateWallet(_userId);
+    final uid = _userId;
+    if (uid.isNotEmpty) {
+      _walletStream = _walletService.walletStream(uid);
+      _userTeamsStream = TeamService().getUserTeamsStream(uid);
+      _walletService.getOrCreateWallet(uid);
     }
   }
 

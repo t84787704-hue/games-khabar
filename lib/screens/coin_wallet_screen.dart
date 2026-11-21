@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_transaction_model.dart';
 import '../models/coin_wallet_model.dart';
@@ -709,8 +710,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
       // 2. Submit to Admin Fulfillment Queue (`reports` table with target_type = 'redeem_request')
       try {
+        final String? rawName = GamerAuthService().currentGamer?.username ??
+            GamerAuthService().currentUser?.userMetadata?['username']?.toString() ??
+            GamerAuthService().currentUser?.userMetadata?['full_name']?.toString();
         final String displayHandle = TeamService.sanitizePublicHandle(
-          GamerAuthService().currentUser?.displayName,
+          rawName,
           fallback: 'TeamWinner',
         );
         await SupabaseService.client.from('reports').insert({
