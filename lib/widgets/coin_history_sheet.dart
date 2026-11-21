@@ -5,6 +5,7 @@
 
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -442,36 +443,63 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               ),
               const SizedBox(height: 12),
 
-              // Transactions List
+              // Transactions & Reward Claims List
               Expanded(
-                child: StreamBuilder<List<CoinTransaction>>(
-                  stream: _walletService.transactionsStream(widget.userId),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: GamerTheme.accentBlue),
-                      );
-                    }
+                child: StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: widget.userId.isNotEmpty
+                      ? SupabaseService.client
+                          .from('reward_claims')
+                          .stream(primaryKey: ['id'])
+                          .eq('user_id', widget.userId)
+                          .order('created_at', ascending: false)
+                          .asBroadcastStream()
+                      : Stream.value(const <Map<String, dynamic>>[]).asBroadcastStream(),
+                  builder: (context, claimsSnap) {
+                    final List<Map<String, dynamic>> rewardClaims =
+                        _selectedFilter == 0 ? (claimsSnap.data ?? const []) : const [];
 
-                    List<CoinTransaction> transactions = List.from(snapshot.data ?? []);
+                    return StreamBuilder<List<CoinTransaction>>(
+                      stream: _walletService.transactionsStream(widget.userId),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting &&
+                            !snapshot.hasData &&
+                            claimsSnap.connectionState == ConnectionState.waiting &&
+                            !claimsSnap.hasData) {
+                          return const Center(
+                            child: CircularProgressIndicator(color: GamerTheme.accentBlue),
+                          );
+                        }
 
-                    if (_selectedFilter == 1) {
-                      transactions = transactions.where((tx) => tx.amount > 0).toList();
-                    } else if (_selectedFilter == 2) {
-                      transactions = transactions.where((tx) => tx.amount < 0).toList();
-                    }
+                        List<CoinTransaction> transactions = List.from(snapshot.data ?? []);
+                        if (rewardClaims.isNotEmpty) {
+                          transactions = transactions
+                              .where((tx) => tx.type != 'game_currency_redemption')
+                              .toList();
+                        }
 
-                    if (transactions.isEmpty) {
-                      return _buildEmptyState();
-                    }
+                        if (_selectedFilter == 1) {
+                          transactions = transactions.where((tx) => tx.amount > 0).toList();
+                        } else if (_selectedFilter == 2) {
+                          transactions = transactions.where((tx) => tx.amount < 0).toList();
+                        }
 
-                    return ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                      itemCount: transactions.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final tx = transactions[index];
-                        return _buildTransactionCard(tx);
+                        if (rewardClaims.isEmpty && transactions.isEmpty) {
+                          return _buildEmptyState();
+                        }
+
+                        final totalItems = rewardClaims.length + transactions.length;
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                          itemCount: totalItems,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            if (index < rewardClaims.length) {
+                              return _buildRewardClaimCard(rewardClaims[index]);
+                            }
+                            final tx = transactions[index - rewardClaims.length];
+                            return _buildTransactionCard(tx);
+                          },
+                        );
                       },
                     );
                   },
@@ -520,6 +548,212 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildRewardClaimCard(Map<String, dynamic> claim) {
+    final String claimCode = (claim['claim_code'] ?? '#RW').toString();
+    final String rawGame = (claim['game_name'] ?? 'free_fire').toString().toLowerCase();
+    final String gameLabel =
+        (rawGame == 'pubg_mobile' || rawGame.contains('pubg') || rawGame.contains('bgmi'))
+            ? 'PUBG Mobile'
+            : 'Free Fire';
+    final String playerUid = (claim['player_uid'] ?? 'N/A').toString();
+    final String playerIgn = (claim['player_ign'] ?? '').toString();
+    final String teamName = (claim['team_name'] ?? 'Rank #1 Team').toString();
+    final int shareAmountPkr = (claim['share_amount_pkr'] as num?)?.toInt() ?? 375;
+    final String rewardLabel = (claim['reward_label'] ?? '').toString();
+    final String status = (claim['status'] ?? 'pending').toString().toLowerCase();
+    final String adminNote = (claim['admin_note'] ?? '').toString();
+
+    final bool isDelivered = status == 'delivered';
+    final bool isRejected = status == 'rejected';
+    final Color accentColor = isDelivered
+        ? GamerTheme.neonGreen
+        : (isRejected ? GamerTheme.redAccent : const Color(0xFFFFB800));
+
+    final DateTime? timestamp =
+        DateTime.tryParse((claim['delivered_at'] ?? claim['created_at'] ?? '').toString());
+    final String dateText = timestamp != null
+        ? DateFormat('dd MMM yyyy • hh:mm a').format(timestamp.toLocal())
+        : 'Recent';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ThemeService.cardSecondary,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accentColor.withOpacity(0.55), width: 1.3),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isDelivered
+                      ? Icons.verified_rounded
+                      : (isRejected ? Icons.cancel_rounded : Icons.card_giftcard_rounded),
+                  color: accentColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🎁 #1 Team Reward • $gameLabel',
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    if (rewardLabel.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        rewardLabel,
+                        style: TextStyle(
+                          color: accentColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  isDelivered
+                      ? '✅ Reward Sent'
+                      : (isRejected ? '❌ Rejected' : '⏳ Pending Delivery (24–48 hrs)'),
+                  style: TextStyle(
+                    color: accentColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              InkWell(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: claimCode));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Claim ID copied: $claimCode'),
+                      backgroundColor: GamerTheme.neonGreen,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: ThemeService.card,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.45)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Claim ID: $claimCode',
+                        style: const TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.copy_rounded, size: 12, color: Color(0xFFFFD700)),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: ThemeService.card,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Text(
+                  'Game UID: $playerUid${playerIgn.isNotEmpty ? ' ($playerIgn)' : ''}',
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: ThemeService.card,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Text(
+                  'Team: $teamName • Share: ${NumberFormat('#,###').format(shareAmountPkr)} PKR / 1,500 PKR',
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: accentColor.withOpacity(0.45)),
+            ),
+            child: Text(
+              isDelivered
+                  ? 'Reward Sent! آپ کا ریوارڈ بھیج دیا گیا ہے — براہِ کرم اپنا گیم اکاؤنٹ چیک کر لیں۔\n(Claim ID: $claimCode • Game UID: $playerUid)${adminNote.isNotEmpty ? '\nNote: $adminNote' : ''}'
+                  : (isRejected
+                      ? 'Claim Status: Rejected${adminNote.isNotEmpty ? ' • Note: $adminNote' : ''}'
+                      : '⏳ Status: Pending Delivery (24–48 hrs) • Claim ID: $claimCode • Game UID: $playerUid'),
+              style: TextStyle(
+                color: isDelivered ? GamerTheme.neonGreen : accentColor,
+                fontWeight: FontWeight.w800,
+                fontSize: 11.5,
+                height: 1.4,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            dateText,
+            style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5),
+          ),
+        ],
       ),
     );
   }

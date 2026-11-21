@@ -59,8 +59,8 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen> {
     'Games Management', // 👇 یہاں شامل کیا
     'Rank Verification',
     'Blue Tick Requests',
-    'UC Requests',
-    'UC History',
+    'Redeem Requests / Reward Claims',
+    'Reward Claims History',
     'Posts Moderation',
     'Team Matches',
     'Reports Management',

@@ -1,10 +1,11 @@
 // ===============================================================================
-// ADMIN UC HISTORY TAB — Past UC Transactions & Log History
+// ADMIN REWARD CLAIMS HISTORY TAB — Delivered & Rejected Claims from public.reward_claims
+// File: lib/screens/admin/admin_uc_history_tab.dart
 // ===============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 
@@ -25,6 +26,17 @@ class AdminUcHistoryTabState extends State<AdminUcHistoryTab> {
     super.dispose();
   }
 
+  String _formatGameName(String raw) {
+    final lower = raw.trim().toLowerCase();
+    if (lower == 'pubg_mobile' || lower.contains('pubg') || lower.contains('bgmi')) {
+      return 'PUBG Mobile';
+    }
+    if (lower == 'free_fire' || lower.contains('free fire')) {
+      return 'Free Fire';
+    }
+    return raw.isEmpty ? 'Game' : raw;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -36,19 +48,25 @@ class AdminUcHistoryTabState extends State<AdminUcHistoryTab> {
             onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
             style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'Search history by username or game ID...',
-              hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
+              hintText: 'Search delivered/rejected claims by Claim Code, UID, or Team...',
+              hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5),
               prefixIcon: const Icon(Icons.history_rounded, color: Color(0xFF38BDF8), size: 18),
               filled: true,
               fillColor: ThemeService.card,
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: ThemeService.border)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: ThemeService.border),
+              ),
             ),
           ),
         ),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client.from('uc_requests').stream(primaryKey: ['id']).order('created_at', ascending: false),
+            stream: SupabaseService.client
+                .from('reward_claims')
+                .stream(primaryKey: ['id'])
+                .order('created_at', ascending: false),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
@@ -57,11 +75,19 @@ class AdminUcHistoryTabState extends State<AdminUcHistoryTab> {
               final list = snapshot.data ?? [];
               final historyList = list.where((req) {
                 final status = (req['status'] ?? 'pending').toString().toLowerCase();
-                if (status == 'pending') return false; // Show only completed/rejected in history
+                if (status == 'pending') return false;
 
                 if (_searchQuery.isNotEmpty) {
-                  final title = (req['username'] ?? req['game_id'] ?? '').toString().toLowerCase();
-                  if (!title.contains(_searchQuery)) return false;
+                  final code = (req['claim_code'] ?? '').toString().toLowerCase();
+                  final uid = (req['player_uid'] ?? '').toString().toLowerCase();
+                  final ign = (req['player_ign'] ?? '').toString().toLowerCase();
+                  final team = (req['team_name'] ?? '').toString().toLowerCase();
+                  if (!code.contains(_searchQuery) &&
+                      !uid.contains(_searchQuery) &&
+                      !ign.contains(_searchQuery) &&
+                      !team.contains(_searchQuery)) {
+                    return false;
+                  }
                 }
                 return true;
               }).toList();
@@ -75,11 +101,22 @@ class AdminUcHistoryTabState extends State<AdminUcHistoryTab> {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(color: ThemeService.card, shape: BoxShape.circle, border: Border.all(color: ThemeService.border)),
+                          decoration: BoxDecoration(
+                            color: ThemeService.card,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: ThemeService.border),
+                          ),
                           child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF38BDF8), size: 40),
                         ),
                         const SizedBox(height: 14),
-                        Text('No UC transaction history', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
+                        Text(
+                          'No processed reward claims yet',
+                          style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -92,37 +129,50 @@ class AdminUcHistoryTabState extends State<AdminUcHistoryTab> {
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final item = historyList[index];
-                  final username = item['username'] ?? item['gamer_name'] ?? 'Player';
-                  final gameId = item['game_id'] ?? item['pubg_id'] ?? 'N/A';
-                  final ucAmount = item['uc_amount'] ?? item['amount'] ?? 60;
-                  final status = (item['status'] ?? 'completed').toString().toLowerCase();
+                  final claimCode = (item['claim_code'] ?? '#RW').toString();
+                  final gameLabel = _formatGameName((item['game_name'] ?? '').toString());
+                  final playerUid = (item['player_uid'] ?? 'N/A').toString();
+                  final playerIgn = (item['player_ign'] ?? '').toString();
+                  final teamName = (item['team_name'] ?? 'Rank #1 Team').toString();
+                  final rewardLabel = (item['reward_label'] ?? '').toString();
+                  final shareAmountPkr = (item['share_amount_pkr'] as num?)?.toInt() ?? 375;
+                  final weekKey = (item['week_key'] ?? '').toString();
+                  final status = (item['status'] ?? 'delivered').toString().toLowerCase();
+                  final adminNote = (item['admin_note'] ?? '').toString();
 
-                  DateTime? createdAt;
-                  if (item['created_at'] != null) {
-                    createdAt = DateTime.tryParse(item['created_at'].toString());
-                  }
-                  final formattedDate = createdAt != null ? DateFormat('dd MMM yyyy, hh:mm a').format(createdAt) : 'Recent';
+                  final DateTime? deliveredAt =
+                      DateTime.tryParse((item['delivered_at'] ?? item['created_at'] ?? '').toString());
+                  final String formattedDate = deliveredAt != null
+                      ? DateFormat('dd MMM yyyy, hh:mm a').format(deliveredAt.toLocal())
+                      : 'Recent';
 
-                  final isApproved = status == 'approved' || status == 'completed';
+                  final bool isDelivered = status == 'delivered' || status == 'approved' || status == 'completed';
 
                   return Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: ThemeService.card,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: isApproved ? const Color(0xFF00FF88).withOpacity(0.3) : const Color(0xFFFF4655).withOpacity(0.3)),
+                      border: Border.all(
+                        color: isDelivered
+                            ? const Color(0xFF00FF88).withOpacity(0.35)
+                            : const Color(0xFFFF4655).withOpacity(0.35),
+                      ),
                     ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: isApproved ? const Color(0xFF00FF88).withOpacity(0.12) : const Color(0xFFFF4655).withOpacity(0.12),
+                            color: isDelivered
+                                ? const Color(0xFF00FF88).withOpacity(0.12)
+                                : const Color(0xFFFF4655).withOpacity(0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
-                            isApproved ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                            color: isApproved ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                            isDelivered ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                            color: isDelivered ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
                             size: 20,
                           ),
                         ),
@@ -131,24 +181,85 @@ class AdminUcHistoryTabState extends State<AdminUcHistoryTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(username, style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5)),
+                              Text(
+                                '$claimCode • $gameLabel ($teamName)',
+                                style: TextStyle(
+                                  color: ThemeService.textPrimary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      'UID: $playerUid${playerIgn.isNotEmpty ? ' ($playerIgn)' : ''} • $shareAmountPkr PKR',
+                                      style: const TextStyle(
+                                        color: Color(0xFF00FF88),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11.5,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: () {
+                                      Clipboard.setData(ClipboardData(text: playerUid));
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('UID copied: $playerUid'),
+                                          backgroundColor: const Color(0xFF00FF88),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    },
+                                    child: Icon(
+                                      Icons.copy_rounded,
+                                      size: 14,
+                                      color: ThemeService.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (rewardLabel.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Reward: $rewardLabel${weekKey.isNotEmpty ? ' • Week: $weekKey' : ''}',
+                                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 11),
+                                ),
+                              ],
+                              if (adminNote.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Note: $adminNote',
+                                  style: TextStyle(
+                                    color: ThemeService.textSecondary,
+                                    fontSize: 11,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 2),
-                              Text('Game ID: $gameId • $ucAmount UC', style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5)),
-                              const SizedBox(height: 2),
-                              Text(formattedDate, style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5)),
+                              Text(
+                                formattedDate,
+                                style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5),
+                              ),
                             ],
                           ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: isApproved ? const Color(0xFF00FF88).withOpacity(0.15) : const Color(0xFFFF4655).withOpacity(0.15),
+                            color: isDelivered
+                                ? const Color(0xFF00FF88).withOpacity(0.15)
+                                : const Color(0xFFFF4655).withOpacity(0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             status.toUpperCase(),
                             style: TextStyle(
-                              color: isApproved ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                              color: isDelivered ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
                               fontSize: 10,
                               fontWeight: FontWeight.w900,
                             ),

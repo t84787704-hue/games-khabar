@@ -54,6 +54,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   Stream<CoinWallet>? _walletStream;
   Stream<List<TeamModel>>? _userTeamsStream;
   Stream<List<CoinTransaction>>? _transactionsStream;
+  Stream<List<Map<String, dynamic>>>? _rewardClaimsStream;
   String? _cachedStatsTeamId;
   Future<Map<String, dynamic>>? _teamWeeklyStatsFuture;
   final Map<String, Future<List<Map<String, dynamic>>>> _gameLeaderboardFutures = {};
@@ -90,6 +91,57 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ? _teamService.getUserTeamsStream(uid)
         : const Stream<List<TeamModel>>.empty();
     _transactionsStream = _walletService.transactionsStream(uid);
+    _rewardClaimsStream = uid.isNotEmpty
+        ? SupabaseService.client
+            .from('reward_claims')
+            .stream(primaryKey: ['id'])
+            .eq('user_id', uid)
+            .order('created_at', ascending: false)
+            .asBroadcastStream()
+        : Stream.value(const <Map<String, dynamic>>[]).asBroadcastStream();
+  }
+
+  String _normalizeGameNameForClaim(String gameName) {
+    if (TeamService.matchesGameName(gameName, 'PUBG Mobile')) {
+      return 'pubg_mobile';
+    }
+    return 'free_fire';
+  }
+
+  String _displayGameNameFromKey(String raw) {
+    final lower = raw.trim().toLowerCase();
+    if (lower == 'pubg_mobile' || lower.contains('pubg') || lower.contains('bgmi')) {
+      return 'PUBG Mobile';
+    }
+    return 'Free Fire';
+  }
+
+  String _getConsistentRewardLabel(String gameName, int shareAmountPkr) {
+    final isPubg = TeamService.matchesGameName(gameName, 'PUBG Mobile');
+    if (isPubg) {
+      if (shareAmountPkr >= 1500) return '660 UC (1,500 PKR Share)';
+      if (shareAmountPkr >= 750) return '325 UC (750 PKR Share)';
+      if (shareAmountPkr >= 500) return '180 UC (500 PKR Share)';
+      return '60 UC (375 PKR Share)';
+    } else {
+      if (shareAmountPkr >= 1500) return '520 Diamonds (1,500 PKR Share)';
+      if (shareAmountPkr >= 750) return '310 Diamonds (750 PKR Share)';
+      if (shareAmountPkr >= 500) return '170 Diamonds (500 PKR Share)';
+      return '100 Diamonds (375 PKR Share)';
+    }
+  }
+
+  Future<void> _copyToClipboard(String text, String label) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$label copied: $text'),
+        backgroundColor: GamerTheme.neonGreen,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<Map<String, dynamic>> _getOrCreateTeamStatsFuture(TeamModel team) {
@@ -467,28 +519,62 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     final int equalPkrShare = TeamService.getEqualPkrShare(memberCount);
     final String currencyLabel = TeamService.getGameCurrencyLabel(gameName);
     final String weekLabel = TeamService.getWeekRangeLabel();
+    final String weekKey = TeamService.getWeekCycleKey();
+    final String normalizedGameKey = _normalizeGameNameForClaim(gameName);
+    final String consistentRewardLabel = _getConsistentRewardLabel(gameName, equalPkrShare);
 
-    final prefs = await SharedPreferences.getInstance();
-    final String weekClaimKey =
-        'weekly_rank1_claim_${weekLabel.replaceAll(' ', '_')}_${gameName.toLowerCase()}_$_userId';
-    final bool alreadyClaimedThisWeek = prefs.getBool(weekClaimKey) ?? false;
-    if (alreadyClaimedThisWeek) {
+    // Check public.reward_claims in Supabase for existing claim for (user_id, week_key, game_name)
+    Map<String, dynamic>? existingClaim;
+    try {
+      final rows = await SupabaseService.client
+          .from('reward_claims')
+          .select()
+          .eq('user_id', _userId)
+          .eq('week_key', weekKey)
+          .eq('game_name', normalizedGameKey)
+          .limit(1);
+      if (rows.isNotEmpty) {
+        existingClaim = Map<String, dynamic>.from(rows.first);
+      }
+    } catch (_) {}
+
+    if (existingClaim != null) {
       if (!mounted) return;
+      final String existingCode = (existingClaim['claim_code'] ?? '#RW').toString();
+      final String existingUid = (existingClaim['player_uid'] ?? 'N/A').toString();
+      final String existingIgn = (existingClaim['player_ign'] ?? '').toString();
+      final String existingTeam =
+          (existingClaim['team_name'] ?? '${activeTeam.name} [${activeTeam.tag}]').toString();
+      final int existingShare =
+          (existingClaim['share_amount_pkr'] as num?)?.toInt() ?? equalPkrShare;
+      final String existingStatus =
+          (existingClaim['status'] ?? 'pending').toString().toLowerCase();
+      final bool isDelivered = existingStatus == 'delivered';
+
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: ThemeService.card,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: GamerTheme.neonGreen, width: 1.2),
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: isDelivered ? GamerTheme.neonGreen : const Color(0xFFFFB800),
+              width: 1.3,
+            ),
           ),
           title: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: GamerTheme.neonGreen, size: 24),
+              Icon(
+                isDelivered ? Icons.verified_rounded : Icons.info_outline_rounded,
+                color: isDelivered ? GamerTheme.neonGreen : const Color(0xFFFFB800),
+                size: 24,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Weekly #1 Share Already Claimed',
+                  isDelivered
+                      ? 'Reward Already Delivered! 🎉'
+                      : 'Weekly #1 Claim Already Submitted',
                   style: TextStyle(
                     color: ThemeService.textPrimary,
                     fontWeight: FontWeight.w900,
@@ -498,10 +584,126 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               ),
             ],
           ),
-          content: Text(
-            'You have already submitted your Rank #1 Team weekly reward claim for $gameName ($weekLabel).\n\n'
-            'Your request is in the delivery queue and visible below in your Coins & Redemption History.',
-            style: TextStyle(color: ThemeService.textSecondary, fontSize: 13, height: 1.4),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'A weekly #1 reward claim already exists for your account in $gameName for week $weekKey ($weekLabel). Duplicate claims are not allowed.',
+                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: ThemeService.cardSecondary,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Claim ID: $existingCode',
+                            style: const TextStyle(
+                              color: Color(0xFFFFD700),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => _copyToClipboard(existingCode, 'Claim ID'),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.copy_rounded, size: 13, color: GamerTheme.neonGreen),
+                              SizedBox(width: 3),
+                              Text(
+                                'Copy',
+                                style: TextStyle(
+                                  color: GamerTheme.neonGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Game UID: $existingUid${existingIgn.isNotEmpty ? ' ($existingIgn)' : ''}',
+                      style: const TextStyle(
+                        color: GamerTheme.neonGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Team Name: $existingTeam',
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Your Current Share: ${NumberFormat('#,###').format(existingShare)} PKR',
+                      style: const TextStyle(
+                        color: Color(0xFFFFD700),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Total Team Prize: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR',
+                      style: TextStyle(
+                        color: ThemeService.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isDelivered
+                            ? GamerTheme.neonGreen.withOpacity(0.14)
+                            : const Color(0xFFFFB800).withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDelivered
+                              ? GamerTheme.neonGreen.withOpacity(0.5)
+                              : const Color(0xFFFFB800).withOpacity(0.5),
+                        ),
+                      ),
+                      child: Text(
+                        isDelivered
+                            ? 'Reward Sent! آپ کا ریوارڈ بھیج دیا گیا ہے — براہِ کرم اپنا گیم اکاؤنٹ چیک کر لیں۔'
+                            : 'Status: Pending Delivery (Top-up within 24–48 hrs)',
+                        style: TextStyle(
+                          color: isDelivered ? GamerTheme.neonGreen : const Color(0xFFFFB800),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           actions: [
             ElevatedButton(
@@ -518,6 +720,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       return;
     }
 
+    final prefs = await SharedPreferences.getInstance();
     final savedGameUid = prefs.getString('saved_game_uid_${gameName.toLowerCase()}_$_userId') ?? '';
     final savedGameIgn = prefs.getString('saved_game_ign_${gameName.toLowerCase()}_$_userId') ?? '';
     final uidController = TextEditingController(text: savedGameUid);
@@ -567,7 +770,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '🎁 Reward: $packTitle ($gameName)',
+                        '🎁 Reward: $consistentRewardLabel ($gameName)',
                         style: TextStyle(
                           color: ThemeService.textPrimary,
                           fontWeight: FontWeight.w900,
@@ -576,7 +779,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '🥇 Rank #1 Team: ${activeTeam.name} [${activeTeam.tag}] ($memberCount/${TeamModel.maxMembers} members)',
+                        '🥇 Rank #1 Team: ${activeTeam.name} [${activeTeam.tag}] ($memberCount/${TeamModel.maxMembers} active members)',
                         style: const TextStyle(
                           color: Color(0xFFFFD700),
                           fontWeight: FontWeight.bold,
@@ -585,11 +788,20 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '🏆 Your Equal Share: ${NumberFormat('#,###').format(equalPkrShare)} PKR Equivalent in $currencyLabel (from 1,500 PKR Pool)',
+                        '💰 Your Current Share: ${NumberFormat('#,###').format(equalPkrShare)} PKR Equivalent in $currencyLabel',
                         style: const TextStyle(
                           color: GamerTheme.neonGreen,
                           fontWeight: FontWeight.bold,
-                          fontSize: 11.3,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '🏆 Total Team Prize: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR ($weekLabel)',
+                        style: TextStyle(
+                          color: ThemeService.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11.2,
                         ),
                       ),
                     ],
@@ -694,43 +906,63 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     }
 
     final String claimCode =
-        'RW-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+        '#RW-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     final String ignSuffix = playerGameIgn.isNotEmpty ? ' ($playerGameIgn)' : '';
+    final String fullTeamName = '${activeTeam.name} [${activeTeam.tag}]';
 
     try {
-      // 1. Record in User's Coin & Redemption History
-      await CoinWalletService.updateCoins(
-        userId: _userId,
-        amount: 0,
-        type: 'game_currency_redemption',
-        title: '🎁 #1 Team Claimed $gameName - $packTitle',
-        description:
-            'Claim #$claimCode • Game UID: $playerGameUid$ignSuffix • $equalPkrShare PKR Share of 1,500 PKR Pool via Team ${activeTeam.name} [${activeTeam.tag}] ($weekLabel) • Status: Pending Delivery',
-      );
-
-      // 2. Submit to Admin Fulfillment Queue (`reports` table with target_type = 'redeem_request')
-      try {
-        final String? rawName = GamerAuthService().currentGamer?.username ??
-            GamerAuthService().currentUser?.userMetadata?['username']?.toString() ??
-            GamerAuthService().currentUser?.userMetadata?['full_name']?.toString();
-        final String displayHandle = TeamService.sanitizePublicHandle(
-          rawName,
-          fallback: 'TeamWinner',
+      // Double-check duplicate right before inserting into public.reward_claims
+      final dupCheck = await SupabaseService.client
+          .from('reward_claims')
+          .select('id, claim_code')
+          .eq('user_id', _userId)
+          .eq('week_key', weekKey)
+          .eq('game_name', normalizedGameKey)
+          .limit(1);
+      if (dupCheck.isNotEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'You already have an active claim (${dupCheck.first['claim_code']}) for $gameName in week $weekKey.',
+            ),
+            backgroundColor: const Color(0xFFFFB800),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
-        await SupabaseService.client.from('reports').insert({
-          'reporter_username': displayHandle,
-          'target_type': 'redeem_request',
-          'target_id': _userId,
-          'target_content':
-              '[$claimCode] $gameName • $packTitle | Equal Share: $equalPkrShare PKR / 1,500 PKR Pool | Team: ${activeTeam.name} [${activeTeam.tag}] (Rank #1 • $memberCount/4 members) | Game UID: $playerGameUid$ignSuffix | Week: $weekLabel',
-          'reason':
-              'Pending Rank #1 Weekly Reward Delivery: $packTitle ($gameName) to UID $playerGameUid$ignSuffix',
-          'status': 'pending',
-          'created_at': DateTime.now().toIso8601String(),
-        });
+        return;
+      }
+
+      // 1. Insert into public.reward_claims
+      await SupabaseService.client.from('reward_claims').insert({
+        'claim_code': claimCode,
+        'user_id': _userId,
+        'team_id': activeTeam.id,
+        'team_name': fullTeamName,
+        'week_key': weekKey,
+        'game_name': normalizedGameKey,
+        'player_uid': playerGameUid,
+        'player_ign': playerGameIgn,
+        'reward_label': consistentRewardLabel,
+        'share_amount_pkr': equalPkrShare,
+        'status': 'pending',
+      });
+
+      // 2. Also record in coin_transactions for wallet ledger consistency
+      try {
+        await CoinWalletService.updateCoins(
+          userId: _userId,
+          amount: 0,
+          type: 'game_currency_redemption',
+          title: '🎁 #1 Team Claimed $gameName - $consistentRewardLabel',
+          description:
+              'Claim $claimCode • Game UID: $playerGameUid$ignSuffix • Your Share: $equalPkrShare PKR / 1,500 PKR Total Team Prize • Team: $fullTeamName ($weekLabel) • Status: Pending Delivery',
+        );
       } catch (_) {}
 
-      await prefs.setBool(weekClaimKey, true);
+      if (mounted) {
+        setState(() {});
+      }
 
       if (!mounted) return;
       await showDialog(
@@ -762,7 +994,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Your Rank #1 Team weekly reward claim has been sent for delivery:',
+                'Your Rank #1 Team weekly reward claim has been recorded:',
                 style: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5),
               ),
               const SizedBox(height: 10),
@@ -771,53 +1003,106 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: ThemeService.cardSecondary,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: ThemeService.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Claim ID: #$claimCode',
-                      style: const TextStyle(
-                        color: Color(0xFFFFD700),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12.5,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Claim ID: $claimCode',
+                            style: const TextStyle(
+                              color: Color(0xFFFFD700),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => _copyToClipboard(claimCode, 'Claim ID'),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: GamerTheme.neonGreen.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.5)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.copy_rounded, size: 12, color: GamerTheme.neonGreen),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Copy',
+                                  style: TextStyle(
+                                    color: GamerTheme.neonGreen,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Reward: $packTitle ($gameName)',
-                      style: TextStyle(
-                        color: ThemeService.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 6),
                     Text(
                       'Game UID: $playerGameUid$ignSuffix',
                       style: const TextStyle(
                         color: GamerTheme.neonGreen,
                         fontWeight: FontWeight.bold,
+                        fontSize: 12.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Team Name: $fullTeamName ($memberCount/${TeamModel.maxMembers} members)',
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
+                        fontWeight: FontWeight.w700,
                         fontSize: 12,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text(
-                      'Team: ${activeTeam.name} [${activeTeam.tag}] • Share: $equalPkrShare PKR',
-                      style: TextStyle(
-                        color: ThemeService.textSecondary,
-                        fontSize: 11.5,
+                      'Your Current Share: ${NumberFormat('#,###').format(equalPkrShare)} PKR ($consistentRewardLabel)',
+                      style: const TextStyle(
+                        color: Color(0xFFFFD700),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text(
-                      'Status: Pending Delivery (Top-up within 24–48 hrs)',
+                      'Total Team Prize: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR ($gameName)',
                       style: TextStyle(
                         color: ThemeService.textSecondary,
                         fontWeight: FontWeight.w600,
                         fontSize: 11.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB800).withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFFB800).withOpacity(0.45)),
+                      ),
+                      child: const Text(
+                        '⏳ Status: Pending Delivery (Top-up within 24–48 hrs)',
+                        style: TextStyle(
+                          color: Color(0xFFFFB800),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11.5,
+                        ),
                       ),
                     ),
                   ],
@@ -825,7 +1110,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                'You can track this claim anytime in the "Coins & Redemption History" section at the bottom of the wallet screen.',
+                'You can track your live delivery status anytime in the "Coins & Redemption History" section below.',
                 style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5, height: 1.35),
               ),
             ],
@@ -844,10 +1129,23 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ),
       );
     } catch (e) {
+      final errStr = e.toString().toLowerCase();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFFF4655)),
-        );
+        if (errStr.contains('duplicate') || errStr.contains('23505') || errStr.contains('unique')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'You have already submitted a weekly #1 reward claim for $gameName in week $weekKey.',
+              ),
+              backgroundColor: const Color(0xFFFFB800),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error submitting claim: $e'), backgroundColor: const Color(0xFFFF4655)),
+          );
+        }
       }
     }
   }
@@ -2067,18 +2365,19 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           isLoadingTeams
                               ? '⏳ Checking active team rank...'
                               : (!hasTeam
-                                  ? '🛡️ Join a 4-Member Team • Weekly #1 Team Only'
+                                  ? '🛡️ Join a 4-Member Team • Weekly #1 Team Only (1,500 PKR Pool)'
                                   : (!isRankOneInSelectedGame
-                                      ? '🏆 Weekly Rank #1 Team Only • 1,500 PKR Pool'
-                                      : '🥇 Rank #1 Team Unlocked • Weekly Winner Share')),
+                                      ? '🏆 Weekly Rank #1 Team Only • Your Current Share: ${NumberFormat('#,###').format(TeamService.getEqualPkrShare(evaluatedTeam!.memberCount.clamp(1, TeamModel.maxMembers)))} PKR (${evaluatedTeam.memberCount.clamp(1, TeamModel.maxMembers)}/4 members • 1,500 PKR Pool)'
+                                      : '🥇 Rank #1 Unlocked • Your Current Share: ${NumberFormat('#,###').format(TeamService.getEqualPkrShare(evaluatedTeam.memberCount.clamp(1, TeamModel.maxMembers)))} PKR (${evaluatedTeam.memberCount.clamp(1, TeamModel.maxMembers)}/4 members • 1,500 PKR Pool)')),
                           style: TextStyle(
                             color: isLoadingTeams
                                 ? ThemeService.textSecondary
                                 : (isRankOneInSelectedGame
                                     ? GamerTheme.neonGreen
                                     : const Color(0xFFFFB800)),
-                            fontSize: 11.5,
+                            fontSize: 11.3,
                             fontWeight: FontWeight.w700,
+                            height: 1.3,
                           ),
                         ),
                       ],
@@ -2240,43 +2539,310 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        StreamBuilder<List<CoinTransaction>>(
-          stream: _transactionsStream ?? _walletService.transactionsStream(_userId),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(color: GamerTheme.neonGreen),
-                ),
-              );
-            }
-            final txs = (snapshot.data ?? []).take(6).toList();
-            if (txs.isEmpty) {
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: ThemeService.card,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: ThemeService.border),
-                ),
-                child: Center(
-                  child: Text(
-                    'No transaction history yet. Earn or contribute coins to start!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                  ),
-                ),
-              );
-            }
-            return Column(
-              children: txs.map((tx) => _buildTxTile(tx)).toList(),
+        const SizedBox(height: 10),
+        StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _rewardClaimsStream ??
+              (_userId.isNotEmpty
+                  ? SupabaseService.client
+                      .from('reward_claims')
+                      .stream(primaryKey: ['id'])
+                      .eq('user_id', _userId)
+                      .order('created_at', ascending: false)
+                      .asBroadcastStream()
+                  : Stream.value(const <Map<String, dynamic>>[]).asBroadcastStream()),
+          builder: (context, claimsSnap) {
+            final claims = claimsSnap.data ?? const <Map<String, dynamic>>[];
+
+            return StreamBuilder<List<CoinTransaction>>(
+              stream: _transactionsStream ?? _walletService.transactionsStream(_userId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData &&
+                    claimsSnap.connectionState == ConnectionState.waiting &&
+                    !claimsSnap.hasData) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(color: GamerTheme.neonGreen),
+                    ),
+                  );
+                }
+
+                // Filter out legacy game_currency_redemption tx rows if reward_claims already exist
+                // so that public.reward_claims is the single source of truth for claim status
+                final allTxs = snapshot.data ?? const <CoinTransaction>[];
+                final filteredTxs = claims.isNotEmpty
+                    ? allTxs.where((tx) => tx.type != 'game_currency_redemption').take(6).toList()
+                    : allTxs.take(6).toList();
+
+                if (claims.isEmpty && filteredTxs.isEmpty) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: ThemeService.card,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: ThemeService.border),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'No transaction history yet. Earn or contribute coins to start!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                      ),
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    ...claims.take(5).map((claim) => _buildRewardClaimHistoryCard(claim)),
+                    ...filteredTxs.map((tx) => _buildTxTile(tx)),
+                  ],
+                );
+              },
             );
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildRewardClaimHistoryCard(Map<String, dynamic> claim) {
+    final String claimCode = (claim['claim_code'] ?? '#RW').toString();
+    final String gameLabel = _displayGameNameFromKey((claim['game_name'] ?? 'free_fire').toString());
+    final String playerUid = (claim['player_uid'] ?? 'N/A').toString();
+    final String playerIgn = (claim['player_ign'] ?? '').toString();
+    final String teamName = (claim['team_name'] ?? 'Rank #1 Team').toString();
+    final String weekKey = (claim['week_key'] ?? '').toString();
+    final int shareAmountPkr = (claim['share_amount_pkr'] as num?)?.toInt() ?? 375;
+    final String rewardLabel = (claim['reward_label'] ?? '').toString().isNotEmpty
+        ? (claim['reward_label']).toString()
+        : _getConsistentRewardLabel(gameLabel, shareAmountPkr);
+    final String status = (claim['status'] ?? 'pending').toString().toLowerCase();
+    final String adminNote = (claim['admin_note'] ?? '').toString();
+
+    final bool isDelivered = status == 'delivered';
+    final bool isRejected = status == 'rejected';
+
+    final Color accentColor = isDelivered
+        ? GamerTheme.neonGreen
+        : (isRejected ? GamerTheme.redAccent : const Color(0xFFFFB800));
+
+    final DateTime? timestamp =
+        DateTime.tryParse((claim['delivered_at'] ?? claim['created_at'] ?? '').toString());
+    final String dateText = timestamp != null
+        ? DateFormat('dd MMM yyyy • hh:mm a').format(timestamp.toLocal())
+        : (weekKey.isNotEmpty ? 'Week $weekKey' : 'Recent');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: accentColor.withOpacity(0.55),
+          width: 1.3,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isDelivered
+                      ? Icons.verified_rounded
+                      : (isRejected ? Icons.cancel_rounded : Icons.card_giftcard_rounded),
+                  color: accentColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🎁 #1 Team Reward • $gameLabel',
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      rewardLabel,
+                      style: TextStyle(
+                        color: accentColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: accentColor.withOpacity(0.45)),
+                ),
+                child: Text(
+                  isDelivered
+                      ? '✅ Reward Sent'
+                      : (isRejected ? '❌ Rejected' : '⏳ Pending Delivery (24–48 hrs)'),
+                  style: TextStyle(
+                    color: accentColor,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              InkWell(
+                onTap: () => _copyToClipboard(claimCode, 'Claim ID'),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: ThemeService.cardSecondary,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Claim ID: $claimCode',
+                        style: const TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.copy_rounded, size: 12, color: Color(0xFFFFD700)),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: ThemeService.cardSecondary,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Text(
+                  'Game UID: $playerUid${playerIgn.isNotEmpty ? ' ($playerIgn)' : ''}',
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: ThemeService.cardSecondary,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Text(
+                  'Team: $teamName',
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: ThemeService.cardSecondary,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Text(
+                  'Your Share: ${NumberFormat('#,###').format(shareAmountPkr)} PKR / 1,500 PKR Pool',
+                  style: const TextStyle(
+                    color: GamerTheme.neonGreen,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: accentColor.withOpacity(0.45)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isDelivered
+                      ? 'Reward Sent! آپ کا ریوارڈ بھیج دیا گیا ہے — براہِ کرم اپنا گیم اکاؤنٹ چیک کر لیں۔\n(Claim ID: $claimCode • Game UID: $playerUid)'
+                      : (isRejected
+                          ? 'Claim Status: Rejected${adminNote.isNotEmpty ? ' • Note: $adminNote' : ''}'
+                          : '⏳ Status: Pending Delivery (24–48 hrs) • Claim ID: $claimCode • Game UID: $playerUid'),
+                  style: TextStyle(
+                    color: isDelivered ? GamerTheme.neonGreen : accentColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11.8,
+                    height: 1.4,
+                  ),
+                ),
+                if (isDelivered && adminNote.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Admin Note: $adminNote',
+                    style: TextStyle(
+                      color: ThemeService.textSecondary,
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            dateText,
+            style: TextStyle(
+              color: ThemeService.textSecondary,
+              fontSize: 10.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2298,15 +2864,15 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     } else if (isTeamContribution) {
       statusLabel = 'Contributed to Team';
     } else if (isRedemption) {
-      statusLabel = '#1 Team Redeemed';
+      statusLabel = 'Pending Delivery (24–48 hrs)';
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: ThemeService.card,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isWeeklyReward
               ? const Color(0xFFFFD700).withOpacity(0.45)
@@ -2316,9 +2882,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
               color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
@@ -2349,18 +2916,19 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (tx.description.isNotEmpty && tx.description != tx.title) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     tx.description,
                     style: TextStyle(
                       color: ThemeService.textSecondary,
-                      fontSize: 11,
+                      fontSize: 11.2,
+                      height: 1.35,
                     ),
-                    maxLines: 2,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
-                const SizedBox(height: 2),
+                const SizedBox(height: 5),
                 Text(
                   DateFormat('dd MMM • hh:mm a').format(tx.timestamp),
                   style: TextStyle(
@@ -2371,7 +2939,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -2383,13 +2951,20 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   fontSize: 13.5,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                statusLabel,
-                style: TextStyle(
-                  color: color.withOpacity(0.85),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+              const SizedBox(height: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    color: color.withOpacity(0.95),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],

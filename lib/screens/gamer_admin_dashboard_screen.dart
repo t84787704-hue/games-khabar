@@ -28,6 +28,7 @@ import '../models/team_model.dart';
 import 'admin/admin_team_matches_screen.dart';
 import 'admin/admin_proofs_tabs.dart';
 import 'admin/admin_reports_tab.dart';
+import 'admin/admin_uc_requests_tab.dart';
 import 'tournament_detail_screen.dart';
 
 class GamerAdminDashboardScreen extends StatefulWidget {
@@ -54,7 +55,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 10, vsync: this);
+    _tabController = TabController(length: 11, vsync: this);
     _ensureSampleQueueExists();
   }
 
@@ -217,6 +218,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                           const Tab(text: 'Posts Moderation'),
                           const Tab(text: 'Team Matches ⚔️'),
                           _buildReportsTabTitle(),
+                          const Tab(text: 'Reward Claims 🎁'),
                           const Tab(text: 'Coins'),
                           const Tab(text: 'Under Review 🔍'),
                           _buildHistoryTabTitle(),
@@ -236,6 +238,7 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   _buildPostsModerationTab(),
                   const AdminTeamMatchesScreen(),
                   const AdminReportsTab(),
+                  const AdminUcRequestsTab(),
                   _buildCoinsTab(),
                   const AdminUnderReviewTab(),
                   const AdminProofHistoryTab(),
