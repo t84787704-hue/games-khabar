@@ -420,7 +420,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         final entry = _weeklyGameLeaderboard[index];
         final TeamModel team = entry['team'] as TeamModel;
         final int rank = (entry['rank'] as num?)?.toInt() ?? (index + 1);
-        final int weeklyCoins = (entry['weeklyCoins'] as num?)?.toInt() ?? 0;
         final int memberCount =
             ((entry['memberCount'] as num?)?.toInt() ?? team.memberCount)
                 .clamp(1, TeamModel.maxMembers);
@@ -428,6 +427,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         final Map<String, int> memberCoins =
             (entry['memberCoins'] as Map<String, int>?) ?? const {};
 
+        int computedTeamCoins = 0;
+        for (final uid in team.cappedMembers) {
+          final cleanUid = uid.trim();
+          final lowerUid = cleanUid.toLowerCase();
+          final uuidLower = SupabaseService.toUuid(cleanUid).toLowerCase();
+          final c = memberCoins[cleanUid] ??
+              memberCoins[lowerUid] ??
+              memberCoins[uuidLower] ??
+              0;
+          computedTeamCoins += c;
+        }
+        final int weeklyCoins = team.cappedMembers.isNotEmpty
+            ? computedTeamCoins
+            : ((entry['weeklyCoins'] as num?)?.toInt() ?? 0);
+
+        final String displayGameLabel = TeamService.displayGameLabel(team.game);
         final sanitizedName =
             TeamModel.sanitizePublicHandle(team.name, fallback: 'Team');
         final displayName = team.tag.trim().isNotEmpty
@@ -478,7 +493,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            '${team.game} • $memberCount/${TeamModel.maxMembers} Members',
+                            '$displayGameLabel • $memberCount/${TeamModel.maxMembers} Members',
                             style: TextStyle(
                               color: ThemeService.textSecondary,
                               fontSize: 11.5,
@@ -534,9 +549,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     spacing: 6,
                     runSpacing: 6,
                     children: team.cappedMembers.map((uid) {
-                      final rawHandle = team.memberNames[uid] ?? 'Gamer';
-                      final handle = TeamModel.sanitizePublicHandle(rawHandle);
-                      final contributed = memberCoins[uid] ?? 0;
+                      final cleanUid = uid.trim();
+                      final lowerUid = cleanUid.toLowerCase();
+                      final uuidLower = SupabaseService.toUuid(cleanUid).toLowerCase();
+                      final rawHandle = team.memberNames[cleanUid] ??
+                          team.memberNames[lowerUid] ??
+                          team.memberNames[uuidLower] ??
+                          (team.isLeader(cleanUid) ? team.leaderName : 'Gamer');
+                      final handle = TeamModel.sanitizePublicHandle(
+                        rawHandle,
+                        fallback: team.isLeader(cleanUid) ? 'Leader' : 'Gamer',
+                      );
+                      final contributed = memberCoins[cleanUid] ??
+                          memberCoins[lowerUid] ??
+                          memberCoins[uuidLower] ??
+                          0;
                       return Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),

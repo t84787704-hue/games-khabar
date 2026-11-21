@@ -917,7 +917,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           AppShareService.shareTeam(
                             teamName: team.name,
                             teamTag: team.tag,
-                            game: team.game,
+                            game: TeamService.displayGameLabel(team.game),
                             leaderName: team.leaderName,
                             wins: team.wins,
                             points: team.points >= (team.wins * 25) ? team.points : (team.wins * 25),
@@ -1761,7 +1761,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                             BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        'Game: ${team.game}',
+                                        'Game: ${TeamService.displayGameLabel(team.game)}',
                                         style: const TextStyle(
                                             color: Color(0xFF00FF88),
                                             fontWeight: FontWeight.bold,
@@ -2607,9 +2607,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           0,
           (sum, m) => sum + ((m['weeklyCoins'] as num?)?.toInt() ?? 0),
         );
-        final int rawWeeklyCoins = (data?['weeklyCoins'] as num?)?.toInt() ?? team.weeklyCoins;
-        int weeklyCoins = rawWeeklyCoins > breakdownSum ? rawWeeklyCoins : breakdownSum;
-        if (team.weeklyCoins > weeklyCoins) weeklyCoins = team.weeklyCoins;
+        final int rawWeeklyCoins = (data?['weeklyCoins'] as num?)?.toInt() ?? 0;
+        final int weeklyCoins = memberBreakdown.isNotEmpty ? breakdownSum : rawWeeklyCoins;
 
         final int weeklyRank = (data?['weeklyRank'] as num?)?.toInt() ??
             (team.weeklyRank > 0 ? team.weeklyRank : 1);
@@ -2618,7 +2617,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         final int memberCount =
             ((data?['memberCount'] as num?)?.toInt() ?? team.memberCount).clamp(1, TeamModel.maxMembers);
         final int equalShare = TeamService.getEqualPkrShare(memberCount);
-        final String currencyLabel = TeamService.getGameCurrencyLabel(team.game);
+        final String displayGameLabel = TeamService.displayGameLabel(team.game);
+        final String currencyLabel = TeamService.getGameCurrencyLabel(displayGameLabel);
         final String weekRangeLabel = (data?['weekRangeLabel'] ?? TeamService.getWeekRangeLabel()).toString();
 
         final bool isTopRank = weeklyRank == 1 && weeklyCoins > 0;
@@ -2656,7 +2656,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Weekly Team Coins (${team.game})',
+                          'Weekly Team Coins ($displayGameLabel)',
                           style: TextStyle(
                             color: textPri,
                             fontWeight: FontWeight.w900,
@@ -2864,7 +2864,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Weekly 7-Day Rule & Privacy Notice: Earned G-Coins go to each member\'s Personal Wallet first. Members manually contribute coins from their Personal Wallet to boost ${team.name}\'s weekly total for ${team.game}. At week\'s end, the #1 team in ${team.game} receives ${NumberFormat('#,###').format(rewardPool)} PKR equivalent in $currencyLabel divided equally among its active members (up to 4). Weekly team coin scores reset to 0 each new week while personal wallets stay safe. Only public gaming handles, team rank, and coin contributions are shown.',
+                        'Weekly 7-Day Rule & Privacy Notice: Earned G-Coins go to each member\'s Personal Wallet first. Members manually contribute coins from their Personal Wallet to boost ${team.name}\'s weekly total for $displayGameLabel. At week\'s end, the #1 team in $displayGameLabel receives ${NumberFormat('#,###').format(rewardPool)} PKR equivalent in $currencyLabel divided equally among its active members (up to 4). Weekly team coin scores reset to 0 each new week while personal wallets stay safe. Only public gaming handles, team rank, and coin contributions are shown.',
                         style: TextStyle(
                           color: textSec,
                           fontSize: 10.5,

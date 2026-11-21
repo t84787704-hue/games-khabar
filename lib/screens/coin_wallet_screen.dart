@@ -48,6 +48,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   bool _isContributingCoins = false;
   String _selectedGameTab = 'Free Fire';
   String _selectedContributionMode = 'custom'; // 'all', 'custom', 'zero'
+  String? _selectedContributeTeamId;
   List<TeamModel> _userTeams = [];
   bool _isLoadingTeams = true;
 
@@ -197,7 +198,12 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     try {
       final teams = await _teamService.getUserTeams(uid);
       if (teams.isNotEmpty) {
-        final primary = teams.first;
+        final bool hasValidSelected = _selectedContributeTeamId != null &&
+            teams.any((t) => t.id == _selectedContributeTeamId);
+        final primary = hasValidSelected
+            ? teams.firstWhere((t) => t.id == _selectedContributeTeamId)
+            : teams.first;
+        _selectedContributeTeamId = primary.id;
         final stats = _teamService.getCachedTeamWeeklyStats(primary.id) ??
             await _teamService.getTeamWeeklyCoinStats(primary);
         _cachedStatsTeamId = primary.id;
@@ -339,13 +345,18 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         team: team,
         amount: amount,
       );
+      _selectedContributeTeamId = team.id;
       _gameLeaderboardFutures.clear();
       _cachedStatsTeamId = null;
       _teamWeeklyStatsFuture = null;
       await _loadUserTeams();
       if (mounted) {
-        setState(() {});
         final bool ok = res['success'] == true;
+        if (ok && amount > 0) {
+          _customContributionCtrl.clear();
+          _selectedContributionMode = 'custom';
+        }
+        setState(() {});
         final String msg = (res['message'] ?? 'Contribution processed.').toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1566,7 +1577,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       );
     }
 
-    final primaryTeam = activeTeams.first;
+    final bool hasValidSelected = _selectedContributeTeamId != null &&
+        activeTeams.any((t) => t.id == _selectedContributeTeamId);
+    final TeamModel primaryTeam = hasValidSelected
+        ? activeTeams.firstWhere((t) => t.id == _selectedContributeTeamId)
+        : activeTeams.first;
+    _selectedContributeTeamId = primaryTeam.id;
+
     final cachedStats = _teamService.getCachedTeamWeeklyStats(primaryTeam.id);
     return FutureBuilder<Map<String, dynamic>>(
       initialData: cachedStats,
@@ -1580,30 +1597,27 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 (sum, m) => sum + ((m is Map ? (m['weeklyCoins'] as num?)?.toInt() : 0) ?? 0),
               )
             : 0;
-        final int memberMapCoins = primaryTeam.memberWeeklyCoins.values.fold<int>(
-          0,
-          (sum, v) => sum + v,
-        );
-        int teamWeeklyCoins = statsWeeklyCoins;
-        if (breakdownCoins > teamWeeklyCoins) teamWeeklyCoins = breakdownCoins;
-        if (primaryTeam.weeklyCoins > teamWeeklyCoins) teamWeeklyCoins = primaryTeam.weeklyCoins;
-        if (memberMapCoins > teamWeeklyCoins) teamWeeklyCoins = memberMapCoins;
+        final int teamWeeklyCoins =
+            (stats != null && stats['memberBreakdown'] is List) ? breakdownCoins : statsWeeklyCoins;
 
         final int weeklyRank = (stats?['weeklyRank'] as num?)?.toInt() ??
             (primaryTeam.weeklyRank > 0 ? primaryTeam.weeklyRank : 1);
         final int memberCount = primaryTeam.memberCount.clamp(1, TeamModel.maxMembers);
         final int equalPkrShare = TeamService.getEqualPkrShare(memberCount);
-        final String currencyLabel = TeamService.getGameCurrencyLabel(primaryTeam.game);
+        final String displayGameLabel = TeamService.displayGameLabel(primaryTeam.game);
+        final String currencyLabel = TeamService.getGameCurrencyLabel(displayGameLabel);
         final String weekLabel = TeamService.getWeekRangeLabel();
         final bool isRankOneWinner = weeklyRank == 1 && teamWeeklyCoins > 0;
 
-        // Calculate current user's weekly contribution to this team
+        // Calculate current user's weekly contribution strictly to this team & game
         int myWeeklyContrib = 0;
         if (stats?['memberCoins'] is Map) {
           final map = stats!['memberCoins'] as Map;
           final uidClean = _userId.trim();
-          final uidUuid = SupabaseService.toUuid(uidClean);
+          final uidLower = uidClean.toLowerCase();
+          final uidUuid = SupabaseService.toUuid(uidClean).toLowerCase();
           myWeeklyContrib = (map[uidClean] as num?)?.toInt() ??
+              (map[uidLower] as num?)?.toInt() ??
               (map[uidUuid] as num?)?.toInt() ??
               0;
         }
@@ -1624,6 +1638,55 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (activeTeams.length > 1) ...[
+                Text(
+                  'Select Target Team for Coin Transfer (${activeTeams.length} Joined Teams):',
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11.2,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: activeTeams.map((t) {
+                      final isSel = t.id == primaryTeam.id;
+                      final tGame = TeamService.displayGameLabel(t.game);
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          label: Text(
+                            '${t.name} [${t.tag}] • $tGame',
+                            style: TextStyle(
+                              color: isSel ? Colors.black : ThemeService.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                            ),
+                          ),
+                          selected: isSel,
+                          selectedColor: GamerTheme.neonGreen,
+                          backgroundColor: ThemeService.cardSecondary,
+                          side: BorderSide(
+                            color: isSel ? GamerTheme.neonGreen : ThemeService.border,
+                          ),
+                          onSelected: (_) {
+                            setState(() {
+                              _selectedContributeTeamId = t.id;
+                              _cachedStatsTeamId = null;
+                              _teamWeeklyStatsFuture = null;
+                            });
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               Row(
                 children: [
                   Container(
@@ -1656,7 +1719,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Game: ${primaryTeam.game} • Members: $memberCount/${TeamModel.maxMembers} • ${isRankOneWinner ? '#1 Winner Redemption Unlocked 🔓' : 'Reach #1 to Redeem ($weekLabel)'}',
+                          'Game: $displayGameLabel • Members: $memberCount/${TeamModel.maxMembers} • ${isRankOneWinner ? '#1 Winner Redemption Unlocked 🔓' : 'Reach #1 to Redeem ($weekLabel)'}',
                           style: TextStyle(
                             color: isRankOneWinner ? GamerTheme.neonGreen : ThemeService.textSecondary,
                             fontSize: 11,
@@ -1804,6 +1867,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   /// personal G-Coins to their active Team Profile (`All / Max`, custom amount, or `0` to keep in Personal Wallet).
   Widget _buildManualTeamContributionBox(TeamModel team, CoinWallet wallet) {
     final int availableCoins = wallet.coins.clamp(0, 999999999);
+    final String displayGameLabel = TeamService.displayGameLabel(team.game);
 
     return Container(
       width: double.infinity,
@@ -1822,7 +1886,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Contribute Personal Coins to Team (${team.game})',
+                  'Contribute Personal Coins to Team ($displayGameLabel)',
                   style: TextStyle(
                     color: ThemeService.textPrimary,
                     fontWeight: FontWeight.w900,

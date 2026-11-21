@@ -64,6 +64,36 @@ class TeamModel {
   int get totalMatches => wins + losses + draws;
   double get winRate => totalMatches > 0 ? (wins / totalMatches) * 100 : 0.0;
 
+  /// Normalizes game labels so PUBG / BGMI / pubg_mobile always display as 'PUBG Mobile'
+  /// and free_fire / Free Fire always display as 'Free Fire'.
+  static String normalizeDisplayGameName(String? rawGame) {
+    final clean = (rawGame ?? '').trim();
+    if (clean.isEmpty) return 'Free Fire';
+    final lower = clean.toLowerCase();
+    if (lower == 'bgmi' ||
+        lower == 'pubg' ||
+        lower == 'pubg mobile' ||
+        lower == 'pubg_mobile' ||
+        lower.contains('battlegrounds mobile')) {
+      return 'PUBG Mobile';
+    }
+    if (lower == 'free fire' ||
+        lower == 'free_fire' ||
+        lower == 'free fire max' ||
+        lower == 'garena free fire') {
+      return 'Free Fire';
+    }
+    return clean;
+  }
+
+  /// Normalizes game name to canonical storage key: 'free_fire' or 'pubg_mobile'
+  static String normalizeGameKey(String? rawGame) {
+    final display = normalizeDisplayGameName(rawGame);
+    if (display == 'PUBG Mobile') return 'pubg_mobile';
+    if (display == 'Free Fire') return 'free_fire';
+    return display.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+  }
+
   /// Privacy & Data Minimization (Play Policy):
   /// Sanitizes a display name/handle so emails, phone numbers, or sensitive data are never exposed.
   static String sanitizePublicHandle(String? raw, {String fallback = 'Gamer'}) {
@@ -193,7 +223,7 @@ class TeamModel {
       name: (row['name'] ?? 'Gamer Team').toString(),
       tag: (row['tag'] ?? 'TEAM').toString().toUpperCase(),
       logo: (row['logo_url'] ?? '').toString(),
-      game: (row['game'] ?? 'BGMI').toString(),
+      game: normalizeDisplayGameName(row['game']?.toString()),
       description: (row['description'] ?? '').toString(),
       requirements: (row['requirements'] ?? '').toString(),
       leaderId: leaderIdStr,
@@ -220,7 +250,7 @@ class TeamModel {
       'name': name.trim(),
       'tag': tag.trim().toUpperCase(),
       'logo_url': logo,
-      'game': game,
+      'game': normalizeDisplayGameName(game),
       'description': description.trim(),
       'requirements': requirements.trim(),
       'leader_id': leaderId,
@@ -262,7 +292,7 @@ class TeamModel {
       name: name ?? this.name,
       tag: tag ?? this.tag,
       logo: logo ?? this.logo,
-      game: game ?? this.game,
+      game: game != null ? normalizeDisplayGameName(game) : this.game,
       description: description ?? this.description,
       requirements: requirements ?? this.requirements,
       leaderId: leaderId,

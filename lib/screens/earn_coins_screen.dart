@@ -293,7 +293,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                                     child: Text(
                                       isSolo
                                           ? 'Solo User Notice • Personal Coins Saved'
-                                          : 'Active 4-Member Team: ${activeTeam!.name} (${activeTeam.game})',
+                                          : 'Active 4-Member Team: ${activeTeam!.name} (${TeamService.displayGameLabel(activeTeam.game)})',
                                       style: TextStyle(
                                         color: ThemeService.textPrimary,
                                         fontWeight: FontWeight.w800,
@@ -306,8 +306,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                               const SizedBox(height: 6),
                               Text(
                                 isSolo
-                                    ? 'All coins you earn here go directly into your Personal Wallet and remain safely stored across weekly resets. Join or create an active 4-member Free Fire or PUBG team to contribute coins and compete for the weekly 1,500 PKR equivalent #1 Team Prize.'
-                                    : 'Every coin you earn from ads or daily check-in goes into your Personal Wallet first. Open your G-Coins Wallet to choose how many personal coins to contribute to ${activeTeam!.name} (${activeTeam.game}) for the weekly #1 Team competition.',
+                                    ? 'All coins you earn here go directly into your Personal Wallet and remain safely stored across weekly resets. Join or create an active 4-member Free Fire or PUBG Mobile team to contribute coins and compete for the weekly 1,500 PKR equivalent #1 Team Prize.'
+                                    : 'Every coin you earn from ads or daily check-in goes into your Personal Wallet first. Open your G-Coins Wallet to choose how many personal coins to contribute to ${activeTeam!.name} (${TeamService.displayGameLabel(activeTeam.game)}) for the weekly #1 Team competition.',
                                 style: TextStyle(
                                   color: ThemeService.textSecondary,
                                   fontSize: 11.5,

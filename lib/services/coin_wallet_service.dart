@@ -188,6 +188,8 @@ class CoinWalletService extends ChangeNotifier {
     required String description,
     String? title,
     String? roomId,
+    String? teamId,
+    String? gameName,
     String? winProofUrl,
     int? inEscrowChange,
   }) async {
@@ -315,9 +317,18 @@ class CoinWalletService extends ChangeNotifier {
         txData['room_id'] = roomId;
         txData['reference_id'] = roomId;
       }
+      if (teamId != null && teamId.isNotEmpty) {
+        txData['team_id'] = teamId;
+      }
+      if (gameName != null && gameName.isNotEmpty) {
+        txData['game_name'] = gameName;
+      }
       if (winProofUrl != null && winProofUrl.isNotEmpty) {
         txData['win_proof_url'] = winProofUrl;
       }
+
+      final String combinedDesc =
+          (title != null && title.isNotEmpty) ? '$title - $description' : description;
 
       try {
         await SupabaseService.client
@@ -332,13 +343,26 @@ class CoinWalletService extends ChangeNotifier {
                 'user_id': targetUuid,
                 'amount': amount,
                 'type': type,
-                'description': (title != null && title.isNotEmpty) ? '$title - $description' : description,
+                'description': combinedDesc,
                 'balance_after': newCoins,
                 if (roomId != null && roomId.isNotEmpty) 'reference_id': roomId,
                 'created_at': now.toIso8601String(),
               });
         } catch (e2) {
-          debugPrint('updateCoins: fallback coin_transactions insert error: $e2');
+          debugPrint('updateCoins: fallback coin_transactions insert error: $e2, trying minimal schema');
+          try {
+            await SupabaseService.client
+                .from('coin_transactions')
+                .insert({
+                  'user_id': targetUuid,
+                  'amount': amount,
+                  'type': type,
+                  'description': combinedDesc,
+                  'created_at': now.toIso8601String(),
+                });
+          } catch (e3) {
+            debugPrint('updateCoins: minimal coin_transactions insert error: $e3');
+          }
         }
       }
 

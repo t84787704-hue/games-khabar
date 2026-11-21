@@ -92,12 +92,14 @@ class _TeamCardState extends State<TeamCard> {
   Color _getGameBadgeColor(String game) {
     switch (game.toUpperCase()) {
       case 'PUBG':
+      case 'PUBG MOBILE':
         return const Color(0xFF1877F2);
       case 'VALORANT':
         return const Color(0xFF8B5CF6);
       case 'FREE FIRE':
         return const Color(0xFFFF5722);
       case 'COD':
+      case 'COD MOBILE':
         return const Color(0xFFE11D48);
       default:
         return const Color(0xFF00E5FF);
@@ -306,7 +308,7 @@ class _TeamCardState extends State<TeamCard> {
             'from_team_name': effectiveMyTeamName,
             'to_team_name': widget.team.name,
             'status': 'pending',
-            'game': widget.team.game.isNotEmpty ? widget.team.game : 'PUBG',
+            'game': TeamService.displayGameLabel(widget.team.game),
           }).select().maybeSingle();
 
           if (res != null && res['id'] != null) {
@@ -354,7 +356,8 @@ class _TeamCardState extends State<TeamCard> {
         _localSentChallengeId ??
         '';
 
-    final gameColor = _getGameBadgeColor(team.game.isNotEmpty ? team.game : 'PUBG');
+    final displayGame = TeamService.displayGameLabel(team.game);
+    final gameColor = _getGameBadgeColor(displayGame);
 
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
@@ -435,7 +438,7 @@ class _TeamCardState extends State<TeamCard> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  (team.game.isNotEmpty ? team.game : 'PUBG').toUpperCase(),
+                                  displayGame.toUpperCase(),
                                   style: TextStyle(
                                     color: gameColor,
                                     fontWeight: FontWeight.w900,

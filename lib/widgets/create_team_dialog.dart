@@ -39,11 +39,11 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _reqController = TextEditingController();
 
-  String _selectedGame = 'BGMI';
+  String _selectedGame = 'Free Fire';
   File? _logoFile;
   bool _isLoading = false;
 
-  final List<String> _games = ['BGMI', 'Free Fire', 'PUBG', 'COD'];
+  final List<String> _games = ['Free Fire', 'PUBG Mobile', 'COD Mobile'];
 
   bool get _isEditMode => widget.isEditMode && widget.existingTeam != null;
 
@@ -56,7 +56,8 @@ class _CreateTeamDialogState extends State<CreateTeamDialog> {
       _tagController.text = team.tag;
       _descController.text = team.description;
       _reqController.text = team.requirements;
-      _selectedGame = _games.contains(team.game) ? team.game : 'BGMI';
+      final normalizedGame = TeamService.displayGameLabel(team.game);
+      _selectedGame = _games.contains(normalizedGame) ? normalizedGame : 'Free Fire';
     }
   }
 

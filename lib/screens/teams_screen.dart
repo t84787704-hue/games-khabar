@@ -46,7 +46,7 @@ class _TeamsScreenState extends State<TeamsScreen>
 
   String _selectedGameFilter = "All";
   String _searchQuery = "";
-  final List<String> _gameFilterOptions = ["All", "BGMI", "Free Fire", "PUBG", "COD", "Valorant"];
+  final List<String> _gameFilterOptions = ["All", "Free Fire", "PUBG Mobile", "COD Mobile", "Valorant"];
 
   final Set<String> _cancelledChallengeIds = {};
   final Set<String> _acceptingChallengeIds = {};
