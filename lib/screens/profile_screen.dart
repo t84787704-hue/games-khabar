@@ -29,6 +29,7 @@ import 'gamer_terms_of_service_screen.dart';
 import 'gamer_delete_account_screen.dart';
 import 'gamer_auth_screen.dart';
 import '../services/app_share_service.dart';
+import '../services/notification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -876,8 +877,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             setState(() {
                               _gamingNewsAlerts = val;
                             });
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool('gaming_news_alerts', val);
+                            await NotificationService().setGamingNewsAlertsEnabled(val);
                           },
                         ),
                       ),

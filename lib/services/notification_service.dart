@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/news_model.dart';
 import '../models/notification_model.dart';
 import 'supabase_store_service.dart';
@@ -34,6 +35,14 @@ class NotificationService {
   static const String channelName = 'Gamers ID Alerts';
   static const String channelDescription = 'Instant match challenges, tournaments, squad alerts, chats and rewards';
 
+  /// Fixed notification ID for general gaming news alerts so updates replace
+  /// a single notification rather than stacking duplicate alerts.
+  static const int _kGamingNewsNotificationId = 90420;
+  static const String _kGamingNewsAlertsPrefKey = 'gaming_news_alerts';
+  static const String _kLastGamingNewsAlertMsKey = 'last_gaming_news_alert_ms_v2';
+  static const String _kSeenGamingNewsIdsKey = 'seen_gaming_news_alert_ids_v2';
+  static const Duration _kGamingNewsCooldown = Duration(hours: 6);
+
   final AndroidNotificationChannel _androidChannel = AndroidNotificationChannel(
     channelId,
     channelName,
@@ -50,8 +59,13 @@ class NotificationService {
 
   final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
   StreamSubscription? _realtimeNotifSub;
+  StreamSubscription? _newsDocsSub;
   Timer? _backgroundPollingTimer;
+  String? _subscribedUserId;
   final Set<String> _seenNotificationIds = {};
+  final Set<String> _seenNewsDocumentIds = {};
+  DateTime? _lastGamingNewsAlertTime;
+  bool _isProcessingNewsAlert = false;
 
   String _trOr(String key, String fallback, {List<String>? args}) {
     try {
@@ -65,11 +79,105 @@ class NotificationService {
     }
   }
 
+  Future<bool> isGamingNewsAlertsEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_kGamingNewsAlertsPrefKey) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> setGamingNewsAlertsEnabled(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kGamingNewsAlertsPrefKey, enabled);
+      if (!enabled) {
+        await _localNotifications.cancel(_kGamingNewsNotificationId);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadGamingNewsAlertState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedIds = prefs.getStringList(_kSeenGamingNewsIdsKey) ?? const <String>[];
+      _seenNewsDocumentIds.addAll(savedIds);
+      final lastMs = prefs.getInt(_kLastGamingNewsAlertMsKey);
+      if (lastMs != null && lastMs > 0) {
+        _lastGamingNewsAlertTime = DateTime.fromMillisecondsSinceEpoch(lastMs);
+      }
+      final enabled = prefs.getBool(_kGamingNewsAlertsPrefKey) ?? true;
+      if (!enabled) {
+        await _localNotifications.cancel(_kGamingNewsNotificationId);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistSeenNewsIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _seenNewsDocumentIds.toList();
+      final trimmed = list.length > 200 ? list.sublist(list.length - 200) : list;
+      await prefs.setStringList(_kSeenGamingNewsIdsKey, trimmed);
+    } catch (_) {}
+  }
+
+  bool _isGenericOrFallbackNewsText(String text) {
+    final clean = text.trim();
+    if (clean.isEmpty) return true;
+    final lower = clean.toLowerCase();
+    return clean.startsWith('notif_') ||
+        lower.contains('notif_new_news_fallback_title') ||
+        lower.contains('notif_gaming_fallback') ||
+        lower.contains('notif_gaming_news_fallback') ||
+        lower.contains('check out the latest gaming updates and news') ||
+        lower == 'gaming news' ||
+        lower == 'new gaming alert' ||
+        lower.contains('weekly #1 team') ||
+        clean.contains('ہفتہ وار #1 ٹیم');
+  }
+
+  Future<bool> _canFireGamingNewsAlert({bool ignoreCooldown = false}) async {
+    if (!await isGamingNewsAlertsEnabled()) {
+      return false;
+    }
+    if (ignoreCooldown) return true;
+
+    final now = DateTime.now();
+    if (_lastGamingNewsAlertTime != null &&
+        now.difference(_lastGamingNewsAlertTime!) < _kGamingNewsCooldown) {
+      return false;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastMs = prefs.getInt(_kLastGamingNewsAlertMsKey);
+      if (lastMs != null && lastMs > 0) {
+        final savedTime = DateTime.fromMillisecondsSinceEpoch(lastMs);
+        _lastGamingNewsAlertTime = savedTime;
+        if (now.difference(savedTime) < _kGamingNewsCooldown) {
+          return false;
+        }
+      }
+    } catch (_) {}
+    return true;
+  }
+
+  Future<void> _recordGamingNewsAlertFired() async {
+    final now = DateTime.now();
+    _lastGamingNewsAlertTime = now;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_kLastGamingNewsAlertMsKey, now.millisecondsSinceEpoch);
+    } catch (_) {}
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) return;
     _isInitialized = true;
 
     await _setupLocalNotifications();
+    await _loadGamingNewsAlertState();
     await requestPermissions();
 
     final curUser = SupabaseService.client.auth.currentUser;
@@ -154,8 +262,11 @@ class NotificationService {
         final user = data.session?.user;
         if (user == null) {
           unreadCountNotifier.value = 0;
+          _subscribedUserId = null;
           _realtimeNotifSub?.cancel();
+          _realtimeNotifSub = null;
           _backgroundPollingTimer?.cancel();
+          _backgroundPollingTimer = null;
           _seenNotificationIds.clear();
           return;
         }
@@ -201,6 +312,13 @@ class NotificationService {
   void _subscribeToUserNotifications(String userId) {
     if (userId.isEmpty) return;
     refreshUnreadCount(userId);
+
+    // Avoid tearing down and resetting isFirst when already subscribed to the same user
+    if (_subscribedUserId == userId && _realtimeNotifSub != null) {
+      return;
+    }
+    _subscribedUserId = userId;
+
     _realtimeNotifSub?.cancel();
     _backgroundPollingTimer?.cancel();
     bool isFirst = true;
@@ -224,24 +342,11 @@ class NotificationService {
 
         if (isFirst) {
           isFirst = false;
-          final now = DateTime.now();
+          // Record all pre-existing notification IDs on initial open/resume without firing burst banners
           for (final r in userRows) {
             final id = r['id']?.toString() ?? '';
             if (id.isNotEmpty) {
               _seenNotificationIds.add(id);
-              final isRead = r['is_read'] == true || r['isRead'] == true || r['read'] == true;
-              if (!isRead) {
-                final createdAtStr = r['created_at']?.toString() ?? '';
-                if (createdAtStr.isNotEmpty) {
-                  try {
-                    final created = DateTime.parse(createdAtStr);
-                    if (now.difference(created).inMinutes <= 10) {
-                      final notif = InAppNotification.fromMap(r);
-                      showInAppLocalNotification(notif);
-                    }
-                  } catch (_) {}
-                }
-              }
             }
           }
           return;
@@ -283,12 +388,12 @@ class NotificationService {
             if (id.isNotEmpty && !_seenNotificationIds.contains(id)) {
               _seenNotificationIds.add(id);
               final createdAtStr = r['created_at']?.toString() ?? '';
-              bool shouldAlert = true;
+              bool shouldAlert = false;
               if (createdAtStr.isNotEmpty) {
                 try {
                   final dt = DateTime.parse(createdAtStr);
-                  if (now.difference(dt).inMinutes > 60) {
-                    shouldAlert = false;
+                  if (now.difference(dt).inMinutes <= 5) {
+                    shouldAlert = true;
                   }
                 } catch (_) {}
               }
@@ -343,6 +448,21 @@ class NotificationService {
 
   Future<void> showInAppLocalNotification(InAppNotification notif) async {
     try {
+      final isNewsNotif = notif.type.toLowerCase() == 'news' ||
+          (notif.data != null && notif.data!.containsKey('newsId'));
+
+      // Never show generic fallback news reminders
+      if (_isGenericOrFallbackNewsText(notif.body)) {
+        return;
+      }
+
+      if (isNewsNotif) {
+        if (!await _canFireGamingNewsAlert()) {
+          return;
+        }
+        await _recordGamingNewsAlertFired();
+      }
+
       // 1. Trigger physical device haptic vibration
       try {
         HapticFeedback.vibrate();
@@ -387,7 +507,9 @@ class NotificationService {
         presentSound: true,
       );
 
-      final notifId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+      final notifId = isNewsNotif
+          ? _kGamingNewsNotificationId
+          : DateTime.now().millisecondsSinceEpoch.remainder(100000);
       await _localNotifications.show(
         notifId,
         notif.title,
@@ -857,16 +979,25 @@ class NotificationService {
 
   Future<void> saveUserFcmToken([String? explicitUid]) async {}
 
+  StreamSubscription? _squadNotifSub;
+  final Set<String> _seenSquadNotifIds = {};
+
   void _listenForSquadNotifications() {
-    bool isFirstSnapshot = true;
     try {
       SupabaseService.client.auth.onAuthStateChange.listen((data) {
         final user = data.session?.user;
-        if (user == null) return;
+        if (user == null) {
+          _squadNotifSub?.cancel();
+          _squadNotifSub = null;
+          _seenSquadNotifIds.clear();
+          return;
+        }
         saveUserFcmToken(user.id);
 
+        _squadNotifSub?.cancel();
+        bool isFirstSnapshot = true;
         try {
-          SupabaseService.client
+          _squadNotifSub = SupabaseService.client
               .from('notifications')
               .stream(primaryKey: ['id'])
               .eq('recipientUid', user.id)
@@ -875,10 +1006,20 @@ class NotificationService {
               .listen((rows) {
             if (isFirstSnapshot) {
               isFirstSnapshot = false;
+              for (final map in rows) {
+                final id = map['id']?.toString() ?? '';
+                if (id.isNotEmpty) {
+                  _seenSquadNotifIds.add(id);
+                }
+              }
               return;
             }
 
             for (final map in rows) {
+              final id = map['id']?.toString() ?? '';
+              if (id.isNotEmpty && !_seenSquadNotifIds.add(id)) {
+                continue;
+              }
               final type = map['type'] as String? ?? '';
               if (type.startsWith('squad_')) {
                 final title = map['title'] as String? ?? 'notif_squad_update_title'.tr();
@@ -953,52 +1094,113 @@ class NotificationService {
   }
 
   void _listenForNewNewsDocuments() {
+    _newsDocsSub?.cancel();
     bool isFirstSnapshot = true;
     try {
-      SupabaseService.client
+      _newsDocsSub = SupabaseService.client
           .from('posts')
           .stream(primaryKey: ['id'])
           .order('created_at', ascending: false)
           .limit(10)
-          .listen((rows) {
+          .listen((rows) async {
+        // On initial snapshot (app launch / stream connect), mark all existing post IDs as seen
+        // and never fire notifications for pre-existing articles.
         if (isFirstSnapshot) {
           isFirstSnapshot = false;
+          bool addedAny = false;
+          for (final data in rows) {
+            final id = data['id']?.toString().trim() ?? '';
+            if (id.isNotEmpty && _seenNewsDocumentIds.add(id)) {
+              addedAny = true;
+            }
+          }
+          if (addedAny) {
+            await _persistSeenNewsIds();
+          }
           return;
         }
 
+        // Collect only genuinely unseen post IDs from this snapshot and immediately mark them seen
+        final List<Map<String, dynamic>> unseenRows = [];
+        bool addedAny = false;
         for (final data in rows) {
-          // Only trigger news notifications for genuine news articles, never for team rewards or user reposts
+          final id = data['id']?.toString().trim() ?? '';
+          if (id.isEmpty) continue;
+          if (_seenNewsDocumentIds.add(id)) {
+            addedAny = true;
+            unseenRows.add(data);
+          }
+        }
+        if (addedAny) {
+          await _persistSeenNewsIds();
+        }
+
+        if (unseenRows.isEmpty || _isProcessingNewsAlert) {
+          return;
+        }
+
+        if (!await _canFireGamingNewsAlert()) {
+          return;
+        }
+
+        final now = DateTime.now();
+        Map<String, dynamic>? candidateArticle;
+
+        for (final data in unseenRows) {
+          // Only trigger news notifications for genuine news articles, never for team rewards, reposts, or generic fallbacks
           final postType = (data['type'] ?? '').toString().toLowerCase();
           final isRepost = data['is_repost'] == true || data['repost_of_id'] != null;
           final rawTitle = (data['title'] ?? '').toString().trim();
+
           if (isRepost ||
               rawTitle.isEmpty ||
               postType == 'weekly_team_reward' ||
-              rawTitle.toLowerCase().contains('weekly #1 team')) {
+              _isGenericOrFallbackNewsText(rawTitle)) {
             continue;
           }
 
-          final rawGame = (data['gameName'] ?? data['game_name'])?.toString().trim() ?? '';
-          final rawCat = (data['category'])?.toString().trim() ?? '';
-          final gameName = (rawGame.isNotEmpty && !rawGame.startsWith('notif_'))
-              ? rawGame
-              : ((rawCat.isNotEmpty && !rawCat.startsWith('notif_'))
-                  ? rawCat
-                  : _trOr('notif_gaming_news_fallback', 'Gaming News'));
-          final title = rawTitle;
-          final newsId = data['id']?.toString() ?? '';
-          final imageUrl = (data['imageUrl'] ?? data['image_url'])?.toString();
-          final category = (rawCat.isNotEmpty && !rawCat.startsWith('notif_'))
-              ? rawCat
-              : _trOr('notif_gaming_fallback', 'Gaming');
+          // Require a recent created_at timestamp so old articles loaded on reconnect never trigger alerts
+          final createdAtRaw = (data['created_at'] ?? data['createdAt'] ?? data['timestamp'])?.toString() ?? '';
+          if (createdAtRaw.isNotEmpty) {
+            final createdAt = DateTime.tryParse(createdAtRaw);
+            if (createdAt != null && now.difference(createdAt.toLocal()).inMinutes.abs() > 20) {
+              continue;
+            }
+          }
 
-          _showLocalNotification(
+          candidateArticle = data;
+          break; // At most ONE news alert per batch/cooldown window
+        }
+
+        if (candidateArticle == null) {
+          return;
+        }
+
+        final rawTitle = (candidateArticle['title'] ?? '').toString().trim();
+        final rawGame = (candidateArticle['gameName'] ?? candidateArticle['game_name'])?.toString().trim() ?? '';
+        final rawCat = (candidateArticle['category'])?.toString().trim() ?? '';
+        final gameName = (rawGame.isNotEmpty && !_isGenericOrFallbackNewsText(rawGame))
+            ? rawGame
+            : ((rawCat.isNotEmpty && !_isGenericOrFallbackNewsText(rawCat))
+                ? rawCat
+                : 'Gaming');
+        final newsId = candidateArticle['id']?.toString().trim() ?? '';
+        final imageUrl = (candidateArticle['imageUrl'] ?? candidateArticle['image_url'])?.toString();
+        final category = (rawCat.isNotEmpty && !_isGenericOrFallbackNewsText(rawCat))
+            ? rawCat
+            : gameName;
+
+        _isProcessingNewsAlert = true;
+        try {
+          await _showLocalNotification(
             title: _trOr('notif_new_news_title', '$gameName News', args: [gameName]),
-            body: title,
+            body: rawTitle,
             newsId: newsId,
             imageUrl: imageUrl,
             category: category,
           );
+        } finally {
+          _isProcessingNewsAlert = false;
         }
       }, onError: (_) {});
     } catch (_) {}
@@ -1011,9 +1213,19 @@ class NotificationService {
     String? imageUrl,
     String? category,
   }) async {
-    final cleanCat = (category != null && category.trim().isNotEmpty && !category.startsWith('notif_'))
+    if (_isGenericOrFallbackNewsText(body)) {
+      return;
+    }
+    if (!await _canFireGamingNewsAlert()) {
+      return;
+    }
+    await _recordGamingNewsAlertFired();
+
+    final cleanCat = (category != null &&
+            category.trim().isNotEmpty &&
+            !_isGenericOrFallbackNewsText(category))
         ? category.trim()
-        : _trOr('notif_gaming_news_fallback', 'Gaming News');
+        : 'Gaming News';
     final payloadData = {
       'type': 'news',
       'newsId': newsId,
@@ -1034,6 +1246,7 @@ class NotificationService {
       enableVibration: true,
       icon: '@mipmap/ic_launcher',
       color: const Color(0xFF00FF88),
+      onlyAlertOnce: true,
       styleInformation: BigTextStyleInformation(
         body,
         contentTitle: title,
@@ -1052,9 +1265,9 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+    // Always reuse the single fixed notification ID so new alerts replace rather than stack
     await _localNotifications.show(
-      notificationId,
+      _kGamingNewsNotificationId,
       title,
       body,
       notificationDetails,
@@ -1220,17 +1433,32 @@ class NotificationService {
     String? gameName,
     String? imageUrl,
   }) async {
-    final effectiveGame = (gameName != null && gameName.trim().isNotEmpty)
+    final cleanTitle = title.trim();
+    if (_isGenericOrFallbackNewsText(cleanTitle)) {
+      return;
+    }
+
+    if (newsId.trim().isNotEmpty) {
+      _seenNewsDocumentIds.add(newsId.trim());
+      await _persistSeenNewsIds();
+    }
+
+    final effectiveGame = (gameName != null &&
+            gameName.trim().isNotEmpty &&
+            !_isGenericOrFallbackNewsText(gameName))
         ? gameName.trim()
-        : category;
-    final notifTitle = 'notif_new_news_title'.tr(args: [effectiveGame]);
-    final notifBody = title;
+        : ((category.trim().isNotEmpty && !_isGenericOrFallbackNewsText(category))
+            ? category.trim()
+            : 'Gaming');
+    final notifTitle = _trOr('notif_new_news_title', '$effectiveGame News', args: [effectiveGame]);
+    final notifBody = cleanTitle;
 
     final payloadData = {
+      'type': 'news',
       'newsId': newsId,
       'category': category,
       'gameName': effectiveGame,
-      'title': title,
+      'title': cleanTitle,
       'description': description,
       if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
       'click_action': 'FLUTTER_NOTIFICATION_CLICK',
@@ -1249,6 +1477,11 @@ class NotificationService {
       }).timeout(const Duration(seconds: 4));
     } catch (_) {}
 
+    if (!await isGamingNewsAlertsEnabled()) {
+      return;
+    }
+    await _recordGamingNewsAlertFired();
+
     try {
       final androidDetails = AndroidNotificationDetails(
         _androidChannel.id,
@@ -1260,10 +1493,11 @@ class NotificationService {
         enableVibration: true,
         icon: '@mipmap/ic_launcher',
         color: const Color(0xFF00FF88),
+        onlyAlertOnce: true,
       );
 
       await _localNotifications.show(
-        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        _kGamingNewsNotificationId,
         notifTitle,
         notifBody,
         NotificationDetails(android: androidDetails),

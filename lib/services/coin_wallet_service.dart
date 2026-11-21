@@ -518,26 +518,38 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   Stream<CoinWallet> walletStream(String userId) {
+    final fallbackCoins = _currentWallet?.coins ??
+        GamerAuthService().currentGamer?.coins ??
+        CoinRewardService().coinsNotifier.value;
+    final initialFallback = _currentWallet ??
+        CoinWallet(
+          userId: userId.isEmpty ? 'guest' : userId,
+          coins: fallbackCoins > 0 ? fallbackCoins : 1000,
+        );
+
     if (userId.isEmpty) {
-      return Stream.value(_currentWallet ??
-          const CoinWallet(userId: 'guest', coins: 1000));
+      return Stream.value(initialFallback).asBroadcastStream();
     }
     try {
+      final userUuid = SupabaseService.toUuid(userId).toLowerCase();
+      final rawLower = userId.toLowerCase();
       return SupabaseService.client
           .from('coin_wallets')
           .stream(primaryKey: ['id'])
           .map((rows) {
-        final match = rows.where((r) =>
-            (r['user_id'] ?? r['id'])?.toString() == userId);
+        final match = rows.where((r) {
+          final rowUid = (r['user_id'] ?? r['id'])?.toString().toLowerCase() ?? '';
+          return rowUid == rawLower || rowUid == userUuid;
+        });
         if (match.isNotEmpty) {
           final w = CoinWallet.fromMap(match.first, userId);
           _currentWallet = w;
           return w;
         }
-        return _currentWallet ?? CoinWallet(userId: userId, coins: 1000);
-      });
+        return _currentWallet ?? initialFallback;
+      }).asBroadcastStream();
     } catch (_) {
-      return Stream.value(_currentWallet ?? CoinWallet(userId: userId, coins: 1000));
+      return Stream.value(_currentWallet ?? initialFallback).asBroadcastStream();
     }
   }
 
@@ -978,7 +990,7 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   Stream<List<CoinTransaction>> transactionsStream(String userId) {
-    if (userId.isEmpty) return Stream.value([]);
+    if (userId.isEmpty) return Stream.value(const <CoinTransaction>[]).asBroadcastStream();
     try {
       final userUuid = SupabaseService.toUuid(userId);
       return SupabaseService.client
@@ -1012,9 +1024,9 @@ class CoinWalletService extends ChangeNotifier {
         }).toList();
         filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
         return filtered;
-      });
+      }).asBroadcastStream();
     } catch (_) {
-      return Stream.value([]);
+      return Stream.value(const <CoinTransaction>[]).asBroadcastStream();
     }
   }
 

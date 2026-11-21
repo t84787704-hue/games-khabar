@@ -80,12 +80,13 @@ class TeamService {
     return _gameLeaderboardCache[clean] ?? _gameLeaderboardCache[clean.toLowerCase()];
   }
 
-  /// Normalizes game names so e.g. 'PUBG' and 'PUBG Mobile' or 'COD' and 'COD Mobile' match
+  /// Normalizes game names so e.g. 'PUBG', 'BGMI', and 'PUBG Mobile' or 'COD' and 'COD Mobile' match
   static bool matchesGameName(String teamGame, String targetGame) {
     final a = teamGame.trim().toLowerCase();
     final b = targetGame.trim().toLowerCase();
     if (a == b) return true;
-    if ((a == 'pubg' || a == 'pubg mobile') && (b == 'pubg' || b == 'pubg mobile')) {
+    const pubgAliases = {'pubg', 'pubg mobile', 'bgmi'};
+    if (pubgAliases.contains(a) && pubgAliases.contains(b)) {
       return true;
     }
     if ((a == 'cod' || a == 'cod mobile') && (b == 'cod' || b == 'cod mobile')) {
@@ -238,7 +239,11 @@ class TeamService {
   }
 
   /// Get team stream (polls + real-time updates for team, members & join requests)
-  Stream<TeamModel?> getTeamStream(String teamId) async* {
+  Stream<TeamModel?> getTeamStream(String teamId) {
+    return _getTeamStreamInternal(teamId).asBroadcastStream();
+  }
+
+  Stream<TeamModel?> _getTeamStreamInternal(String teamId) async* {
     if (teamId.isEmpty) {
       yield null;
       return;
@@ -341,7 +346,11 @@ class TeamService {
   }
 
   /// Stream of user teams (includes both leader and joined member teams)
-  Stream<List<TeamModel>> getUserTeamsStream(String userId) async* {
+  Stream<List<TeamModel>> getUserTeamsStream(String userId) {
+    return _getUserTeamsStreamInternal(userId).asBroadcastStream();
+  }
+
+  Stream<List<TeamModel>> _getUserTeamsStreamInternal(String userId) async* {
     if (userId.isEmpty) {
       yield [];
       return;
@@ -565,6 +574,16 @@ class TeamService {
 
   /// Get stream of all teams with optional game filter and search query
   Stream<List<TeamModel>> getTeamsStream({
+    String? gameFilter,
+    String? searchQuery,
+  }) {
+    return _getTeamsStreamInternal(
+      gameFilter: gameFilter,
+      searchQuery: searchQuery,
+    ).asBroadcastStream();
+  }
+
+  Stream<List<TeamModel>> _getTeamsStreamInternal({
     String? gameFilter,
     String? searchQuery,
   }) async* {

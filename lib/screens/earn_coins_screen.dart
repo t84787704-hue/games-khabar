@@ -231,9 +231,14 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
             ),
           ),
           body: StreamBuilder<CoinWallet>(
-            stream: _walletService.walletStream(_userId),
+            stream: _walletStream ?? _walletService.walletStream(_userId),
             builder: (context, snapshot) {
-              final wallet = snapshot.data ?? _walletService.currentWallet ?? CoinWallet.empty(_userId);
+              final wallet = snapshot.data ??
+                  _walletService.currentWallet ??
+                  CoinWallet(
+                    userId: _userId,
+                    coins: GamerAuthService().currentGamer?.coins ?? 0,
+                  );
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -243,9 +248,15 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                     _buildBalanceBanner(wallet.coins, isDark),
                     const SizedBox(height: 14),
                     StreamBuilder<List<TeamModel>>(
-                      stream: TeamService().getUserTeamsStream(_userId),
+                      stream: _userTeamsStream ?? TeamService().getUserTeamsStream(_userId),
                       builder: (context, teamSnap) {
-                        final teams = teamSnap.data ?? [];
+                        final cachedTeams = TeamService().getCachedUserTeams(_userId);
+                        if (teamSnap.connectionState == ConnectionState.waiting &&
+                            !teamSnap.hasData &&
+                            cachedTeams == null) {
+                          return const SizedBox.shrink();
+                        }
+                        final teams = teamSnap.data ?? cachedTeams ?? [];
                         final isSolo = teams.isEmpty;
                         final activeTeam = isSolo ? null : teams.first;
                         return Container(
@@ -276,7 +287,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                                     child: Text(
                                       isSolo
                                           ? 'Solo User Notice • Personal Coins Saved'
-                                          : '4-Member Team Weekly Tracking: ${activeTeam!.name} (${activeTeam.game})',
+                                          : 'Active 4-Member Team: ${activeTeam!.name} (${activeTeam.game})',
                                       style: TextStyle(
                                         color: ThemeService.textPrimary,
                                         fontWeight: FontWeight.w800,
@@ -289,8 +300,8 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                               const SizedBox(height: 6),
                               Text(
                                 isSolo
-                                    ? 'All coins you earn here are safely stored in your personal balance and history. Joining an active team (up to 4 members) is required to redeem rewards or qualify for weekly per-game #1 team rewards.'
-                                    : 'Every coin you earn from ads or daily check-in is added to your personal balance and counted toward your team\'s weekly total for ${activeTeam!.game}. Each week\'s #1 team per game shares the weekly reward equally.',
+                                    ? 'All coins you earn here go directly into your Personal Wallet and remain safely stored across weekly resets. Join or create an active 4-member Free Fire or PUBG team to contribute coins and compete for the weekly 1,500 PKR equivalent #1 Team Prize.'
+                                    : 'Every coin you earn from ads or daily check-in goes into your Personal Wallet first. Open your G-Coins Wallet to choose how many personal coins to contribute to ${activeTeam!.name} (${activeTeam.game}) for the weekly #1 Team competition.',
                                 style: TextStyle(
                                   color: ThemeService.textSecondary,
                                   fontSize: 11.5,
