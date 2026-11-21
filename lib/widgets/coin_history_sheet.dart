@@ -566,6 +566,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
     final String rewardLabel = (claim['reward_label'] ?? '').toString();
     final String status = (claim['status'] ?? 'pending').toString().toLowerCase();
     final String adminNote = (claim['admin_note'] ?? '').toString();
+    final String proofImageUrl = (claim['proof_image_url'] ?? '').toString().trim();
 
     final bool isDelivered = status == 'delivered';
     final bool isRejected = status == 'rejected';
@@ -748,12 +749,168 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               ),
             ),
           ),
+          if (proofImageUrl.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            InkWell(
+              onTap: () => _showDeliveryProofDialog(
+                imageUrl: proofImageUrl,
+                claimCode: claimCode,
+                playerUid: playerUid,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: GamerTheme.neonGreen.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: GamerTheme.neonGreen.withOpacity(0.45),
+                    width: 1.2,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.receipt_long_rounded,
+                          color: GamerTheme.neonGreen,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text(
+                            '📸 Delivery Proof Screenshot (Tap to View Full Screen)',
+                            style: TextStyle(
+                              color: GamerTheme.neonGreen,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: GamerTheme.neonGreen.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.zoom_out_map_rounded, size: 12, color: GamerTheme.neonGreen),
+                              SizedBox(width: 3),
+                              Text(
+                                'View',
+                                style: TextStyle(
+                                  color: GamerTheme.neonGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(9),
+                      child: SizedBox(
+                        height: 135,
+                        width: double.infinity,
+                        child: Image.network(
+                          proofImageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: ThemeService.card,
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'Unable to load delivery proof screenshot',
+                              style: TextStyle(color: Colors.white54, fontSize: 11),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 6),
           Text(
             dateText,
             style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showDeliveryProofDialog({
+    required String imageUrl,
+    required String claimCode,
+    required String playerUid,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: GamerTheme.neonGreen, width: 1.4),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: ThemeService.card,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(17)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_rounded, color: GamerTheme.neonGreen, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Delivery Proof • $claimCode (UID: $playerUid)',
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close_rounded, color: ThemeService.textPrimary),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4.5,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Text(
+                      'Failed to load delivery proof screenshot',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

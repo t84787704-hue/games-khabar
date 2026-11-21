@@ -1,11 +1,15 @@
 // ===============================================================================
 // ADMIN REWARD CLAIMS & UC REQUESTS TAB — Connected to public.reward_claims
+// Supports Delivery Proof Screenshot Upload to 'reward-proofs' Storage Bucket
 // File: lib/screens/admin/admin_uc_requests_tab.dart
 // ===============================================================================
 
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/notification_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
@@ -19,15 +23,25 @@ class AdminUcRequestsTab extends StatefulWidget {
 
 class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
   final TextEditingController _searchController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
   String _searchQuery = '';
   String _statusFilter = 'pending'; // 'pending', 'delivered', 'rejected', 'all'
   final Set<String> _processingIds = {};
+  final Set<String> _uploadingProofIds = {};
+  final Map<String, String> _uploadedProofUrls = {};
+  final Map<String, Uint8List> _uploadedProofBytes = {};
   int _refreshSeed = 0;
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  String _claimKey(Map<String, dynamic> claim) {
+    final id = (claim['id'] ?? '').toString().trim();
+    if (id.isNotEmpty) return id;
+    return (claim['claim_code'] ?? '').toString().trim();
   }
 
   String _formatGameName(String raw) {
@@ -39,6 +53,19 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
       return 'Free Fire';
     }
     return raw.isEmpty ? 'Game' : raw;
+  }
+
+  String _getMimeType(String ext) {
+    switch (ext.toLowerCase()) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      default:
+        return 'image/jpeg';
+    }
   }
 
   Future<void> _copyToClipboard(String text, String label) async {
@@ -54,15 +81,194 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
     );
   }
 
+  /// Picks a proof screenshot from device gallery and uploads to Supabase Storage bucket `reward-proofs`.
+  Future<String?> _pickAndUploadProofScreenshot(
+    Map<String, dynamic> claim, {
+    void Function(void Function())? setDialogState,
+  }) async {
+    final String key = _claimKey(claim);
+    final String claimId = (claim['id'] ?? '').toString().trim();
+    final String claimCode = (claim['claim_code'] ?? 'RW').toString().trim();
+
+    try {
+      final XFile? picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (picked == null) return null;
+
+      if (mounted) {
+        setState(() => _uploadingProofIds.add(key));
+      }
+      setDialogState?.call(() {});
+
+      final Uint8List bytes = await picked.readAsBytes();
+      final String rawExt = picked.name.contains('.')
+          ? picked.name.split('.').last.toLowerCase()
+          : 'jpg';
+      final String ext = (rawExt == 'png' || rawExt == 'webp' || rawExt == 'jpg' || rawExt == 'jpeg')
+          ? rawExt
+          : 'jpg';
+      final String safeCode = claimCode.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '');
+      final int ts = DateTime.now().millisecondsSinceEpoch;
+      final String storagePath = 'proofs/${safeCode.isEmpty ? 'claim' : safeCode}_$ts.$ext';
+
+      await SupabaseService.client.storage.from('reward-proofs').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(
+              upsert: true,
+              contentType: _getMimeType(ext),
+            ),
+          );
+
+      final String publicUrl =
+          SupabaseService.client.storage.from('reward-proofs').getPublicUrl(storagePath);
+
+      if (mounted) {
+        setState(() {
+          _uploadedProofUrls[key] = publicUrl;
+          _uploadedProofBytes[key] = bytes;
+        });
+      }
+      setDialogState?.call(() {});
+
+      // Also persist proof_image_url on the claim record immediately so it's never lost
+      try {
+        if (claimId.isNotEmpty) {
+          await SupabaseService.client
+              .from('reward_claims')
+              .update({'proof_image_url': publicUrl}).eq('id', claimId);
+        } else if (claimCode.isNotEmpty) {
+          await SupabaseService.client
+              .from('reward_claims')
+              .update({'proof_image_url': publicUrl}).eq('claim_code', claimCode);
+        }
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📸 Delivery proof screenshot uploaded successfully!'),
+            backgroundColor: Color(0xFF00FF88),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return publicUrl;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload proof screenshot: $e'),
+            backgroundColor: const Color(0xFFFF4655),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return null;
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingProofIds.remove(key));
+      }
+      setDialogState?.call(() {});
+    }
+  }
+
+  void _showFullScreenProofDialog({
+    required String imageUrl,
+    Uint8List? memoryBytes,
+    required String claimCode,
+    required String playerUid,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Stack(
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: ThemeService.card,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_rounded, color: Color(0xFF00FF88), size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Delivery Proof • $claimCode (UID: $playerUid)',
+                          style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close_rounded, color: ThemeService.textPrimary),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 4.0,
+                    child: memoryBytes != null
+                        ? Image.memory(memoryBytes, fit: BoxFit.contain)
+                        : Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const SizedBox(
+                                height: 260,
+                                child: Center(
+                                  child: CircularProgressIndicator(color: Color(0xFF00FF88)),
+                                ),
+                              );
+                            },
+                            errorBuilder: (_, __, ___) => const SizedBox(
+                              height: 220,
+                              child: Center(
+                                child: Text(
+                                  'Unable to load proof image',
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _updateClaimStatus({
     required Map<String, dynamic> claim,
     required String newStatus,
   }) async {
-    final String claimId = (claim['id'] ?? '').toString();
-    final String claimCode = (claim['claim_code'] ?? '#RW').toString();
-    final String userId = (claim['user_id'] ?? '').toString();
-    final String playerUid = (claim['player_uid'] ?? '').toString();
-    final String playerIgn = (claim['player_ign'] ?? '').toString();
+    final String key = _claimKey(claim);
+    final String claimId = (claim['id'] ?? '').toString().trim();
+    final String claimCode = (claim['claim_code'] ?? '#RW').toString().trim();
+    final String userId = (claim['user_id'] ?? '').toString().trim();
+    final String playerUid = (claim['player_uid'] ?? '').toString().trim();
+    final String playerIgn = (claim['player_ign'] ?? '').toString().trim();
     final String gameName = _formatGameName((claim['game_name'] ?? '').toString());
     final String rewardLabel = (claim['reward_label'] ?? '').toString();
     final int shareAmountPkr = (claim['share_amount_pkr'] as num?)?.toInt() ?? 375;
@@ -73,134 +279,263 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
 
     final String? adminNote = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: ThemeService.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: isDelivering ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
-            width: 1.3,
-          ),
-        ),
-        title: Row(
-          children: [
-            Icon(
-              isDelivering ? Icons.check_circle_rounded : Icons.cancel_rounded,
-              color: isDelivering ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
-              size: 22,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                isDelivering ? 'Mark Claim as Delivered' : 'Reject Reward Claim',
-                style: TextStyle(
-                  color: ThemeService.textPrimary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 15.5,
-                ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final String currentProofUrl =
+              _uploadedProofUrls[key] ?? (claim['proof_image_url'] ?? '').toString().trim();
+          final Uint8List? currentProofBytes = _uploadedProofBytes[key];
+          final bool isUploadingProof = _uploadingProofIds.contains(key);
+
+          return AlertDialog(
+            backgroundColor: ThemeService.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: isDelivering ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                width: 1.3,
               ),
             ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: ThemeService.cardSecondary,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: ThemeService.border),
+            title: Row(
+              children: [
+                Icon(
+                  isDelivering ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                  color: isDelivering ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                  size: 22,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Claim: $claimCode • $gameName',
-                      style: const TextStyle(
-                        color: Color(0xFFFFD700),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12.5,
-                      ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isDelivering ? 'Mark Claim as Delivered' : 'Reject Reward Claim',
+                    style: TextStyle(
+                      color: ThemeService.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15.5,
                     ),
-                    const SizedBox(height: 4),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: ThemeService.cardSecondary,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: ThemeService.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Claim: $claimCode • $gameName',
+                          style: const TextStyle(
+                            color: Color(0xFFFFD700),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Player UID: $playerUid${playerIgn.isNotEmpty ? ' ($playerIgn)' : ''}',
+                          style: const TextStyle(
+                            color: Color(0xFF00FF88),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Share: ${NumberFormat('#,###').format(shareAmountPkr)} PKR ($rewardLabel)',
+                          style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isDelivering) ...[
+                    const SizedBox(height: 12),
                     Text(
-                      'Player UID: $playerUid${playerIgn.isNotEmpty ? ' ($playerIgn)' : ''}',
-                      style: const TextStyle(
-                        color: Color(0xFF00FF88),
+                      'Delivery Proof Screenshot (Optional but Recommended):',
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Share: ${NumberFormat('#,###').format(shareAmountPkr)} PKR ($rewardLabel)',
-                      style: TextStyle(
-                        color: ThemeService.textPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11.5,
+                    const SizedBox(height: 8),
+                    if (currentProofUrl.isNotEmpty || currentProofBytes != null) ...[
+                      GestureDetector(
+                        onTap: () => _showFullScreenProofDialog(
+                          imageUrl: currentProofUrl,
+                          memoryBytes: currentProofBytes,
+                          claimCode: claimCode,
+                          playerUid: playerUid,
+                        ),
+                        child: Container(
+                          width: double.infinity,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            color: ThemeService.cardSecondary,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(9),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                if (currentProofBytes != null)
+                                  Image.memory(currentProofBytes, fit: BoxFit.cover)
+                                else
+                                  Image.network(
+                                    currentProofUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Center(
+                                      child: Text(
+                                        'Proof Attached ✓',
+                                        style: TextStyle(color: ThemeService.textPrimary),
+                                      ),
+                                    ),
+                                  ),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black87,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.check_circle_rounded, color: Color(0xFF00FF88), size: 13),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Proof Attached',
+                                          style: TextStyle(
+                                            color: Color(0xFF00FF88),
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: isUploadingProof
+                            ? null
+                            : () => _pickAndUploadProofScreenshot(
+                                  claim,
+                                  setDialogState: setDialogState,
+                                ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF38BDF8),
+                          side: const BorderSide(color: Color(0xFF38BDF8)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: isUploadingProof
+                            ? const SizedBox(
+                                width: 15,
+                                height: 15,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF38BDF8),
+                                ),
+                              )
+                            : const Icon(Icons.add_photo_alternate_rounded, size: 18),
+                        label: Text(
+                          isUploadingProof
+                              ? 'Uploading Proof Screenshot...'
+                              : (currentProofUrl.isNotEmpty
+                                  ? 'Change Proof Screenshot'
+                                  : 'Upload Proof Screenshot'),
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                        ),
                       ),
                     ),
                   ],
-                ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 2,
+                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                    decoration: InputDecoration(
+                      labelText: 'Admin Note (Optional)',
+                      hintText: isDelivering
+                          ? 'e.g. Top-up completed to UID $playerUid'
+                          : 'e.g. Invalid Player UID provided',
+                      labelStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                      hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.7), fontSize: 12),
+                      filled: true,
+                      fillColor: ThemeService.cardSecondary,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: noteController,
-                maxLines: 2,
-                style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-                decoration: InputDecoration(
-                  labelText: 'Admin Note (Optional)',
-                  hintText: isDelivering
-                      ? 'e.g. Top-up completed to UID $playerUid'
-                      : 'e.g. Invalid Player UID provided',
-                  labelStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
-                  hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.7), fontSize: 12),
-                  filled: true,
-                  fillColor: ThemeService.cardSecondary,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDelivering ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
+                  foregroundColor: isDelivering ? Colors.black : Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
+                icon: Icon(
+                  isDelivering ? Icons.done_all_rounded : Icons.block_rounded,
+                  size: 16,
+                ),
+                label: Text(
+                  isDelivering ? 'Confirm Delivered' : 'Confirm Reject',
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+                ),
+                onPressed: isUploadingProof
+                    ? null
+                    : () => Navigator.pop(ctx, noteController.text.trim()),
               ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, null),
-            child: Text('Cancel', style: TextStyle(color: ThemeService.textSecondary)),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isDelivering ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
-              foregroundColor: isDelivering ? Colors.black : Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            icon: Icon(
-              isDelivering ? Icons.done_all_rounded : Icons.block_rounded,
-              size: 16,
-            ),
-            label: Text(
-              isDelivering ? 'Confirm Delivered' : 'Confirm Reject',
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
-            ),
-            onPressed: () => Navigator.pop(ctx, noteController.text.trim()),
-          ),
-        ],
+          );
+        },
       ),
     );
 
     if (adminNote == null) return;
 
-    setState(() => _processingIds.add(claimId));
+    final String finalProofUrl =
+        _uploadedProofUrls[key] ?? (claim['proof_image_url'] ?? '').toString().trim();
+
+    setState(() => _processingIds.add(key));
     try {
       final nowIso = DateTime.now().toUtc().toIso8601String();
       final Map<String, dynamic> updatePayload = {
         'status': newStatus,
         if (isDelivering) 'delivered_at': nowIso,
         if (adminNote.isNotEmpty) 'admin_note': adminNote,
+        if (finalProofUrl.isNotEmpty) 'proof_image_url': finalProofUrl,
       };
 
       if (claimId.isNotEmpty) {
@@ -236,7 +571,7 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
           SnackBar(
             content: Text(
               isDelivering
-                  ? '✅ Claim $claimCode marked as DELIVERED!'
+                  ? '✅ Claim $claimCode marked as DELIVERED!${finalProofUrl.isNotEmpty ? ' (Proof Saved)' : ''}'
                   : 'Claim $claimCode marked as REJECTED.',
             ),
             backgroundColor: isDelivering ? const Color(0xFF00FF88) : const Color(0xFFFF4655),
@@ -256,7 +591,7 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
       }
     } finally {
       if (mounted) {
-        setState(() => _processingIds.remove(claimId));
+        setState(() => _processingIds.remove(key));
       }
     }
   }
@@ -440,7 +775,7 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
   }
 
   Widget _buildClaimCard(Map<String, dynamic> claim) {
-    final String claimId = (claim['id'] ?? '').toString();
+    final String key = _claimKey(claim);
     final String claimCode = (claim['claim_code'] ?? '#RW').toString();
     final String rawGame = (claim['game_name'] ?? 'free_fire').toString();
     final String gameLabel = _formatGameName(rawGame);
@@ -452,13 +787,17 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
     final int shareAmountPkr = (claim['share_amount_pkr'] as num?)?.toInt() ?? 375;
     final String status = (claim['status'] ?? 'pending').toString().toLowerCase();
     final String adminNote = (claim['admin_note'] ?? '').toString();
+    final String proofUrl =
+        _uploadedProofUrls[key] ?? (claim['proof_image_url'] ?? '').toString().trim();
+    final Uint8List? proofBytes = _uploadedProofBytes[key];
 
-    DateTime? createdAt = DateTime.tryParse((claim['created_at'] ?? '').toString());
-    DateTime? deliveredAt = DateTime.tryParse((claim['delivered_at'] ?? '').toString());
+    final DateTime? createdAt = DateTime.tryParse((claim['created_at'] ?? '').toString());
+    final DateTime? deliveredAt = DateTime.tryParse((claim['delivered_at'] ?? '').toString());
 
     final bool isDelivered = status == 'delivered';
     final bool isRejected = status == 'rejected';
-    final bool isProcessing = _processingIds.contains(claimId);
+    final bool isProcessing = _processingIds.contains(key);
+    final bool isUploadingProof = _uploadingProofIds.contains(key);
 
     final Color statusColor = isDelivered
         ? const Color(0xFF00FF88)
@@ -697,19 +1036,166 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
                     ),
                   ),
                 ],
+
+                // Delivery Proof Preview inside Card (if attached/uploaded)
+                if (proofUrl.isNotEmpty || proofBytes != null) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.photo_camera_back_rounded, color: Color(0xFF00FF88), size: 15),
+                          SizedBox(width: 5),
+                          Text(
+                            'Delivery Proof Screenshot Attached:',
+                            style: TextStyle(
+                              color: Color(0xFF00FF88),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: isUploadingProof
+                            ? null
+                            : () => _pickAndUploadProofScreenshot(claim),
+                        icon: const Icon(Icons.edit_rounded, size: 13, color: Color(0xFF38BDF8)),
+                        label: const Text(
+                          'Replace',
+                          style: TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () => _showFullScreenProofDialog(
+                      imageUrl: proofUrl,
+                      memoryBytes: proofBytes,
+                      claimCode: claimCode,
+                      playerUid: playerUid,
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      height: 125,
+                      decoration: BoxDecoration(
+                        color: ThemeService.card,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (proofBytes != null)
+                              Image.memory(proofBytes, fit: BoxFit.cover)
+                            else
+                              Image.network(
+                                proofUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Center(
+                                  child: Text(
+                                    'Tap to View Delivery Proof',
+                                    style: TextStyle(
+                                      color: ThemeService.textSecondary,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            Positioned(
+                              bottom: 6,
+                              right: 6,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black87,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.zoom_in_rounded, color: Colors.white, size: 13),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Tap to Enlarge',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
 
-          if (!isDelivered) ...[
-            const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          // Upload Proof Screenshot button directly on card
+          if (proofUrl.isEmpty && proofBytes == null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: isUploadingProof
+                      ? null
+                      : () => _pickAndUploadProofScreenshot(claim),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF38BDF8),
+                    side: const BorderSide(color: Color(0xFF38BDF8)),
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: isUploadingProof
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF38BDF8),
+                          ),
+                        )
+                      : const Icon(Icons.add_photo_alternate_rounded, size: 17),
+                  label: Text(
+                    isUploadingProof
+                        ? 'Uploading Proof Screenshot...'
+                        : 'Upload Proof Screenshot',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                  ),
+                ),
+              ),
+            ),
+
+          if (!isDelivered)
             Row(
               children: [
                 if (!isRejected) ...[
                   Expanded(
                     flex: 1,
                     child: OutlinedButton.icon(
-                      onPressed: isProcessing
+                      onPressed: (isProcessing || isUploadingProof)
                           ? null
                           : () => _updateClaimStatus(
                                 claim: claim,
@@ -733,7 +1219,7 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton.icon(
-                    onPressed: isProcessing
+                    onPressed: (isProcessing || isUploadingProof)
                         ? null
                         : () => _updateClaimStatus(
                               claim: claim,
@@ -760,7 +1246,6 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
                 ),
               ],
             ),
-          ],
         ],
       ),
     );
