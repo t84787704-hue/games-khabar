@@ -430,7 +430,7 @@ class SquadService {
       }).handleError((_) {}).asBroadcastStream();
     } catch (e) {
       debugPrint('[SquadService] getSquadRequestsStream notice: $e');
-      return Stream.value([]);
+      return Stream<List<SquadJoinRequest>>.value(const <SquadJoinRequest>[]).asBroadcastStream();
     }
   }
 

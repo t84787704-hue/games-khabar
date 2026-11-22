@@ -234,7 +234,7 @@ class TournamentService extends ChangeNotifier {
   }
 
   Stream<List<TournamentRoom>> getLiveRoomsStream({String? gameName}) {
-    return (() async* {
+    Stream<List<TournamentRoom>> stream() async* {
       // 1. Immediately yield cached local rooms (Zero latency, never hangs on spinner)
       if (_rooms.isEmpty) {
         await _loadFromLocal();
@@ -298,7 +298,9 @@ class TournamentService extends ChangeNotifier {
           yield _filterRoomsByGame(_rooms, gameName);
         }
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   Future<bool> joinRoom({

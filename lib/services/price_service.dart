@@ -80,7 +80,7 @@ class PriceService {
   }
 
   Stream<Map<String, dynamic>?> streamGamePrice(String gameName) {
-    return (() async* {
+    Stream<Map<String, dynamic>?> stream() async* {
       final docId = getGameDocId(gameName);
       try {
         final initial = await SupabaseService.client
@@ -99,11 +99,13 @@ class PriceService {
             .map((list) => list.isNotEmpty ? list.first : null)
             .handleError((_) {});
       } catch (_) {}
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   Stream<Map<String, dynamic>?> streamUserAlert(String gameName, String userId) {
-    return (() async* {
+    Stream<Map<String, dynamic>?> stream() async* {
       final gameId = getGameDocId(gameName);
       final alertDocId = '${userId}_$gameId';
       try {
@@ -123,7 +125,9 @@ class PriceService {
             .map((list) => list.isNotEmpty ? list.first : null)
             .handleError((_) {});
       } catch (_) {}
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   Future<void> setPriceAlert({

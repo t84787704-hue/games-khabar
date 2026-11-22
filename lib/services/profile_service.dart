@@ -109,12 +109,12 @@ class ProfileService {
     String? userId,
     String? username,
   }) {
-    return (() async* {
+    Stream<List<ProfileFeedItem>> stream() async* {
       final uid =
           (userId != null && userId.trim().isNotEmpty) ? userId.trim() : '';
 
       if (uid.isEmpty) {
-        yield [];
+        yield <ProfileFeedItem>[];
         return;
       }
 
@@ -128,18 +128,20 @@ class ProfileService {
               .eq('user_id', uuid) // ✅ strict — no foreign posts
               .order('created_at', ascending: false);
 
-          final items = (rows as List)
+          final List<ProfileFeedItem> items = (rows as List)
               .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
               .toList();
 
           yield items;
         } catch (e) {
           debugPrint('[ProfileService] Stream error: $e');
-          yield [];
+          yield <ProfileFeedItem>[];
         }
         await Future.delayed(const Duration(seconds: 4));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   /// One-shot fetch of user posts.

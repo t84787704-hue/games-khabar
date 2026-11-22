@@ -25,7 +25,7 @@ class _RssScreenState extends State<RssScreen> {
   int _publishedCount = 0;
 
   Stream<List<Map<String, dynamic>>> _sourcesStream() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       while (true) {
         List<Map<String, dynamic>> list = [];
         try {
@@ -35,7 +35,9 @@ class _RssScreenState extends State<RssScreen> {
         yield list;
         await Future.delayed(const Duration(seconds: 4));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   Future<void> _syncFeedsClientSide() async {

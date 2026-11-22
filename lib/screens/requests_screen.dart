@@ -25,7 +25,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
   final LfgService _lfgService = LfgService();
 
   Stream<Map<String, dynamic>?> _postStream() {
-    return (() async* {
+    Stream<Map<String, dynamic>?> stream() async* {
       while (true) {
         Map<String, dynamic>? data;
         try {
@@ -38,7 +38,9 @@ class _RequestsScreenState extends State<RequestsScreen> {
         yield data;
         await Future.delayed(const Duration(seconds: 4));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   final Set<String> _processingUids = {};

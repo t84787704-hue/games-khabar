@@ -17,7 +17,7 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
   static const Color neonGreen = Color(0xFF00FF88);
 
   Stream<List<Map<String, dynamic>>> _sourcesStream() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       while (true) {
         List<Map<String, dynamic>> list = [];
         try {
@@ -27,7 +27,9 @@ class _RssSourcesScreenState extends State<RssSourcesScreen> {
         yield list;
         await Future.delayed(const Duration(seconds: 4));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static const Color bgDark = Color(0xFF0A0A0F);

@@ -699,7 +699,7 @@ class SupabaseService {
 
   // REALTIME STREAMS
   static Stream<List<Map<String, dynamic>>> getMatchChatStream(String matchId) {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       while (true) {
         final messages = await query(
           'match_chat',
@@ -710,13 +710,15 @@ class SupabaseService {
         yield messages;
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getChatMessagesStream(String roomId) => getMatchChatStream(roomId);
 
   static Stream<Map<String, dynamic>?> getTeamMatchStream(String matchId) {
-    return (() async* {
+    Stream<Map<String, dynamic>?> stream() async* {
       while (true) {
         final matches = await query(
           'team_matches',
@@ -726,7 +728,9 @@ class SupabaseService {
         yield matches.isNotEmpty ? matches.first : null;
         await Future.delayed(const Duration(seconds: 4));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   // ============================================================
@@ -1024,7 +1028,7 @@ class SupabaseService {
   // ============================================================
 
   static Stream<List<Map<String, dynamic>>> getRealtimeUsers() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       if (_cachedUsers.isNotEmpty) {
         yield _cachedUsers;
       }
@@ -1050,11 +1054,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimePosts() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       if (_cachedPosts.isNotEmpty) {
         yield _cachedPosts;
       }
@@ -1080,11 +1086,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeReports() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       if (_cachedReports.isNotEmpty) {
         yield _cachedReports;
       }
@@ -1108,11 +1116,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeCoinTransactions() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       if (_cachedCoinTransactions.isNotEmpty) {
         yield _cachedCoinTransactions;
       }
@@ -1138,11 +1148,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeNotifications() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       if (_cachedNotifications.isNotEmpty) {
         yield _cachedNotifications;
       }
@@ -1168,11 +1180,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeRooms() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       if (_cachedRooms.isNotEmpty) {
         yield _cachedRooms;
       }
@@ -1198,11 +1212,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeActiveMatches() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       if (_cachedActiveMatches.isNotEmpty) {
         yield _cachedActiveMatches;
       }
@@ -1228,11 +1244,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeTournaments() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       if (_cachedTournaments.isNotEmpty) {
         yield _cachedTournaments;
       }
@@ -1258,11 +1276,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeProofHistory() {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       if (_cachedProofHistory.isNotEmpty) {
         yield _cachedProofHistory;
       }
@@ -1286,11 +1306,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeSingleRoom(String roomId) {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       while (true) {
         try {
           final res = await client
@@ -1307,11 +1329,13 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeRoomMessages(String roomId) {
-    return (() async* {
+    Stream<List<Map<String, dynamic>>> stream() async* {
       while (true) {
         try {
           final res = await client
@@ -1328,6 +1352,8 @@ class SupabaseService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 }

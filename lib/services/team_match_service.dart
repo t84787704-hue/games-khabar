@@ -654,22 +654,24 @@ class TeamMatchService {
 
   /// 9. Stream all matches
   Stream<List<TeamMatch>> getAllMatchesStream({String? statusFilter}) {
-    return (() async* {
+    Stream<List<TeamMatch>> stream() async* {
       while (true) {
         try {
           final list = await SupabaseService.getTeamMatches(status: statusFilter);
           yield list.map((m) => TeamMatch.fromMap(m)).toList();
         } catch (_) {
-          yield [];
+          yield <TeamMatch>[];
         }
         await Future.delayed(const Duration(seconds: 4));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   /// Stream of matches for a particular user
   Stream<List<TeamMatch>> getUserTeamMatchesStream(String userId) {
-    return (() async* {
+    Stream<List<TeamMatch>> stream() async* {
       while (true) {
         try {
           final list = await SupabaseService.getTeamMatches();
@@ -678,16 +680,18 @@ class TeamMatchService {
               .where((m) => m.isMemberOfMatch(userId))
               .toList();
         } catch (_) {
-          yield [];
+          yield <TeamMatch>[];
         }
         await Future.delayed(const Duration(seconds: 4));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   /// Stream single match by ID
   Stream<TeamMatch?> getMatchStream(String matchId) {
-    return (() async* {
+    Stream<TeamMatch?> stream() async* {
       while (true) {
         try {
           final data = await SupabaseService.getTeamMatch(matchId);
@@ -697,12 +701,14 @@ class TeamMatchService {
         }
         await Future.delayed(const Duration(seconds: 3));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 
   /// Stream Top 100 Leaderboard teams (Sorted by points descending)
   Stream<List<TeamRanking>> getTopTeamsLeaderboard({int limit = 100}) {
-    return (() async* {
+    Stream<List<TeamRanking>> stream() async* {
       while (true) {
         try {
           final rows = await SupabaseService.client
@@ -722,11 +728,13 @@ class TeamMatchService {
             );
             yield fallback.map((r) => TeamRanking.fromMap(r)).toList();
           } catch (_) {
-            yield [];
+            yield <TeamRanking>[];
           }
         }
         await Future.delayed(const Duration(seconds: 4));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
 }

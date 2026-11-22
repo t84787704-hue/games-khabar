@@ -26,7 +26,7 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
   static const Color _neonGreen = GamerTheme.neonGreen;
 
   Stream<Map<String, dynamic>?> _roomStream() {
-    return (() async* {
+    Stream<Map<String, dynamic>?> stream() async* {
       while (true) {
         Map<String, dynamic>? data;
         try {
@@ -39,7 +39,9 @@ class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
         yield data;
         await Future.delayed(const Duration(seconds: 4));
       }
-    })().asBroadcastStream();
+    }
+
+    return stream().asBroadcastStream();
   }
   bool _isUploadingProof = false;
   File? _selectedProofImage;
