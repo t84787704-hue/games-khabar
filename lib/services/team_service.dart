@@ -80,6 +80,139 @@ class TeamService {
     return _gameLeaderboardCache[clean] ?? _gameLeaderboardCache[clean.toLowerCase()];
   }
 
+  /// Clears all weekly team stats, leaderboard, and user team caches so fresh post-reset totals load immediately.
+  void invalidateWeeklyCaches() {
+    _teamWeeklyStatsCache.clear();
+    _gameLeaderboardCache.clear();
+    _userTeamsCache.clear();
+  }
+
+  /// Parses an ISO timestamp string into UTC epoch milliseconds (0 if invalid/empty).
+  static int parseUtcMs(dynamic raw) {
+    final s = (raw ?? '').toString().trim();
+    if (s.isEmpty) return 0;
+    final dt = DateTime.tryParse(s);
+    if (dt == null) return 0;
+    return dt.toUtc().millisecondsSinceEpoch;
+  }
+
+  /// Evaluates whether [team] has completed a delivered weekly reward cycle in [weekKey]
+  /// based on [allClaims] from `public.reward_claims`.
+  /// When a team's submitted weekly reward claim(s) are marked 'delivered' (and no older
+  /// 'pending' claims from that batch remain waiting for delivery), all coin contributions
+  /// from before `cutoffUtcMs` are reset to 0 so the next round/week starts cleanly from 0.
+  static Map<String, dynamic> evaluateTeamRewardCycleReset({
+    required TeamModel team,
+    required List<Map<String, dynamic>> allClaims,
+    String? weekKey,
+  }) {
+    final String targetWeekKey = (weekKey ?? getWeekCycleKey()).trim();
+    final String rawTid = team.id.trim().toLowerCase();
+    final String tidUuid =
+        rawTid.isNotEmpty ? SupabaseService.toUuid(team.id.trim()).toLowerCase() : '';
+    final String teamGameKey = normalizeGameKey(team.game);
+    final String teamFullNameLower = '${team.name.trim()} [${team.tag.trim()}]'.toLowerCase();
+    final String teamNameLower = team.name.trim().toLowerCase();
+
+    final Set<String> memberIdsLower = {};
+    if (team.leaderId.trim().isNotEmpty) {
+      final lid = team.leaderId.trim();
+      memberIdsLower.add(lid.toLowerCase());
+      memberIdsLower.add(SupabaseService.toUuid(lid).toLowerCase());
+    }
+    for (final m in team.cappedMembers) {
+      final mid = m.trim();
+      if (mid.isNotEmpty) {
+        memberIdsLower.add(mid.toLowerCase());
+        memberIdsLower.add(SupabaseService.toUuid(mid).toLowerCase());
+      }
+    }
+
+    final List<Map<String, dynamic>> teamClaims = [];
+    for (final c in allClaims) {
+      final String status = (c['status'] ?? 'pending').toString().trim().toLowerCase();
+      if (status == 'rejected') continue;
+
+      final String cGameRaw = (c['game_name'] ?? '').toString().trim();
+      if (cGameRaw.isNotEmpty && normalizeGameKey(cGameRaw) != teamGameKey) {
+        continue;
+      }
+
+      final String cWeek = (c['week_key'] ?? '').toString().trim();
+      if (cWeek.isNotEmpty &&
+          cWeek != targetWeekKey &&
+          !cWeek.startsWith(targetWeekKey)) {
+        continue;
+      }
+
+      final String cTid = (c['team_id'] ?? '').toString().trim().toLowerCase();
+      final String cTidUuid =
+          cTid.isNotEmpty ? SupabaseService.toUuid(cTid).toLowerCase() : '';
+      final String cTeamName = (c['team_name'] ?? '').toString().trim().toLowerCase();
+      final String cUid = (c['user_id'] ?? '').toString().trim().toLowerCase();
+      final String cUidUuid =
+          cUid.isNotEmpty ? SupabaseService.toUuid(cUid).toLowerCase() : '';
+
+      bool matchesTeam = false;
+      if (cTid.isNotEmpty &&
+          (cTid == rawTid || cTid == tidUuid || (tidUuid.isNotEmpty && cTidUuid == tidUuid))) {
+        matchesTeam = true;
+      } else if (cTeamName.isNotEmpty &&
+          (cTeamName == teamFullNameLower || cTeamName == teamNameLower)) {
+        matchesTeam = true;
+      } else if ((cTid.isEmpty || cTid == rawTid || cTidUuid == tidUuid) &&
+          (memberIdsLower.contains(cUid) || memberIdsLower.contains(cUidUuid))) {
+        matchesTeam = true;
+      }
+
+      if (matchesTeam) {
+        teamClaims.add(c);
+      }
+    }
+
+    int latestDeliveredMs = 0;
+    int deliveredCount = 0;
+    for (final c in teamClaims) {
+      final String status = (c['status'] ?? 'pending').toString().trim().toLowerCase();
+      if (status == 'delivered') {
+        deliveredCount++;
+        final int delMs = parseUtcMs(c['delivered_at']);
+        final int updMs = parseUtcMs(c['updated_at']);
+        final int creMs = parseUtcMs(c['created_at']);
+        int bestMs = delMs > 0 ? delMs : (updMs > 0 ? updMs : creMs);
+        if (creMs > bestMs) bestMs = creMs;
+        if (bestMs <= 0) {
+          bestMs = 1;
+        }
+        if (bestMs > latestDeliveredMs) {
+          latestDeliveredMs = bestMs;
+        }
+      }
+    }
+
+    bool hasUnfinishedPendingInBatch = false;
+    if (deliveredCount > 0) {
+      for (final c in teamClaims) {
+        final String status = (c['status'] ?? 'pending').toString().trim().toLowerCase();
+        if (status == 'pending') {
+          final int creMs = parseUtcMs(c['created_at']);
+          if (creMs <= 0 || creMs <= latestDeliveredMs) {
+            hasUnfinishedPendingInBatch = true;
+            break;
+          }
+        }
+      }
+    }
+
+    final bool hasCompletedDeliveredRound =
+        deliveredCount > 0 && !hasUnfinishedPendingInBatch;
+    return {
+      'hasCompletedDeliveredRound': hasCompletedDeliveredRound,
+      'cutoffUtcMs': hasCompletedDeliveredRound ? latestDeliveredMs : 0,
+      'deliveredCount': deliveredCount,
+    };
+  }
+
   /// Canonical snake_case game key ('free_fire' or 'pubg_mobile')
   static String normalizeGameKey(String game) {
     return TeamModel.normalizeGameKey(game);
@@ -1711,10 +1844,12 @@ class TeamService {
     final userUuid = SupabaseService.toUuid(cleanUid);
     final gameKey = normalizeGameKey(team.game); // strictly 'free_fire' or 'pubg_mobile'
     final gameDisplay = displayGameLabel(team.game); // 'Free Fire' or 'PUBG Mobile'
+    final int contribUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
 
-    final structuredRoomId = 'team_contrib|$weekKey|$teamUuid|$gameKey|$userUuid';
+    final structuredRoomId =
+        'team_contrib|$weekKey|$teamUuid|$gameKey|$userUuid|$contribUtcMs';
     final structuredMeta =
-        '[team_id:$teamUuid|raw_team_id:$rawTeamId|user_id:$userUuid|raw_user_id:$cleanUid|game_name:$gameKey|week_key:$weekKey]';
+        '[team_id:$teamUuid|raw_team_id:$rawTeamId|user_id:$userUuid|raw_user_id:$cleanUid|game_name:$gameKey|week_key:$weekKey|contrib_utc_ms:$contribUtcMs]';
 
     // 1. Deduct from Personal Wallet & record exact (team_id, user_id, game_name) contribution in history
     await CoinWalletService.updateCoins(
@@ -1738,7 +1873,8 @@ class TeamService {
         'game_name': gameKey,
         'week_key': weekKey,
         'amount': amount,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'created_at': DateTime.fromMillisecondsSinceEpoch(contribUtcMs, isUtc: true)
+            .toIso8601String(),
       });
     } catch (_) {}
 
@@ -1940,7 +2076,62 @@ class TeamService {
 
     if (allUserLookupIds.isEmpty) return resultByTeam;
 
+    // 0. Check public.reward_claims to determine if any team has already completed a delivered
+    //    weekly reward cycle in this weekKey. Any contribution made at or before the team's
+    //    delivered reward timestamp is reset to 0 so new rounds/weeks start cleanly from 0.
+    final Map<String, bool> teamHasDeliveredReset = {};
+    final Map<String, int> teamResetCutoffMs = {};
+    try {
+      final List<Map<String, dynamic>> mergedClaims = [];
+      final Set<String> seenClaimKeys = {};
+      for (final c in SupabaseService.cachedRewardClaims) {
+        final k = ((c['id'] ?? c['claim_code']) ?? '').toString().trim();
+        if (k.isNotEmpty && seenClaimKeys.add(k)) {
+          mergedClaims.add(c);
+        }
+      }
+      try {
+        final dbClaims = await SupabaseService.client
+            .from('reward_claims')
+            .select()
+            .order('created_at', ascending: false)
+            .limit(500);
+        for (final raw in dbClaims) {
+          final c = Map<String, dynamic>.from(raw);
+          final k = ((c['id'] ?? c['claim_code']) ?? '').toString().trim();
+          if (k.isNotEmpty) {
+            if (seenClaimKeys.add(k)) {
+              mergedClaims.add(c);
+            } else {
+              final idx = mergedClaims.indexWhere(
+                (x) => ((x['id'] ?? x['claim_code']) ?? '').toString().trim() == k,
+              );
+              if (idx >= 0) mergedClaims[idx] = c;
+            }
+          }
+        }
+      } catch (_) {}
+
+      for (final t in teams) {
+        final rawTid = t.id.trim().toLowerCase();
+        if (rawTid.isEmpty) continue;
+        final tidUuid = SupabaseService.toUuid(t.id.trim()).toLowerCase();
+        final resetInfo = evaluateTeamRewardCycleReset(
+          team: t,
+          allClaims: mergedClaims,
+          weekKey: weekKey,
+        );
+        final bool hasReset = resetInfo['hasCompletedDeliveredRound'] == true;
+        final int cutoffMs = (resetInfo['cutoffUtcMs'] as int?) ?? 0;
+        teamHasDeliveredReset[rawTid] = hasReset;
+        teamHasDeliveredReset[tidUuid] = hasReset;
+        teamResetCutoffMs[rawTid] = cutoffMs;
+        teamResetCutoffMs[tidUuid] = cutoffMs;
+      }
+    } catch (_) {}
+
     // 1. Query dedicated team_coin_contributions table if provisioned in Supabase
+    bool dbQuerySucceeded = false;
     try {
       final contribRows = await SupabaseService.client
           .from('team_coin_contributions')
@@ -1960,6 +2151,16 @@ class TeamService {
         final rUserUuid = SupabaseService.toUuid(rUserId).toLowerCase();
         final rGameKey = normalizeGameKey(rGameRaw);
 
+        // If this team completed a delivered reward cycle, only count contributions strictly AFTER cutoffMs
+        final bool hasReset = teamHasDeliveredReset[rTeamUuid] == true;
+        final int cutoffMs = teamResetCutoffMs[rTeamUuid] ?? 0;
+        if (hasReset) {
+          final int rowMs = parseUtcMs(r['created_at']);
+          if (rowMs <= 0 || rowMs <= cutoffMs) {
+            continue;
+          }
+        }
+
         final tupleKey = '$rTeamUuid|$rGameKey|$rUserUuid';
         tableSumByExactTuple[tupleKey] = (tableSumByExactTuple[tupleKey] ?? 0) + amount;
       }
@@ -1973,7 +2174,8 @@ class TeamService {
           .inFilter('user_id', allUserLookupIds)
           .eq('type', 'team_weekly_contribution')
           .gte('created_at', weekStart.toIso8601String())
-          .lte('created_at', weekEnd.toIso8601String());
+          .lte('created_at', weekEnd.add(const Duration(hours: 14)).toIso8601String());
+      dbQuerySucceeded = true;
 
       for (final r in txRows) {
         final type = (r['type'] ?? '').toString().trim().toLowerCase();
@@ -1997,9 +2199,10 @@ class TeamService {
         if (extractedGameRaw.isEmpty) extractedGameRaw = null;
 
         String? extractedWeekKey;
+        int? extractedContribUtcMs;
 
         // Parse structured metadata tag:
-        // [team_id:<teamUuid>|raw_team_id:<rawTeamId>|user_id:<userUuid>|raw_user_id:<cleanUid>|game_name:<gameKey>|week_key:<weekKey>]
+        // [team_id:<teamUuid>|raw_team_id:<rawTeamId>|user_id:<userUuid>|raw_user_id:<cleanUid>|game_name:<gameKey>|week_key:<weekKey>|contrib_utc_ms:<ms>]
         final teamTagMatch = RegExp(r'team_id:([^\|\]]+)').firstMatch(desc);
         if (teamTagMatch != null) {
           extractedTeamId = teamTagMatch.group(1)!.trim();
@@ -2016,9 +2219,13 @@ class TeamService {
         if (weekTagMatch != null) {
           extractedWeekKey = weekTagMatch.group(1)!.trim();
         }
+        final msTagMatch = RegExp(r'contrib_utc_ms:(\d+)').firstMatch(desc);
+        if (msTagMatch != null) {
+          extractedContribUtcMs = int.tryParse(msTagMatch.group(1)!.trim());
+        }
 
         // Parse pipe format in room_id / reference_id:
-        // team_contrib|<weekKey>|<teamUuid>|<gameKey>|<userUuid>
+        // team_contrib|<weekKey>|<teamUuid>|<gameKey>|<userUuid>|<contribUtcMs>
         if (ref.startsWith('team_contrib|')) {
           final parts = ref.split('|');
           if (parts.length >= 4) {
@@ -2028,9 +2235,11 @@ class TeamService {
             if (parts.length >= 5 && parts[4].trim().isNotEmpty) {
               extractedUserId ??= parts[4].trim();
             }
+            if (parts.length >= 6 && parts[5].trim().isNotEmpty) {
+              extractedContribUtcMs ??= int.tryParse(parts[5].trim());
+            }
           }
         } else if (ref.startsWith('weekly_team_contrib_')) {
-          // Format: weekly_team_contrib_<YYYY-MM-DD>_<teamId>
           final prefix = 'weekly_team_contrib_${weekKey}_';
           if (ref.startsWith(prefix)) {
             final tid = ref.substring(prefix.length).trim();
@@ -2041,10 +2250,6 @@ class TeamService {
           }
         }
 
-        // If the DB row was saved with minimal schema (description only, before [team_id:...] tag),
-        // extract the exact target team name & game from:
-        // 'to Team "<TeamName>" for <Game> Weekly Competition'
-        // and resolve it ONLY if it uniquely matches a single team that this user belongs to.
         if ((extractedTeamId == null || extractedTeamId.isEmpty) &&
             extractedUserId != null &&
             extractedUserId.isNotEmpty) {
@@ -2083,7 +2288,6 @@ class TeamService {
           }
         }
 
-        // If extractedTeamId is known but extractedGameRaw was not on the row, resolve from that team
         if (extractedTeamId != null &&
             extractedTeamId.isNotEmpty &&
             (extractedGameRaw == null || extractedGameRaw.isEmpty)) {
@@ -2098,8 +2302,6 @@ class TeamService {
           }
         }
 
-        // Strictly require explicit team_id, user_id, and game_name ('free_fire' or 'pubg_mobile')
-        // so records for one team never leak into any other team.
         if (extractedTeamId == null ||
             extractedTeamId.isEmpty ||
             extractedUserId == null ||
@@ -2119,6 +2321,21 @@ class TeamService {
         final txUserUuid = SupabaseService.toUuid(extractedUserId).toLowerCase();
         final txGameKey = normalizeGameKey(extractedGameRaw);
 
+        // If this team has already completed a delivered reward cycle in this week,
+        // reset any pre-delivery contribution to 0 and only count new contributions made strictly AFTER cutoffMs.
+        final bool hasReset = teamHasDeliveredReset[txTeamUuid] == true;
+        final int cutoffMs = teamResetCutoffMs[txTeamUuid] ?? 0;
+        if (hasReset) {
+          if (extractedContribUtcMs != null) {
+            if (extractedContribUtcMs <= cutoffMs) {
+              continue;
+            }
+          } else {
+            // Legacy contribution row before contrib_utc_ms tag was added belongs to the already-delivered cycle
+            continue;
+          }
+        }
+
         final tupleKey = '$txTeamUuid|$txGameKey|$txUserUuid';
         txSumByExactTuple[tupleKey] = (txSumByExactTuple[tupleKey] ?? 0) + contributedAmount;
       }
@@ -2130,7 +2347,6 @@ class TeamService {
     SharedPreferences? prefs;
     try {
       prefs = await SharedPreferences.getInstance();
-      // Proactively purge any legacy global per-user keys if still present on device
       final oldKeys = prefs
           .getKeys()
           .where((k) =>
@@ -2149,6 +2365,8 @@ class TeamService {
       final teamGameKey = normalizeGameKey(t.game);
       final memberMap = resultByTeam[teamUuid];
       if (memberMap == null) continue;
+
+      final bool hasReset = teamHasDeliveredReset[teamUuid] == true;
 
       final roster = <String>[];
       if (t.leaderId.trim().isNotEmpty) roster.add(t.leaderId.trim());
@@ -2171,14 +2389,18 @@ class TeamService {
         if (forDate == null && prefs != null) {
           final exactLocalKey =
               'weekly_exact_contrib_v3_${weekKey}_${teamUuid}_${teamGameKey}_$userUuid';
-          final localVal = prefs.getInt(exactLocalKey) ?? 0;
-          if (resolvedCoins > 0) {
-            // Keep local cache in sync with verified DB sum
-            if (localVal != resolvedCoins) {
-              await prefs.setInt(exactLocalKey, resolvedCoins);
+          if (hasReset || dbQuerySucceeded) {
+            // Keep local cache strictly in sync with DB post-reset value (including 0 after reward delivery!)
+            await prefs.setInt(exactLocalKey, resolvedCoins);
+          } else {
+            final localVal = prefs.getInt(exactLocalKey) ?? 0;
+            if (resolvedCoins > 0) {
+              if (localVal != resolvedCoins) {
+                await prefs.setInt(exactLocalKey, resolvedCoins);
+              }
+            } else if (localVal > 0) {
+              resolvedCoins = localVal;
             }
-          } else if (localVal > 0) {
-            resolvedCoins = localVal;
           }
         }
 

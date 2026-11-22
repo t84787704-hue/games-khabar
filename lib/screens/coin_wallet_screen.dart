@@ -206,18 +206,48 @@ class CoinWalletScreen extends StatefulWidget {
     final String normalizedGameKey = normalizeGameKeyForClaim(gameName);
     final String consistentRewardLabel = getConsistentRewardLabelForShare(gameName, equalPkrShare);
 
-    // Check public.reward_claims in Supabase for existing claim for (user_id, week_key, game_name)
+    // Check public.reward_claims in Supabase for existing active claim in current round
     Map<String, dynamic>? existingClaim;
     try {
+      final allTeamClaimsRows = await SupabaseService.client
+          .from('reward_claims')
+          .select()
+          .eq('game_name', normalizedGameKey);
+      final List<Map<String, dynamic>> mergedClaims = [
+        ...SupabaseService.cachedRewardClaims,
+        ...allTeamClaimsRows.map((e) => Map<String, dynamic>.from(e)),
+      ];
+      final resetInfo = TeamService.evaluateTeamRewardCycleReset(
+        team: activeTeam,
+        allClaims: mergedClaims,
+        weekKey: weekKey,
+      );
+      final bool hasResetRound = (resetInfo['hasReset'] as bool?) ?? false;
+      final int cutoffUtcMs = (resetInfo['cutoffUtcMs'] as num?)?.toInt() ?? 0;
+
       final rows = await SupabaseService.client
           .from('reward_claims')
           .select()
           .eq('user_id', cleanUid)
-          .eq('week_key', weekKey)
           .eq('game_name', normalizedGameKey)
-          .limit(1);
-      if (rows.isNotEmpty) {
-        existingClaim = Map<String, dynamic>.from(rows.first);
+          .order('created_at', ascending: false);
+      for (final rawRow in rows) {
+        final row = Map<String, dynamic>.from(rawRow);
+        final String rWeek = (row['week_key'] ?? '').toString().trim();
+        if (rWeek != weekKey && !rWeek.startsWith('${weekKey}_r')) continue;
+        final String rStatus = (row['status'] ?? 'pending').toString().trim().toLowerCase();
+        if (rStatus == 'rejected') continue;
+        if (hasResetRound && cutoffUtcMs > 0 && rStatus == 'delivered') {
+          final int claimTs = TeamService.parseUtcMs(
+            row['delivered_at'] ?? row['updated_at'] ?? row['created_at'],
+          );
+          if (claimTs <= 0 || claimTs <= cutoffUtcMs) {
+            // Delivered claim belongs to a completed/reset round; do not block new round
+            continue;
+          }
+        }
+        existingClaim = row;
+        break;
       }
     } catch (_) {}
 
@@ -539,19 +569,31 @@ class CoinWalletScreen extends StatefulWidget {
     final String fullTeamName = '${activeTeam.name} [${activeTeam.tag}]';
 
     try {
-      final dupCheck = await SupabaseService.client
+      final dupRows = await SupabaseService.client
           .from('reward_claims')
-          .select('id, claim_code')
+          .select('id, claim_code, status, week_key')
           .eq('user_id', cleanUid)
-          .eq('week_key', weekKey)
           .eq('game_name', normalizedGameKey)
-          .limit(1);
-      if (dupCheck.isNotEmpty) {
+          .order('created_at', ascending: false);
+      Map<String, dynamic>? activePendingDup;
+      bool hasSameWeekRow = false;
+      for (final rawDup in dupRows) {
+        final d = Map<String, dynamic>.from(rawDup);
+        final String dWeek = (d['week_key'] ?? '').toString().trim();
+        if (dWeek == weekKey) hasSameWeekRow = true;
+        if (dWeek != weekKey && !dWeek.startsWith('${weekKey}_r')) continue;
+        final String dStatus = (d['status'] ?? 'pending').toString().trim().toLowerCase();
+        if (dStatus == 'pending' || dStatus == 'processing') {
+          activePendingDup = d;
+          break;
+        }
+      }
+      if (activePendingDup != null) {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'You already have an active claim (${dupCheck.first['claim_code']}) for $gameName in week $weekKey.',
+              'You already have an active pending claim (${activePendingDup['claim_code']}) for $gameName in week $weekKey.',
             ),
             backgroundColor: const Color(0xFFFFB800),
             behavior: SnackBarBehavior.floating,
@@ -560,12 +602,16 @@ class CoinWalletScreen extends StatefulWidget {
         return;
       }
 
+      final String effectiveWeekKey = hasSameWeekRow
+          ? '${weekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(9)}'
+          : weekKey;
+
       final Map<String, dynamic> newClaimPayload = {
         'claim_code': claimCode,
         'user_id': cleanUid,
         'team_id': activeTeam.id,
         'team_name': fullTeamName,
-        'week_key': weekKey,
+        'week_key': effectiveWeekKey,
         'game_name': normalizedGameKey,
         'player_uid': playerGameUid,
         'player_ign': playerGameIgn,
@@ -573,10 +619,27 @@ class CoinWalletScreen extends StatefulWidget {
         'share_amount_pkr': equalPkrShare,
         'status': 'pending',
       };
-      final insertedRows = await SupabaseService.client
-          .from('reward_claims')
-          .insert(newClaimPayload)
-          .select();
+      List<dynamic> insertedRows = const [];
+      try {
+        insertedRows = await SupabaseService.client
+            .from('reward_claims')
+            .insert(newClaimPayload)
+            .select();
+      } catch (insertErr) {
+        final errStr = insertErr.toString().toLowerCase();
+        if (errStr.contains('23505') || errStr.contains('duplicate') || errStr.contains('unique')) {
+          final fallbackPayload = {
+            ...newClaimPayload,
+            'week_key': '${weekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+          };
+          insertedRows = await SupabaseService.client
+              .from('reward_claims')
+              .insert(fallbackPayload)
+              .select();
+        } else {
+          rethrow;
+        }
+      }
       if (insertedRows.isNotEmpty) {
         SupabaseService.upsertCachedRewardClaim(
           Map<String, dynamic>.from(insertedRows.first),
@@ -1324,18 +1387,47 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     final String normalizedGameKey = _normalizeGameNameForClaim(gameName);
     final String consistentRewardLabel = _getConsistentRewardLabel(gameName, equalPkrShare);
 
-    // Check public.reward_claims in Supabase for existing claim for (user_id, week_key, game_name)
+    // Check public.reward_claims in Supabase for existing active claim in current round
     Map<String, dynamic>? existingClaim;
     try {
+      final allTeamClaimsRows = await SupabaseService.client
+          .from('reward_claims')
+          .select()
+          .eq('game_name', normalizedGameKey);
+      final List<Map<String, dynamic>> mergedClaims = [
+        ...SupabaseService.cachedRewardClaims,
+        ...allTeamClaimsRows.map((e) => Map<String, dynamic>.from(e)),
+      ];
+      final resetInfo = TeamService.evaluateTeamRewardCycleReset(
+        team: activeTeam,
+        allClaims: mergedClaims,
+        weekKey: weekKey,
+      );
+      final bool hasResetRound = (resetInfo['hasReset'] as bool?) ?? false;
+      final int cutoffUtcMs = (resetInfo['cutoffUtcMs'] as num?)?.toInt() ?? 0;
+
       final rows = await SupabaseService.client
           .from('reward_claims')
           .select()
           .eq('user_id', _userId)
-          .eq('week_key', weekKey)
           .eq('game_name', normalizedGameKey)
-          .limit(1);
-      if (rows.isNotEmpty) {
-        existingClaim = Map<String, dynamic>.from(rows.first);
+          .order('created_at', ascending: false);
+      for (final rawRow in rows) {
+        final row = Map<String, dynamic>.from(rawRow);
+        final String rWeek = (row['week_key'] ?? '').toString().trim();
+        if (rWeek != weekKey && !rWeek.startsWith('${weekKey}_r')) continue;
+        final String rStatus = (row['status'] ?? 'pending').toString().trim().toLowerCase();
+        if (rStatus == 'rejected') continue;
+        if (hasResetRound && cutoffUtcMs > 0 && rStatus == 'delivered') {
+          final int claimTs = TeamService.parseUtcMs(
+            row['delivered_at'] ?? row['updated_at'] ?? row['created_at'],
+          );
+          if (claimTs <= 0 || claimTs <= cutoffUtcMs) {
+            continue;
+          }
+        }
+        existingClaim = row;
+        break;
       }
     } catch (_) {}
 
@@ -1740,20 +1832,32 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     final String fullTeamName = '${activeTeam.name} [${activeTeam.tag}]';
 
     try {
-      // Double-check duplicate right before inserting into public.reward_claims
-      final dupCheck = await SupabaseService.client
+      // Double-check duplicate pending claim right before inserting into public.reward_claims
+      final dupRows = await SupabaseService.client
           .from('reward_claims')
-          .select('id, claim_code')
+          .select('id, claim_code, status, week_key')
           .eq('user_id', _userId)
-          .eq('week_key', weekKey)
           .eq('game_name', normalizedGameKey)
-          .limit(1);
-      if (dupCheck.isNotEmpty) {
+          .order('created_at', ascending: false);
+      Map<String, dynamic>? activePendingDup;
+      bool hasSameWeekRow = false;
+      for (final rawDup in dupRows) {
+        final d = Map<String, dynamic>.from(rawDup);
+        final String dWeek = (d['week_key'] ?? '').toString().trim();
+        if (dWeek == weekKey) hasSameWeekRow = true;
+        if (dWeek != weekKey && !dWeek.startsWith('${weekKey}_r')) continue;
+        final String dStatus = (d['status'] ?? 'pending').toString().trim().toLowerCase();
+        if (dStatus == 'pending' || dStatus == 'processing') {
+          activePendingDup = d;
+          break;
+        }
+      }
+      if (activePendingDup != null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'You already have an active claim (${dupCheck.first['claim_code']}) for $gameName in week $weekKey.',
+              'You already have an active pending claim (${activePendingDup['claim_code']}) for $gameName in week $weekKey.',
             ),
             backgroundColor: const Color(0xFFFFB800),
             behavior: SnackBarBehavior.floating,
@@ -1762,13 +1866,17 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         return;
       }
 
+      final String effectiveWeekKey = hasSameWeekRow
+          ? '${weekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(9)}'
+          : weekKey;
+
       // 1. Insert into public.reward_claims
       final Map<String, dynamic> newClaimPayload = {
         'claim_code': claimCode,
         'user_id': _userId,
         'team_id': activeTeam.id,
         'team_name': fullTeamName,
-        'week_key': weekKey,
+        'week_key': effectiveWeekKey,
         'game_name': normalizedGameKey,
         'player_uid': playerGameUid,
         'player_ign': playerGameIgn,
@@ -1776,10 +1884,27 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         'share_amount_pkr': equalPkrShare,
         'status': 'pending',
       };
-      final insertedRows = await SupabaseService.client
-          .from('reward_claims')
-          .insert(newClaimPayload)
-          .select();
+      List<dynamic> insertedRows = const [];
+      try {
+        insertedRows = await SupabaseService.client
+            .from('reward_claims')
+            .insert(newClaimPayload)
+            .select();
+      } catch (insertErr) {
+        final errStr = insertErr.toString().toLowerCase();
+        if (errStr.contains('23505') || errStr.contains('duplicate') || errStr.contains('unique')) {
+          final fallbackPayload = {
+            ...newClaimPayload,
+            'week_key': '${weekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+          };
+          insertedRows = await SupabaseService.client
+              .from('reward_claims')
+              .insert(fallbackPayload)
+              .select();
+        } else {
+          rethrow;
+        }
+      }
       if (insertedRows.isNotEmpty) {
         SupabaseService.upsertCachedRewardClaim(
           Map<String, dynamic>.from(insertedRows.first),
@@ -2536,9 +2661,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 final int mEarned = memberCoins[mClean] ??
                     memberCoins[mLower] ??
                     memberCoins[mUuidLower] ??
-                    primaryTeam.memberWeeklyCoins[mClean] ??
-                    primaryTeam.memberWeeklyCoins[mLower] ??
-                    0;
+                    (stats.isNotEmpty
+                        ? 0
+                        : (primaryTeam.memberWeeklyCoins[mClean] ??
+                            primaryTeam.memberWeeklyCoins[mLower] ??
+                            0));
                 final String cleanHandle = TeamModel.sanitizePublicHandle(
                   resolvedName,
                   fallback: isLeader ? 'Leader' : 'Gamer',
@@ -2580,9 +2707,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             ? myContributedFromMap
             : breakdownMyContrib;
 
-        final int statsWeeklyCoins =
-            ((stats['weeklyCoins'] ?? stats['totalTeamCoins']) as num?)?.toInt() ??
-                primaryTeam.weeklyCoins;
+        final int statsWeeklyCoins = stats.containsKey('weeklyCoins') ||
+                stats.containsKey('totalTeamCoins')
+            ? (((stats['weeklyCoins'] ?? stats['totalTeamCoins']) as num?)?.toInt() ?? 0)
+            : primaryTeam.weeklyCoins;
         int teamCoins = memberBreakdown.isNotEmpty
             ? (breakdownCoinsSum >= statsWeeklyCoins ? breakdownCoinsSum : statsWeeklyCoins)
             : statsWeeklyCoins;
@@ -3058,6 +3186,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         final String currentWeekKey = TeamService.getWeekCycleKey();
                         final String normalizedTeamGameKey =
                             CoinWalletScreen.normalizeGameKeyForClaim(primaryTeam.game);
+                        final resetInfo = TeamService.evaluateTeamRewardCycleReset(
+                          team: primaryTeam,
+                          allClaims: allClaims,
+                          weekKey: currentWeekKey,
+                        );
+                        final bool hasResetRound = (resetInfo['hasReset'] as bool?) ?? false;
+                        final int cutoffUtcMs = (resetInfo['cutoffUtcMs'] as num?)?.toInt() ?? 0;
 
                         Map<String, dynamic>? findMemberClaim(String memberId) {
                           final cleanM = memberId.trim();
@@ -3080,8 +3215,20 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                             final String status =
                                 (c['status'] ?? 'pending').toString().toLowerCase();
                             if (status == 'rejected') continue;
-                            if ((cWeek.isEmpty || cWeek == currentWeekKey) &&
+                            final bool weekMatches = cWeek.isEmpty ||
+                                cWeek == currentWeekKey ||
+                                cWeek.startsWith('${currentWeekKey}_r');
+                            if (weekMatches &&
                                 (cGame.isEmpty || cGame == normalizedTeamGameKey)) {
+                              if (hasResetRound && cutoffUtcMs > 0 && status == 'delivered') {
+                                final int claimTs = TeamService.parseUtcMs(
+                                  c['delivered_at'] ?? c['updated_at'] ?? c['created_at'],
+                                );
+                                if (claimTs <= 0 || claimTs <= cutoffUtcMs) {
+                                  // Completed & delivered round has been reset to 0
+                                  continue;
+                                }
+                              }
                               return c;
                             }
                           }

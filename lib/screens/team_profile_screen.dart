@@ -2833,6 +2833,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     final String currentWeekKey = TeamService.getWeekCycleKey();
                     final String normalizedTeamGameKey =
                         CoinWalletScreen.normalizeGameKeyForClaim(team.game);
+                    final resetInfo = TeamService.evaluateTeamRewardCycleReset(
+                      team: team,
+                      allClaims: allClaims,
+                      weekKey: currentWeekKey,
+                    );
+                    final bool hasResetRound = (resetInfo['hasReset'] as bool?) ?? false;
+                    final int cutoffUtcMs = (resetInfo['cutoffUtcMs'] as num?)?.toInt() ?? 0;
+
                     final String shareRewardLabel =
                         CoinWalletScreen.getConsistentRewardLabelForShare(
                       team.game,
@@ -2867,8 +2875,20 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         final String status =
                             (c['status'] ?? 'pending').toString().toLowerCase();
                         if (status == 'rejected') continue;
-                        if ((cWeek.isEmpty || cWeek == currentWeekKey) &&
+                        final bool weekMatches = cWeek.isEmpty ||
+                            cWeek == currentWeekKey ||
+                            cWeek.startsWith('${currentWeekKey}_r');
+                        if (weekMatches &&
                             (cGame.isEmpty || cGame == normalizedTeamGameKey)) {
+                          if (hasResetRound && cutoffUtcMs > 0 && status == 'delivered') {
+                            final int claimTs = TeamService.parseUtcMs(
+                              c['delivered_at'] ?? c['updated_at'] ?? c['created_at'],
+                            );
+                            if (claimTs <= 0 || claimTs <= cutoffUtcMs) {
+                              // Completed & delivered round has been reset to 0
+                              continue;
+                            }
+                          }
                           return c;
                         }
                       }

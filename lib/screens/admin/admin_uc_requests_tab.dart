@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/notification_service.dart';
 import '../../services/supabase_service.dart';
+import '../../services/team_service.dart';
 import '../../services/theme_service.dart';
 
 class AdminUcRequestsTab extends StatefulWidget {
@@ -605,6 +606,9 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
       }
 
       _upsertLocalClaim({...claim, ...updatePayload});
+      if (isDelivering) {
+        TeamService().invalidateWeeklyCaches();
+      }
 
       if (userId.isNotEmpty) {
         try {

@@ -311,7 +311,7 @@ class CoinWalletService extends ChangeNotifier {
         'title': title ?? description,
         'description': description,
         'balance_after': newCoins,
-        'created_at': now.toIso8601String(),
+        'created_at': now.toUtc().toIso8601String(),
       };
       if (roomId != null && roomId.isNotEmpty) {
         txData['room_id'] = roomId;
