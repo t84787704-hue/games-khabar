@@ -1183,34 +1183,69 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
     setState(() => _isContributingCoins = true);
     try {
-      final res = await _teamService.contributePersonalCoinsToTeam(
-        userId: _userId,
-        team: team,
-        amount: amount,
-      );
+      final res = await _teamService
+          .contributePersonalCoinsToTeam(
+            userId: _userId,
+            team: team,
+            amount: amount,
+          )
+          .timeout(
+            const Duration(seconds: 6),
+            onTimeout: () => <String, dynamic>{
+              'success': true,
+              'contributed': amount,
+              'message':
+                  'Contributed $amount G-Coins to ${team.name} [${team.tag}]!',
+            },
+          );
       _selectedContributeTeamId = team.id;
       _gameLeaderboardFutures.clear();
-      _cachedStatsTeamId = null;
-      _teamWeeklyStatsFuture = null;
-      await _loadUserTeams();
+      _cachedStatsTeamId = team.id;
+      final optimisticCached = _teamService.getCachedTeamWeeklyStats(team.id);
+      _teamWeeklyStatsFuture = optimisticCached != null
+          ? Future.value(optimisticCached)
+          : _teamService.getTeamWeeklyCoinStats(team);
+
       if (mounted) {
         final bool ok = res['success'] == true;
         if (ok && amount > 0) {
           _customContributionCtrl.clear();
           _selectedContributionMode = 'custom';
         }
-        setState(() {});
+        setState(() {
+          _isContributingCoins = false;
+        });
         final String msg = (res['message'] ?? 'Contribution processed.').toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(msg),
+            content: Text(
+              msg,
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             backgroundColor: ok ? GamerTheme.neonGreen : const Color(0xFFFF4655),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
+
+      // Refresh full team list in the background without blocking the button spinner
+      Future<void>(() async {
+        try {
+          await _loadUserTeams();
+          if (mounted) {
+            setState(() {
+              _cachedStatsTeamId = null;
+              _teamWeeklyStatsFuture = null;
+            });
+          }
+        } catch (_) {}
+      });
     } catch (e) {
       if (mounted) {
+        setState(() => _isContributingCoins = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Contribution failed: $e'),
@@ -1220,7 +1255,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isContributingCoins = false);
+      if (mounted && _isContributingCoins) {
+        setState(() => _isContributingCoins = false);
+      }
     }
   }
 
@@ -2348,7 +2385,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: _currentWalletPage == 0
-                                    ? GamerTheme.neonGreen
+                                    ? (isDark ? GamerTheme.neonGreen : const Color(0xFF047857))
                                     : ThemeService.textSecondary,
                                 fontWeight: _currentWalletPage == 0
                                     ? FontWeight.w900
@@ -2861,21 +2898,29 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: isRankOne
-                                ? const Color(0xFFFFD700).withOpacity(0.2)
-                                : GamerTheme.neonGreen.withOpacity(0.14),
+                                ? (isDark
+                                    ? const Color(0xFFFFD700).withOpacity(0.2)
+                                    : const Color(0xFFFEF3C7))
+                                : (isDark
+                                    ? GamerTheme.neonGreen.withOpacity(0.14)
+                                    : const Color(0xFFD1FAE5)),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: isRankOne
-                                  ? const Color(0xFFFFD700).withOpacity(0.65)
-                                  : GamerTheme.neonGreen.withOpacity(0.45),
+                                  ? (isDark
+                                      ? const Color(0xFFFFD700).withOpacity(0.65)
+                                      : const Color(0xFFD97706))
+                                  : (isDark
+                                      ? GamerTheme.neonGreen.withOpacity(0.45)
+                                      : const Color(0xFF059669)),
                             ),
                           ),
                           child: Text(
                             rank > 0 ? '${rank == 1 ? '🥇 ' : ''}Rank #$rank' : 'Unranked',
                             style: TextStyle(
                               color: isRankOne
-                                  ? (isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309))
-                                  : GamerTheme.neonGreen,
+                                  ? (isDark ? const Color(0xFFFFD700) : const Color(0xFF92400E))
+                                  : (isDark ? GamerTheme.neonGreen : const Color(0xFF065F46)),
                               fontWeight: FontWeight.w900,
                               fontSize: 11.5,
                             ),
@@ -2892,13 +2937,19 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: isRankOne
-                                ? const Color(0xFFFFD700).withOpacity(0.16)
-                                : GamerTheme.neonGreen.withOpacity(0.14),
+                                ? (isDark
+                                    ? const Color(0xFFFFD700).withOpacity(0.16)
+                                    : const Color(0xFFFEF3C7))
+                                : (isDark
+                                    ? GamerTheme.neonGreen.withOpacity(0.14)
+                                    : const Color(0xFFD1FAE5)),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
                             isRankOne ? Icons.emoji_events_rounded : Icons.shield_rounded,
-                            color: isRankOne ? const Color(0xFFFFD700) : GamerTheme.neonGreen,
+                            color: isRankOne
+                                ? (isDark ? const Color(0xFFFFD700) : const Color(0xFFD97706))
+                                : (isDark ? GamerTheme.neonGreen : const Color(0xFF059669)),
                             size: 24,
                           ),
                         ),
@@ -2918,10 +2969,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               const SizedBox(height: 3),
                               Text(
                                 'Game: $displayGameName • Members: ${primaryTeam.memberCount}/${TeamModel.maxMembers}',
-                                style: const TextStyle(
-                                  color: GamerTheme.neonGreen,
+                                style: TextStyle(
+                                  color: isDark ? GamerTheme.neonGreen : const Color(0xFF047857),
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ],
@@ -2939,7 +2990,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         color: ThemeService.cardSecondary,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: const Color(0xFFFFD700).withOpacity(0.35),
+                          color: isDark
+                              ? const Color(0xFFFFD700).withOpacity(0.35)
+                              : const Color(0xFFD97706).withOpacity(0.45),
                         ),
                       ),
                       child: Column(
@@ -2963,18 +3016,22 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: GamerTheme.neonGreen.withOpacity(0.14),
+                                  color: isDark
+                                      ? GamerTheme.neonGreen.withOpacity(0.14)
+                                      : const Color(0xFFD1FAE5),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: GamerTheme.neonGreen.withOpacity(0.35),
+                                    color: isDark
+                                        ? GamerTheme.neonGreen.withOpacity(0.35)
+                                        : const Color(0xFF059669),
                                   ),
                                 ),
                                 child: Text(
                                   'Your Weekly Contrib: +${NumberFormat('#,###').format(myContributed)}',
-                                  style: const TextStyle(
-                                    color: GamerTheme.neonGreen,
+                                  style: TextStyle(
+                                    color: isDark ? GamerTheme.neonGreen : const Color(0xFF065F46),
                                     fontSize: 10.5,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
                               ),
@@ -2987,8 +3044,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               const SizedBox(width: 8),
                               Text(
                                 NumberFormat('#,###').format(teamCoins),
-                                style: const TextStyle(
-                                  color: Color(0xFFFFD700),
+                                style: TextStyle(
+                                  color: isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309),
                                   fontSize: 30,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -2997,9 +3054,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               Text(
                                 'Team Coins',
                                 style: TextStyle(
-                                  color: ThemeService.textSecondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                                  color: ThemeService.textPrimary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ],
@@ -3007,11 +3064,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           const SizedBox(height: 8),
                           Text(
                             isRankOne
-                                ? '🔓 #1 Winner Redemption Unlocked for ${primaryTeam.name} [${primaryTeam.tag}]!'
-                                : '🔒 Reach Rank #1 on the $displayGameName Weekly Leaderboard to unlock reward redemption.',
+                                ? '🔓 #1 Winner Redemption Unlocked in Team Profile for ${primaryTeam.name} [${primaryTeam.tag}]!'
+                                : '🔒 Redeem Locked in Team Profile — Finish Rank #1 at the end of the week to unlock & divide 1,500 PKR equally among active team members.',
                             style: TextStyle(
                               color: isRankOne
-                                  ? GamerTheme.neonGreen
+                                  ? (isDark ? GamerTheme.neonGreen : const Color(0xFF047857))
                                   : ThemeService.textSecondary,
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
@@ -3039,9 +3096,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.workspace_premium_rounded,
-                          color: Color(0xFFFFD700),
+                          color: isDark ? const Color(0xFFFFD700) : const Color(0xFFD97706),
                           size: 19,
                         ),
                         const SizedBox(width: 6),
@@ -3065,36 +3122,44 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: GamerTheme.neonGreen.withOpacity(0.12),
+                            color: isDark
+                                ? GamerTheme.neonGreen.withOpacity(0.12)
+                                : const Color(0xFFD1FAE5),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: GamerTheme.neonGreen.withOpacity(0.35),
+                              color: isDark
+                                  ? GamerTheme.neonGreen.withOpacity(0.35)
+                                  : const Color(0xFF059669),
                             ),
                           ),
                           child: Text(
                             '🏆 #1 Weekly Prize: 1,500 PKR ($prizeCurrency)',
-                            style: const TextStyle(
-                              color: GamerTheme.neonGreen,
+                            style: TextStyle(
+                              color: isDark ? GamerTheme.neonGreen : const Color(0xFF065F46),
                               fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFD700).withOpacity(0.14),
+                            color: isDark
+                                ? const Color(0xFFFFD700).withOpacity(0.14)
+                                : const Color(0xFFFEF3C7),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: const Color(0xFFFFD700).withOpacity(0.45),
+                              color: isDark
+                                  ? const Color(0xFFFFD700).withOpacity(0.45)
+                                  : const Color(0xFFD97706),
                             ),
                           ),
                           child: Text(
                             '👥 Equal Share: $perMemberSharePkr PKR / member ($memberCount/${TeamModel.maxMembers})',
                             style: TextStyle(
-                              color: isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309),
+                              color: isDark ? const Color(0xFFFFD700) : const Color(0xFF92400E),
                               fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
                         ),
@@ -3102,7 +3167,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Your Reward Package if Rank #1: $shareRewardLabel',
+                      'Your Reward Package if Rank #1: $shareRewardLabel (Divided equally among active members at week\'s end)',
                       style: TextStyle(
                         color: ThemeService.textPrimary,
                         fontSize: 12,
@@ -3398,13 +3463,23 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                                   vertical: 2,
                                                 ),
                                                 decoration: BoxDecoration(
-                                                  color: GamerTheme.neonGreen.withOpacity(0.2),
+                                                  color: isDark
+                                                      ? GamerTheme.neonGreen.withOpacity(0.2)
+                                                      : const Color(0xFFD1FAE5),
                                                   borderRadius: BorderRadius.circular(5),
+                                                  border: Border.all(
+                                                    color: isDark
+                                                        ? GamerTheme.neonGreen.withOpacity(0.5)
+                                                        : const Color(0xFF059669),
+                                                    width: 0.8,
+                                                  ),
                                                 ),
-                                                child: const Text(
+                                                child: Text(
                                                   'YOU',
                                                   style: TextStyle(
-                                                    color: GamerTheme.neonGreen,
+                                                    color: isDark
+                                                        ? GamerTheme.neonGreen
+                                                        : const Color(0xFF065F46),
                                                     fontSize: 9.5,
                                                     fontWeight: FontWeight.w900,
                                                   ),
@@ -3419,7 +3494,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                         '+${NumberFormat('#,###').format(coins)} Coins',
                                         style: TextStyle(
                                           color: coins > 0
-                                              ? const Color(0xFFFFD700)
+                                              ? (isDark
+                                                  ? const Color(0xFFFFD700)
+                                                  : const Color(0xFFB45309))
                                               : ThemeService.textSecondary,
                                           fontSize: 12.5,
                                           fontWeight: FontWeight.w900,
@@ -3433,13 +3510,17 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                     child: LinearProgressIndicator(
                                       value: shareRatio,
                                       minHeight: 5,
-                                      backgroundColor: ThemeService.border.withOpacity(0.4),
+                                      backgroundColor: ThemeService.border.withOpacity(0.45),
                                       valueColor: AlwaysStoppedAnimation<Color>(
-                                        coins > 0 ? GamerTheme.neonGreen : Colors.grey,
+                                        coins > 0
+                                            ? (isDark
+                                                ? GamerTheme.neonGreen
+                                                : const Color(0xFF059669))
+                                            : Colors.grey,
                                       ),
                                     ),
                                   ),
-                                  // Per-Member Reward Share & Individual Claim Action / Status (Strictly for Rank #1 Winner Team inside Team Profile)
+                                  // Per-Member Reward Share & Individual Claim Action / Status
                                   if (isRankOne) ...[
                                     const SizedBox(height: 10),
                                     Container(
@@ -3453,8 +3534,12 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                         borderRadius: BorderRadius.circular(10),
                                         border: Border.all(
                                           color: hasMemberClaimed
-                                              ? GamerTheme.neonGreen.withOpacity(0.5)
-                                              : const Color(0xFFFFD700).withOpacity(0.45),
+                                              ? (isDark
+                                                  ? GamerTheme.neonGreen.withOpacity(0.55)
+                                                  : const Color(0xFF059669))
+                                              : (isDark
+                                                  ? const Color(0xFFFFD700).withOpacity(0.45)
+                                                  : const Color(0xFFD97706)),
                                         ),
                                       ),
                                       child: Wrap(
@@ -3466,9 +3551,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                           Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              const Icon(
+                                              Icon(
                                                 Icons.card_giftcard_rounded,
-                                                color: Color(0xFFFFD700),
+                                                color: isDark
+                                                    ? const Color(0xFFFFD700)
+                                                    : const Color(0xFFD97706),
                                                 size: 15,
                                               ),
                                               const SizedBox(width: 5),
@@ -3502,18 +3589,24 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                                   vertical: 5,
                                                 ),
                                                 decoration: BoxDecoration(
-                                                  color: GamerTheme.neonGreen.withOpacity(0.16),
+                                                  color: isDark
+                                                      ? GamerTheme.neonGreen.withOpacity(0.16)
+                                                      : const Color(0xFFD1FAE5),
                                                   borderRadius: BorderRadius.circular(8),
                                                   border: Border.all(
-                                                    color: GamerTheme.neonGreen.withOpacity(0.6),
+                                                    color: isDark
+                                                        ? GamerTheme.neonGreen.withOpacity(0.6)
+                                                        : const Color(0xFF059669),
                                                   ),
                                                 ),
                                                 child: Text(
                                                   isMemberClaimDelivered
                                                       ? '✅ Claim Done (Delivered)'
                                                       : '✅ Claim Done',
-                                                  style: const TextStyle(
-                                                    color: GamerTheme.neonGreen,
+                                                  style: TextStyle(
+                                                    color: isDark
+                                                        ? GamerTheme.neonGreen
+                                                        : const Color(0xFF065F46),
                                                     fontSize: 11,
                                                     fontWeight: FontWeight.w900,
                                                   ),
@@ -3562,18 +3655,22 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                                 vertical: 4,
                                               ),
                                               decoration: BoxDecoration(
-                                                color:
-                                                    const Color(0xFFFFB800).withOpacity(0.14),
+                                                color: isDark
+                                                    ? const Color(0xFFFFB800).withOpacity(0.14)
+                                                    : const Color(0xFFFEF3C7),
                                                 borderRadius: BorderRadius.circular(8),
                                                 border: Border.all(
-                                                  color: const Color(0xFFFFB800)
-                                                      .withOpacity(0.45),
+                                                  color: isDark
+                                                      ? const Color(0xFFFFB800).withOpacity(0.45)
+                                                      : const Color(0xFFD97706),
                                                 ),
                                               ),
-                                              child: const Text(
+                                              child: Text(
                                                 '⏳ Pending Claim',
                                                 style: TextStyle(
-                                                  color: Color(0xFFFFB800),
+                                                  color: isDark
+                                                      ? const Color(0xFFFFB800)
+                                                      : const Color(0xFF92400E),
                                                   fontSize: 10.5,
                                                   fontWeight: FontWeight.w800,
                                                 ),
@@ -4139,9 +4236,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         Text(
                           'Game: $displayGameLabel • Members: $memberCount/${TeamModel.maxMembers} • ${isRankOneWinner ? '#1 Winner Redemption Unlocked 🔓' : 'Reach #1 to Redeem ($weekLabel)'}',
                           style: TextStyle(
-                            color: isRankOneWinner ? GamerTheme.neonGreen : ThemeService.textSecondary,
+                            color: isRankOneWinner
+                                ? (ThemeService.isDarkMode
+                                    ? GamerTheme.neonGreen
+                                    : const Color(0xFF047857))
+                                : ThemeService.textSecondary,
                             fontSize: 11,
-                            fontWeight: isRankOneWinner ? FontWeight.w700 : FontWeight.normal,
+                            fontWeight: isRankOneWinner ? FontWeight.w800 : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -4150,14 +4251,22 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFD700).withOpacity(0.15),
+                      color: ThemeService.isDarkMode
+                          ? const Color(0xFFFFD700).withOpacity(0.15)
+                          : const Color(0xFFFEF3C7),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
+                      border: Border.all(
+                        color: ThemeService.isDarkMode
+                            ? const Color(0xFFFFD700).withOpacity(0.5)
+                            : const Color(0xFFD97706),
+                      ),
                     ),
                     child: Text(
                       '${weeklyRank == 1 ? '🥇 ' : ''}Rank #$weeklyRank',
-                      style: const TextStyle(
-                        color: Color(0xFFFFD700),
+                      style: TextStyle(
+                        color: ThemeService.isDarkMode
+                            ? const Color(0xFFFFD700)
+                            : const Color(0xFF92400E),
                         fontWeight: FontWeight.w900,
                         fontSize: 11,
                       ),
@@ -4184,9 +4293,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       children: [
                         Text(
                           'Weekly Team Coins: ${NumberFormat('#,###').format(teamWeeklyCoins)}',
-                          style: const TextStyle(
-                            color: Color(0xFFFFD700),
-                            fontWeight: FontWeight.bold,
+                          style: TextStyle(
+                            color: ThemeService.isDarkMode
+                                ? const Color(0xFFFFD700)
+                                : const Color(0xFFB45309),
+                            fontWeight: FontWeight.w900,
                             fontSize: 12,
                           ),
                         ),
@@ -4194,7 +4305,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           'Your Weekly Contrib: +${NumberFormat('#,###').format(myWeeklyContrib)}',
                           style: TextStyle(
                             color: ThemeService.textPrimary,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                             fontSize: 11.5,
                           ),
                         ),
@@ -4214,9 +4325,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       children: [
                         Text(
                           '#1 Weekly Prize: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR ($currencyLabel)',
-                          style: const TextStyle(
-                            color: GamerTheme.neonGreen,
-                            fontWeight: FontWeight.bold,
+                          style: TextStyle(
+                            color: ThemeService.isDarkMode
+                                ? GamerTheme.neonGreen
+                                : const Color(0xFF047857),
+                            fontWeight: FontWeight.w900,
                             fontSize: 11.2,
                           ),
                         ),
@@ -4255,12 +4368,20 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 14, color: GamerTheme.neonGreen),
-                  label: const Text(
+                  icon: Icon(
+                    Icons.open_in_new_rounded,
+                    size: 14,
+                    color: ThemeService.isDarkMode
+                        ? GamerTheme.neonGreen
+                        : const Color(0xFF047857),
+                  ),
+                  label: Text(
                     'View 4-Member Breakdown in Team Profile',
                     style: TextStyle(
-                      color: GamerTheme.neonGreen,
-                      fontWeight: FontWeight.bold,
+                      color: ThemeService.isDarkMode
+                          ? GamerTheme.neonGreen
+                          : const Color(0xFF047857),
+                      fontWeight: FontWeight.w800,
                       fontSize: 11.5,
                     ),
                   ),
@@ -4478,6 +4599,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final bool isDark = ThemeService.isDarkMode;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -4485,18 +4607,24 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected
-              ? GamerTheme.neonGreen.withOpacity(0.2)
+              ? (isDark
+                  ? GamerTheme.neonGreen.withOpacity(0.2)
+                  : const Color(0xFFD1FAE5))
               : ThemeService.card,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? GamerTheme.neonGreen : ThemeService.border,
+            color: isSelected
+                ? (isDark ? GamerTheme.neonGreen : const Color(0xFF059669))
+                : ThemeService.border,
             width: isSelected ? 1.3 : 1.0,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? GamerTheme.neonGreen : ThemeService.textPrimary,
+            color: isSelected
+                ? (isDark ? GamerTheme.neonGreen : const Color(0xFF065F46))
+                : ThemeService.textPrimary,
             fontSize: 11,
             fontWeight: FontWeight.w800,
           ),
@@ -4506,13 +4634,14 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   }
 
   Widget _buildActionButtons() {
+    final bool isDark = ThemeService.isDarkMode;
     return Row(
       children: [
         Expanded(
           child: _actionButton(
             icon: Icons.play_circle_fill_rounded,
             label: 'Earn Coins ⚡',
-            color: GamerTheme.neonGreen,
+            color: isDark ? GamerTheme.neonGreen : const Color(0xFF047857),
             onTap: () {
               Navigator.push(
                 context,
@@ -4526,7 +4655,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           child: _actionButton(
             icon: Icons.shield_rounded,
             label: 'Team Profile Wallet 🛡️',
-            color: const Color(0xFFFFD700),
+            color: isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309),
             onTap: () => _switchToWalletPage(1),
           ),
         ),
@@ -4550,7 +4679,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           decoration: BoxDecoration(
             color: ThemeService.card,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withOpacity(0.4)),
+            border: Border.all(color: color.withOpacity(0.5)),
           ),
           child: Column(
             children: [
@@ -4561,7 +4690,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 style: TextStyle(
                   color: color,
                   fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ],

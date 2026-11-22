@@ -100,56 +100,64 @@ class GameCard extends StatelessWidget {
                   Positioned(
                     top: 8,
                     left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-                      decoration: BoxDecoration(
-                        color: isTournamentAvailable
-                            ? const Color(0xFF00FF88)
-                            : Colors.black.withOpacity(0.70),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
+                    right: 8,
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                        decoration: BoxDecoration(
                           color: isTournamentAvailable
                               ? const Color(0xFF00FF88)
-                              : Colors.white24,
-                          width: 0.8,
-                        ),
-                        boxShadow: isTournamentAvailable
-                            ? [
-                                BoxShadow(
-                                  color: const Color(0xFF00FF88).withOpacity(0.35),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                )
-                              ]
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isTournamentAvailable
-                                ? Icons.emoji_events_rounded
-                                : Icons.schedule_rounded,
-                            size: 11,
+                              : Colors.black.withOpacity(0.78),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
                             color: isTournamentAvailable
-                                ? const Color(0xFF0B0F14)
-                                : Colors.white70,
+                                ? const Color(0xFF00FF88)
+                                : const Color(0xFFFFB800).withOpacity(0.65),
+                            width: 0.9,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            isTournamentAvailable
-                                ? (tournamentCount > 1 ? '$tournamentCount LIVE' : 'AVAILABLE')
-                                : 'SOON',
-                            style: TextStyle(
+                          boxShadow: isTournamentAvailable
+                              ? [
+                                  BoxShadow(
+                                    color: const Color(0xFF00FF88).withOpacity(0.35),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  )
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isTournamentAvailable
+                                  ? Icons.emoji_events_rounded
+                                  : Icons.schedule_rounded,
+                              size: 11,
                               color: isTournamentAvailable
                                   ? const Color(0xFF0B0F14)
-                                  : Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 9.5,
-                              letterSpacing: 0.3,
+                                  : const Color(0xFFFFD700),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                isTournamentAvailable
+                                    ? (tournamentCount > 1 ? '$tournamentCount LIVE' : 'AVAILABLE')
+                                    : 'TOURNAMENT COMING SOON',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isTournamentAvailable
+                                      ? const Color(0xFF0B0F14)
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: isTournamentAvailable ? 9.5 : 8.5,
+                                  letterSpacing: 0.25,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -183,8 +191,12 @@ class GameCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: isTournamentAvailable
-                              ? const Color(0xFF00FF88)
-                              : const Color(0xFFFF9900),
+                              ? (ThemeService.isDarkMode
+                                  ? const Color(0xFF00FF88)
+                                  : const Color(0xFF059669))
+                              : (ThemeService.isDarkMode
+                                  ? const Color(0xFFFF9900)
+                                  : const Color(0xFFD97706)),
                           boxShadow: isTournamentAvailable
                               ? [
                                   BoxShadow(
@@ -204,9 +216,13 @@ class GameCard extends StatelessWidget {
                               : 'Tournament Coming Soon',
                           style: TextStyle(
                             color: isTournamentAvailable
-                                ? const Color(0xFF00FF88)
-                                : const Color(0xFFFFB800),
-                            fontWeight: FontWeight.w700,
+                                ? (ThemeService.isDarkMode
+                                    ? const Color(0xFF00FF88)
+                                    : const Color(0xFF047857))
+                                : (ThemeService.isDarkMode
+                                    ? const Color(0xFFFFB800)
+                                    : const Color(0xFFB45309)),
+                            fontWeight: FontWeight.w800,
                             fontSize: 10.5,
                             letterSpacing: -0.2,
                           ),

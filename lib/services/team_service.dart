@@ -2031,21 +2031,24 @@ class TeamService {
           'Transferred $amount G-Coins from Personal Wallet to Team "${team.name} [${team.tag}]" for $gameDisplay Weekly Competition ($weekLabel) $structuredMeta',
     );
 
-    // 1b. Also persist into team_coin_contributions if that table is provisioned in Supabase
-    try {
-      await SupabaseService.client.from('team_coin_contributions').insert({
-        'team_id': teamUuid,
-        'user_id': userUuid,
-        'member_id': userUuid,
-        'game_name': gameKey,
-        'week_key': weekKey,
-        'amount': amount,
-        'created_at': DateTime.fromMillisecondsSinceEpoch(contribUtcMs, isUtc: true)
-            .toIso8601String(),
-      });
-    } catch (_) {}
+    // 1b. Also persist into team_coin_contributions in the background if that table is provisioned
+    Future<void>(() async {
+      try {
+        await SupabaseService.client.from('team_coin_contributions').insert({
+          'team_id': teamUuid,
+          'user_id': userUuid,
+          'member_id': userUuid,
+          'game_name': gameKey,
+          'week_key': weekKey,
+          'amount': amount,
+          'created_at': DateTime.fromMillisecondsSinceEpoch(contribUtcMs, isUtc: true)
+              .toIso8601String(),
+        });
+      } catch (_) {}
+    });
 
     // 2. Increment local weekly contribution counter strictly scoped to (weekKey, teamUuid, gameKey, userUuid)
+    int newMemberExactTotal = amount;
     try {
       final prefs = await SharedPreferences.getInstance();
       // Remove any legacy cross-team per-user keys so old fallback totals never leak across teams
@@ -2056,24 +2059,93 @@ class TeamService {
       final exactLocalKey =
           'weekly_exact_contrib_v3_${weekKey}_${teamUuid.toLowerCase()}_${gameKey}_${userUuid.toLowerCase()}';
       final currentExact = prefs.getInt(exactLocalKey) ?? 0;
-      await prefs.setInt(exactLocalKey, currentExact + amount);
+      newMemberExactTotal = currentExact + amount;
+      await prefs.setInt(exactLocalKey, newMemberExactTotal);
     } catch (e) {
       debugPrint('[TeamService] contributePersonalCoinsToTeam prefs note: $e');
     }
 
-    // 3. Invalidate and refresh weekly leaderboard & team stats cache
-    _teamWeeklyStatsCache.clear();
+    // 3. Optimistically update cached weekly stats for this team so UI updates instantaneously
+    final prevCached = getCachedTeamWeeklyStats(team.id);
     _gameLeaderboardCache.clear();
-    final updatedStats = await getTeamWeeklyCoinStats(team);
-    await getUserTeams(cleanUid);
+    int optimisticTeamWeeklyCoins =
+        ((prevCached?['weeklyCoins'] as num?)?.toInt() ?? team.weeklyCoins) + amount;
+    int optimisticWeeklyRank =
+        (prevCached?['weeklyRank'] as num?)?.toInt() ?? (team.weeklyRank > 0 ? team.weeklyRank : 1);
+
+    final Map<String, int> optimisticMemberCoins = {};
+    if (prevCached?['memberCoins'] is Map) {
+      (prevCached!['memberCoins'] as Map).forEach((k, v) {
+        optimisticMemberCoins[k.toString()] = (v as num?)?.toInt() ?? 0;
+      });
+    } else {
+      team.memberWeeklyCoins.forEach((k, v) {
+        optimisticMemberCoins[k] = v;
+      });
+    }
+    final cleanLower = cleanUid.toLowerCase();
+    final userUuidLower = userUuid.toLowerCase();
+    optimisticMemberCoins[cleanUid] = newMemberExactTotal;
+    optimisticMemberCoins[cleanLower] = newMemberExactTotal;
+    optimisticMemberCoins[userUuidLower] = newMemberExactTotal;
+
+    final List<Map<String, dynamic>> optimisticBreakdown = [];
+    if (prevCached?['memberBreakdown'] is List) {
+      for (final item in (prevCached!['memberBreakdown'] as List)) {
+        if (item is Map) {
+          final m = Map<String, dynamic>.from(item);
+          final mUid = (m['userId'] ?? '').toString().trim();
+          final mLower = mUid.toLowerCase();
+          final mUuid = mUid.isNotEmpty ? SupabaseService.toUuid(mUid).toLowerCase() : '';
+          if (mUid == cleanUid || mLower == cleanLower || mUuid == userUuidLower) {
+            m['weeklyCoins'] = newMemberExactTotal;
+            m['coins'] = newMemberExactTotal;
+          }
+          optimisticBreakdown.add(m);
+        }
+      }
+    }
+
+    if (optimisticBreakdown.isNotEmpty) {
+      final sumBreakdown = optimisticBreakdown.fold<int>(
+        0,
+        (sum, m) => sum + ((m['weeklyCoins'] as num?)?.toInt() ?? 0),
+      );
+      if (sumBreakdown > 0) {
+        optimisticTeamWeeklyCoins = sumBreakdown;
+      }
+    }
+
+    final optimisticStats = <String, dynamic>{
+      if (prevCached != null) ...prevCached,
+      'teamId': team.id,
+      'teamName': team.name,
+      'teamTag': team.tag,
+      'game': gameDisplay,
+      'weeklyCoins': optimisticTeamWeeklyCoins,
+      'weeklyRank': optimisticWeeklyRank,
+      'memberCoins': optimisticMemberCoins,
+      if (optimisticBreakdown.isNotEmpty) 'memberBreakdown': optimisticBreakdown,
+      'weekRangeLabel': weekLabel,
+      'weekKey': weekKey,
+    };
+    _storeTeamWeeklyStatsCache(team.id, optimisticStats);
+
+    // 4. Refresh exact leaderboard & user teams in the background without blocking button completion
+    Future<void>(() async {
+      try {
+        await getTeamWeeklyCoinStats(team);
+        await getUserTeams(cleanUid);
+      } catch (_) {}
+    });
 
     return {
       'success': true,
       'contributed': amount,
       'keptInWallet': false,
       'newPersonalBalance': (wallet.coins - amount).clamp(0, 999999999),
-      'teamWeeklyCoins': (updatedStats['weeklyCoins'] as num?)?.toInt() ?? amount,
-      'weeklyRank': (updatedStats['weeklyRank'] as num?)?.toInt() ?? 1,
+      'teamWeeklyCoins': optimisticTeamWeeklyCoins,
+      'weeklyRank': optimisticWeeklyRank,
       'message':
           'Successfully contributed $amount G-Coins from your Personal Wallet to ${team.name} [${team.tag}] ($gameDisplay)!',
     };
