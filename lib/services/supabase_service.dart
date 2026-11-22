@@ -1010,6 +1010,7 @@ class SupabaseService {
   static List<Map<String, dynamic>> _cachedActiveMatches = [];
   static List<Map<String, dynamic>> _cachedTournaments = [];
   static List<Map<String, dynamic>> _cachedProofHistory = [];
+  static List<Map<String, dynamic>> _cachedRewardClaims = [];
 
   static List<Map<String, dynamic>> get cachedUsers => _cachedUsers;
   static List<Map<String, dynamic>> get cachedPosts => _cachedPosts;
@@ -1020,6 +1021,133 @@ class SupabaseService {
   static List<Map<String, dynamic>> get cachedActiveMatches => _cachedActiveMatches;
   static List<Map<String, dynamic>> get cachedTournaments => _cachedTournaments;
   static List<Map<String, dynamic>> get cachedProofHistory => _cachedProofHistory;
+  static List<Map<String, dynamic>> get cachedRewardClaims => _cachedRewardClaims;
+
+  static void upsertCachedRewardClaim(Map<String, dynamic> claim) {
+    final String id = (claim['id'] ?? '').toString().trim();
+    final String code = (claim['claim_code'] ?? '').toString().trim();
+    if (id.isEmpty && code.isEmpty) return;
+
+    final updated = List<Map<String, dynamic>>.from(_cachedRewardClaims);
+    final int idx = updated.indexWhere((c) {
+      final cId = (c['id'] ?? '').toString().trim();
+      final cCode = (c['claim_code'] ?? '').toString().trim();
+      if (id.isNotEmpty && cId.isNotEmpty) return cId == id;
+      if (code.isNotEmpty && cCode.isNotEmpty) return cCode == code;
+      return false;
+    });
+
+    if (idx >= 0) {
+      updated[idx] = {...updated[idx], ...claim};
+    } else {
+      updated.insert(0, Map<String, dynamic>.from(claim));
+    }
+    _cachedRewardClaims = updated;
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchRewardClaims({
+    String? userId,
+    int limit = 5000,
+  }) async {
+    final String cleanUid = (userId ?? '').trim();
+    try {
+      if (cleanUid.isNotEmpty) {
+        final res = await client
+            .from('reward_claims')
+            .select()
+            .eq('user_id', cleanUid)
+            .order('created_at', ascending: false)
+            .limit(limit)
+            .timeout(const Duration(seconds: 8));
+        if (res is List) {
+          final list = res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          for (final item in list) {
+            upsertCachedRewardClaim(item);
+          }
+          if (list.isNotEmpty) return list;
+          return _cachedRewardClaims
+              .where((c) => (c['user_id'] ?? '').toString().trim() == cleanUid)
+              .toList();
+        }
+      } else {
+        // Admin query across 1,000 to 100,000+ users:
+        // 1. Fetch all pending claims first so historical delivered claims never push out pending claims
+        // 2. Fetch latest claims of all statuses and merge deduplicated by id / claim_code
+        final results = await Future.wait<dynamic>([
+          client
+              .from('reward_claims')
+              .select()
+              .eq('status', 'pending')
+              .order('created_at', ascending: false)
+              .limit(limit)
+              .timeout(const Duration(seconds: 8))
+              .catchError((_) => <dynamic>[]),
+          client
+              .from('reward_claims')
+              .select()
+              .order('created_at', ascending: false)
+              .limit(limit)
+              .timeout(const Duration(seconds: 8)),
+        ]);
+
+        final Map<String, Map<String, dynamic>> mergedMap = {};
+        for (final batch in results) {
+          if (batch is List) {
+            for (final raw in batch) {
+              if (raw is Map) {
+                final item = Map<String, dynamic>.from(raw);
+                final id = (item['id'] ?? '').toString().trim();
+                final code = (item['claim_code'] ?? '').toString().trim();
+                final key = id.isNotEmpty ? id : code;
+                if (key.isNotEmpty) {
+                  mergedMap[key] = item;
+                }
+              }
+            }
+          }
+        }
+
+        final list = mergedMap.values.toList();
+        list.sort((a, b) {
+          final aTime = (a['created_at'] ?? '').toString();
+          final bTime = (b['created_at'] ?? '').toString();
+          return bTime.compareTo(aTime);
+        });
+
+        if (list.isNotEmpty || _cachedRewardClaims.isEmpty) {
+          _cachedRewardClaims = list;
+        }
+        return _cachedRewardClaims;
+      }
+    } catch (e) {
+      debugPrint('[SupabaseService] fetchRewardClaims primary error: $e');
+      try {
+        final fallback = await query(
+          'reward_claims',
+          filters: cleanUid.isNotEmpty ? {'user_id': 'eq.$cleanUid'} : null,
+          order: 'created_at.desc',
+          limit: limit,
+        );
+        if (fallback.isNotEmpty) {
+          if (cleanUid.isEmpty) {
+            _cachedRewardClaims = fallback;
+          } else {
+            for (final item in fallback) {
+              upsertCachedRewardClaim(item);
+            }
+          }
+          return fallback;
+        }
+      } catch (_) {}
+    }
+
+    if (cleanUid.isNotEmpty) {
+      return _cachedRewardClaims
+          .where((c) => (c['user_id'] ?? '').toString().trim() == cleanUid)
+          .toList();
+    }
+    return _cachedRewardClaims;
+  }
 
   // ============================================================
   // BULLETPROOF REALTIME STREAMS (REST-FIRST + SAFE PERIODIC REFRESH)
@@ -1350,6 +1478,31 @@ class SupabaseService {
         } catch (e) {
           debugPrint('getRealtimeRoomMessages error: $e');
         }
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    }
+
+    return stream().asBroadcastStream();
+  }
+
+  static Stream<List<Map<String, dynamic>>> getRealtimeRewardClaims({String? userId}) {
+    final String cleanUid = (userId ?? '').trim();
+    Stream<List<Map<String, dynamic>>> stream() async* {
+      if (_cachedRewardClaims.isNotEmpty) {
+        if (cleanUid.isEmpty) {
+          yield _cachedRewardClaims;
+        } else {
+          final cachedUserClaims = _cachedRewardClaims
+              .where((c) => (c['user_id'] ?? '').toString().trim() == cleanUid)
+              .toList();
+          if (cachedUserClaims.isNotEmpty) {
+            yield cachedUserClaims;
+          }
+        }
+      }
+      while (true) {
+        final list = await fetchRewardClaims(userId: cleanUid.isEmpty ? null : cleanUid);
+        yield list;
         await Future.delayed(const Duration(seconds: 3));
       }
     }

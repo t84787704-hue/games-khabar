@@ -30,7 +30,60 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
   final Set<String> _uploadingProofIds = {};
   final Map<String, String> _uploadedProofUrls = {};
   final Map<String, Uint8List> _uploadedProofBytes = {};
-  int _refreshSeed = 0;
+  late Stream<List<Map<String, dynamic>>> _claimsStream;
+  List<Map<String, dynamic>> _lastValidClaims = [];
+  bool _isRefreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastValidClaims = List<Map<String, dynamic>>.from(SupabaseService.cachedRewardClaims);
+    _claimsStream = SupabaseService.getRealtimeRewardClaims();
+    _refreshClaimsNow();
+  }
+
+  Future<void> _refreshClaimsNow() async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+    try {
+      final fresh = await SupabaseService.fetchRewardClaims();
+      if (mounted && (fresh.isNotEmpty || _lastValidClaims.isEmpty)) {
+        setState(() {
+          _lastValidClaims = List<Map<String, dynamic>>.from(fresh);
+        });
+      }
+    } catch (_) {
+    } finally {
+      _isRefreshing = false;
+    }
+  }
+
+  String _normalizeStatus(dynamic raw) {
+    final s = (raw ?? 'pending').toString().trim().toLowerCase();
+    if (s.isEmpty || s == 'null' || s.contains('pending') || s == 'processing' || s == 'waiting') {
+      return 'pending';
+    }
+    if (s.contains('deliver') || s == 'approved' || s == 'completed' || s == 'sent') {
+      return 'delivered';
+    }
+    if (s.contains('reject') || s == 'declined' || s == 'cancelled') {
+      return 'rejected';
+    }
+    return s;
+  }
+
+  void _upsertLocalClaim(Map<String, dynamic> updatedClaim) {
+    SupabaseService.upsertCachedRewardClaim(updatedClaim);
+    final String targetKey = _claimKey(updatedClaim);
+    final nextList = List<Map<String, dynamic>>.from(_lastValidClaims);
+    final idx = nextList.indexWhere((c) => _claimKey(c) == targetKey);
+    if (idx >= 0) {
+      nextList[idx] = {...nextList[idx], ...updatedClaim};
+    } else {
+      nextList.insert(0, Map<String, dynamic>.from(updatedClaim));
+    }
+    _lastValidClaims = nextList;
+  }
 
   @override
   void dispose() {
@@ -129,6 +182,7 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
         setState(() {
           _uploadedProofUrls[key] = publicUrl;
           _uploadedProofBytes[key] = bytes;
+          _upsertLocalClaim({...claim, 'proof_image_url': publicUrl});
         });
       }
       setDialogState?.call(() {});
@@ -550,6 +604,8 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
             .eq('claim_code', claimCode);
       }
 
+      _upsertLocalClaim({...claim, ...updatePayload});
+
       if (userId.isNotEmpty) {
         try {
           await NotificationService().createNotification(
@@ -566,7 +622,8 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
       }
 
       if (mounted) {
-        setState(() => _refreshSeed++);
+        setState(() {});
+        _refreshClaimsNow();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -598,156 +655,191 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          color: ThemeService.bg,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _claimsStream,
+      builder: (context, snapshot) {
+        if (snapshot.hasData &&
+            (snapshot.data!.isNotEmpty || _lastValidClaims.isEmpty)) {
+          _lastValidClaims = List<Map<String, dynamic>>.from(snapshot.data!);
+        }
+
+        final list = _lastValidClaims.isNotEmpty
+            ? _lastValidClaims
+            : (snapshot.data ?? const <Map<String, dynamic>>[]);
+
+        int pendingCount = 0;
+        int deliveredCount = 0;
+        int rejectedCount = 0;
+        for (final c in list) {
+          final st = _normalizeStatus(c['status']);
+          if (st == 'delivered') {
+            deliveredCount++;
+          } else if (st == 'rejected') {
+            rejectedCount++;
+          } else {
+            pendingCount++;
+          }
+        }
+
+        final filtered = list.where((claim) {
+          final status = _normalizeStatus(claim['status']);
+          if (_statusFilter != 'all' && status != _statusFilter) {
+            return false;
+          }
+          if (_searchQuery.isNotEmpty) {
+            final code = (claim['claim_code'] ?? '').toString().toLowerCase();
+            final uid = (claim['player_uid'] ?? '').toString().toLowerCase();
+            final ign = (claim['player_ign'] ?? '').toString().toLowerCase();
+            final team = (claim['team_name'] ?? '').toString().toLowerCase();
+            final game = (claim['game_name'] ?? '').toString().toLowerCase();
+            final week = (claim['week_key'] ?? '').toString().toLowerCase();
+            final matches = code.contains(_searchQuery) ||
+                uid.contains(_searchQuery) ||
+                ign.contains(_searchQuery) ||
+                team.contains(_searchQuery) ||
+                game.contains(_searchQuery) ||
+                week.contains(_searchQuery);
+            if (!matches) return false;
+          }
+          return true;
+        }).toList();
+
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              color: ThemeService.bg,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
-                      style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Search by Claim Code, Player UID, IGN, Team, or Week...',
-                        hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5),
-                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFFFFD700), size: 18),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: Icon(Icons.clear, color: ThemeService.textSecondary, size: 16),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              )
-                            : null,
-                        filled: true,
-                        fillColor: ThemeService.card,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: ThemeService.border),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'Search by Claim Code, Player UID, IGN, Team, or Week...',
+                            hintStyle: TextStyle(color: ThemeService.textSecondary, fontSize: 12.5),
+                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFFFFD700), size: 18),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: Icon(Icons.clear, color: ThemeService.textSecondary, size: 16),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _searchQuery = '');
+                                    },
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: ThemeService.card,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: ThemeService.border),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Refresh Claims',
+                        onPressed: _refreshClaimsNow,
+                        icon: const Icon(Icons.refresh_rounded, color: Color(0xFF00FF88)),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: 'Refresh Claims',
-                    onPressed: () => setState(() => _refreshSeed++),
-                    icon: const Icon(Icons.refresh_rounded, color: Color(0xFF00FF88)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildFilterChip('⏳ Pending', 'pending', const Color(0xFFFFB800)),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('✅ Delivered', 'delivered', const Color(0xFF00FF88)),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('❌ Rejected', 'rejected', const Color(0xFFFF4655)),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('📋 All Claims', 'all', const Color(0xFF38BDF8)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: StreamBuilder<List<Map<String, dynamic>>>(
-            key: ValueKey(_refreshSeed),
-            stream: SupabaseService.client
-                .from('reward_claims')
-                .stream(primaryKey: ['id'])
-                .order('created_at', ascending: false),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFFFD700)),
-                );
-              }
-
-              final list = snapshot.data ?? [];
-              final filtered = list.where((claim) {
-                final status = (claim['status'] ?? 'pending').toString().toLowerCase();
-                if (_statusFilter != 'all' && status != _statusFilter) {
-                  return false;
-                }
-                if (_searchQuery.isNotEmpty) {
-                  final code = (claim['claim_code'] ?? '').toString().toLowerCase();
-                  final uid = (claim['player_uid'] ?? '').toString().toLowerCase();
-                  final ign = (claim['player_ign'] ?? '').toString().toLowerCase();
-                  final team = (claim['team_name'] ?? '').toString().toLowerCase();
-                  final game = (claim['game_name'] ?? '').toString().toLowerCase();
-                  final week = (claim['week_key'] ?? '').toString().toLowerCase();
-                  final matches = code.contains(_searchQuery) ||
-                      uid.contains(_searchQuery) ||
-                      ign.contains(_searchQuery) ||
-                      team.contains(_searchQuery) ||
-                      game.contains(_searchQuery) ||
-                      week.contains(_searchQuery);
-                  if (!matches) return false;
-                }
-                return true;
-              }).toList();
-
-              if (filtered.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            color: ThemeService.card,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: ThemeService.border),
-                          ),
-                          child: const Icon(
-                            Icons.card_giftcard_rounded,
-                            color: Color(0xFFFFD700),
-                            size: 40,
-                          ),
+                        _buildFilterChip(
+                          '⏳ Pending ($pendingCount)',
+                          'pending',
+                          const Color(0xFFFFB800),
                         ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'No ${_statusFilter == 'all' ? '' : _statusFilter} reward claims found',
-                          style: TextStyle(
-                            color: ThemeService.textPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          '✅ Delivered ($deliveredCount)',
+                          'delivered',
+                          const Color(0xFF00FF88),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          '❌ Rejected ($rejectedCount)',
+                          'rejected',
+                          const Color(0xFFFF4655),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          '📋 All Claims (${list.length})',
+                          'all',
+                          const Color(0xFF38BDF8),
                         ),
                       ],
                     ),
                   ),
-                );
-              }
-
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                itemCount: filtered.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final claim = filtered[index];
-                  return _buildClaimCard(claim);
-                },
-              );
-            },
-          ),
-        ),
-      ],
+                ],
+              ),
+            ),
+            Expanded(
+              child: (snapshot.connectionState == ConnectionState.waiting &&
+                      _lastValidClaims.isEmpty &&
+                      !snapshot.hasData)
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Color(0xFFFFD700)),
+                    )
+                  : filtered.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(18),
+                                  decoration: BoxDecoration(
+                                    color: ThemeService.card,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: ThemeService.border),
+                                  ),
+                                  child: const Icon(
+                                    Icons.card_giftcard_rounded,
+                                    color: Color(0xFFFFD700),
+                                    size: 40,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  'No ${_statusFilter == 'all' ? '' : _statusFilter} reward claims found',
+                                  style: TextStyle(
+                                    color: ThemeService.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            if (index < 0 || index >= filtered.length) {
+                              return const SizedBox.shrink();
+                            }
+                            final claim = filtered[index];
+                            return _buildClaimCard(claim);
+                          },
+                        ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -785,7 +877,7 @@ class AdminUcRequestsTabState extends State<AdminUcRequestsTab> {
     final String weekKey = (claim['week_key'] ?? '').toString();
     final String rewardLabel = (claim['reward_label'] ?? '').toString();
     final int shareAmountPkr = (claim['share_amount_pkr'] as num?)?.toInt() ?? 375;
-    final String status = (claim['status'] ?? 'pending').toString().toLowerCase();
+    final String status = _normalizeStatus(claim['status']);
     final String adminNote = (claim['admin_note'] ?? '').toString();
     final String proofUrl =
         _uploadedProofUrls[key] ?? (claim['proof_image_url'] ?? '').toString().trim();

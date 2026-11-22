@@ -20,6 +20,29 @@ class AdminUcHistoryTab extends StatefulWidget {
 class AdminUcHistoryTabState extends State<AdminUcHistoryTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  late Stream<List<Map<String, dynamic>>> _claimsStream;
+  List<Map<String, dynamic>> _lastValidClaims = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _lastValidClaims = List<Map<String, dynamic>>.from(SupabaseService.cachedRewardClaims);
+    _claimsStream = SupabaseService.getRealtimeRewardClaims();
+  }
+
+  String _normalizeStatus(dynamic raw) {
+    final s = (raw ?? 'pending').toString().trim().toLowerCase();
+    if (s.isEmpty || s == 'null' || s.contains('pending') || s == 'processing' || s == 'waiting') {
+      return 'pending';
+    }
+    if (s.contains('deliver') || s == 'approved' || s == 'completed' || s == 'sent') {
+      return 'delivered';
+    }
+    if (s.contains('reject') || s == 'declined' || s == 'cancelled') {
+      return 'rejected';
+    }
+    return s;
+  }
 
   @override
   void dispose() {
@@ -136,18 +159,24 @@ class AdminUcHistoryTabState extends State<AdminUcHistoryTab> {
         ),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client
-                .from('reward_claims')
-                .stream(primaryKey: ['id'])
-                .order('created_at', ascending: false),
+            stream: _claimsStream,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+              if (snapshot.hasData &&
+                  (snapshot.data!.isNotEmpty || _lastValidClaims.isEmpty)) {
+                _lastValidClaims = List<Map<String, dynamic>>.from(snapshot.data!);
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  _lastValidClaims.isEmpty &&
+                  !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFF38BDF8)));
               }
 
-              final list = snapshot.data ?? [];
+              final list = _lastValidClaims.isNotEmpty
+                  ? _lastValidClaims
+                  : (snapshot.data ?? const <Map<String, dynamic>>[]);
               final historyList = list.where((req) {
-                final status = (req['status'] ?? 'pending').toString().toLowerCase();
+                final status = _normalizeStatus(req['status']);
                 if (status == 'pending') return false;
 
                 if (_searchQuery.isNotEmpty) {

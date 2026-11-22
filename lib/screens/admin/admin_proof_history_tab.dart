@@ -48,17 +48,13 @@ class AdminProofHistoryTabState extends State<AdminProofHistoryTab> {
         ),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: SupabaseService.client
-                .from('proof_history')
-                .stream(primaryKey: ['id'])
-                .order('created_at', ascending: false),
+            stream: SupabaseService.getRealtimeProofHistory(),
             builder: (context, snapshot) {
-              // 👇 یہاں تبدیلی کی ہے: صرف لوڈنگ چیک کریں
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
               }
 
-              final logs = snapshot.data ?? [];
+              final logs = snapshot.data ?? SupabaseService.cachedProofHistory;
               final filtered = logs.where((log) {
                 if (_searchQuery.isEmpty) return true;
                 final title = (log['title'] ?? log['username'] ?? log['proof_type'] ?? '').toString().toLowerCase();

@@ -42,6 +42,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   final CoinWalletService _walletService = CoinWalletService();
   final TeamService _teamService = TeamService();
   final TextEditingController _customContributionCtrl = TextEditingController();
+  final PageController _walletPageController = PageController();
+  int _currentWalletPage = 0;
 
   bool _isClaimingDaily = false;
   bool _isWatchingAd = false;
@@ -93,12 +95,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         : const Stream<List<TeamModel>>.empty();
     _transactionsStream = _walletService.transactionsStream(uid);
     _rewardClaimsStream = uid.isNotEmpty
-        ? SupabaseService.client
-            .from('reward_claims')
-            .stream(primaryKey: ['id'])
-            .eq('user_id', uid)
-            .order('created_at', ascending: false)
-            .asBroadcastStream()
+        ? SupabaseService.getRealtimeRewardClaims(userId: uid)
         : Stream.value(const <Map<String, dynamic>>[]).asBroadcastStream();
   }
 
@@ -220,9 +217,23 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     }
   }
 
+  void _switchToWalletPage(int index) {
+    if (_currentWalletPage != index) {
+      setState(() => _currentWalletPage = index);
+    }
+    if (_walletPageController.hasClients) {
+      _walletPageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _customContributionCtrl.dispose();
+    _walletPageController.dispose();
     super.dispose();
   }
 
@@ -957,7 +968,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       }
 
       // 1. Insert into public.reward_claims
-      await SupabaseService.client.from('reward_claims').insert({
+      final Map<String, dynamic> newClaimPayload = {
         'claim_code': claimCode,
         'user_id': _userId,
         'team_id': activeTeam.id,
@@ -969,7 +980,21 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         'reward_label': consistentRewardLabel,
         'share_amount_pkr': equalPkrShare,
         'status': 'pending',
-      });
+      };
+      final insertedRows = await SupabaseService.client
+          .from('reward_claims')
+          .insert(newClaimPayload)
+          .select();
+      if (insertedRows.isNotEmpty) {
+        SupabaseService.upsertCachedRewardClaim(
+          Map<String, dynamic>.from(insertedRows.first),
+        );
+      } else {
+        SupabaseService.upsertCachedRewardClaim({
+          ...newClaimPayload,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
 
       // 2. Also record in coin_transactions for wallet ledger consistency
       try {
@@ -1245,58 +1270,1044 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         (teamsSnap.hasData && _userId.isNotEmpty) ? teamsSnap.data! : _userTeams;
                     final bool isTeamsLoading = _isLoadingTeams;
 
-                    return SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 1. Prominent Personal Coin Wallet Card
-                          _buildBalanceCard(
-                            wallet,
-                            isDark,
-                            activeTeams,
-                            isLoadingTeams: isTeamsLoading,
+                    return Column(
+                      children: [
+                        _buildWalletPageSwitcher(
+                          isDark: isDark,
+                          activeTeams: activeTeams,
+                        ),
+                        Expanded(
+                          child: PageView(
+                            controller: _walletPageController,
+                            onPageChanged: (index) {
+                              if (_currentWalletPage != index) {
+                                setState(() => _currentWalletPage = index);
+                              }
+                            },
+                            children: [
+                              // Page 1: Personal Wallet
+                              RefreshIndicator(
+                                color: GamerTheme.neonGreen,
+                                backgroundColor: ThemeService.card,
+                                onRefresh: _refreshWallet,
+                                child: SingleChildScrollView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // 1. Prominent Personal Coin Wallet Card
+                                      _buildBalanceCard(
+                                        wallet,
+                                        isDark,
+                                        activeTeams,
+                                        isLoadingTeams: isTeamsLoading,
+                                      ),
+                                      const SizedBox(height: 14),
+
+                                      // 2. Team Membership Status + Manual Personal-to-Team Contribution Card
+                                      _buildTeamMembershipStatusBanner(
+                                        wallet,
+                                        activeTeams,
+                                        isLoadingTeams: isTeamsLoading,
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      _buildActionButtons(),
+                                      const SizedBox(height: 20),
+
+                                      // 3. Clear "Earn Coins" Cards (+25 Ad Watch, +50 Daily Bonus -> Personal Wallet First)
+                                      _buildEarnCoinsSection(),
+                                      const SizedBox(height: 20),
+
+                                      // 4. "Redeem Game Currency" (Free Fire & PUBG • #1 Team Winner-Only Redemption)
+                                      _buildRedeemGameCurrencySection(
+                                        wallet,
+                                        activeTeams,
+                                        isLoadingTeams: isTeamsLoading,
+                                      ),
+                                      const SizedBox(height: 20),
+
+                                      // 5. Coins & Redemption History List
+                                      _buildRecentTransactions(),
+                                      const SizedBox(height: 20),
+
+                                      // 6. Transparent Play Policy & Privacy Disclosure Card
+                                      _buildPlayPolicyDisclosureCard(),
+                                      const SizedBox(height: 100),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              // Page 2: Your Team Profile Wallet
+                              RefreshIndicator(
+                                color: GamerTheme.neonGreen,
+                                backgroundColor: ThemeService.card,
+                                onRefresh: _refreshWallet,
+                                child: _buildTeamProfileWalletPage(
+                                  wallet,
+                                  isDark,
+                                  activeTeams,
+                                  isLoadingTeams: isTeamsLoading,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 14),
-
-                          // 2. Team Membership Status + Manual Personal-to-Team Contribution Card
-                          _buildTeamMembershipStatusBanner(
-                            wallet,
-                            activeTeams,
-                            isLoadingTeams: isTeamsLoading,
-                          ),
-                          const SizedBox(height: 16),
-
-                          _buildActionButtons(),
-                          const SizedBox(height: 20),
-
-                          // 3. Clear "Earn Coins" Cards (+25 Ad Watch, +50 Daily Bonus -> Personal Wallet First)
-                          _buildEarnCoinsSection(),
-                          const SizedBox(height: 20),
-
-                          // 4. "Redeem Game Currency" (Free Fire & PUBG • #1 Team Winner-Only Redemption)
-                          _buildRedeemGameCurrencySection(
-                            wallet,
-                            activeTeams,
-                            isLoadingTeams: isTeamsLoading,
-                          ),
-                          const SizedBox(height: 20),
-
-                          // 5. Coins & Redemption History List
-                          _buildRecentTransactions(),
-                          const SizedBox(height: 20),
-
-                          // 6. Transparent Play Policy & Privacy Disclosure Card
-                          _buildPlayPolicyDisclosureCard(),
-                          const SizedBox(height: 100),
-                        ],
-                      ),
+                        ),
+                      ],
                     );
                   },
                 );
               },
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWalletPageSwitcher({
+    required bool isDark,
+    required List<TeamModel> activeTeams,
+  }) {
+    final TeamModel? primaryTeam = activeTeams.isNotEmpty
+        ? activeTeams.firstWhere(
+            (t) => t.id == _selectedContributeTeamId,
+            orElse: () => activeTeams.first,
+          )
+        : null;
+    final String teamSubtitle = primaryTeam != null
+        ? '${primaryTeam.name} [${primaryTeam.tag}]'
+        : 'Join / View Team';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      decoration: BoxDecoration(
+        color: ThemeService.appBarBg,
+        border: Border(
+          bottom: BorderSide(
+            color: ThemeService.border.withOpacity(0.6),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: ThemeService.cardSecondary,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: ThemeService.border,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _switchToWalletPage(0),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: _currentWalletPage == 0
+                            ? GamerTheme.neonGreen.withOpacity(isDark ? 0.2 : 0.16)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _currentWalletPage == 0
+                              ? GamerTheme.neonGreen.withOpacity(0.65)
+                              : Colors.transparent,
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('🪙', style: TextStyle(fontSize: 14)),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Personal Wallet',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _currentWalletPage == 0
+                                    ? GamerTheme.neonGreen
+                                    : ThemeService.textSecondary,
+                                fontWeight: _currentWalletPage == 0
+                                    ? FontWeight.w900
+                                    : FontWeight.w600,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _switchToWalletPage(1),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: _currentWalletPage == 1
+                            ? const Color(0xFFFFD700).withOpacity(isDark ? 0.2 : 0.18)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _currentWalletPage == 1
+                              ? const Color(0xFFFFD700).withOpacity(0.75)
+                              : Colors.transparent,
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('🛡️', style: TextStyle(fontSize: 14)),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Team Profile Wallet',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _currentWalletPage == 1
+                                    ? (isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309))
+                                    : ThemeService.textSecondary,
+                                fontWeight: _currentWalletPage == 1
+                                    ? FontWeight.w900
+                                    : FontWeight.w600,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: _currentWalletPage == 0 ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: _currentWalletPage == 0
+                      ? GamerTheme.neonGreen
+                      : ThemeService.textSecondary.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(width: 6),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: _currentWalletPage == 1 ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: _currentWalletPage == 1
+                      ? const Color(0xFFFFD700)
+                      : ThemeService.textSecondary.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => _switchToWalletPage(_currentWalletPage == 0 ? 1 : 0),
+                child: Text(
+                  _currentWalletPage == 0
+                      ? 'Swipe left for Team Wallet ($teamSubtitle) →'
+                      : '← Swipe right for Personal Wallet',
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTeamProfileWalletPage(
+    CoinWallet wallet,
+    bool isDark,
+    List<TeamModel> activeTeams, {
+    required bool isLoadingTeams,
+  }) {
+    if (isLoadingTeams && activeTeams.isEmpty) {
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: _buildTeamLoadingSkeletonCard(),
+      );
+    }
+
+    if (activeTeams.isEmpty) {
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: ThemeService.card,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFFFFB800).withOpacity(0.45),
+              width: 1.3,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFB800).withOpacity(0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.shield_outlined,
+                  color: Color(0xFFFFB800),
+                  size: 34,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'No Active Team Joined Yet',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Your Personal G-Coins (${NumberFormat('#,###').format(wallet.coins)}) are safely stored in your Personal Wallet.\n\nJoin or create a 4-member team for Free Fire or PUBG Mobile to activate your Team Profile Wallet, contribute coins to your team\'s weekly score, and compete for the #1 Weekly 1,500 PKR Prize!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: ThemeService.textSecondary,
+                  fontSize: 12.5,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const TeamsScreen()),
+                    );
+                    _loadUserTeams();
+                  },
+                  icon: const Icon(Icons.group_add_rounded, size: 18),
+                  label: const Text(
+                    'Join or Create a 4-Member Team 🛡️',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFB800),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextButton.icon(
+                onPressed: () => _switchToWalletPage(0),
+                icon: const Icon(Icons.arrow_back_rounded, size: 16, color: GamerTheme.neonGreen),
+                label: const Text(
+                  'Back to Personal Wallet',
+                  style: TextStyle(
+                    color: GamerTheme.neonGreen,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final bool hasSelectedTeam = _selectedContributeTeamId != null &&
+        activeTeams.any((t) => t.id == _selectedContributeTeamId);
+    final TeamModel primaryTeam = hasSelectedTeam
+        ? activeTeams.firstWhere((t) => t.id == _selectedContributeTeamId)
+        : activeTeams.first;
+    _selectedContributeTeamId = primaryTeam.id;
+
+    final int memberCount = primaryTeam.memberCount.clamp(1, 4);
+    final int perMemberSharePkr = (1500 / memberCount).round();
+    final bool isFreeFire = TeamService.matchesGameName(primaryTeam.game, 'Free Fire');
+    final String displayGameName =
+        TeamService.normalizeCompetitiveGameName(primaryTeam.game);
+    final String prizeCurrency = isFreeFire ? 'Free Fire Diamonds' : 'PUBG Mobile UC';
+    final String shareRewardLabel =
+        _getConsistentRewardLabel(displayGameName, perMemberSharePkr);
+    final Map<String, dynamic>? cachedStats =
+        _teamService.getCachedTeamWeeklyStats(primaryTeam.id);
+
+    return FutureBuilder<Map<String, dynamic>>(
+      initialData: cachedStats,
+      future: _getOrCreateTeamStatsFuture(primaryTeam),
+      builder: (context, snap) {
+        final stats = snap.data ?? cachedStats ?? {};
+        final int teamCoins = (stats['totalTeamCoins'] as int?) ?? 0;
+        final int rank = (stats['rank'] as int?) ?? 0;
+        final bool isRankOne = (stats['isRankOne'] as bool?) ?? false;
+        final Map<String, int> memberCoins =
+            (stats['memberCoins'] as Map<String, int>?) ?? {};
+        final int myContributed = memberCoins[_userId] ?? 0;
+
+        final List<Map<String, dynamic>> rawBreakdown =
+            ((stats['memberBreakdown'] as List?) ?? const [])
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+
+        // Fallback to primaryTeam.members if memberBreakdown is not populated yet
+        final List<Map<String, dynamic>> memberBreakdown = rawBreakdown.isNotEmpty
+            ? rawBreakdown
+            : primaryTeam.members
+                .map((m) => <String, dynamic>{
+                      'userId': m.userId,
+                      'username': m.username.isNotEmpty ? m.username : 'Player',
+                      'role': m.role,
+                      'coins': memberCoins[m.userId] ?? 0,
+                    })
+                .toList();
+
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Multi-team selector if user is in more than 1 team
+              if (activeTeams.length > 1) ...[
+                Text(
+                  'SWITCH YOUR JOINED TEAM (${activeTeams.length}):',
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: activeTeams.map((teamItem) {
+                    final bool isSelected = teamItem.id == primaryTeam.id;
+                    final String teamGameLabel =
+                        TeamService.normalizeCompetitiveGameName(teamItem.game);
+                    return InkWell(
+                      onTap: () {
+                        if (teamItem.id == primaryTeam.id) return;
+                        setState(() {
+                          _selectedContributeTeamId = teamItem.id;
+                          _cachedStatsTeamId = teamItem.id;
+                          final cached =
+                              _teamService.getCachedTeamWeeklyStats(teamItem.id);
+                          _teamWeeklyStatsFuture = cached != null
+                              ? Future.value(cached)
+                              : _teamService.getTeamWeeklyCoinStats(teamItem);
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFFFFD700).withOpacity(0.18)
+                              : ThemeService.card,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFFFFD700)
+                                : ThemeService.border,
+                            width: isSelected ? 1.4 : 1,
+                          ),
+                        ),
+                        child: Text(
+                          '🛡️ ${teamItem.name} [${teamItem.tag}] • $teamGameLabel',
+                          style: TextStyle(
+                            color: isSelected
+                                ? (isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309))
+                                : ThemeService.textPrimary,
+                            fontSize: 11.5,
+                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // 1. Main Team Profile Wallet Hero Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: isDark ? null : ThemeService.card,
+                  gradient: isDark
+                      ? const LinearGradient(
+                          colors: [Color(0xFF1F1C2C), Color(0xFF121726)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isRankOne
+                        ? const Color(0xFFFFD700).withOpacity(0.75)
+                        : GamerTheme.neonGreen.withOpacity(0.45),
+                    width: 1.4,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isRankOne ? const Color(0xFFFFD700) : GamerTheme.neonGreen)
+                          .withOpacity(0.12),
+                      blurRadius: 18,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('🛡️', style: TextStyle(fontSize: 15)),
+                            const SizedBox(width: 6),
+                            Text(
+                              'YOUR TEAM PROFILE WALLET',
+                              style: TextStyle(
+                                color: ThemeService.textSecondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isRankOne
+                                ? const Color(0xFFFFD700).withOpacity(0.2)
+                                : GamerTheme.neonGreen.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isRankOne
+                                  ? const Color(0xFFFFD700).withOpacity(0.65)
+                                  : GamerTheme.neonGreen.withOpacity(0.45),
+                            ),
+                          ),
+                          child: Text(
+                            rank > 0 ? '🥇 Rank #$rank' : 'Unranked',
+                            style: TextStyle(
+                              color: isRankOne
+                                  ? (isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309))
+                                  : GamerTheme.neonGreen,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Team Name & Tag
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isRankOne
+                                ? const Color(0xFFFFD700).withOpacity(0.16)
+                                : GamerTheme.neonGreen.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            isRankOne ? Icons.emoji_events_rounded : Icons.shield_rounded,
+                            color: isRankOne ? const Color(0xFFFFD700) : GamerTheme.neonGreen,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${primaryTeam.name} [${primaryTeam.tag}]',
+                                style: TextStyle(
+                                  color: ThemeService.textPrimary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Game: $displayGameName • Members: ${primaryTeam.memberCount}/4',
+                                style: const TextStyle(
+                                  color: GamerTheme.neonGreen,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Weekly Team Coins Big Display
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: ThemeService.cardSecondary,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFFFFD700).withOpacity(0.35),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'WEEKLY TEAM COINS ($displayGameName)',
+                                style: TextStyle(
+                                  color: ThemeService.textSecondary,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.7,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: GamerTheme.neonGreen.withOpacity(0.14),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Your Weekly Contrib: +${NumberFormat('#,###').format(myContributed)}',
+                                  style: const TextStyle(
+                                    color: GamerTheme.neonGreen,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Text('🪙', style: TextStyle(fontSize: 28)),
+                              const SizedBox(width: 8),
+                              Text(
+                                NumberFormat('#,###').format(teamCoins),
+                                style: const TextStyle(
+                                  color: Color(0xFFFFD700),
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Team Coins',
+                                style: TextStyle(
+                                  color: ThemeService.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            isRankOne
+                                ? '🔓 #1 Winner Redemption Unlocked for ${primaryTeam.name} [${primaryTeam.tag}]!'
+                                : '🔒 Reach Rank #1 on the $displayGameName Weekly Leaderboard to unlock reward redemption.',
+                            style: TextStyle(
+                              color: isRankOne
+                                  ? GamerTheme.neonGreen
+                                  : ThemeService.textSecondary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // 2. Weekly Prize Pool & Equal Share Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: ThemeService.card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.workspace_premium_rounded,
+                          color: Color(0xFFFFD700),
+                          size: 19,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Weekly #1 Team Prize & Equal Member Share',
+                          style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: GamerTheme.neonGreen.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: GamerTheme.neonGreen.withOpacity(0.35),
+                            ),
+                          ),
+                          child: Text(
+                            '🏆 #1 Weekly Prize: 1,500 PKR ($prizeCurrency)',
+                            style: const TextStyle(
+                              color: GamerTheme.neonGreen,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFD700).withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFFFFD700).withOpacity(0.45),
+                            ),
+                          ),
+                          child: Text(
+                            '👥 Equal Share: $perMemberSharePkr PKR / member ($memberCount/${primaryTeam.maxMembers})',
+                            style: TextStyle(
+                              color: isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Your Reward Package if Rank #1: $shareRewardLabel',
+                      style: TextStyle(
+                        color: ThemeService.textPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Weekly Cycle: ${TeamService.getWeekRangeLabel()} • Key: ${TeamService.getCurrentWeekKey()}',
+                      style: TextStyle(
+                        color: ThemeService.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // 3. 4-Member Weekly Contribution Breakdown Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: ThemeService.card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.groups_rounded,
+                              color: GamerTheme.neonGreen,
+                              size: 19,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '4-Member Weekly Contribution Breakdown',
+                              style: TextStyle(
+                                color: ThemeService.textPrimary,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '${memberBreakdown.length}/4',
+                          style: TextStyle(
+                            color: ThemeService.textSecondary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ...memberBreakdown.map((m) {
+                      final String mUid = (m['userId'] ?? '').toString();
+                      final String rawUsername = (m['username'] ?? 'Player').toString();
+                      final String handle =
+                          rawUsername.startsWith('@') ? rawUsername : '@$rawUsername';
+                      final String role = (m['role'] ?? 'member').toString();
+                      final int coins = (m['coins'] as int?) ?? (memberCoins[mUid] ?? 0);
+                      final bool isCurrentUser = mUid.isNotEmpty && mUid == _userId;
+                      final double shareRatio =
+                          teamCoins > 0 ? (coins / teamCoins).clamp(0.0, 1.0) : 0.0;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(
+                          color: isCurrentUser
+                              ? GamerTheme.neonGreen.withOpacity(0.08)
+                              : ThemeService.cardSecondary,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isCurrentUser
+                                ? GamerTheme.neonGreen.withOpacity(0.45)
+                                : ThemeService.border,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        role == 'leader' ? '👑' : '🎮',
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Flexible(
+                                        child: Text(
+                                          handle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: ThemeService.textPrimary,
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isCurrentUser) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: GamerTheme.neonGreen.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(5),
+                                          ),
+                                          child: const Text(
+                                            'YOU',
+                                            style: TextStyle(
+                                              color: GamerTheme.neonGreen,
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  '+${NumberFormat('#,###').format(coins)} Coins',
+                                  style: TextStyle(
+                                    color: coins > 0
+                                        ? const Color(0xFFFFD700)
+                                        : ThemeService.textSecondary,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: shareRatio,
+                                minHeight: 5,
+                                backgroundColor: ThemeService.border.withOpacity(0.4),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  coins > 0 ? GamerTheme.neonGreen : Colors.grey,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // 4. Direct Personal-to-Team Contribution Box on Team Profile Wallet Page
+              _buildManualTeamContributionBox(primaryTeam, wallet),
+              const SizedBox(height: 14),
+
+              // 5. Quick Actions: Open Full Team Profile & Weekly Leaderboard
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TeamProfileScreen(teamId: primaryTeam.id),
+                          ),
+                        );
+                        _loadUserTeams();
+                      },
+                      icon: const Icon(
+                        Icons.open_in_new_rounded,
+                        size: 16,
+                        color: GamerTheme.neonGreen,
+                      ),
+                      label: const Text(
+                        'Full Team Profile',
+                        style: TextStyle(
+                          color: GamerTheme.neonGreen,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: GamerTheme.neonGreen.withOpacity(0.55)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.emoji_events_rounded,
+                        size: 16,
+                        color: Color(0xFFFFD700),
+                      ),
+                      label: const Text(
+                        'Top Teams Rank',
+                        style: TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.55)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         );
       },
@@ -1310,6 +2321,12 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     required bool isLoadingTeams,
   }) {
     final bool hasTeam = activeTeams.isNotEmpty;
+    final TeamModel? primaryTeam = hasTeam
+        ? activeTeams.firstWhere(
+            (t) => t.id == _selectedContributeTeamId,
+            orElse: () => activeTeams.first,
+          )
+        : null;
 
     return Container(
       width: double.infinity,
@@ -1382,20 +2399,23 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   ),
                 )
               else
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: hasTeam
-                        ? GamerTheme.neonGreen.withOpacity(0.15)
-                        : const Color(0xFFFFB800).withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    hasTeam ? '🛡️ Team Eligible' : '👤 Solo Wallet (Saved)',
-                    style: TextStyle(
-                      color: hasTeam ? GamerTheme.neonGreen : const Color(0xFFFFB800),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                GestureDetector(
+                  onTap: () => _switchToWalletPage(1),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: hasTeam
+                          ? GamerTheme.neonGreen.withOpacity(0.15)
+                          : const Color(0xFFFFB800).withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      hasTeam ? '🛡️ Team Eligible →' : '👤 Solo Wallet (Saved)',
+                      style: TextStyle(
+                        color: hasTeam ? GamerTheme.neonGreen : const Color(0xFFFFB800),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -1416,6 +2436,40 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: () => _switchToWalletPage(1),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: ThemeService.cardSecondary,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFFFFD700).withOpacity(0.35),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('🛡️', style: TextStyle(fontSize: 12)),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      primaryTeam != null
+                          ? 'Swipe left or tap for Team Wallet: ${primaryTeam.name} [${primaryTeam.tag}] →'
+                          : 'Swipe left or tap to open Your Team Profile Wallet →',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -2619,12 +3673,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         StreamBuilder<List<Map<String, dynamic>>>(
           stream: _rewardClaimsStream ??
               (_userId.isNotEmpty
-                  ? SupabaseService.client
-                      .from('reward_claims')
-                      .stream(primaryKey: ['id'])
-                      .eq('user_id', _userId)
-                      .order('created_at', ascending: false)
-                      .asBroadcastStream()
+                  ? SupabaseService.getRealtimeRewardClaims(userId: _userId)
                   : Stream.value(const <Map<String, dynamic>>[]).asBroadcastStream()),
           builder: (context, claimsSnap) {
             final claims = claimsSnap.data ?? const <Map<String, dynamic>>[];

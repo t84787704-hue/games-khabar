@@ -447,12 +447,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               Expanded(
                 child: StreamBuilder<List<Map<String, dynamic>>>(
                   stream: widget.userId.isNotEmpty
-                      ? SupabaseService.client
-                          .from('reward_claims')
-                          .stream(primaryKey: ['id'])
-                          .eq('user_id', widget.userId)
-                          .order('created_at', ascending: false)
-                          .asBroadcastStream()
+                      ? SupabaseService.getRealtimeRewardClaims(userId: widget.userId)
                       : Stream.value(const <Map<String, dynamic>>[]).asBroadcastStream(),
                   builder: (context, claimsSnap) {
                     final List<Map<String, dynamic>> rewardClaims =
