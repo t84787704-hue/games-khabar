@@ -777,8 +777,8 @@ class SupabaseService {
     } catch (e) {}
 
     try {
-      final reports = await query('reports', select: 'id', limit: 1000);
-      totalReports = reports.length;
+      final reports = await query('reports', limit: 1000);
+      totalReports = reports.where(isRealModerationReport).length;
     } catch (e) {}
 
     return {
@@ -789,8 +789,35 @@ class SupabaseService {
     };
   }
 
+  static bool _didCleanupStaleRedeemReports = false;
+
+  /// Returns true only for genuine user/post moderation reports (excludes legacy REDEEM_REQUEST entries)
+  static bool isRealModerationReport(Map<String, dynamic> r) {
+    final reason = (r['reason'] ?? '').toString().trim().toUpperCase();
+    final targetId = (r['target_id'] ?? '').toString().trim().toUpperCase();
+    final targetType = (r['target_type'] ?? '').toString().trim().toUpperCase();
+    final details = (r['details'] ?? '').toString().trim().toUpperCase();
+    if (reason.contains('REDEEM_REQUEST') ||
+        targetId.contains('REDEEM') ||
+        targetType.contains('REDEEM') ||
+        details.contains('REDEEM REQUEST:')) {
+      return false;
+    }
+    return true;
+  }
+
+  static Future<void> _cleanupStaleRedeemRequestReports() async {
+    if (_didCleanupStaleRedeemReports) return;
+    _didCleanupStaleRedeemReports = true;
+    try {
+      await client.from('reports').delete().eq('reason', 'REDEEM_REQUEST');
+    } catch (_) {}
+  }
+
   static Future<List<Map<String, dynamic>>> getReports() async {
-    return await query('reports', order: 'created_at.desc', limit: 100);
+    await _cleanupStaleRedeemRequestReports();
+    final rows = await query('reports', order: 'created_at.desc', limit: 100);
+    return rows.where(isRealModerationReport).toList();
   }
 
   static Future<bool> updateReport({

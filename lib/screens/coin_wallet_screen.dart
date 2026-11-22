@@ -1261,6 +1261,15 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     );
   }
 
+  Future<void> _handleRedeemItem(
+    String gameName,
+    String packTitle,
+    int cost,
+    CoinWallet wallet,
+    List<TeamModel> activeTeams,
+  ) =>
+      _redeemPack(gameName, packTitle, cost, wallet, activeTeams);
+
   Future<void> _redeemPack(
     String gameName,
     String packTitle,

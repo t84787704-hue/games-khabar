@@ -46,6 +46,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final Map<String, Map<String, String>> _profileCache = {};
   Stream<List<Map<String, dynamic>>>? _rewardClaimsStream;
 
+  String get _uid =>
+      GamerAuthService().currentUid ??
+      (SupabaseService.client.auth.currentUser?.id ?? '');
+
   @override
   void initState() {
     super.initState();
