@@ -484,7 +484,7 @@ class TeamService {
       try {
         final userRows = await SupabaseService.client
             .from("users")
-            .select("id, uid, username, gamer_id, game_id, display_name, avatar_url")
+            .select()
             .inFilter("id", leaderIds);
         for (final u in userRows) {
           final id = (u["id"] ?? "").toString();

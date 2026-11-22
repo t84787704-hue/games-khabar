@@ -96,17 +96,6 @@ class _GamerGrowthHubDialogState extends State<GamerGrowthHubDialog> {
                   });
                 } catch (_) {}
 
-                // Insert into reports as redemption request so Admin sees it
-                await SupabaseService.client.from('reports').insert({
-                  'reporter_username': username,
-                  'target_type': 'redeem_request',
-                  'target_id': uid,
-                  'target_content': '$itemName | Game UID: $playerGameUid | Cost: $requiredCoins Coins',
-                  'reason': 'Pending Delivery: $itemName to $playerGameUid',
-                  'status': 'pending',
-                  'created_at': DateTime.now().toIso8601String(),
-                });
-
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(

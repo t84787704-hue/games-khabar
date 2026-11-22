@@ -88,10 +88,14 @@ class _AdminReportsTabState extends State<AdminReportsTab> {
 
               // Filter Chips: Pending, Resolved, All
               StreamBuilder<List<Map<String, dynamic>>>(
-                initialData: SupabaseService.cachedReports,
+                initialData: SupabaseService.cachedReports
+                    .where(SupabaseService.isRealModerationReport)
+                    .toList(),
                 stream: SupabaseService.getRealtimeReports(),
                 builder: (context, snapshot) {
-                  final allReports = snapshot.data ?? [];
+                  final allReports = (snapshot.data ?? [])
+                      .where(SupabaseService.isRealModerationReport)
+                      .toList();
                   final pendingCount = allReports.where((r) => (r['status'] ?? '').toString().toLowerCase() == 'pending').length;
                   final resolvedCount = allReports.where((r) => (r['status'] ?? '').toString().toLowerCase() == 'resolved').length;
                   final totalCount = allReports.length;
@@ -143,7 +147,9 @@ class _AdminReportsTabState extends State<AdminReportsTab> {
         // Stream Reports List
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            initialData: SupabaseService.cachedReports,
+            initialData: SupabaseService.cachedReports
+                .where(SupabaseService.isRealModerationReport)
+                .toList(),
             stream: SupabaseService.getRealtimeReports(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
@@ -152,7 +158,9 @@ class _AdminReportsTabState extends State<AdminReportsTab> {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
               }
 
-              final allDocs = snapshot.data ?? [];
+              final allDocs = (snapshot.data ?? [])
+                  .where(SupabaseService.isRealModerationReport)
+                  .toList();
               final filtered = allDocs.where((r) {
                 final status = (r['status'] ?? 'pending').toString().toLowerCase();
 

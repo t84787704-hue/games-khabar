@@ -1221,8 +1221,9 @@ class SupabaseService {
 
   static Stream<List<Map<String, dynamic>>> getRealtimeReports() {
     Stream<List<Map<String, dynamic>>> stream() async* {
+      _cleanupStaleRedeemRequestReports();
       if (_cachedReports.isNotEmpty) {
-        yield _cachedReports;
+        yield _cachedReports.where(isRealModerationReport).toList();
       }
       while (true) {
         try {
@@ -1232,14 +1233,16 @@ class SupabaseService {
               .order('created_at', ascending: false)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res);
+            final list = List<Map<String, dynamic>>.from(res)
+                .where(isRealModerationReport)
+                .toList();
             _cachedReports = list;
             yield list;
           }
         } catch (e) {
           debugPrint('getRealtimeReports error: $e');
           if (_cachedReports.isNotEmpty) {
-            yield _cachedReports;
+            yield _cachedReports.where(isRealModerationReport).toList();
           }
         }
         await Future.delayed(const Duration(seconds: 3));

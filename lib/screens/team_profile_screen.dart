@@ -10,6 +10,7 @@ import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/send_team_match_challenge_dialog.dart';
 import '../widgets/end_match_dialog.dart';
+import 'coin_wallet_screen.dart';
 import 'gamer_profile_screen.dart';
 import 'teams_screen.dart';
 import 'private_match_room_screen.dart';
@@ -43,10 +44,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final Set<String> _autoCompletingMatchIds = {};
   final List<Map<String, dynamic>> _optimisticActiveMatches = [];
   final Map<String, Map<String, String>> _profileCache = {};
+  Stream<List<Map<String, dynamic>>>? _rewardClaimsStream;
 
   @override
   void initState() {
     super.initState();
+    _rewardClaimsStream = SupabaseService.getRealtimeRewardClaims();
     _teamService.syncAllTeamsTournamentWins();
     _teamService.checkAndDistributeWeeklyGameRewards();
   }
@@ -69,7 +72,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     try {
       final userRow = await SupabaseService.client
           .from('users')
-          .select('username, gamer_id, game_id, display_name, avatar_url')
+          .select()
           .or('id.eq.$cleanUid,uid.eq.$cleanUid')
           .maybeSingle();
       if (userRow != null) {
@@ -77,7 +80,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         final gid = (userRow['gamer_id'] ?? userRow['game_id'] ?? '').toString().trim();
         final dn = (userRow['display_name'] ?? '').toString().trim();
 
-        for (final candidate in [un, gid, dn]) {
+        for (final candidate in [un, dn, gid]) {
           if (candidate.isNotEmpty &&
               candidate.toLowerCase() != 'null' &&
               !candidate.toLowerCase().startsWith('user_')) {
@@ -86,7 +89,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
           }
         }
         if (username == 'Gamer') {
-          for (final candidate in [un, gid, dn]) {
+          for (final candidate in [un, dn, gid]) {
             if (candidate.isNotEmpty && candidate.toLowerCase() != 'null') {
               username = TeamModel.sanitizePublicHandle(candidate, fallback: 'Gamer');
               break;
@@ -111,7 +114,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       try {
         final sbProfile = await SupabaseService.client
             .from('profiles')
-            .select('username, display_name, gamer_id, game_id, avatar_url')
+            .select()
             .eq('id', cleanUid)
             .maybeSingle();
 
@@ -2817,40 +2820,127 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     ),
                   ),
                 )
-              else if (memberBreakdown.isEmpty)
-                ...team.cappedMembers.map((uid) {
-                  final isMemberLeader = team.isLeader(uid);
-                  final fallbackHandle = isMemberLeader
-                      ? TeamModel.sanitizePublicHandle(team.leaderName, fallback: 'Leader')
-                      : 'Gamer';
-                  return _buildMemberContributionRow(
-                    handle: fallbackHandle,
-                    role: isMemberLeader ? 'Leader' : 'Member',
-                    coins: team.memberWeeklyCoins[uid] ?? 0,
-                    totalTeamCoins: weeklyCoins,
-                    textPri: textPri,
-                    textSec: textSec,
-                    cardSec: cardSec,
-                  );
-                })
               else
-                ...memberBreakdown.take(TeamModel.maxMembers).map((m) {
-                  final handle = TeamModel.sanitizePublicHandle(
-                    m['handle']?.toString(),
-                    fallback: 'Gamer',
-                  );
-                  final role = (m['role'] ?? 'Member').toString();
-                  final coins = (m['weeklyCoins'] as int?) ?? 0;
-                  return _buildMemberContributionRow(
-                    handle: handle,
-                    role: role,
-                    coins: coins,
-                    totalTeamCoins: weeklyCoins,
-                    textPri: textPri,
-                    textSec: textSec,
-                    cardSec: cardSec,
-                  );
-                }),
+                StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: _rewardClaimsStream ?? SupabaseService.getRealtimeRewardClaims(),
+                  builder: (context, claimsSnap) {
+                    final allClaims = claimsSnap.data ?? const <Map<String, dynamic>>[];
+                    final String currentWeekKey = TeamService.getWeekCycleKey();
+                    final String normalizedTeamGameKey =
+                        CoinWalletScreen.normalizeGameKeyForClaim(team.game);
+                    final String shareRewardLabel =
+                        CoinWalletScreen.getConsistentRewardLabelForShare(
+                      team.game,
+                      equalShare,
+                    );
+                    final String viewerUid = _uid.trim();
+                    final String viewerLower = viewerUid.toLowerCase();
+                    final String viewerUuidLower = viewerUid.isNotEmpty
+                        ? SupabaseService.toUuid(viewerUid).toLowerCase()
+                        : '';
+                    final bool isViewerTeamMember =
+                        viewerUid.isNotEmpty && team.isMember(viewerUid);
+
+                    Map<String, dynamic>? findMemberClaim(String memberId) {
+                      final cleanM = memberId.trim();
+                      if (cleanM.isEmpty) return null;
+                      final cleanMLower = cleanM.toLowerCase();
+                      final cleanMUuidLower =
+                          SupabaseService.toUuid(cleanM).toLowerCase();
+                      for (final c in allClaims) {
+                        final cUid = (c['user_id'] ?? '').toString().trim();
+                        final cLower = cUid.toLowerCase();
+                        final cUuidLower = cUid.isNotEmpty
+                            ? SupabaseService.toUuid(cUid).toLowerCase()
+                            : '';
+                        final bool userMatches = cUid == cleanM ||
+                            cLower == cleanMLower ||
+                            (cleanMUuidLower.isNotEmpty && cUuidLower == cleanMUuidLower);
+                        if (!userMatches) continue;
+                        final cWeek = (c['week_key'] ?? '').toString().trim();
+                        final cGame = (c['game_name'] ?? '').toString().trim().toLowerCase();
+                        final String status =
+                            (c['status'] ?? 'pending').toString().toLowerCase();
+                        if (status == 'rejected') continue;
+                        if ((cWeek.isEmpty || cWeek == currentWeekKey) &&
+                            (cGame.isEmpty || cGame == normalizedTeamGameKey)) {
+                          return c;
+                        }
+                      }
+                      return null;
+                    }
+
+                    final List<Map<String, dynamic>> rowsToRender =
+                        memberBreakdown.isNotEmpty
+                            ? memberBreakdown.take(TeamModel.maxMembers).toList()
+                            : team.cappedMembers.map((uid) {
+                                final isMemberLeader = team.isLeader(uid);
+                                final fallbackHandle = isMemberLeader
+                                    ? TeamModel.sanitizePublicHandle(
+                                        team.leaderName,
+                                        fallback: 'Leader',
+                                      )
+                                    : (team.memberNames[uid] ?? 'Gamer');
+                                return <String, dynamic>{
+                                  'userId': uid,
+                                  'handle': fallbackHandle,
+                                  'role': isMemberLeader ? 'Leader' : 'Member',
+                                  'weeklyCoins': team.memberWeeklyCoins[uid] ?? 0,
+                                };
+                              }).toList();
+
+                    return Column(
+                      children: rowsToRender.map((m) {
+                        final String mUid = (m['userId'] ?? '').toString().trim();
+                        final String mLower = mUid.toLowerCase();
+                        final String mUuidLower = mUid.isNotEmpty
+                            ? SupabaseService.toUuid(mUid).toLowerCase()
+                            : '';
+                        final bool isCurrentUser = viewerUid.isNotEmpty &&
+                            (mUid == viewerUid ||
+                                mLower == viewerLower ||
+                                mUuidLower == viewerUuidLower);
+                        final String handle = TeamModel.sanitizePublicHandle(
+                          m['handle']?.toString(),
+                          fallback: 'Gamer',
+                        );
+                        final String role = (m['role'] ?? 'Member').toString();
+                        final int coins = (m['weeklyCoins'] as num?)?.toInt() ?? 0;
+                        final Map<String, dynamic>? memberClaim = findMemberClaim(mUid);
+                        final bool hasMemberClaimed = memberClaim != null;
+                        final bool isMemberClaimDelivered =
+                            (memberClaim?['status'] ?? '').toString().toLowerCase() ==
+                                'delivered';
+
+                        return _buildMemberContributionRow(
+                          memberUid: mUid,
+                          handle: handle,
+                          role: role,
+                          coins: coins,
+                          totalTeamCoins: weeklyCoins,
+                          textPri: textPri,
+                          textSec: textSec,
+                          cardSec: cardSec,
+                          showWinnerClaimRow: isTopRank && isViewerTeamMember,
+                          isCurrentUser: isCurrentUser,
+                          shareRewardLabel: shareRewardLabel,
+                          hasMemberClaimed: hasMemberClaimed,
+                          isMemberClaimDelivered: isMemberClaimDelivered,
+                          onTapClaim: isCurrentUser
+                              ? () => CoinWalletScreen.openWinnerTeamMemberClaimDialog(
+                                    context: context,
+                                    activeTeam: team,
+                                    userId: viewerUid,
+                                    onClaimSubmitted: () {
+                                      if (mounted) setState(() {});
+                                    },
+                                  )
+                              : null,
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
 
               const SizedBox(height: 10),
               // Transparent Rules & Play Policy Privacy Disclosure
@@ -2887,6 +2977,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Widget _buildMemberContributionRow({
+    required String memberUid,
     required String handle,
     required String role,
     required int coins,
@@ -2894,10 +2985,19 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     required Color textPri,
     required Color textSec,
     required Color cardSec,
+    bool showWinnerClaimRow = false,
+    bool isCurrentUser = false,
+    String shareRewardLabel = '',
+    bool hasMemberClaimed = false,
+    bool isMemberClaimDelivered = false,
+    VoidCallback? onTapClaim,
   }) {
     final isLeaderRole = role.toLowerCase() == 'leader' || role.toLowerCase() == 'owner';
     final double shareRatio =
         totalTeamCoins > 0 ? (coins / totalTeamCoins).clamp(0.0, 1.0) : 0.0;
+    final cleanCheck = handle.trim().toLowerCase().replaceFirst(RegExp(r'^@+'), '');
+    final bool isGenericHandle =
+        cleanCheck.isEmpty || cleanCheck == 'gamer' || cleanCheck == 'player' || cleanCheck == 'leader';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -2905,6 +3005,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       decoration: BoxDecoration(
         color: cardSec,
         borderRadius: BorderRadius.circular(10),
+        border: isCurrentUser
+            ? Border.all(color: const Color(0xFF00FF88).withOpacity(0.45))
+            : null,
       ),
       child: Column(
         children: [
@@ -2916,7 +3019,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     ? const Color(0xFFFF6B00).withOpacity(0.2)
                     : const Color(0xFF00FF88).withOpacity(0.15),
                 child: Text(
-                  handle.isNotEmpty ? handle[0].toUpperCase() : 'G',
+                  handle.replaceFirst(RegExp(r'^@+'), '').isNotEmpty
+                      ? handle.replaceFirst(RegExp(r'^@+'), '')[0].toUpperCase()
+                      : 'G',
                   style: TextStyle(
                     color: isLeaderRole ? const Color(0xFFFF6B00) : const Color(0xFF00FF88),
                     fontWeight: FontWeight.bold,
@@ -2929,15 +3034,33 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 child: Row(
                   children: [
                     Flexible(
-                      child: Text(
-                        handle,
-                        style: TextStyle(
-                          color: textPri,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: isGenericHandle && memberUid.isNotEmpty
+                          ? FutureBuilder<Map<String, String>>(
+                              future: _fetchUserProfile(memberUid),
+                              builder: (context, profSnap) {
+                                final resolvedName =
+                                    (profSnap.data?['username'] ?? handle)
+                                        .replaceFirst(RegExp(r'^@+'), '');
+                                return Text(
+                                  '@$resolvedName',
+                                  style: TextStyle(
+                                    color: textPri,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              },
+                            )
+                          : Text(
+                              handle.startsWith('@') ? handle : '@$handle',
+                              style: TextStyle(
+                                color: textPri,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                     ),
                     const SizedBox(width: 6),
                     Container(
@@ -2957,6 +3080,24 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         ),
                       ),
                     ),
+                    if (isCurrentUser) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00FF88).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'YOU',
+                          style: TextStyle(
+                            color: Color(0xFF00FF88),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -2982,6 +3123,119 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               ),
             ),
           ),
+          if (showWinnerClaimRow) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: hasMemberClaimed
+                      ? const Color(0xFF00FF88).withOpacity(0.5)
+                      : const Color(0xFFFFD700).withOpacity(0.45),
+                ),
+              ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.card_giftcard_rounded,
+                        color: Color(0xFFFFD700),
+                        size: 14,
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          'Reward Share: $shareRewardLabel',
+                          style: TextStyle(
+                            color: textPri,
+                            fontSize: 11.2,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (hasMemberClaimed)
+                    InkWell(
+                      onTap: isCurrentUser ? onTapClaim : null,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00FF88).withOpacity(0.16),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFF00FF88).withOpacity(0.6),
+                          ),
+                        ),
+                        child: Text(
+                          isMemberClaimDelivered
+                              ? '✅ Claim Done (Delivered)'
+                              : '✅ Claim Done',
+                          style: const TextStyle(
+                            color: Color(0xFF00FF88),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (isCurrentUser)
+                    SizedBox(
+                      height: 30,
+                      child: ElevatedButton.icon(
+                        onPressed: onTapClaim,
+                        icon: const Icon(Icons.redeem_rounded, size: 14),
+                        label: Text(
+                          'Claim $shareRewardLabel',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00FF88),
+                          foregroundColor: Colors.black,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB800).withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFFFFB800).withOpacity(0.45),
+                        ),
+                      ),
+                      child: const Text(
+                        '⏳ Pending Claim',
+                        style: TextStyle(
+                          color: Color(0xFFFFB800),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
