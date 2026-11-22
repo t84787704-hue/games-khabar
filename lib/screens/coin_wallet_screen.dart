@@ -1664,11 +1664,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         : activeTeams.first;
     _selectedContributeTeamId = primaryTeam.id;
 
-    final int memberCount = primaryTeam.memberCount.clamp(1, 4);
+    final int memberCount = primaryTeam.memberCount.clamp(1, TeamModel.maxMembers);
     final int perMemberSharePkr = (1500 / memberCount).round();
     final bool isFreeFire = TeamService.matchesGameName(primaryTeam.game, 'Free Fire');
     final String displayGameName =
-        TeamService.normalizeCompetitiveGameName(primaryTeam.game);
+        TeamService.displayGameLabel(primaryTeam.game);
     final String prizeCurrency = isFreeFire ? 'Free Fire Diamonds' : 'PUBG Mobile UC';
     final String shareRewardLabel =
         _getConsistentRewardLabel(displayGameName, perMemberSharePkr);
@@ -1693,17 +1693,47 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList();
 
-        // Fallback to primaryTeam.members if memberBreakdown is not populated yet
+        // Fallback to primaryTeam.cappedMembers (List<String>) if memberBreakdown is not populated yet
         final List<Map<String, dynamic>> memberBreakdown = rawBreakdown.isNotEmpty
             ? rawBreakdown
-            : primaryTeam.members
-                .map((m) => <String, dynamic>{
-                      'userId': m.userId,
-                      'username': m.username.isNotEmpty ? m.username : 'Player',
-                      'role': m.role,
-                      'coins': memberCoins[m.userId] ?? 0,
-                    })
-                .toList();
+            : primaryTeam.cappedMembers.map((String memberUid) {
+                final bool isLeader = primaryTeam.isLeader(memberUid);
+                String resolvedName = primaryTeam.memberNames[memberUid] ?? '';
+                if (resolvedName.isEmpty &&
+                    isLeader &&
+                    primaryTeam.leaderName.isNotEmpty) {
+                  resolvedName = primaryTeam.leaderName;
+                }
+                if (resolvedName.isEmpty) {
+                  for (final detail in primaryTeam.memberDetails) {
+                    final dUid = (detail['id'] ??
+                            detail['uid'] ??
+                            detail['userId'] ??
+                            '')
+                        .toString()
+                        .trim();
+                    if (dUid == memberUid) {
+                      resolvedName =
+                          (detail['name'] ?? detail['username'] ?? '')
+                              .toString()
+                              .trim();
+                      break;
+                    }
+                  }
+                }
+                final String cleanHandle = TeamModel.sanitizePublicHandle(
+                  resolvedName,
+                  fallback: isLeader ? 'Leader' : 'Gamer',
+                );
+                return <String, dynamic>{
+                  'userId': memberUid,
+                  'username': cleanHandle,
+                  'role': isLeader ? 'leader' : 'member',
+                  'coins': memberCoins[memberUid] ??
+                      primaryTeam.memberWeeklyCoins[memberUid] ??
+                      0,
+                };
+              }).toList();
 
         return SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -1729,7 +1759,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   children: activeTeams.map((teamItem) {
                     final bool isSelected = teamItem.id == primaryTeam.id;
                     final String teamGameLabel =
-                        TeamService.normalizeCompetitiveGameName(teamItem.game);
+                        TeamService.displayGameLabel(teamItem.game);
                     return InkWell(
                       onTap: () {
                         if (teamItem.id == primaryTeam.id) return;
@@ -1885,7 +1915,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                'Game: $displayGameName • Members: ${primaryTeam.memberCount}/4',
+                                'Game: $displayGameName • Members: ${primaryTeam.memberCount}/${TeamModel.maxMembers}',
                                 style: const TextStyle(
                                   color: GamerTheme.neonGreen,
                                   fontSize: 12,
@@ -2050,7 +2080,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                             ),
                           ),
                           child: Text(
-                            '👥 Equal Share: $perMemberSharePkr PKR / member ($memberCount/${primaryTeam.maxMembers})',
+                            '👥 Equal Share: $perMemberSharePkr PKR / member ($memberCount/${TeamModel.maxMembers})',
                             style: TextStyle(
                               color: isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309),
                               fontSize: 11.5,
@@ -2071,7 +2101,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Weekly Cycle: ${TeamService.getWeekRangeLabel()} • Key: ${TeamService.getCurrentWeekKey()}',
+                      'Weekly Cycle: ${TeamService.getWeekRangeLabel()} • Key: ${TeamService.getWeekCycleKey()}',
                       style: TextStyle(
                         color: ThemeService.textSecondary,
                         fontSize: 11,

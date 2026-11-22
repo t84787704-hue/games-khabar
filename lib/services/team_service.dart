@@ -1625,6 +1625,11 @@ class TeamService {
     return '${start.year}-$m-$d';
   }
 
+  /// Alias returning the current or specified weekly cycle key
+  static String getCurrentWeekKey([DateTime? date]) {
+    return getWeekCycleKey(date);
+  }
+
   /// Human-readable date range for a weekly cycle (e.g. "16 Nov - 22 Nov")
   static String getWeekRangeLabel([DateTime? date]) {
     const months = [
