@@ -791,7 +791,7 @@ class SupabaseService {
 
   static bool _didCleanupStaleRedeemReports = false;
 
-  /// Returns true only for genuine user/post moderation reports (excludes legacy REDEEM_REQUEST entries)
+  /// Returns true only for genuine user/post moderation reports (filters out legacy REDEEM_REQUEST entries)
   static bool isRealModerationReport(Map<String, dynamic> r) {
     final reason = (r['reason'] ?? '').toString().trim().toUpperCase();
     final targetId = (r['target_id'] ?? '').toString().trim().toUpperCase();
@@ -806,6 +806,7 @@ class SupabaseService {
     return true;
   }
 
+  /// Cleans up any legacy automatic REDEEM_REQUEST rows from the reports table once per session
   static Future<void> _cleanupStaleRedeemRequestReports() async {
     if (_didCleanupStaleRedeemReports) return;
     _didCleanupStaleRedeemReports = true;

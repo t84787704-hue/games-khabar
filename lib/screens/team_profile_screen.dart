@@ -46,6 +46,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final Map<String, Map<String, String>> _profileCache = {};
   Stream<List<Map<String, dynamic>>>? _rewardClaimsStream;
 
+  /// Current logged-in user ID for team membership & winner claim checks
   String get _uid =>
       GamerAuthService().currentUid ??
       (SupabaseService.client.auth.currentUser?.id ?? '');

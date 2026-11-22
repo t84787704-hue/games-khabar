@@ -86,7 +86,7 @@ class _AdminReportsTabState extends State<AdminReportsTab> {
               ),
               const SizedBox(height: 10),
 
-              // Filter Chips: Pending, Resolved, All
+              // Filter Chips: Pending, Resolved, All (strictly real moderation reports)
               StreamBuilder<List<Map<String, dynamic>>>(
                 initialData: SupabaseService.cachedReports
                     .where(SupabaseService.isRealModerationReport)

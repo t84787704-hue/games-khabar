@@ -1261,6 +1261,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     );
   }
 
+  /// Delegates winner team reward redemption to _redeemPack with locked profile UID
   Future<void> _handleRedeemItem(
     String gameName,
     String packTitle,

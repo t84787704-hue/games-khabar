@@ -1,5 +1,5 @@
 // ===============================================================================
-// GAMER GROWTH HUB — UC Shop & Room Countdown (10-Min Timer Removed)
+// GAMER GROWTH HUB — UC Shop & Room Countdown (No Automatic REDEEM_REQUEST Report)
 // File: lib/widgets/gamer_growth_hub_dialog.dart
 // ===============================================================================
 
