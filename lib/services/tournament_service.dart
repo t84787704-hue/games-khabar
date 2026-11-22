@@ -233,70 +233,72 @@ class TournamentService extends ChangeNotifier {
     return rooms;
   }
 
-  Stream<List<TournamentRoom>> getLiveRoomsStream({String? gameName}) async* {
-    // 1. Immediately yield cached local rooms (Zero latency, never hangs on spinner)
-    if (_rooms.isEmpty) {
-      await _loadFromLocal();
-    }
-    yield _filterRoomsByGame(_rooms, gameName);
-
-    // 2. Immediate REST fetch from Supabase
-    try {
-      final res = await SupabaseService.client
-          .from('tournament_rooms')
-          .select()
-          .timeout(const Duration(seconds: 3));
-      if (res is List && res.isNotEmpty) {
-        final supabaseRooms = res.map((d) => TournamentRoom.fromSupabase(d)).toList();
-        final Map<String, TournamentRoom> map = {};
-        for (final r in _rooms) {
-          if (!r.isExpiredCompleted) map[r.id] = r;
-        }
-        for (final sr in supabaseRooms) {
-          if (!sr.isExpiredCompleted) map[sr.id] = sr;
-        }
-        _rooms = map.values.toList();
-        _rooms.sort((a, b) => b.startTime.compareTo(a.startTime));
-        await _saveToLocal();
+  Stream<List<TournamentRoom>> getLiveRoomsStream({String? gameName}) {
+    return (() async* {
+      // 1. Immediately yield cached local rooms (Zero latency, never hangs on spinner)
+      if (_rooms.isEmpty) {
+        await _loadFromLocal();
       }
       yield _filterRoomsByGame(_rooms, gameName);
-    } catch (e) {
-      debugPrint('TournamentService REST fetch notice: $e');
-      yield _filterRoomsByGame(_rooms, gameName);
-    }
 
-    // 3. Listen to realtime stream if available
-    try {
-      await for (final snap in SupabaseService.client
-          .from('tournament_rooms')
-          .stream(primaryKey: ['id'])) {
-        final streamRooms = snap
-            .where((d) => d['isLive'] == true)
-            .map((d) => TournamentRoom.fromSupabase(d))
-            .toList();
-        if (streamRooms.isNotEmpty) {
+      // 2. Immediate REST fetch from Supabase
+      try {
+        final res = await SupabaseService.client
+            .from('tournament_rooms')
+            .select()
+            .timeout(const Duration(seconds: 3));
+        if (res is List && res.isNotEmpty) {
+          final supabaseRooms = res.map((d) => TournamentRoom.fromSupabase(d)).toList();
           final Map<String, TournamentRoom> map = {};
           for (final r in _rooms) {
             if (!r.isExpiredCompleted) map[r.id] = r;
           }
-          for (final sr in streamRooms) {
-            if (sr.isExpiredCompleted) continue;
-            map[sr.id] = sr;
+          for (final sr in supabaseRooms) {
+            if (!sr.isExpiredCompleted) map[sr.id] = sr;
           }
           _rooms = map.values.toList();
           _rooms.sort((a, b) => b.startTime.compareTo(a.startTime));
           await _saveToLocal();
         }
         yield _filterRoomsByGame(_rooms, gameName);
-      }
-    } catch (e) {
-      debugPrint('TournamentService realtime stream notice: $e');
-      // Periodic poll fallback
-      while (true) {
-        await Future.delayed(const Duration(seconds: 6));
+      } catch (e) {
+        debugPrint('TournamentService REST fetch notice: $e');
         yield _filterRoomsByGame(_rooms, gameName);
       }
-    }
+
+      // 3. Listen to realtime stream if available
+      try {
+        await for (final snap in SupabaseService.client
+            .from('tournament_rooms')
+            .stream(primaryKey: ['id'])) {
+          final streamRooms = snap
+              .where((d) => d['isLive'] == true)
+              .map((d) => TournamentRoom.fromSupabase(d))
+              .toList();
+          if (streamRooms.isNotEmpty) {
+            final Map<String, TournamentRoom> map = {};
+            for (final r in _rooms) {
+              if (!r.isExpiredCompleted) map[r.id] = r;
+            }
+            for (final sr in streamRooms) {
+              if (sr.isExpiredCompleted) continue;
+              map[sr.id] = sr;
+            }
+            _rooms = map.values.toList();
+            _rooms.sort((a, b) => b.startTime.compareTo(a.startTime));
+            await _saveToLocal();
+          }
+          yield _filterRoomsByGame(_rooms, gameName);
+        }
+      } catch (e) {
+        debugPrint('TournamentService realtime stream notice: $e');
+        // Periodic poll fallback
+        while (true) {
+          await Future.delayed(const Duration(seconds: 6));
+          yield _filterRoomsByGame(_rooms, gameName);
+        }
+      }
+    })().asBroadcastStream();
   }
 
   Future<bool> joinRoom({

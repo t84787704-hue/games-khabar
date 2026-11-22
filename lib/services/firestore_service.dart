@@ -9,6 +9,7 @@ class FirestoreService {
 
   final StreamController<List<NewsModel>> _streamController =
       StreamController<List<NewsModel>>.broadcast();
+  StreamSubscription? _supabaseSub;
 
   // In-memory master list (populated strictly from Supabase)
   List<NewsModel> _currentNewsList = [];
@@ -20,7 +21,8 @@ class FirestoreService {
   void _initSupabaseListener() {
     try {
       refreshNews();
-      SupabaseService.client
+      _supabaseSub?.cancel();
+      _supabaseSub = SupabaseService.client
           .from('news')
           .stream(primaryKey: ['id'])
           .order('timestamp', ascending: false)
@@ -45,7 +47,10 @@ class FirestoreService {
   List<NewsModel> get currentNews => List.from(_currentNewsList);
 
   // Reactive stream of all news sorted by newest
-  Stream<List<NewsModel>> getNewsStream() async* {
+  Stream<List<NewsModel>> getNewsStream() =>
+      _getNewsStreamInternal().asBroadcastStream();
+
+  Stream<List<NewsModel>> _getNewsStreamInternal() async* {
     yield List.from(_currentNewsList);
     yield* _streamController.stream;
   }

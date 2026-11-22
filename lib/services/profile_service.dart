@@ -108,36 +108,38 @@ class ProfileService {
   Stream<List<ProfileFeedItem>> getUserPostsAndClipsStream({
     String? userId,
     String? username,
-  }) async* {
-    final uid =
-        (userId != null && userId.trim().isNotEmpty) ? userId.trim() : '';
+  }) {
+    return (() async* {
+      final uid =
+          (userId != null && userId.trim().isNotEmpty) ? userId.trim() : '';
 
-    if (uid.isEmpty) {
-      yield [];
-      return;
-    }
-
-    final uuid = SupabaseService.toUuid(uid);
-
-    while (true) {
-      try {
-        final rows = await SupabaseService.client
-            .from('posts')
-            .select()
-            .eq('user_id', uuid) // ✅ strict — no foreign posts
-            .order('created_at', ascending: false);
-
-        final items = (rows as List)
-            .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
-            .toList();
-
-        yield items;
-      } catch (e) {
-        debugPrint('[ProfileService] Stream error: $e');
+      if (uid.isEmpty) {
         yield [];
+        return;
       }
-      await Future.delayed(const Duration(seconds: 4));
-    }
+
+      final uuid = SupabaseService.toUuid(uid);
+
+      while (true) {
+        try {
+          final rows = await SupabaseService.client
+              .from('posts')
+              .select()
+              .eq('user_id', uuid) // ✅ strict — no foreign posts
+              .order('created_at', ascending: false);
+
+          final items = (rows as List)
+              .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
+              .toList();
+
+          yield items;
+        } catch (e) {
+          debugPrint('[ProfileService] Stream error: $e');
+          yield [];
+        }
+        await Future.delayed(const Duration(seconds: 4));
+      }
+    })().asBroadcastStream();
   }
 
   /// One-shot fetch of user posts.

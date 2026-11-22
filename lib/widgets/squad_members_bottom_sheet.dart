@@ -31,7 +31,10 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
   final Map<String, GamerUser?> _userCache = {};
   bool _isActionInProgress = false;
 
-  Stream<Map<String, dynamic>?> _postStream(String postId) async* {
+  Stream<Map<String, dynamic>?> _postStream(String postId) =>
+      _postStreamInternal(postId).asBroadcastStream();
+
+  Stream<Map<String, dynamic>?> _postStreamInternal(String postId) async* {
     while (true) {
       Map<String, dynamic>? data;
       try {
@@ -188,8 +191,8 @@ class _SquadMembersBottomSheetState extends State<SquadMembersBottomSheet> {
         stream: _postStream(widget.squad.id),
         builder: (context, snapshot) {
           List<String> members = List<String>.from(widget.squad.members);
-          if (snapshot.hasData && snapshot.data != null) {
-            final data = snapshot.data!;
+          final data = snapshot.data;
+          if (data != null) {
             final snapMembers = List<String>.from(data['members'] ?? []);
             if (snapMembers.isNotEmpty) {
               members = snapMembers;

@@ -1390,12 +1390,12 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
         initialData: const [],
         stream: SupabaseService.getRealtimeSingleRoom(widget.roomId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              (!snapshot.hasData || snapshot.data!.isEmpty)) {
+          final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+          if (snapshot.connectionState == ConnectionState.waiting && rows.isEmpty) {
             return const Center(child: CircularProgressIndicator(color: Color(0xFF00FF88)));
           }
 
-          if (snapshot.data == null || snapshot.data!.isEmpty) {
+          if (rows.isEmpty) {
             return Center(
               child: Text(
                 'room_not_found'.tr(),
@@ -1404,7 +1404,7 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
             );
           }
 
-          final room = GamerRoom.fromSupabase(snapshot.data!.first);
+          final room = GamerRoom.fromSupabase(rows.first);
           final bool isJoined = room.joinedUserIds.contains(widget.currentUserId);
           final bool canEndMatch = room.joinedUsers.length >= 2;
 

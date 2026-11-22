@@ -36,7 +36,10 @@ class LFGCard extends StatefulWidget {
 class _LFGCardState extends State<LFGCard> {
   bool _isRequesting = false;
 
-  Stream<Map<String, dynamic>?> _postStream(String postId) async* {
+  Stream<Map<String, dynamic>?> _postStream(String postId) =>
+      _postStreamInternal(postId).asBroadcastStream();
+
+  Stream<Map<String, dynamic>?> _postStreamInternal(String postId) async* {
     while (true) {
       Map<String, dynamic>? data;
       try {

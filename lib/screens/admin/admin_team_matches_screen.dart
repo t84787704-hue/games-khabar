@@ -445,10 +445,11 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
     );
   }
 
-  Stream<_AdminMatchUnifiedData> _getUnifiedMatchesStream() async* {
-    while (true) {
-      try {
-        final List<TeamMatch> matches = [];
+  Stream<_AdminMatchUnifiedData> _getUnifiedMatchesStream() {
+    return (() async* {
+      while (true) {
+        try {
+          final List<TeamMatch> matches = [];
 
         // 1. Fetch from team_matches table
         try {
@@ -554,6 +555,7 @@ class _AdminTeamMatchesScreenState extends State<AdminTeamMatchesScreen> {
       }
       await Future.delayed(const Duration(seconds: 4));
     }
+    })().asBroadcastStream();
   }
 
   Future<void> _resolveDisputeReport(Map<String, dynamic> report) async {

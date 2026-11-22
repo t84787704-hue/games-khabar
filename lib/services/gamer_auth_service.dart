@@ -31,12 +31,23 @@ class GamerAuthService {
   StreamSubscription<AuthState>? _authSubscription;
   Future<GamerUser?>? _inFlightRefresh;
 
-  User? get currentUser => _supabase.auth.currentUser;
-  String? get currentUid => _supabase.auth.currentUser?.id;
-  bool get isAuthenticated => _supabase.auth.currentUser != null;
+  User? get currentUser {
+    try {
+      return _supabase.auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
+  String? get currentUid => currentUser?.id;
+  bool get isAuthenticated => currentUser != null;
   GamerUser? get currentGamer => currentGamerNotifier.value;
 
-  Stream<User?> get authStateChanges => _supabase.auth.onAuthStateChange.map((event) => event.session?.user);
+  Stream<User?> get authStateChanges => _supabase.auth.onAuthStateChange
+      .handleError((e) {
+        debugPrint('[GamerAuthService] authStateChanges error: $e');
+      })
+      .map((event) => event.session?.user)
+      .asBroadcastStream();
 
   static String _cacheKey(String uid) => 'cached_gamer_profile_$uid';
 
@@ -110,29 +121,40 @@ class GamerAuthService {
   }
 
   Future<void> init() async {
-    _authSubscription?.cancel();
-    _authSubscription = _supabase.auth.onAuthStateChange.listen((data) async {
-      final user = data.session?.user;
-      authUserNotifier.value = user;
-      if (user != null) {
-        if (currentGamerNotifier.value == null || currentGamerNotifier.value!.uid != user.id) {
-          final cached = await _loadCachedGamerProfile(user.id);
-          if (cached != null) {
-            currentGamerNotifier.value = cached;
-            isLoadingNotifier.value = false;
+    await _authSubscription?.cancel();
+    _authSubscription = _supabase.auth.onAuthStateChange.listen(
+      (data) async {
+        try {
+          final user = data.session?.user;
+          authUserNotifier.value = user;
+          if (user != null) {
+            if (currentGamerNotifier.value == null || currentGamerNotifier.value!.uid != user.id) {
+              final cached = await _loadCachedGamerProfile(user.id);
+              if (cached != null) {
+                currentGamerNotifier.value = cached;
+                isLoadingNotifier.value = false;
+              } else {
+                isLoadingNotifier.value = true;
+              }
+            }
+            await refreshCurrentGamer();
           } else {
-            isLoadingNotifier.value = true;
+            currentGamerNotifier.value = null;
+            profileLoadErrorNotifier.value = false;
+            isLoadingNotifier.value = false;
           }
+        } catch (e) {
+          debugPrint('[GamerAuthService] onAuthStateChange callback error: $e');
+          isLoadingNotifier.value = false;
         }
-        await refreshCurrentGamer();
-      } else {
-        currentGamerNotifier.value = null;
-        profileLoadErrorNotifier.value = false;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('[GamerAuthService] onAuthStateChange stream error: $error');
         isLoadingNotifier.value = false;
-      }
-    });
+      },
+    );
 
-    final initialUser = _supabase.auth.currentUser;
+    final initialUser = currentUser;
     authUserNotifier.value = initialUser;
     if (initialUser != null) {
       try {
@@ -823,7 +845,9 @@ class GamerAuthService {
     }
   }
 
-  Stream<GamerUser?> userProfileStream(String uid) async* {
+  Stream<GamerUser?> userProfileStream(String uid) => _userProfileStreamInternal(uid).asBroadcastStream();
+
+  Stream<GamerUser?> _userProfileStreamInternal(String uid) async* {
     while (true) {
       final user = await getUserProfile(uid);
       yield user;

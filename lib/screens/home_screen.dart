@@ -681,81 +681,89 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       if (featuredNews != null && _searchQuery.isEmpty)
                                         SliverToBoxAdapter(
-                                          child: Padding(
-                                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                                            child: GestureDetector(
-                                              onTap: () => _navigateToDetail(featuredNews!),
-                                              child: Container(
-                                                height: 200,
-                                                decoration: BoxDecoration(
-                                                  color: cardDark,
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  border: Border.all(color: borderDark),
-                                                ),
-                                                child: ClipRRect(
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  child: Stack(
-                                                    fit: StackFit.expand,
-                                                    children: [
-                                                      AppImageView(
-                                                        imageUrl: featuredNews!.effectiveImageUrl,
-                                                        fit: BoxFit.cover,
-                                                      ),
-                                                      Container(
-                                                        decoration: BoxDecoration(
-                                                          gradient: LinearGradient(
-                                                            begin: Alignment.topCenter,
-                                                            end: Alignment.bottomCenter,
-                                                            colors: [
-                                                              Colors.transparent,
-                                                              Colors.black.withOpacity(0.4),
-                                                              Colors.black.withOpacity(0.95),
-                                                            ],
-                                                            stops: const [0.0, 0.4, 1.0],
+                                          child: Builder(
+                                            builder: (context) {
+                                              final featured = featuredNews;
+                                              if (featured == null) {
+                                                return const SizedBox.shrink();
+                                              }
+                                              return Padding(
+                                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                                                child: GestureDetector(
+                                                  onTap: () => _navigateToDetail(featured),
+                                                  child: Container(
+                                                    height: 200,
+                                                    decoration: BoxDecoration(
+                                                      color: cardDark,
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      border: Border.all(color: borderDark),
+                                                    ),
+                                                    child: ClipRRect(
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      child: Stack(
+                                                        fit: StackFit.expand,
+                                                        children: [
+                                                          AppImageView(
+                                                            imageUrl: featured.effectiveImageUrl,
+                                                            fit: BoxFit.cover,
                                                           ),
-                                                        ),
-                                                      ),
-                                                      Positioned(
-                                                        top: 12,
-                                                        left: 12,
-                                                        child: Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                          decoration: BoxDecoration(
-                                                            color: neonBlue,
-                                                            borderRadius: BorderRadius.circular(4),
-                                                          ),
-                                                          child: Text(
-                                                            'badge_featured'.tr(),
-                                                            style: const TextStyle(
-                                                              color: Color(0xFF05080D),
-                                                              fontSize: 10,
-                                                              fontWeight: FontWeight.w900,
-                                                              letterSpacing: 0.5,
+                                                          Container(
+                                                            decoration: BoxDecoration(
+                                                              gradient: LinearGradient(
+                                                                begin: Alignment.topCenter,
+                                                                end: Alignment.bottomCenter,
+                                                                colors: [
+                                                                  Colors.transparent,
+                                                                  Colors.black.withOpacity(0.4),
+                                                                  Colors.black.withOpacity(0.95),
+                                                                ],
+                                                                stops: const [0.0, 0.4, 1.0],
+                                                              ),
                                                             ),
                                                           ),
-                                                        ),
-                                                      ),
-                                                      Positioned(
-                                                        bottom: 12,
-                                                        left: 12,
-                                                        right: 12,
-                                                        child: TranslatedNewsTitle(
-                                                          news: featuredNews!,
-                                                          langCode: langCode,
-                                                          maxLines: 2,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: TextStyle(
-                                                            color: textWhite,
-                                                            fontSize: 16,
-                                                            fontWeight: FontWeight.w900,
+                                                          Positioned(
+                                                            top: 12,
+                                                            left: 12,
+                                                            child: Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                              decoration: BoxDecoration(
+                                                                color: neonBlue,
+                                                                borderRadius: BorderRadius.circular(4),
+                                                              ),
+                                                              child: Text(
+                                                                'badge_featured'.tr(),
+                                                                style: const TextStyle(
+                                                                  color: Color(0xFF05080D),
+                                                                  fontSize: 10,
+                                                                  fontWeight: FontWeight.w900,
+                                                                  letterSpacing: 0.5,
+                                                                ),
+                                                              ),
+                                                            ),
                                                           ),
-                                                        ),
+                                                          Positioned(
+                                                            bottom: 12,
+                                                            left: 12,
+                                                            right: 12,
+                                                            child: TranslatedNewsTitle(
+                                                              news: featured,
+                                                              langCode: langCode,
+                                                              maxLines: 2,
+                                                              overflow: TextOverflow.ellipsis,
+                                                              style: TextStyle(
+                                                                color: textWhite,
+                                                                fontSize: 16,
+                                                                fontWeight: FontWeight.w900,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
-                                                    ],
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                            ),
+                                              );
+                                            },
                                           ),
                                         ),
                                       if (remainingNews.isNotEmpty)
@@ -764,6 +772,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                           sliver: SliverList(
                                             delegate: SliverChildBuilderDelegate(
                                               (context, index) {
+                                                if (index < 0 || index >= remainingNews.length) {
+                                                  return const SizedBox.shrink();
+                                                }
                                                 final item = remainingNews[index];
                                                 return NewsCard(
                                                   key: ValueKey('home_news_${item.id}'),

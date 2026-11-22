@@ -227,10 +227,10 @@ class SquadService {
         });
 
         return result;
-      });
+      }).handleError((_) {}).asBroadcastStream();
     } catch (e) {
       debugPrint('[SquadService] getActiveSquadsStream error: $e');
-      return Stream.value([]);
+      return Stream<List<SquadPost>>.value([]).asBroadcastStream();
     }
   }
 
@@ -427,7 +427,7 @@ class SquadService {
           return tB.compareTo(tA);
         });
         return list;
-      });
+      }).handleError((_) {}).asBroadcastStream();
     } catch (e) {
       debugPrint('[SquadService] getSquadRequestsStream notice: $e');
       return Stream.value([]);

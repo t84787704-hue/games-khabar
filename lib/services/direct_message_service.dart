@@ -196,6 +196,13 @@ class DirectMessageService {
   Stream<List<ChatMessage>> getMessagesStream({
     required String userId1,
     required String userId2,
+  }) =>
+      _getMessagesStreamInternal(userId1: userId1, userId2: userId2)
+          .asBroadcastStream();
+
+  Stream<List<ChatMessage>> _getMessagesStreamInternal({
+    required String userId1,
+    required String userId2,
   }) async* {
     if (userId1.isEmpty || userId2.isEmpty) {
       yield [];
@@ -464,7 +471,10 @@ class DirectMessageService {
   }
 
   /// Stream total unread count (for badge)
-  Stream<int> getUnreadCountStream(String userId) async* {
+  Stream<int> getUnreadCountStream(String userId) =>
+      _getUnreadCountStreamInternal(userId).asBroadcastStream();
+
+  Stream<int> _getUnreadCountStreamInternal(String userId) async* {
     if (userId.isEmpty) {
       yield 0;
       return;

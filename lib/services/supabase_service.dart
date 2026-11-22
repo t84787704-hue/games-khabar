@@ -698,31 +698,35 @@ class SupabaseService {
   }
 
   // REALTIME STREAMS
-  static Stream<List<Map<String, dynamic>>> getMatchChatStream(String matchId) async* {
-    while (true) {
-      final messages = await query(
-        'match_chat',
-        filters: {'match_id': 'eq.$matchId'},
-        order: 'created_at.asc',
-        limit: 50,
-      );
-      yield messages;
-      await Future.delayed(const Duration(seconds: 3));
-    }
+  static Stream<List<Map<String, dynamic>>> getMatchChatStream(String matchId) {
+    return (() async* {
+      while (true) {
+        final messages = await query(
+          'match_chat',
+          filters: {'match_id': 'eq.$matchId'},
+          order: 'created_at.asc',
+          limit: 50,
+        );
+        yield messages;
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    })().asBroadcastStream();
   }
 
   static Stream<List<Map<String, dynamic>>> getChatMessagesStream(String roomId) => getMatchChatStream(roomId);
 
-  static Stream<Map<String, dynamic>?> getTeamMatchStream(String matchId) async* {
-    while (true) {
-      final matches = await query(
-        'team_matches',
-        filters: {'match_id': 'eq.$matchId'},
-        limit: 1,
-      );
-      yield matches.isNotEmpty ? matches.first : null;
-      await Future.delayed(const Duration(seconds: 4));
-    }
+  static Stream<Map<String, dynamic>?> getTeamMatchStream(String matchId) {
+    return (() async* {
+      while (true) {
+        final matches = await query(
+          'team_matches',
+          filters: {'match_id': 'eq.$matchId'},
+          limit: 1,
+        );
+        yield matches.isNotEmpty ? matches.first : null;
+        await Future.delayed(const Duration(seconds: 4));
+      }
+    })().asBroadcastStream();
   }
 
   // ============================================================
@@ -1019,289 +1023,311 @@ class SupabaseService {
   // NEVER emits empty list if records exist.
   // ============================================================
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeUsers() async* {
-    if (_cachedUsers.isNotEmpty) {
-      yield _cachedUsers;
-    }
-    while (true) {
-      try {
-        final res = await client
-            .from('users')
-            .select()
-            .order('created_at', ascending: false)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          final list = List<Map<String, dynamic>>.from(res);
-          if (list.isNotEmpty || _cachedUsers.isEmpty) {
-            _cachedUsers = list;
-            yield list;
+  static Stream<List<Map<String, dynamic>>> getRealtimeUsers() {
+    return (() async* {
+      if (_cachedUsers.isNotEmpty) {
+        yield _cachedUsers;
+      }
+      while (true) {
+        try {
+          final res = await client
+              .from('users')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            final list = List<Map<String, dynamic>>.from(res);
+            if (list.isNotEmpty || _cachedUsers.isEmpty) {
+              _cachedUsers = list;
+              yield list;
+            }
+          }
+        } catch (e) {
+          debugPrint('getRealtimeUsers error: $e');
+          if (_cachedUsers.isNotEmpty) {
+            yield _cachedUsers;
           }
         }
-      } catch (e) {
-        debugPrint('getRealtimeUsers error: $e');
-        if (_cachedUsers.isNotEmpty) {
-          yield _cachedUsers;
-        }
+        await Future.delayed(const Duration(seconds: 3));
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
+    })().asBroadcastStream();
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimePosts() async* {
-    if (_cachedPosts.isNotEmpty) {
-      yield _cachedPosts;
-    }
-    while (true) {
-      try {
-        final res = await client
-            .from('posts')
-            .select()
-            .order('created_at', ascending: false)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          final list = List<Map<String, dynamic>>.from(res);
-          if (list.isNotEmpty || _cachedPosts.isEmpty) {
-            _cachedPosts = list;
-            yield list;
+  static Stream<List<Map<String, dynamic>>> getRealtimePosts() {
+    return (() async* {
+      if (_cachedPosts.isNotEmpty) {
+        yield _cachedPosts;
+      }
+      while (true) {
+        try {
+          final res = await client
+              .from('posts')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            final list = List<Map<String, dynamic>>.from(res);
+            if (list.isNotEmpty || _cachedPosts.isEmpty) {
+              _cachedPosts = list;
+              yield list;
+            }
+          }
+        } catch (e) {
+          debugPrint('getRealtimePosts error: $e');
+          if (_cachedPosts.isNotEmpty) {
+            yield _cachedPosts;
           }
         }
-      } catch (e) {
-        debugPrint('getRealtimePosts error: $e');
-        if (_cachedPosts.isNotEmpty) {
-          yield _cachedPosts;
-        }
+        await Future.delayed(const Duration(seconds: 3));
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
+    })().asBroadcastStream();
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeReports() async* {
-    if (_cachedReports.isNotEmpty) {
-      yield _cachedReports;
-    }
-    while (true) {
-      try {
-        final res = await client
-            .from('reports')
-            .select()
-            .order('created_at', ascending: false)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          final list = List<Map<String, dynamic>>.from(res);
-          _cachedReports = list;
-          yield list;
-        }
-      } catch (e) {
-        debugPrint('getRealtimeReports error: $e');
-        if (_cachedReports.isNotEmpty) {
-          yield _cachedReports;
-        }
+  static Stream<List<Map<String, dynamic>>> getRealtimeReports() {
+    return (() async* {
+      if (_cachedReports.isNotEmpty) {
+        yield _cachedReports;
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
-  }
-
-  static Stream<List<Map<String, dynamic>>> getRealtimeCoinTransactions() async* {
-    if (_cachedCoinTransactions.isNotEmpty) {
-      yield _cachedCoinTransactions;
-    }
-    while (true) {
-      try {
-        final res = await client
-            .from('coin_transactions')
-            .select()
-            .order('created_at', ascending: false)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          final list = List<Map<String, dynamic>>.from(res);
-          if (list.isNotEmpty || _cachedCoinTransactions.isEmpty) {
-            _cachedCoinTransactions = list;
+      while (true) {
+        try {
+          final res = await client
+              .from('reports')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            final list = List<Map<String, dynamic>>.from(res);
+            _cachedReports = list;
             yield list;
           }
-        }
-      } catch (e) {
-        debugPrint('getRealtimeCoinTransactions error: $e');
-        if (_cachedCoinTransactions.isNotEmpty) {
-          yield _cachedCoinTransactions;
-        }
-      }
-      await Future.delayed(const Duration(seconds: 3));
-    }
-  }
-
-  static Stream<List<Map<String, dynamic>>> getRealtimeNotifications() async* {
-    if (_cachedNotifications.isNotEmpty) {
-      yield _cachedNotifications;
-    }
-    while (true) {
-      try {
-        final res = await client
-            .from('notifications')
-            .select()
-            .order('created_at', ascending: false)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          final list = List<Map<String, dynamic>>.from(res);
-          if (list.isNotEmpty || _cachedNotifications.isEmpty) {
-            _cachedNotifications = list;
-            yield list;
+        } catch (e) {
+          debugPrint('getRealtimeReports error: $e');
+          if (_cachedReports.isNotEmpty) {
+            yield _cachedReports;
           }
         }
-      } catch (e) {
-        debugPrint('getRealtimeNotifications error: $e');
-        if (_cachedNotifications.isNotEmpty) {
-          yield _cachedNotifications;
-        }
+        await Future.delayed(const Duration(seconds: 3));
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
+    })().asBroadcastStream();
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeRooms() async* {
-    if (_cachedRooms.isNotEmpty) {
-      yield _cachedRooms;
-    }
-    while (true) {
-      try {
-        final res = await client
-            .from('rooms')
-            .select()
-            .order('created_at', ascending: false)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          final list = List<Map<String, dynamic>>.from(res);
-          if (list.isNotEmpty || _cachedRooms.isEmpty) {
-            _cachedRooms = list;
-            yield list;
+  static Stream<List<Map<String, dynamic>>> getRealtimeCoinTransactions() {
+    return (() async* {
+      if (_cachedCoinTransactions.isNotEmpty) {
+        yield _cachedCoinTransactions;
+      }
+      while (true) {
+        try {
+          final res = await client
+              .from('coin_transactions')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            final list = List<Map<String, dynamic>>.from(res);
+            if (list.isNotEmpty || _cachedCoinTransactions.isEmpty) {
+              _cachedCoinTransactions = list;
+              yield list;
+            }
+          }
+        } catch (e) {
+          debugPrint('getRealtimeCoinTransactions error: $e');
+          if (_cachedCoinTransactions.isNotEmpty) {
+            yield _cachedCoinTransactions;
           }
         }
-      } catch (e) {
-        debugPrint('getRealtimeRooms error: $e');
-        if (_cachedRooms.isNotEmpty) {
-          yield _cachedRooms;
-        }
+        await Future.delayed(const Duration(seconds: 3));
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
+    })().asBroadcastStream();
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeActiveMatches() async* {
-    if (_cachedActiveMatches.isNotEmpty) {
-      yield _cachedActiveMatches;
-    }
-    while (true) {
-      try {
-        final res = await client
-            .from('active_matches')
-            .select()
-            .order('created_at', ascending: false)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          final list = List<Map<String, dynamic>>.from(res);
-          if (list.isNotEmpty || _cachedActiveMatches.isEmpty) {
-            _cachedActiveMatches = list;
-            yield list;
+  static Stream<List<Map<String, dynamic>>> getRealtimeNotifications() {
+    return (() async* {
+      if (_cachedNotifications.isNotEmpty) {
+        yield _cachedNotifications;
+      }
+      while (true) {
+        try {
+          final res = await client
+              .from('notifications')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            final list = List<Map<String, dynamic>>.from(res);
+            if (list.isNotEmpty || _cachedNotifications.isEmpty) {
+              _cachedNotifications = list;
+              yield list;
+            }
+          }
+        } catch (e) {
+          debugPrint('getRealtimeNotifications error: $e');
+          if (_cachedNotifications.isNotEmpty) {
+            yield _cachedNotifications;
           }
         }
-      } catch (e) {
-        debugPrint('getRealtimeActiveMatches error: $e');
-        if (_cachedActiveMatches.isNotEmpty) {
-          yield _cachedActiveMatches;
-        }
+        await Future.delayed(const Duration(seconds: 3));
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
+    })().asBroadcastStream();
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeTournaments() async* {
-    if (_cachedTournaments.isNotEmpty) {
-      yield _cachedTournaments;
-    }
-    while (true) {
-      try {
-        final res = await client
-            .from('tournaments')
-            .select()
-            .order('created_at', ascending: false)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          final list = List<Map<String, dynamic>>.from(res);
-          if (list.isNotEmpty || _cachedTournaments.isEmpty) {
-            _cachedTournaments = list;
-            yield list;
+  static Stream<List<Map<String, dynamic>>> getRealtimeRooms() {
+    return (() async* {
+      if (_cachedRooms.isNotEmpty) {
+        yield _cachedRooms;
+      }
+      while (true) {
+        try {
+          final res = await client
+              .from('rooms')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            final list = List<Map<String, dynamic>>.from(res);
+            if (list.isNotEmpty || _cachedRooms.isEmpty) {
+              _cachedRooms = list;
+              yield list;
+            }
+          }
+        } catch (e) {
+          debugPrint('getRealtimeRooms error: $e');
+          if (_cachedRooms.isNotEmpty) {
+            yield _cachedRooms;
           }
         }
-      } catch (e) {
-        debugPrint('getRealtimeTournaments error: $e');
-        if (_cachedTournaments.isNotEmpty) {
-          yield _cachedTournaments;
-        }
+        await Future.delayed(const Duration(seconds: 3));
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
+    })().asBroadcastStream();
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeProofHistory() async* {
-    if (_cachedProofHistory.isNotEmpty) {
-      yield _cachedProofHistory;
-    }
-    while (true) {
-      try {
-        final res = await client
-            .from('proof_history')
-            .select()
-            .order('created_at', ascending: false)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          final list = List<Map<String, dynamic>>.from(res);
-          _cachedProofHistory = list;
-          yield list;
-        }
-      } catch (e) {
-        debugPrint('getRealtimeProofHistory error: $e');
-        if (_cachedProofHistory.isNotEmpty) {
-          yield _cachedProofHistory;
-        }
+  static Stream<List<Map<String, dynamic>>> getRealtimeActiveMatches() {
+    return (() async* {
+      if (_cachedActiveMatches.isNotEmpty) {
+        yield _cachedActiveMatches;
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
+      while (true) {
+        try {
+          final res = await client
+              .from('active_matches')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            final list = List<Map<String, dynamic>>.from(res);
+            if (list.isNotEmpty || _cachedActiveMatches.isEmpty) {
+              _cachedActiveMatches = list;
+              yield list;
+            }
+          }
+        } catch (e) {
+          debugPrint('getRealtimeActiveMatches error: $e');
+          if (_cachedActiveMatches.isNotEmpty) {
+            yield _cachedActiveMatches;
+          }
+        }
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    })().asBroadcastStream();
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeSingleRoom(String roomId) async* {
-    while (true) {
-      try {
-        final res = await client
-            .from('rooms')
-            .select()
-            .eq('id', roomId)
-            .limit(1)
-            .timeout(const Duration(seconds: 4));
-        if (res is List && res.isNotEmpty) {
-          yield List<Map<String, dynamic>>.from(res);
-        }
-      } catch (e) {
-        debugPrint('getRealtimeSingleRoom error: $e');
+  static Stream<List<Map<String, dynamic>>> getRealtimeTournaments() {
+    return (() async* {
+      if (_cachedTournaments.isNotEmpty) {
+        yield _cachedTournaments;
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
+      while (true) {
+        try {
+          final res = await client
+              .from('tournaments')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            final list = List<Map<String, dynamic>>.from(res);
+            if (list.isNotEmpty || _cachedTournaments.isEmpty) {
+              _cachedTournaments = list;
+              yield list;
+            }
+          }
+        } catch (e) {
+          debugPrint('getRealtimeTournaments error: $e');
+          if (_cachedTournaments.isNotEmpty) {
+            yield _cachedTournaments;
+          }
+        }
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    })().asBroadcastStream();
   }
 
-  static Stream<List<Map<String, dynamic>>> getRealtimeRoomMessages(String roomId) async* {
-    while (true) {
-      try {
-        final res = await client
-            .from('messages')
-            .select()
-            .eq('room_id', roomId)
-            .order('created_at', ascending: true)
-            .timeout(const Duration(seconds: 4));
-        if (res is List) {
-          yield List<Map<String, dynamic>>.from(res);
-        }
-      } catch (e) {
-        debugPrint('getRealtimeRoomMessages error: $e');
+  static Stream<List<Map<String, dynamic>>> getRealtimeProofHistory() {
+    return (() async* {
+      if (_cachedProofHistory.isNotEmpty) {
+        yield _cachedProofHistory;
       }
-      await Future.delayed(const Duration(seconds: 3));
-    }
+      while (true) {
+        try {
+          final res = await client
+              .from('proof_history')
+              .select()
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            final list = List<Map<String, dynamic>>.from(res);
+            _cachedProofHistory = list;
+            yield list;
+          }
+        } catch (e) {
+          debugPrint('getRealtimeProofHistory error: $e');
+          if (_cachedProofHistory.isNotEmpty) {
+            yield _cachedProofHistory;
+          }
+        }
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    })().asBroadcastStream();
+  }
+
+  static Stream<List<Map<String, dynamic>>> getRealtimeSingleRoom(String roomId) {
+    return (() async* {
+      while (true) {
+        try {
+          final res = await client
+              .from('rooms')
+              .select()
+              .eq('id', roomId)
+              .limit(1)
+              .timeout(const Duration(seconds: 4));
+          if (res is List && res.isNotEmpty) {
+            yield List<Map<String, dynamic>>.from(res);
+          }
+        } catch (e) {
+          debugPrint('getRealtimeSingleRoom error: $e');
+        }
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    })().asBroadcastStream();
+  }
+
+  static Stream<List<Map<String, dynamic>>> getRealtimeRoomMessages(String roomId) {
+    return (() async* {
+      while (true) {
+        try {
+          final res = await client
+              .from('messages')
+              .select()
+              .eq('room_id', roomId)
+              .order('created_at', ascending: true)
+              .timeout(const Duration(seconds: 4));
+          if (res is List) {
+            yield List<Map<String, dynamic>>.from(res);
+          }
+        } catch (e) {
+          debugPrint('getRealtimeRoomMessages error: $e');
+        }
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    })().asBroadcastStream();
   }
 }

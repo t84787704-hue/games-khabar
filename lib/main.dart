@@ -15,9 +15,38 @@ import 'screens/banned_screen.dart';
 import 'screens/gamer_privacy_policy_screen.dart';
 import 'screens/gamer_terms_of_service_screen.dart';
 import 'services/notification_service.dart';
+import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+bool _isTransientNetworkOrAuthError(Object error) {
+  if (error is SocketException ||
+      error is HandshakeException ||
+      error is TlsException ||
+      error is HttpException ||
+      error is TimeoutException ||
+      error is WebSocketException ||
+      error is AuthRetryableFetchException ||
+      error is AuthException) {
+    return true;
+  }
+  final msg = error.toString();
+  return msg.contains('SocketException') ||
+      msg.contains('Failed host lookup') ||
+      msg.contains('Connection closed') ||
+      msg.contains('Connection reset') ||
+      msg.contains('Connection refused') ||
+      msg.contains('Network is unreachable') ||
+      msg.contains('Software caused connection abort') ||
+      msg.contains('HandshakeException') ||
+      msg.contains('ClientException') ||
+      msg.contains('HttpException') ||
+      msg.contains('AuthRetryableFetchException') ||
+      msg.contains('Stream has already been listened to');
+}
 
 // ✅ Global Notification Plugin Instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -53,9 +82,20 @@ void main() async {
   // ✅ Initialize Firebase & Crashlytics
   try {
     await Firebase.initializeApp();
-    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      final exception = details.exception;
+      if (_isTransientNetworkOrAuthError(exception)) {
+        debugPrint('[FlutterError non-fatal network/auth]: $exception');
+        return;
+      }
+      FirebaseCrashlytics.instance.recordFlutterError(details, fatal: false);
+    };
     PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      if (_isTransientNetworkOrAuthError(error)) {
+        debugPrint('[PlatformDispatcher non-fatal network/auth]: $error');
+        return true;
+      }
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: false);
       return true;
     };
   } catch (e) {

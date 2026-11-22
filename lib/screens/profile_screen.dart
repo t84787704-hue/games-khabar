@@ -429,8 +429,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 builder: (context, snapshot) {
                   int coins = 0;
                   try {
-                    if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
-                      final data = snapshot.data!.first;
+                    final rows = snapshot.data;
+                    if (rows != null && rows.isNotEmpty) {
+                      final data = rows.first;
                       final rawCoins = data['gCoins'] ?? data['coins'];
                       if (rawCoins is num) {
                         coins = rawCoins.toInt();

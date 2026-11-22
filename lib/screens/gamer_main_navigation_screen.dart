@@ -105,16 +105,21 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
 
     _adminSub?.cancel();
     try {
-      _adminSub = watchIsAdmin().listen((adminState) {
-        if (mounted && adminState != _isAdmin) {
-          setState(() {
-            _isAdmin = adminState;
-            if (!_isAdmin && _currentIndex > 4) {
-              _currentIndex = 0;
-            }
-          });
-        }
-      });
+      _adminSub = watchIsAdmin().listen(
+        (adminState) {
+          if (mounted && adminState != _isAdmin) {
+            setState(() {
+              _isAdmin = adminState;
+              if (!_isAdmin && _currentIndex > 4) {
+                _currentIndex = 0;
+              }
+            });
+          }
+        },
+        onError: (e) {
+          debugPrint('[GamerMainNavigationScreen] watchIsAdmin stream error: $e');
+        },
+      );
     } catch (_) {}
   }
 

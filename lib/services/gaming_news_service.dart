@@ -57,7 +57,10 @@ class GamingNewsService {
   }
 
   /// Stream of all gaming news from Supabase, sorted by timestamp descending
-  Stream<List<GamingNewsModel>> getGamingNewsStream() async* {
+  Stream<List<GamingNewsModel>> getGamingNewsStream() =>
+      _getGamingNewsStreamInternal().asBroadcastStream();
+
+  Stream<List<GamingNewsModel>> _getGamingNewsStreamInternal() async* {
     yield _getFallbackSeedArticles();
     try {
       final rows = await SupabaseService.client
@@ -80,6 +83,7 @@ class GamingNewsService {
           .stream(primaryKey: ['id'])
           .order('timestamp', ascending: false)
           .limit(200)
+          .handleError((_) {})
           .map((list) => list
               .map((m) => GamingNewsModel.fromMap(m))
               .where(_isGenuineGamingNewsItem)
@@ -88,7 +92,10 @@ class GamingNewsService {
   }
 
   /// Stream of saved news from Supabase table 'saved_news'
-  Stream<List<GamingNewsModel>> getSavedNewsStream(String uid) async* {
+  Stream<List<GamingNewsModel>> getSavedNewsStream(String uid) =>
+      _getSavedNewsStreamInternal(uid).asBroadcastStream();
+
+  Stream<List<GamingNewsModel>> _getSavedNewsStreamInternal(String uid) async* {
     if (uid.isEmpty) {
       yield [];
       return;
@@ -106,7 +113,10 @@ class GamingNewsService {
   }
 
   /// Check if a specific news article is bookmarked
-  Stream<bool> isBookmarkedStream(String uid, String newsId) async* {
+  Stream<bool> isBookmarkedStream(String uid, String newsId) =>
+      _isBookmarkedStreamInternal(uid, newsId).asBroadcastStream();
+
+  Stream<bool> _isBookmarkedStreamInternal(String uid, String newsId) async* {
     if (uid.isEmpty || newsId.isEmpty) {
       yield false;
       return;

@@ -60,6 +60,8 @@ class NotificationService {
   final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
   StreamSubscription? _realtimeNotifSub;
   StreamSubscription? _newsDocsSub;
+  StreamSubscription? _inAppAuthSub;
+  StreamSubscription? _squadAuthSub;
   Timer? _backgroundPollingTimer;
   String? _subscribedUserId;
   final Set<String> _seenNotificationIds = {};
@@ -213,7 +215,7 @@ class NotificationService {
         unreadCountNotifier.value = unread;
 
         return list;
-      });
+      }).asBroadcastStream();
     } catch (_) {
       return Stream.value([]);
     }
@@ -243,7 +245,7 @@ class NotificationService {
 
         unreadCountNotifier.value = unread;
         return unread;
-      });
+      }).asBroadcastStream();
     } catch (_) {
       return Stream.value(0);
     }
@@ -258,20 +260,26 @@ class NotificationService {
         _subscribeToUserNotifications(initialUser.id);
       }
 
-      SupabaseService.client.auth.onAuthStateChange.listen((data) {
-        final user = data.session?.user;
-        if (user == null) {
-          unreadCountNotifier.value = 0;
-          _subscribedUserId = null;
-          _realtimeNotifSub?.cancel();
-          _realtimeNotifSub = null;
-          _backgroundPollingTimer?.cancel();
-          _backgroundPollingTimer = null;
-          _seenNotificationIds.clear();
-          return;
-        }
-        _subscribeToUserNotifications(user.id);
-      });
+      _inAppAuthSub?.cancel();
+      _inAppAuthSub = SupabaseService.client.auth.onAuthStateChange.listen(
+        (data) {
+          final user = data.session?.user;
+          if (user == null) {
+            unreadCountNotifier.value = 0;
+            _subscribedUserId = null;
+            _realtimeNotifSub?.cancel();
+            _realtimeNotifSub = null;
+            _backgroundPollingTimer?.cancel();
+            _backgroundPollingTimer = null;
+            _seenNotificationIds.clear();
+            return;
+          }
+          _subscribeToUserNotifications(user.id);
+        },
+        onError: (e) {
+          debugPrint('[NotificationService] inAppAuthSub error: $e');
+        },
+      );
 
       // Also listen to GamerAuthService's user notifier
       GamerAuthService().authUserNotifier.addListener(() {
@@ -984,58 +992,64 @@ class NotificationService {
 
   void _listenForSquadNotifications() {
     try {
-      SupabaseService.client.auth.onAuthStateChange.listen((data) {
-        final user = data.session?.user;
-        if (user == null) {
-          _squadNotifSub?.cancel();
-          _squadNotifSub = null;
-          _seenSquadNotifIds.clear();
-          return;
-        }
-        saveUserFcmToken(user.id);
+      _squadAuthSub?.cancel();
+      _squadAuthSub = SupabaseService.client.auth.onAuthStateChange.listen(
+        (data) {
+          final user = data.session?.user;
+          if (user == null) {
+            _squadNotifSub?.cancel();
+            _squadNotifSub = null;
+            _seenSquadNotifIds.clear();
+            return;
+          }
+          saveUserFcmToken(user.id);
 
-        _squadNotifSub?.cancel();
-        bool isFirstSnapshot = true;
-        try {
-          _squadNotifSub = SupabaseService.client
-              .from('notifications')
-              .stream(primaryKey: ['id'])
-              .eq('recipientUid', user.id)
-              .order('created_at', ascending: false)
-              .limit(10)
-              .listen((rows) {
-            if (isFirstSnapshot) {
-              isFirstSnapshot = false;
+          _squadNotifSub?.cancel();
+          bool isFirstSnapshot = true;
+          try {
+            _squadNotifSub = SupabaseService.client
+                .from('notifications')
+                .stream(primaryKey: ['id'])
+                .eq('recipientUid', user.id)
+                .order('created_at', ascending: false)
+                .limit(10)
+                .listen((rows) {
+              if (isFirstSnapshot) {
+                isFirstSnapshot = false;
+                for (final map in rows) {
+                  final id = map['id']?.toString() ?? '';
+                  if (id.isNotEmpty) {
+                    _seenSquadNotifIds.add(id);
+                  }
+                }
+                return;
+              }
+
               for (final map in rows) {
                 final id = map['id']?.toString() ?? '';
-                if (id.isNotEmpty) {
-                  _seenSquadNotifIds.add(id);
+                if (id.isNotEmpty && !_seenSquadNotifIds.add(id)) {
+                  continue;
+                }
+                final type = map['type'] as String? ?? '';
+                if (type.startsWith('squad_')) {
+                  final title = map['title'] as String? ?? 'notif_squad_update_title'.tr();
+                  final message = map['message'] as String? ?? map['body'] as String? ?? 'notif_squad_update_body'.tr();
+                  final postId = map['postId'] as String? ?? map['post_id'] as String? ?? '';
+                  showSquadNotification(
+                    title: title,
+                    body: message,
+                    postId: postId,
+                    recipientUid: user.id,
+                  );
                 }
               }
-              return;
-            }
-
-            for (final map in rows) {
-              final id = map['id']?.toString() ?? '';
-              if (id.isNotEmpty && !_seenSquadNotifIds.add(id)) {
-                continue;
-              }
-              final type = map['type'] as String? ?? '';
-              if (type.startsWith('squad_')) {
-                final title = map['title'] as String? ?? 'notif_squad_update_title'.tr();
-                final message = map['message'] as String? ?? map['body'] as String? ?? 'notif_squad_update_body'.tr();
-                final postId = map['postId'] as String? ?? map['post_id'] as String? ?? '';
-                showSquadNotification(
-                  title: title,
-                  body: message,
-                  postId: postId,
-                  recipientUid: user.id,
-                );
-              }
-            }
-          }, onError: (_) {});
-        } catch (_) {}
-      });
+            }, onError: (_) {});
+          } catch (_) {}
+        },
+        onError: (e) {
+          debugPrint('[NotificationService] squadAuthSub error: $e');
+        },
+      );
     } catch (_) {}
   }
 

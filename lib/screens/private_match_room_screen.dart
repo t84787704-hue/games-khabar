@@ -89,6 +89,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
       if (mounted) setState(() => _isRoomInfoLoading = false);
       return;
     }
+    _roomInfoSub?.cancel();
     try {
       _roomInfoSub = SupabaseService.client
           .from('match_room_info')
@@ -201,6 +202,7 @@ class _PrivateMatchRoomScreenState extends State<PrivateMatchRoomScreen> {
   void _subscribeToStream() {
     final cleanId = widget.matchId.trim();
     if (cleanId.isEmpty) return;
+    _streamSub?.cancel();
     try {
       _streamSub = SupabaseService.client
           .from("match_messages")

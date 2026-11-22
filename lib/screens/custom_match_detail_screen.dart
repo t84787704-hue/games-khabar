@@ -25,19 +25,21 @@ class CustomMatchDetailScreen extends StatefulWidget {
 class _CustomMatchDetailScreenState extends State<CustomMatchDetailScreen> {
   static const Color _neonGreen = GamerTheme.neonGreen;
 
-  Stream<Map<String, dynamic>?> _roomStream() async* {
-    while (true) {
-      Map<String, dynamic>? data;
-      try {
-        data = await SupabaseService.client
-            .from('rooms')
-            .select()
-            .eq('id', widget.roomId)
-            .maybeSingle();
-      } catch (_) {}
-      yield data;
-      await Future.delayed(const Duration(seconds: 4));
-    }
+  Stream<Map<String, dynamic>?> _roomStream() {
+    return (() async* {
+      while (true) {
+        Map<String, dynamic>? data;
+        try {
+          data = await SupabaseService.client
+              .from('rooms')
+              .select()
+              .eq('id', widget.roomId)
+              .maybeSingle();
+        } catch (_) {}
+        yield data;
+        await Future.delayed(const Duration(seconds: 4));
+      }
+    })().asBroadcastStream();
   }
   bool _isUploadingProof = false;
   File? _selectedProofImage;

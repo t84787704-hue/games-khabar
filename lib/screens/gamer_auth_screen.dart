@@ -35,17 +35,23 @@ class _GamerAuthScreenState extends State<GamerAuthScreen> {
   @override
   void initState() {
     super.initState();
-    _authSubscription = SupabaseService.client.auth.onAuthStateChange.listen((data) {
-      final AuthChangeEvent event = data.event;
-      final Session? session = data.session;
+    _authSubscription?.cancel();
+    _authSubscription = SupabaseService.client.auth.onAuthStateChange.listen(
+      (data) {
+        final AuthChangeEvent event = data.event;
+        final Session? session = data.session;
 
-      if ((event == AuthChangeEvent.signedIn || event == AuthChangeEvent.tokenRefreshed) &&
-          session != null) {
-        if (!_isNavigating) {
-          _handlePostAuth();
+        if ((event == AuthChangeEvent.signedIn || event == AuthChangeEvent.tokenRefreshed) &&
+            session != null) {
+          if (!_isNavigating) {
+            _handlePostAuth();
+          }
         }
-      }
-    });
+      },
+      onError: (Object error) {
+        debugPrint('[GamerAuthScreen] onAuthStateChange error: $error');
+      },
+    );
   }
 
   @override

@@ -12,9 +12,10 @@ class SteamAllNewsService {
     final url = Uri.parse('https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=$testAppId&count=2');
     
     try {
-      final res = await http.get(url);
+      final res = await http.get(url).timeout(const Duration(seconds: 12));
       print('Status: ${res.statusCode}');
-      print('Body: ${res.body.substring(0, 300)}');
+      final previewLen = res.body.length < 300 ? res.body.length : 300;
+      print('Body: ${res.body.substring(0, previewLen)}');
       
       if (res.statusCode == 200) {
         print('API KAAM KAR RAHA HAI!');
@@ -29,7 +30,7 @@ class SteamAllNewsService {
     for (var entry in allGamesAppIds.entries) {
       try {
         final url = Uri.parse('https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${entry.value}&count=2');
-        final res = await http.get(url);
+        final res = await http.get(url).timeout(const Duration(seconds: 12));
         if (res.statusCode == 200) {
           var data = jsonDecode(res.body);
           var items = data['appnews']?['newsitems'] as List?;
@@ -49,25 +50,28 @@ class SteamAllNewsService {
                   'timestamp': nowStr,
                   'source': 'steam_source_name'.tr(),
                 });
+                total++;
               } catch (_) {
-                await SupabaseService.client.from('news').insert({
-                  'title': item['title'] ?? 'steam_no_title'.tr(),
-                  'content': item['contents'] ?? '',
-                  'source_url': item['url'] ?? '',
-                  'game_name': entry.key,
-                  'category': 'steam_category_open_world'.tr(),
-                  'created_at': nowStr,
-                  'source': 'steam_source_name'.tr(),
-                });
+                try {
+                  await SupabaseService.client.from('news').insert({
+                    'title': item['title'] ?? 'steam_no_title'.tr(),
+                    'content': item['contents'] ?? '',
+                    'source_url': item['url'] ?? '',
+                    'game_name': entry.key,
+                    'category': 'steam_category_open_world'.tr(),
+                    'created_at': nowStr,
+                    'source': 'steam_source_name'.tr(),
+                  });
+                  total++;
+                } catch (_) {}
               }
-              total++;
             }
           }
         }
       } catch (e) {
         print('Skip ${entry.key}: $e');
       }
-      await Future.delayed(Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 1));
     }
     return total;
   }

@@ -79,45 +79,51 @@ class PriceService {
     return false;
   }
 
-  Stream<Map<String, dynamic>?> streamGamePrice(String gameName) async* {
-    final docId = getGameDocId(gameName);
-    try {
-      final initial = await SupabaseService.client
-          .from('game_prices')
-          .select()
-          .eq('id', docId)
-          .maybeSingle();
-      yield initial;
-    } catch (_) {}
+  Stream<Map<String, dynamic>?> streamGamePrice(String gameName) {
+    return (() async* {
+      final docId = getGameDocId(gameName);
+      try {
+        final initial = await SupabaseService.client
+            .from('game_prices')
+            .select()
+            .eq('id', docId)
+            .maybeSingle();
+        yield initial;
+      } catch (_) {}
 
-    try {
-      yield* SupabaseService.client
-          .from('game_prices')
-          .stream(primaryKey: ['id'])
-          .eq('id', docId)
-          .map((list) => list.isNotEmpty ? list.first : null);
-    } catch (_) {}
+      try {
+        yield* SupabaseService.client
+            .from('game_prices')
+            .stream(primaryKey: ['id'])
+            .eq('id', docId)
+            .map((list) => list.isNotEmpty ? list.first : null)
+            .handleError((_) {});
+      } catch (_) {}
+    })().asBroadcastStream();
   }
 
-  Stream<Map<String, dynamic>?> streamUserAlert(String gameName, String userId) async* {
-    final gameId = getGameDocId(gameName);
-    final alertDocId = '${userId}_$gameId';
-    try {
-      final initial = await SupabaseService.client
-          .from('user_price_alerts')
-          .select()
-          .eq('id', alertDocId)
-          .maybeSingle();
-      yield initial;
-    } catch (_) {}
+  Stream<Map<String, dynamic>?> streamUserAlert(String gameName, String userId) {
+    return (() async* {
+      final gameId = getGameDocId(gameName);
+      final alertDocId = '${userId}_$gameId';
+      try {
+        final initial = await SupabaseService.client
+            .from('user_price_alerts')
+            .select()
+            .eq('id', alertDocId)
+            .maybeSingle();
+        yield initial;
+      } catch (_) {}
 
-    try {
-      yield* SupabaseService.client
-          .from('user_price_alerts')
-          .stream(primaryKey: ['id'])
-          .eq('id', alertDocId)
-          .map((list) => list.isNotEmpty ? list.first : null);
-    } catch (_) {}
+      try {
+        yield* SupabaseService.client
+            .from('user_price_alerts')
+            .stream(primaryKey: ['id'])
+            .eq('id', alertDocId)
+            .map((list) => list.isNotEmpty ? list.first : null)
+            .handleError((_) {});
+      } catch (_) {}
+    })().asBroadcastStream();
   }
 
   Future<void> setPriceAlert({

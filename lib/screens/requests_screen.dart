@@ -24,19 +24,21 @@ class RequestsScreen extends StatefulWidget {
 class _RequestsScreenState extends State<RequestsScreen> {
   final LfgService _lfgService = LfgService();
 
-  Stream<Map<String, dynamic>?> _postStream() async* {
-    while (true) {
-      Map<String, dynamic>? data;
-      try {
-        data = await SupabaseService.client
-            .from('lfg_posts')
-            .select()
-            .eq('id', widget.postId)
-            .maybeSingle();
-      } catch (_) {}
-      yield data;
-      await Future.delayed(const Duration(seconds: 4));
-    }
+  Stream<Map<String, dynamic>?> _postStream() {
+    return (() async* {
+      while (true) {
+        Map<String, dynamic>? data;
+        try {
+          data = await SupabaseService.client
+              .from('lfg_posts')
+              .select()
+              .eq('id', widget.postId)
+              .maybeSingle();
+        } catch (_) {}
+        yield data;
+        await Future.delayed(const Duration(seconds: 4));
+      }
+    })().asBroadcastStream();
   }
 
   final Set<String> _processingUids = {};

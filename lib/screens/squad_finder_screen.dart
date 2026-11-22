@@ -798,11 +798,42 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
               });
             }
           },
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-            slivers: [
-              // Top Team vs Team Action Bar
-              SliverToBoxAdapter(
+          child: StreamBuilder<List<SquadPost>>(
+            stream: _squadService.getActiveSquadsStream(),
+            builder: (context, snapshot) {
+              final isWaitingInitial =
+                  snapshot.connectionState == ConnectionState.waiting && _localSquads.isEmpty;
+              final streamSquads = snapshot.data ?? const <SquadPost>[];
+              final squads = _combineSquads(streamSquads);
+
+              final filtered = squads.where((s) {
+                if (_filterGame != 'All' &&
+                    !s.game.toLowerCase().contains(_filterGame.toLowerCase())) {
+                  return false;
+                }
+                if (_filterMode != 'All' &&
+                    !s.mode.toLowerCase().contains(_filterMode.toLowerCase())) {
+                  return false;
+                }
+                if (_filterTier != 'All' &&
+                    !s.tierNeeded.toLowerCase().contains(_filterTier.toLowerCase()) &&
+                    s.tierNeeded != 'Any Tier') {
+                  return false;
+                }
+                if (_filterKd != 'Any') {
+                  final minVal = double.tryParse(_filterKd.replaceAll('+', '').trim()) ?? 0.0;
+                  if (s.kdNeeded < minVal) {
+                    return false;
+                  }
+                }
+                return true;
+              }).toList();
+
+              return CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                slivers: [
+                  // Top Team vs Team Action Bar
+                  SliverToBoxAdapter(
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
                   color: GamerTheme.bgDark,
@@ -1347,111 +1378,81 @@ class _SquadFinderScreenState extends State<SquadFinderScreen> {
               ),
 
               // Squad Stream List
-              StreamBuilder<List<SquadPost>>(
-                stream: _squadService.getActiveSquadsStream(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting && _localSquads.isEmpty) {
-                    return const SliverFillRemaining(
-                      child: Center(
-                        child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
-                      ),
-                    );
-                  }
-
-                  final streamSquads = snapshot.data ?? [];
-                  final squads = _combineSquads(streamSquads);
-
-                  // Filter in-memory for smooth instant feedback
-                  final filtered = squads.where((s) {
-                    if (_filterGame != 'All' &&
-                        !s.game.toLowerCase().contains(_filterGame.toLowerCase())) {
-                      return false;
-                    }
-                    if (_filterMode != 'All' &&
-                        !s.mode.toLowerCase().contains(_filterMode.toLowerCase())) {
-                      return false;
-                    }
-                    if (_filterTier != 'All' &&
-                        !s.tierNeeded.toLowerCase().contains(_filterTier.toLowerCase()) &&
-                        s.tierNeeded != 'Any Tier') {
-                      return false;
-                    }
-                    if (_filterKd != 'Any') {
-                      final minVal = double.tryParse(_filterKd.replaceAll('+', '').trim()) ?? 0.0;
-                      if (s.kdNeeded < minVal) {
-                        return false;
-                      }
-                    }
-                    return true;
-                  }).toList();
-
-                  debugPrint('[SquadFinderScreen] Filtered squads count: ${filtered.length}');
-
-                  if (filtered.isEmpty) {
-                    return SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: GamerTheme.cardDark,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: GamerTheme.borderDark),
-                                ),
-                                child: const Text('🛡️', style: TextStyle(fontSize: 40)),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'squad_no_posts_found'.tr(),
-                                style: const TextStyle(
-                                  color: GamerTheme.textWhite,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'squad_no_posts_desc'.tr(),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13, height: 1.4),
-                              ),
-                              const SizedBox(height: 20),
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: GamerTheme.accentOrange,
-                                  foregroundColor: GamerTheme.bgDark,
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                icon: const Icon(Icons.add_rounded, color: GamerTheme.bgDark),
-                                label: Text('squad_post_requirement_now'.tr(), style: const TextStyle(fontWeight: FontWeight.w900)),
-                                onPressed: _openCreateSquadSheet,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  return SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        return SquadCard(squad: filtered[index]);
-                      },
-                      childCount: filtered.length,
+              if (isWaitingInitial)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
                     ),
-                  );
-                },
-              ),
+                  ),
+                )
+              else if (filtered.isEmpty)
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: GamerTheme.cardDark,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: GamerTheme.borderDark),
+                            ),
+                            child: const Text('🛡️', style: TextStyle(fontSize: 40)),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'squad_no_posts_found'.tr(),
+                            style: const TextStyle(
+                              color: GamerTheme.textWhite,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'squad_no_posts_desc'.tr(),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: GamerTheme.textMuted, fontSize: 13, height: 1.4),
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: GamerTheme.accentOrange,
+                              foregroundColor: GamerTheme.bgDark,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            icon: const Icon(Icons.add_rounded, color: GamerTheme.bgDark),
+                            label: Text('squad_post_requirement_now'.tr(), style: const TextStyle(fontWeight: FontWeight.w900)),
+                            onPressed: _openCreateSquadSheet,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      if (index < 0 || index >= filtered.length) {
+                        return const SizedBox.shrink();
+                      }
+                      return SquadCard(squad: filtered[index]);
+                    },
+                    childCount: filtered.length,
+                  ),
+                ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 80)),
-            ],
+                ],
+              );
+            },
           ),
         ),
       ),

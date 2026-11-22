@@ -190,23 +190,26 @@ class GamerSocialService {
 
     final allySourceUuid = stringToUuid(currentUid);
     final targetUuid = stringToUuid(targetUid);
-    final controller = StreamController<bool>();
+    final controller = StreamController<bool>.broadcast();
     StreamSubscription? realtimeSub;
     StreamSubscription? localSub;
     bool? lastEmitted;
 
     void emitIfChanged(bool val) {
-      if (!controller.isClosed && lastEmitted != val) {
+      if (!controller.isClosed) {
         lastEmitted = val;
         controller.add(val);
       }
     }
 
     controller.onListen = () async {
+      if (lastEmitted != null && !controller.isClosed) {
+        controller.add(lastEmitted!);
+      }
       final initial = await isAlly(currentUid, targetUid);
       emitIfChanged(initial);
 
-      localSub = socialGraphUpdatesStream.listen((event) {
+      localSub ??= socialGraphUpdatesStream.listen((event) {
         final actorUuid = stringToUuid(event.actorUid);
         final evTargetUuid = stringToUuid(event.targetUid);
         if (actorUuid == allySourceUuid && evTargetUuid == targetUuid) {
@@ -214,36 +217,37 @@ class GamerSocialService {
         }
       });
 
-      try {
-        final table = await resolveFollowsTable();
-        realtimeSub = _supabase
-            .from(table)
-            .stream(primaryKey: ['id'])
-            .eq('follower_id', allySourceUuid)
-            .listen(
-          (rows) {
-            final found = rows.any(
-              (r) =>
-                  (r['following_id']?.toString().toLowerCase() ?? '') ==
-                  targetUuid,
-            );
-            emitIfChanged(found);
-          },
-          onError: (e) {
-            debugPrint('[GamerSocialService] isAllyStream realtime note: $e');
-          },
-        );
-      } catch (e) {
-        debugPrint('[GamerSocialService] isAllyStream setup note: $e');
+      if (realtimeSub == null) {
+        try {
+          final table = await resolveFollowsTable();
+          realtimeSub = _supabase
+              .from(table)
+              .stream(primaryKey: ['id'])
+              .eq('follower_id', allySourceUuid)
+              .listen(
+            (rows) {
+              final found = rows.any(
+                (r) =>
+                    (r['following_id']?.toString().toLowerCase() ?? '') ==
+                    targetUuid,
+              );
+              emitIfChanged(found);
+            },
+            onError: (e) {
+              debugPrint('[GamerSocialService] isAllyStream realtime note: $e');
+            },
+          );
+        } catch (e) {
+          debugPrint('[GamerSocialService] isAllyStream setup note: $e');
+        }
       }
     };
 
     controller.onCancel = () async {
       await realtimeSub?.cancel();
+      realtimeSub = null;
       await localSub?.cancel();
-      if (!controller.isClosed) {
-        await controller.close();
-      }
+      localSub = null;
     };
 
     return controller.stream;
@@ -509,7 +513,10 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<String>> getAlliesUserIdsStream(String uid) async* {
+  Stream<List<String>> getAlliesUserIdsStream(String uid) =>
+      _getAlliesUserIdsStreamInternal(uid).asBroadcastStream();
+
+  Stream<List<String>> _getAlliesUserIdsStreamInternal(String uid) async* {
     if (uid.isEmpty) {
       yield [];
       return;
@@ -758,7 +765,10 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<GamerPost>> getAllPostsStream({String? gameTag}) async* {
+  Stream<List<GamerPost>> getAllPostsStream({String? gameTag}) =>
+      _getAllPostsStreamInternal(gameTag: gameTag).asBroadcastStream();
+
+  Stream<List<GamerPost>> _getAllPostsStreamInternal({String? gameTag}) async* {
     while (true) {
       try {
         var query = _supabase.from('posts').select();
@@ -777,7 +787,10 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<GamerPost>> getVideosStream({String? gameTag}) async* {
+  Stream<List<GamerPost>> getVideosStream({String? gameTag}) =>
+      _getVideosStreamInternal(gameTag: gameTag).asBroadcastStream();
+
+  Stream<List<GamerPost>> _getVideosStreamInternal({String? gameTag}) async* {
     while (true) {
       try {
         var query =
@@ -799,7 +812,10 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<GamerPost>> getUserPostsStream(String userId,
+  Stream<List<GamerPost>> getUserPostsStream(String userId, [String? username]) =>
+      _getUserPostsStreamInternal(userId, username).asBroadcastStream();
+
+  Stream<List<GamerPost>> _getUserPostsStreamInternal(String userId,
       [String? username]) async* {
     while (true) {
       try {
@@ -1042,7 +1058,10 @@ class GamerSocialService {
     }
   }
 
-  Stream<bool> isPostLikedStream(String postId, String userId) async* {
+  Stream<bool> isPostLikedStream(String postId, String userId) =>
+      _isPostLikedStreamInternal(postId, userId).asBroadcastStream();
+
+  Stream<bool> _isPostLikedStreamInternal(String postId, String userId) async* {
     if (userId.isEmpty || postId.isEmpty) {
       yield false;
       return;
@@ -1102,7 +1121,10 @@ class GamerSocialService {
     }
   }
 
-  Stream<List<PostComment>> getCommentsStream(String postId) async* {
+  Stream<List<PostComment>> getCommentsStream(String postId) =>
+      _getCommentsStreamInternal(postId).asBroadcastStream();
+
+  Stream<List<PostComment>> _getCommentsStreamInternal(String postId) async* {
     if (postId.isEmpty) {
       yield [];
       return;

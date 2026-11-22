@@ -35,10 +35,11 @@ class UserBlueTickBadge extends StatelessWidget {
           .stream(primaryKey: ['id'])
           .eq('id', userId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data == null || snapshot.data!.isEmpty) {
+        final rows = snapshot.data;
+        if (rows == null || rows.isEmpty) {
           return const SizedBox.shrink();
         }
-        final data = snapshot.data!.first;
+        final data = rows.first;
         if (!isApproved(data)) {
           return const SizedBox.shrink();
         }

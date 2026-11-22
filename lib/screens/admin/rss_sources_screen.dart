@@ -16,16 +16,18 @@ class RssSourcesScreen extends StatefulWidget {
 class _RssSourcesScreenState extends State<RssSourcesScreen> {
   static const Color neonGreen = Color(0xFF00FF88);
 
-  Stream<List<Map<String, dynamic>>> _sourcesStream() async* {
-    while (true) {
-      List<Map<String, dynamic>> list = [];
-      try {
-        final res = await SupabaseService.client.from('rss_sources').select();
-        list = List<Map<String, dynamic>>.from(res);
-      } catch (_) {}
-      yield list;
-      await Future.delayed(const Duration(seconds: 4));
-    }
+  Stream<List<Map<String, dynamic>>> _sourcesStream() {
+    return (() async* {
+      while (true) {
+        List<Map<String, dynamic>> list = [];
+        try {
+          final res = await SupabaseService.client.from('rss_sources').select();
+          list = List<Map<String, dynamic>>.from(res);
+        } catch (_) {}
+        yield list;
+        await Future.delayed(const Duration(seconds: 4));
+      }
+    })().asBroadcastStream();
   }
 
   static const Color bgDark = Color(0xFF0A0A0F);

@@ -653,72 +653,80 @@ class TeamMatchService {
   }
 
   /// 9. Stream all matches
-  Stream<List<TeamMatch>> getAllMatchesStream({String? statusFilter}) async* {
-    while (true) {
-      try {
-        final list = await SupabaseService.getTeamMatches(status: statusFilter);
-        yield list.map((m) => TeamMatch.fromMap(m)).toList();
-      } catch (_) {
-        yield [];
-      }
-      await Future.delayed(const Duration(seconds: 4));
-    }
-  }
-
-  /// Stream of matches for a particular user
-  Stream<List<TeamMatch>> getUserTeamMatchesStream(String userId) async* {
-    while (true) {
-      try {
-        final list = await SupabaseService.getTeamMatches();
-        yield list
-            .map((m) => TeamMatch.fromMap(m))
-            .where((m) => m.isMemberOfMatch(userId))
-            .toList();
-      } catch (_) {
-        yield [];
-      }
-      await Future.delayed(const Duration(seconds: 4));
-    }
-  }
-
-  /// Stream single match by ID
-  Stream<TeamMatch?> getMatchStream(String matchId) async* {
-    while (true) {
-      try {
-        final data = await SupabaseService.getTeamMatch(matchId);
-        yield data != null ? TeamMatch.fromMap(data) : null;
-      } catch (_) {
-        yield null;
-      }
-      await Future.delayed(const Duration(seconds: 3));
-    }
-  }
-
-  /// Stream Top 100 Leaderboard teams (Sorted by points descending)
-  Stream<List<TeamRanking>> getTopTeamsLeaderboard({int limit = 100}) async* {
-    while (true) {
-      try {
-        final rows = await SupabaseService.client
-            .from('teams')
-            .select()
-            .order('points', ascending: false)
-            .limit(limit);
-        yield (rows as List)
-            .map((r) => TeamRanking.fromMap(Map<String, dynamic>.from(r)))
-            .toList();
-      } catch (e) {
+  Stream<List<TeamMatch>> getAllMatchesStream({String? statusFilter}) {
+    return (() async* {
+      while (true) {
         try {
-          final fallback = await SupabaseService.query(
-            'teams',
-            order: 'points.desc',
-            limit: limit,
-          );
-          yield fallback.map((r) => TeamRanking.fromMap(r)).toList();
+          final list = await SupabaseService.getTeamMatches(status: statusFilter);
+          yield list.map((m) => TeamMatch.fromMap(m)).toList();
         } catch (_) {
           yield [];
         }
+        await Future.delayed(const Duration(seconds: 4));
       }
-      await Future.delayed(const Duration(seconds: 4));
-    }
+    })().asBroadcastStream();
+  }
+
+  /// Stream of matches for a particular user
+  Stream<List<TeamMatch>> getUserTeamMatchesStream(String userId) {
+    return (() async* {
+      while (true) {
+        try {
+          final list = await SupabaseService.getTeamMatches();
+          yield list
+              .map((m) => TeamMatch.fromMap(m))
+              .where((m) => m.isMemberOfMatch(userId))
+              .toList();
+        } catch (_) {
+          yield [];
+        }
+        await Future.delayed(const Duration(seconds: 4));
+      }
+    })().asBroadcastStream();
+  }
+
+  /// Stream single match by ID
+  Stream<TeamMatch?> getMatchStream(String matchId) {
+    return (() async* {
+      while (true) {
+        try {
+          final data = await SupabaseService.getTeamMatch(matchId);
+          yield data != null ? TeamMatch.fromMap(data) : null;
+        } catch (_) {
+          yield null;
+        }
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    })().asBroadcastStream();
+  }
+
+  /// Stream Top 100 Leaderboard teams (Sorted by points descending)
+  Stream<List<TeamRanking>> getTopTeamsLeaderboard({int limit = 100}) {
+    return (() async* {
+      while (true) {
+        try {
+          final rows = await SupabaseService.client
+              .from('teams')
+              .select()
+              .order('points', ascending: false)
+              .limit(limit);
+          yield (rows as List)
+              .map((r) => TeamRanking.fromMap(Map<String, dynamic>.from(r)))
+              .toList();
+        } catch (e) {
+          try {
+            final fallback = await SupabaseService.query(
+              'teams',
+              order: 'points.desc',
+              limit: limit,
+            );
+            yield fallback.map((r) => TeamRanking.fromMap(r)).toList();
+          } catch (_) {
+            yield [];
+          }
+        }
+        await Future.delayed(const Duration(seconds: 4));
+      }
+    })().asBroadcastStream();
   }
 }

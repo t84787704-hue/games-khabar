@@ -131,189 +131,192 @@ class _FollowingScreenState extends State<FollowingScreen> {
       body: ValueListenableBuilder<Set<String>>(
         valueListenable: FollowingService.followedGamesNotifier,
         builder: (context, followedGames, _) {
-          return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          final followedPaidGames =
+              followedGames.where((g) => _priceService.isPaidGame(g)).toList();
+
+          return StreamBuilder<List<NewsModel>>(
+            initialData: _storeService.currentNews,
+            stream: _storeService.getNewsStream(),
+            builder: (context, snapshot) {
+              final allNews = snapshot.data ?? const <NewsModel>[];
+              final followedList = _followingService.filterNews(allNews);
+
+              return CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'select_games_to_follow'.tr(),
-                            style: TextStyle(
-                              color: textWhite,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Text(
-                            'games_followed_count'.tr(args: ['${followedGames.length}']),
-                            style: TextStyle(
-                              color: neonGreen,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'select_games_sub'.tr(),
-                        style: TextStyle(color: textGray, fontSize: 12),
-                      ),
-                      const SizedBox(height: 12),
-
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ...FollowingService.popularGames.map((game) {
-                            final isFollowed = _followingService.isFollowing(game);
-                            return FilterChip(
-                              label: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    isFollowed ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
-                                    size: 14,
-                                    color: isFollowed ? const Color(0xFF05080D) : neonGreen,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    game,
-                                    style: TextStyle(
-                                      color: isFollowed ? const Color(0xFF05080D) : textWhite,
-                                      fontWeight: isFollowed ? FontWeight.bold : FontWeight.w500,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              selected: isFollowed,
-                              selectedColor: neonGreen,
-                              backgroundColor: cardDark,
-                              checkmarkColor: const Color(0xFF05080D),
-                              showCheckmark: false,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: BorderSide(
-                                  color: isFollowed ? neonGreen : borderDark,
-                                  width: isFollowed ? 1.5 : 1,
-                                ),
-                              ),
-                              onSelected: (_) {
-                                _followingService.toggleFollow(game);
-                              },
-                            );
-                          }),
-
-                          ActionChip(
-                            avatar: Icon(
-                              _isAddingCustom ? Icons.close : Icons.add,
-                              size: 16,
-                              color: neonGreen,
-                            ),
-                            label: Text(
-                              _isAddingCustom ? 'cancel'.tr() : 'add_other_game'.tr(),
-                              style: TextStyle(
-                                color: neonGreen,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            backgroundColor: cardDark,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              side: BorderSide(color: neonGreen.withOpacity(0.5)),
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isAddingCustom = !_isAddingCustom;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-
-                      if (_isAddingCustom) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: cardDark,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: neonGreen, width: 1.2),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Row(
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _customGameController,
-                                  autofocus: true,
-                                  style: TextStyle(color: textWhite, fontSize: 13),
-                                  decoration: InputDecoration(
-                                    hintText: 'enter_game_hint'.tr(),
-                                    hintStyle: TextStyle(color: textGray, fontSize: 12),
-                                    border: InputBorder.none,
-                                  ),
-                                  onSubmitted: (_) => _addCustomGame(),
+                              Text(
+                                'select_games_to_follow'.tr(),
+                                style: TextStyle(
+                                  color: textWhite,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
                                 ),
                               ),
-                              IconButton(
-                                icon: Icon(Icons.check, color: neonGreen),
-                                onPressed: _addCustomGame,
+                              Text(
+                                'games_followed_count'.tr(args: ['${followedGames.length}']),
+                                style: TextStyle(
+                                  color: neonGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-
-                      const SizedBox(height: 16),
-                      Divider(color: borderDark, thickness: 1),
-                      const SizedBox(height: 8),
-
-                      Row(
-                        children: [
-                          Container(
-                            width: 3,
-                            height: 14,
-                            decoration: BoxDecoration(
-                              color: neonGreen,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
+                          const SizedBox(height: 6),
                           Text(
-                            'followed_games_feed'.tr(),
-                            style: TextStyle(
-                              color: textWhite,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 15,
-                              letterSpacing: 0.5,
-                            ),
+                            'select_games_sub'.tr(),
+                            style: TextStyle(color: textGray, fontSize: 12),
                           ),
+                          const SizedBox(height: 12),
+
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              ...FollowingService.popularGames.map((game) {
+                                final isFollowed = _followingService.isFollowing(game);
+                                return FilterChip(
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        isFollowed ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
+                                        size: 14,
+                                        color: isFollowed ? const Color(0xFF05080D) : neonGreen,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        game,
+                                        style: TextStyle(
+                                          color: isFollowed ? const Color(0xFF05080D) : textWhite,
+                                          fontWeight: isFollowed ? FontWeight.bold : FontWeight.w500,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  selected: isFollowed,
+                                  selectedColor: neonGreen,
+                                  backgroundColor: cardDark,
+                                  checkmarkColor: const Color(0xFF05080D),
+                                  showCheckmark: false,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    side: BorderSide(
+                                      color: isFollowed ? neonGreen : borderDark,
+                                      width: isFollowed ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  onSelected: (_) {
+                                    _followingService.toggleFollow(game);
+                                  },
+                                );
+                              }),
+
+                              ActionChip(
+                                avatar: Icon(
+                                  _isAddingCustom ? Icons.close : Icons.add,
+                                  size: 16,
+                                  color: neonGreen,
+                                ),
+                                label: Text(
+                                  _isAddingCustom ? 'cancel'.tr() : 'add_other_game'.tr(),
+                                  style: TextStyle(
+                                    color: neonGreen,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                backgroundColor: cardDark,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  side: BorderSide(color: neonGreen.withOpacity(0.5)),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isAddingCustom = !_isAddingCustom;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+
+                          if (_isAddingCustom) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: cardDark,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: neonGreen, width: 1.2),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _customGameController,
+                                      autofocus: true,
+                                      style: TextStyle(color: textWhite, fontSize: 13),
+                                      decoration: InputDecoration(
+                                        hintText: 'enter_game_hint'.tr(),
+                                        hintStyle: TextStyle(color: textGray, fontSize: 12),
+                                        border: InputBorder.none,
+                                      ),
+                                      onSubmitted: (_) => _addCustomGame(),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(Icons.check, color: neonGreen),
+                                    onPressed: _addCustomGame,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
+                          const SizedBox(height: 16),
+                          Divider(color: borderDark, thickness: 1),
+                          const SizedBox(height: 8),
+
+                          Row(
+                            children: [
+                              Container(
+                                width: 3,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: neonGreen,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'followed_games_feed'.tr(),
+                                style: TextStyle(
+                                  color: textWhite,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                    ],
+                    ),
                   ),
-                ),
-              ),
 
-              StreamBuilder<List<NewsModel>>(
-                initialData: _storeService.currentNews,
-                stream: _storeService.getNewsStream(),
-                builder: (context, snapshot) {
-                  final allNews = snapshot.data ?? [];
-                  final followedList = _followingService.filterNews(allNews);
-
-                  if (followedGames.isEmpty) {
-                    return SliverToBoxAdapter(
+                  if (followedGames.isEmpty)
+                    SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
                         child: Center(
@@ -377,11 +380,9 @@ class _FollowingScreenState extends State<FollowingScreen> {
                           ),
                         ),
                       ),
-                    );
-                  }
-
-                  if (followedList.isEmpty) {
-                    return SliverToBoxAdapter(
+                    )
+                  else if (followedList.isEmpty)
+                    SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
                         child: Center(
@@ -406,141 +407,129 @@ class _FollowingScreenState extends State<FollowingScreen> {
                           ),
                         ),
                       ),
-                    );
-                  }
-
-                  return SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = followedList[index];
-                        return NewsCard(
-                          key: ValueKey('following_news_${item.id}'),
-                          news: item,
-                          langCode: langCode,
-                          isRtl: isRtl,
-                          onTap: () => _navigateToDetail(item),
-                        );
-                      },
-                      childCount: followedList.length,
-                    ),
-                  );
-                },
-              ),
-
-              Builder(
-                builder: (context) {
-                  final followedPaidGames =
-                      followedGames.where((g) => _priceService.isPaidGame(g)).toList();
-                  if (followedPaidGames.isEmpty) {
-                    return const SliverToBoxAdapter(child: SizedBox(height: 16));
-                  }
-
-                  return SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 28, 16, 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 3,
-                            height: 15,
-                            decoration: BoxDecoration(
-                              color: neonGreen,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'price_tracker_title'.tr(),
-                            style: TextStyle(
-                              color: textWhite,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 15,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: neonGreen.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'tracked_count'.tr(args: ['${followedPaidGames.length}']),
-                              style: TextStyle(
-                                color: neonGreen,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ),
-                        ],
+                    )
+                  else
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          if (index < 0 || index >= followedList.length) {
+                            return const SizedBox.shrink();
+                          }
+                          final item = followedList[index];
+                          return NewsCard(
+                            key: ValueKey('following_news_${item.id}'),
+                            news: item,
+                            langCode: langCode,
+                            isRtl: isRtl,
+                            onTap: () => _navigateToDetail(item),
+                          );
+                        },
+                        childCount: followedList.length,
                       ),
                     ),
-                  );
-                },
-              ),
 
-              Builder(
-                builder: (context) {
-                  final followedPaidGames =
-                      followedGames.where((g) => _priceService.isPaidGame(g)).toList();
-                  if (followedPaidGames.isEmpty) {
-                    return const SliverToBoxAdapter(child: SizedBox.shrink());
-                  }
-
-                  return SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final game = followedPaidGames[index];
-                        return StreamBuilder<dynamic>(
-                          stream: _priceService.streamGamePrice(game),
-                          builder: (context, priceSnap) {
-                            final raw = priceSnap.data;
-                            Map<String, dynamic>? data;
-                            if (raw is Map<String, dynamic>) {
-                              data = raw;
-                            } else if (raw != null) {
-                              try {
-                                data = (raw as dynamic).data();
-                              } catch (_) {}
-                            }
-                            final currentPrice = (data?['currentPrice'] as num?)?.toDouble() ??
-                                _getDefaultCurrentPrice(game);
-                            final originalPrice = (data?['originalPrice'] as num?)?.toDouble() ??
-                                _getDefaultOriginalPrice(game);
-                            final lowestPrice = (data?['lowestPrice'] as num?)?.toDouble() ??
-                                _getDefaultLowestPrice(game);
-                            final priceHistory =
-                                (data?['priceHistory'] as List<dynamic>?) ?? [];
-                            final store = data?['store'] as String? ?? 'Steam';
-                            final dealUrl = data?['dealUrl'] as String?;
-                            final discountPercent =
-                                (data?['discountPercent'] as num?)?.toInt();
-
-                            return PriceTrackerCard(
-                              gameName: game,
-                              currentPrice: currentPrice,
-                              originalPrice: originalPrice,
-                              lowestPrice: lowestPrice,
-                              priceHistory: priceHistory,
-                              store: store,
-                              dealUrl: dealUrl,
-                              discountPercent: discountPercent,
-                            );
-                          },
-                        );
-                      },
-                      childCount: followedPaidGames.length,
+                  if (followedPaidGames.isEmpty)
+                    const SliverToBoxAdapter(child: SizedBox(height: 16))
+                  else ...[
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 28, 16, 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 3,
+                              height: 15,
+                              decoration: BoxDecoration(
+                                color: neonGreen,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'price_tracker_title'.tr(),
+                              style: TextStyle(
+                                color: textWhite,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 15,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: neonGreen.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'tracked_count'.tr(args: ['${followedPaidGames.length}']),
+                                style: TextStyle(
+                                  color: neonGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  );
-                },
-              ),
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          if (index < 0 || index >= followedPaidGames.length) {
+                            return const SizedBox.shrink();
+                          }
+                          final game = followedPaidGames[index];
+                          return StreamBuilder<dynamic>(
+                            stream: _priceService.streamGamePrice(game),
+                            builder: (context, priceSnap) {
+                              final raw = priceSnap.data;
+                              Map<String, dynamic>? data;
+                              if (raw is Map<String, dynamic>) {
+                                data = raw;
+                              } else if (raw != null) {
+                                try {
+                                  data = (raw as dynamic).data();
+                                } catch (_) {}
+                              }
+                              final currentPrice = (data?['currentPrice'] as num?)?.toDouble() ??
+                                  _getDefaultCurrentPrice(game);
+                              final originalPrice = (data?['originalPrice'] as num?)?.toDouble() ??
+                                  _getDefaultOriginalPrice(game);
+                              final lowestPrice = (data?['lowestPrice'] as num?)?.toDouble() ??
+                                  _getDefaultLowestPrice(game);
+                              final priceHistory =
+                                  (data?['priceHistory'] as List<dynamic>?) ?? [];
+                              final store = data?['store'] as String? ?? 'Steam';
+                              final dealUrl = data?['dealUrl'] as String?;
+                              final discountPercent =
+                                  (data?['discountPercent'] as num?)?.toInt();
 
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 32),
-              ),
-            ],
+                              return PriceTrackerCard(
+                                gameName: game,
+                                currentPrice: currentPrice,
+                                originalPrice: originalPrice,
+                                lowestPrice: lowestPrice,
+                                priceHistory: priceHistory,
+                                store: store,
+                                dealUrl: dealUrl,
+                                discountPercent: discountPercent,
+                              );
+                            },
+                          );
+                        },
+                        childCount: followedPaidGames.length,
+                      ),
+                    ),
+                  ],
+
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: 32),
+                  ),
+                ],
+              );
+            },
           );
         },
       ),

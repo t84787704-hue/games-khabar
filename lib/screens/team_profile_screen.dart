@@ -1416,9 +1416,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 .eq('from_team_id',
                                     SupabaseService.toUuid(widget.teamId)),
                             builder: (context, outSnap) {
-                              if (!outSnap.hasData)
+                              final outRows = outSnap.data;
+                              if (outRows == null || outRows.isEmpty)
                                 return const SizedBox.shrink();
-                              final outgoingList = outSnap.data!
+                              final outgoingList = outRows
                                   .where((d) =>
                                       (d['status'] ?? '')
                                           .toString()
@@ -1525,9 +1526,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 .eq('to_team_id',
                                     SupabaseService.toUuid(widget.teamId)),
                             builder: (context, incSnap) {
-                              if (!incSnap.hasData)
+                              final incRows = incSnap.data;
+                              if (incRows == null || incRows.isEmpty)
                                 return const SizedBox.shrink();
-                              final incomingList = incSnap.data!
+                              final incomingList = incRows
                                   .where((d) =>
                                       (d['status'] ?? '')
                                           .toString()
@@ -2028,11 +2030,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         'avatar': memberAvatar
                                       }),
                                 builder: (context, snap) {
+                                  final snapData = snap.data;
+                                  final snapUsername = snapData?['username'];
+                                  final snapAvatar = snapData?['avatar'];
                                   final resolvedName =
-                                      (snap.data?['username'] != null &&
-                                              snap.data!['username'] !=
-                                                  'Player')
-                                          ? snap.data!['username']!
+                                      (snapUsername != null &&
+                                              snapUsername != 'Player')
+                                          ? snapUsername
                                           : (isDefaultName
                                               ? (snap.connectionState ==
                                                       ConnectionState.waiting
@@ -2040,9 +2044,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                                   : memberName)
                                               : memberName);
                                   final resolvedAvatar =
-                                      (snap.data?['avatar'] != null &&
-                                              snap.data!['avatar']!.isNotEmpty)
-                                          ? snap.data!['avatar']!
+                                      (snapAvatar != null &&
+                                              snapAvatar.isNotEmpty)
+                                          ? snapAvatar
                                           : memberAvatar;
 
                                   return ListTile(
