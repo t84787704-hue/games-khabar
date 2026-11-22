@@ -106,6 +106,28 @@ class _TeamCardState extends State<TeamCard> {
     }
   }
 
+  String _trClean(String key, String fallback) {
+    final translated = key.tr();
+    if (translated.isEmpty ||
+        translated == key ||
+        translated.contains('_')) {
+      return fallback;
+    }
+    return translated;
+  }
+
+  void _openTeamProfile(TeamModel team) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TeamProfileScreen(
+          teamId: team.id,
+          team: team,
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleCancelJoinRequest(String currentUid) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
@@ -389,104 +411,108 @@ class _TeamCardState extends State<TeamCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: ThemeService.cardSecondary,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: gameColor.withOpacity(0.35), width: 1),
-                        image: team.logo.isNotEmpty
-                            ? DecorationImage(
-                                image: NetworkImage(team.logo),
-                                fit: BoxFit.cover,
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => _openTeamProfile(team),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: ThemeService.cardSecondary,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: gameColor.withOpacity(0.35), width: 1),
+                          image: team.logo.isNotEmpty
+                              ? DecorationImage(
+                                  image: NetworkImage(team.logo),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: team.logo.isEmpty
+                            ? Center(
+                                child: Icon(Icons.shield_rounded, color: gameColor, size: 22),
                               )
                             : null,
                       ),
-                      child: team.logo.isEmpty
-                          ? Center(
-                              child: Icon(Icons.shield_rounded, color: gameColor, size: 22),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  team.name,
-                                  style: TextStyle(
-                                    color: ThemeService.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13.5,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                decoration: BoxDecoration(
-                                  color: gameColor.withOpacity(0.16),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  displayGame.toUpperCase(),
-                                  style: TextStyle(
-                                    color: gameColor,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 8.5,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    team.name,
+                                    style: TextStyle(
+                                      color: ThemeService.textPrimary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13.5,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 1.5),
-                          Text(
-                            "Leader: @${TeamModel.sanitizePublicHandle(team.leaderName)}",
-                            style: TextStyle(
-                              color: ThemeService.textSecondary,
-                              fontSize: 11,
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: gameColor.withOpacity(0.16),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    displayGame.toUpperCase(),
+                                    style: TextStyle(
+                                      color: gameColor,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 8.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2.5),
-                          Row(
-                            children: [
-                              const Icon(Icons.group_rounded, color: Color(0xFF1877F2), size: 12),
-                              const SizedBox(width: 3),
-                              Text(
-                                "${team.memberCount}/${TeamModel.maxMembers} Members",
-                                style: TextStyle(
-                                  color: ThemeService.textSecondary,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            const SizedBox(height: 1.5),
+                            Text(
+                              "Leader: @${TeamModel.sanitizePublicHandle(team.leaderName, fallback: 'Leader')}",
+                              style: TextStyle(
+                                color: ThemeService.textSecondary,
+                                fontSize: 11,
                               ),
-                              const SizedBox(width: 10),
-                              const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFB800), size: 12),
-                              const SizedBox(width: 3),
-                              Text(
-                                "${team.wins} Wins",
-                                style: TextStyle(
-                                  color: ThemeService.textSecondary,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2.5),
+                            Row(
+                              children: [
+                                const Icon(Icons.group_rounded, color: Color(0xFF1877F2), size: 12),
+                                const SizedBox(width: 3),
+                                Text(
+                                  "${team.memberCount}/${TeamModel.maxMembers} Members",
+                                  style: TextStyle(
+                                    color: ThemeService.textSecondary,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                                const SizedBox(width: 10),
+                                const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFB800), size: 12),
+                                const SizedBox(width: 3),
+                                Text(
+                                  "${team.wins} Wins",
+                                  style: TextStyle(
+                                    color: ThemeService.textSecondary,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -502,16 +528,9 @@ class _TeamCardState extends State<TeamCard> {
                             backgroundColor: ThemeService.cardSecondary,
                             padding: EdgeInsets.zero,
                           ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => TeamProfileScreen(teamId: team.id),
-                              ),
-                            );
-                          },
+                          onPressed: () => _openTeamProfile(team),
                           child: Text(
-                            'view_team'.tr(),
+                            _trClean('view_team', 'View Team'),
                             style: TextStyle(
                               color: ThemeService.textPrimary,
                               fontWeight: FontWeight.bold,
@@ -536,17 +555,10 @@ class _TeamCardState extends State<TeamCard> {
                                 ),
                                 icon: const Icon(Icons.login_rounded, size: 13),
                                 label: Text(
-                                  'open_team'.tr(),
+                                  _trClean('open_team', 'Open Team'),
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                                 ),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => TeamProfileScreen(teamId: team.id),
-                                    ),
-                                  );
-                                },
+                                onPressed: () => _openTeamProfile(team),
                               )
                             : hasActiveChallenge
                                 ? OutlinedButton.icon(
@@ -559,7 +571,7 @@ class _TeamCardState extends State<TeamCard> {
                                     ),
                                     icon: const Icon(Icons.hourglass_top_rounded, size: 12, color: Color(0xFFFF8A00)),
                                     label: Text(
-                                      'btn_requested'.tr().contains('btn_') ? 'Requested' : 'btn_requested'.tr(),
+                                      _trClean('btn_requested', 'Requested'),
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 10.5,
@@ -589,8 +601,8 @@ class _TeamCardState extends State<TeamCard> {
                                             : const Icon(Icons.close_rounded, size: 12, color: Color(0xFFFF8A00)),
                                         label: Text(
                                           _isCancelling
-                                              ? 'loading'.tr()
-                                              : 'btn_cancel_request'.tr(),
+                                              ? _trClean('loading', 'Loading...')
+                                              : _trClean('btn_cancel_request', 'Cancel Request'),
                                           style: const TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 10.5,
@@ -611,7 +623,7 @@ class _TeamCardState extends State<TeamCard> {
                                         ),
                                         icon: const Icon(Icons.flash_on_rounded, size: 13, color: Colors.white),
                                         label: Text(
-                                          'btn_challenge_caps'.tr(),
+                                          _trClean('btn_challenge_caps', 'CHALLENGE'),
                                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
                                         onPressed: () => _handleChallenge(currentUid),

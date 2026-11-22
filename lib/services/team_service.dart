@@ -41,8 +41,36 @@ class TeamService {
   }
 
   final Map<String, List<TeamModel>> _userTeamsCache = {};
+  final Map<String, TeamModel> _teamsByIdCache = {};
   final Map<String, Map<String, dynamic>> _teamWeeklyStatsCache = {};
   final Map<String, List<Map<String, dynamic>>> _gameLeaderboardCache = {};
+
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  static bool isValidUuid(String value) => _uuidRegex.hasMatch(value.trim());
+
+  void _storeTeamCache(TeamModel team) {
+    final clean = team.id.trim();
+    if (clean.isEmpty) return;
+    final uuid = SupabaseService.toUuid(clean);
+    _teamsByIdCache[clean] = team;
+    _teamsByIdCache[clean.toLowerCase()] = team;
+    _teamsByIdCache[uuid] = team;
+    _teamsByIdCache[uuid.toLowerCase()] = team;
+  }
+
+  /// Returns cached TeamModel by [teamId], or null if not yet cached in memory.
+  TeamModel? getCachedTeam(String teamId) {
+    final clean = teamId.trim();
+    if (clean.isEmpty) return null;
+    final uuid = SupabaseService.toUuid(clean);
+    return _teamsByIdCache[clean] ??
+        _teamsByIdCache[clean.toLowerCase()] ??
+        _teamsByIdCache[uuid] ??
+        _teamsByIdCache[uuid.toLowerCase()];
+  }
 
   /// Returns cached active teams for [userId], or null if not yet fetched in this session.
   List<TeamModel>? getCachedUserTeams(String userId) {
@@ -256,8 +284,9 @@ class TeamService {
 
   /// Helper to enrich a single raw team row with members (max 4), pending join requests, and leader info
   Future<TeamModel> _enrichTeamRow(Map<String, dynamic> rawRow) async {
-    final teamId = (rawRow["id"] ?? "").toString();
+    final teamId = (rawRow["id"] ?? "").toString().trim();
     final teamUuid = SupabaseService.toUuid(teamId);
+    final bool teamIdIsUuid = isValidUuid(teamId);
 
     final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
 
@@ -275,10 +304,28 @@ class TeamService {
       }
     }
     try {
-      final memberRows = await SupabaseService.client
-          .from("team_members")
-          .select("user_id")
-          .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
+      List<dynamic> memberRows = [];
+      if (teamIdIsUuid) {
+        memberRows = await SupabaseService.client
+            .from("team_members")
+            .select("user_id")
+            .eq("team_id", teamId);
+      } else {
+        try {
+          memberRows = await SupabaseService.client
+              .from("team_members")
+              .select("user_id")
+              .eq("team_id", teamUuid);
+        } catch (_) {}
+        if (memberRows.isEmpty && teamId.isNotEmpty) {
+          try {
+            memberRows = await SupabaseService.client
+                .from("team_members")
+                .select("user_id")
+                .eq("team_id", teamId);
+          } catch (_) {}
+        }
+      }
       for (final m in memberRows) {
         final uid = (m["user_id"] ?? "").toString().trim();
         if (uid.isNotEmpty && !members.contains(uid) && members.length < maxTeamMembers) {
@@ -300,10 +347,28 @@ class TeamService {
       }
     }
     try {
-      final reqRows = await SupabaseService.client
-          .from("team_join_requests")
-          .select("user_id, status")
-          .or("team_id.eq.$teamUuid,team_id.eq.$teamId");
+      List<dynamic> reqRows = [];
+      if (teamIdIsUuid) {
+        reqRows = await SupabaseService.client
+            .from("team_join_requests")
+            .select("user_id, status")
+            .eq("team_id", teamId);
+      } else {
+        try {
+          reqRows = await SupabaseService.client
+              .from("team_join_requests")
+              .select("user_id, status")
+              .eq("team_id", teamUuid);
+        } catch (_) {}
+        if (reqRows.isEmpty && teamId.isNotEmpty) {
+          try {
+            reqRows = await SupabaseService.client
+                .from("team_join_requests")
+                .select("user_id, status")
+                .eq("team_id", teamId);
+          } catch (_) {}
+        }
+      }
       for (final r in reqRows) {
         final status = (r["status"] ?? "pending").toString().toLowerCase();
         final uid = (r["user_id"] ?? "").toString().trim();
@@ -326,11 +391,32 @@ class TeamService {
     String leaderAvatar = (rawRow["leader_avatar"] ?? rawRow["leaderAvatar"] ?? "").toString().trim();
     if (leaderId.isNotEmpty) {
       try {
-        final userRes = await SupabaseService.client
-            .from("users")
-            .select("id, uid, username, gamer_id, game_id, display_name, avatar_url")
-            .or("id.eq.$leaderId,uid.eq.$leaderId")
-            .maybeSingle();
+        Map<String, dynamic>? userRes;
+        final leaderUuid = SupabaseService.toUuid(leaderId);
+        try {
+          final rows = await SupabaseService.client
+              .from("users")
+              .select()
+              .eq("id", isValidUuid(leaderId) ? leaderId : leaderUuid)
+              .limit(1);
+          if (rows.isNotEmpty) {
+            userRes = Map<String, dynamic>.from(rows.first);
+          }
+        } catch (_) {}
+
+        if (userRes == null && !isValidUuid(leaderId)) {
+          try {
+            final rows = await SupabaseService.client
+                .from("users")
+                .select()
+                .eq("id", leaderId)
+                .limit(1);
+            if (rows.isNotEmpty) {
+              userRes = Map<String, dynamic>.from(rows.first);
+            }
+          } catch (_) {}
+        }
+
         if (userRes != null) {
           final un = (userRes["username"] ?? "").toString().trim();
           final gid = (userRes["gamer_id"] ?? userRes["game_id"] ?? "").toString().trim();
@@ -364,51 +450,114 @@ class TeamService {
     enrichedMap["leader_avatar"] = leaderAvatar;
     enrichedMap["leaderAvatar"] = leaderAvatar;
 
-    final team = TeamModel.fromSupabase(enrichedMap);
-    return team.copyWith(
+    final team = TeamModel.fromSupabase(enrichedMap).copyWith(
       members: members,
       leaderName: cleanLeaderHandle,
       leaderAvatar: leaderAvatar,
     );
+    _storeTeamCache(team);
+    return team;
   }
 
-  /// Get single team by ID
+  /// Get single team by ID (with safe UUID/raw ID lookup and in-memory cache fallback)
   Future<TeamModel?> getTeam(String teamId) async {
-    if (teamId.isEmpty) return null;
+    final cleanId = teamId.trim();
+    if (cleanId.isEmpty) return null;
+
+    final teamUuid = SupabaseService.toUuid(cleanId);
+    Map<String, dynamic>? matchedRow;
+
+    // 1. Direct query using safe equality (avoids Postgrest 22P02 syntax errors on UUID/non-UUID columns)
     try {
-      final teamUuid = SupabaseService.toUuid(teamId);
-      final res = await SupabaseService.client
+      final rows = await SupabaseService.client
           .from("teams")
           .select()
-          .or("id.eq.$teamUuid,id.eq.$teamId")
-          .maybeSingle();
-      if (res != null) {
-        return await _enrichTeamRow(res);
+          .eq("id", isValidUuid(cleanId) ? cleanId : teamUuid)
+          .limit(1);
+      if (rows.isNotEmpty) {
+        matchedRow = Map<String, dynamic>.from(rows.first);
       }
     } catch (e) {
-      debugPrint("[TeamService] getTeam error: $e");
+      debugPrint("[TeamService] getTeam primary eq query notice: $e");
     }
-    return null;
+
+    // 2. If cleanId is not a standard UUID, also try querying by raw cleanId
+    if (matchedRow == null && !isValidUuid(cleanId)) {
+      try {
+        final rows = await SupabaseService.client
+            .from("teams")
+            .select()
+            .eq("id", cleanId)
+            .limit(1);
+        if (rows.isNotEmpty) {
+          matchedRow = Map<String, dynamic>.from(rows.first);
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback: scan all teams rows (same query used by TeamsScreen) to match by id or toUuid(id)
+    if (matchedRow == null) {
+      try {
+        final allRows = await SupabaseService.client.from("teams").select();
+        final cleanLower = cleanId.toLowerCase();
+        final uuidLower = teamUuid.toLowerCase();
+        for (final r in allRows) {
+          final rid = (r["id"] ?? "").toString().trim();
+          if (rid.isEmpty) continue;
+          final ridLower = rid.toLowerCase();
+          final ridUuidLower = SupabaseService.toUuid(rid).toLowerCase();
+          if (ridLower == cleanLower ||
+              ridLower == uuidLower ||
+              ridUuidLower == uuidLower) {
+            matchedRow = Map<String, dynamic>.from(r);
+            break;
+          }
+        }
+      } catch (e) {
+        debugPrint("[TeamService] getTeam scan fallback notice: $e");
+      }
+    }
+
+    if (matchedRow != null) {
+      try {
+        final enriched = await _enrichTeamRow(matchedRow);
+        _storeTeamCache(enriched);
+        return enriched;
+      } catch (e) {
+        debugPrint("[TeamService] _enrichTeamRow fallback notice: $e");
+        final basic = TeamModel.fromSupabase(matchedRow);
+        _storeTeamCache(basic);
+        return basic;
+      }
+    }
+
+    return getCachedTeam(cleanId);
   }
 
-  /// Get team stream (polls + real-time updates for team, members & join requests)
+  /// Get team stream (yields cached team immediately if available, then polls + updates)
   Stream<TeamModel?> getTeamStream(String teamId) {
     return _getTeamStreamInternal(teamId).asBroadcastStream();
   }
 
   Stream<TeamModel?> _getTeamStreamInternal(String teamId) async* {
-    if (teamId.isEmpty) {
+    final cleanId = teamId.trim();
+    if (cleanId.isEmpty) {
       yield null;
       return;
     }
+    final cached = getCachedTeam(cleanId);
+    if (cached != null) {
+      yield cached;
+    }
     while (true) {
       try {
-        final team = await getTeam(teamId);
-        yield team;
+        final team = await getTeam(cleanId);
+        yield team ?? getCachedTeam(cleanId);
       } catch (e) {
         debugPrint("[TeamService] getTeamStream error: $e");
+        yield getCachedTeam(cleanId);
       }
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 4));
     }
   }
 
@@ -474,15 +623,16 @@ class TeamService {
                   (k, v) => MapEntry(k.toString(), v.toString()),
                 )
               : t.memberNames;
-          result.add(
-            t.copyWith(
-              weeklyCoins: syncedWeeklyCoins,
-              weeklyRank: syncedWeeklyRank,
-              memberWeeklyCoins: syncedMemberCoins,
-              memberNames: syncedMemberNames,
-            ),
+          final updatedTeam = t.copyWith(
+            weeklyCoins: syncedWeeklyCoins,
+            weeklyRank: syncedWeeklyRank,
+            memberWeeklyCoins: syncedMemberCoins,
+            memberNames: syncedMemberNames,
           );
+          _storeTeamCache(updatedTeam);
+          result.add(updatedTeam);
         } catch (_) {
+          _storeTeamCache(t);
           result.add(t);
         }
       }
@@ -606,7 +756,7 @@ class TeamService {
     }
 
     final leaderIds = rows
-        .map((r) => (r["leader_id"] ?? r["leaderId"] ?? "").toString())
+        .map((r) => (r["leader_id"] ?? r["leaderId"] ?? "").toString().trim())
         .where((id) => id.isNotEmpty)
         .toSet()
         .toList();
@@ -615,13 +765,17 @@ class TeamService {
     final Map<String, String> leaderAvatarById = {};
     if (leaderIds.isNotEmpty) {
       try {
+        final validUuidLeaderIds = leaderIds
+            .map((id) => isValidUuid(id) ? id : SupabaseService.toUuid(id))
+            .toSet()
+            .toList();
         final userRows = await SupabaseService.client
             .from("users")
             .select()
-            .inFilter("id", leaderIds);
+            .inFilter("id", validUuidLeaderIds);
         for (final u in userRows) {
-          final id = (u["id"] ?? "").toString();
-          final uid = (u["uid"] ?? "").toString();
+          final id = (u["id"] ?? "").toString().trim();
+          final uid = (u["uid"] ?? "").toString().trim();
           final un = (u["username"] ?? "").toString().trim();
           final gid = (u["gamer_id"] ?? u["game_id"] ?? "").toString().trim();
           final d = (u["display_name"] ?? "").toString().trim();
@@ -634,11 +788,15 @@ class TeamService {
           final avatar = (u["avatar_url"] ?? "").toString();
           if (id.isNotEmpty) {
             leaderNameById[id] = name;
+            leaderNameById[id.toLowerCase()] = name;
             leaderAvatarById[id] = avatar;
+            leaderAvatarById[id.toLowerCase()] = avatar;
           }
           if (uid.isNotEmpty) {
             leaderNameById[uid] = name;
+            leaderNameById[uid.toLowerCase()] = name;
             leaderAvatarById[uid] = avatar;
+            leaderAvatarById[uid.toLowerCase()] = avatar;
           }
         }
       } catch (e) {
@@ -700,8 +858,16 @@ class TeamService {
         (rawRow["leader_name"] ?? rawRow["leaderName"] ?? "").toString(),
         fallback: "Leader",
       );
-      final leaderName = leaderNameById[leaderId] ?? fallbackLeaderName;
+      final leaderUuidLower = leaderId.isNotEmpty
+          ? SupabaseService.toUuid(leaderId).toLowerCase()
+          : "";
+      final leaderName = leaderNameById[leaderId] ??
+          leaderNameById[leaderId.toLowerCase()] ??
+          leaderNameById[leaderUuidLower] ??
+          fallbackLeaderName;
       final leaderAvatar = leaderAvatarById[leaderId] ??
+          leaderAvatarById[leaderId.toLowerCase()] ??
+          leaderAvatarById[leaderUuidLower] ??
           (rawRow["leader_avatar"] ?? rawRow["leaderAvatar"] ?? "").toString();
 
       final mapCopy = Map<String, dynamic>.from(rawRow);
@@ -714,12 +880,13 @@ class TeamService {
       mapCopy["leader_avatar"] = leaderAvatar;
       mapCopy["leaderAvatar"] = leaderAvatar;
 
-      final t = TeamModel.fromSupabase(mapCopy);
-      return t.copyWith(
+      final t = TeamModel.fromSupabase(mapCopy).copyWith(
         members: members,
         leaderName: leaderName,
         leaderAvatar: leaderAvatar,
       );
+      _storeTeamCache(t);
+      return t;
     }).toList();
 
     return enriched;

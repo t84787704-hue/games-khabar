@@ -3608,7 +3608,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => TeamProfileScreen(teamId: primaryTeam.id),
+                            builder: (_) => TeamProfileScreen(
+                              teamId: primaryTeam.id,
+                              team: primaryTeam,
+                            ),
                           ),
                         );
                         _loadUserTeams();
@@ -4265,7 +4268,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => TeamProfileScreen(teamId: primaryTeam.id),
+                        builder: (_) => TeamProfileScreen(
+                          teamId: primaryTeam.id,
+                          team: primaryTeam,
+                        ),
                       ),
                     ).then((_) => _loadUserTeams());
                   },

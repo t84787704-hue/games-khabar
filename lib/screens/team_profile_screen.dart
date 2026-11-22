@@ -45,6 +45,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final List<Map<String, dynamic>> _optimisticActiveMatches = [];
   final Map<String, Map<String, String>> _profileCache = {};
   Stream<List<Map<String, dynamic>>>? _rewardClaimsStream;
+  TeamModel? _resolvedTeam;
+  Stream<TeamModel?>? _teamStream;
+  Stream<List<TeamModel>>? _userTeamsStream;
+  Stream<List<Map<String, dynamic>>>? _activeMatchesStream;
+  bool _initialLoadCompleted = false;
+  String? _loadErrorMessage;
 
   /// Current logged-in user ID for team membership & winner claim checks
   String get _uid =>
@@ -54,9 +60,81 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _resolvedTeam = widget.team ?? _teamService.getCachedTeam(widget.teamId);
+    if (_resolvedTeam != null) {
+      _initialLoadCompleted = true;
+    }
+    _teamStream = _teamService.getTeamStream(widget.teamId);
+    final uid = _uid;
+    _userTeamsStream = uid.isNotEmpty
+        ? _teamService.getUserTeamsStream(uid)
+        : Stream.value(const <TeamModel>[]);
+    _activeMatchesStream = SupabaseService.client
+        .from('active_matches')
+        .stream(primaryKey: ['id']);
     _rewardClaimsStream = SupabaseService.getRealtimeRewardClaims();
-    _teamService.syncAllTeamsTournamentWins();
-    _teamService.checkAndDistributeWeeklyGameRewards();
+
+    _loadTeamDirectly();
+
+    // Run non-blocking background maintenance after initial render
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      _teamService.syncAllTeamsTournamentWins();
+      _teamService.checkAndDistributeWeeklyGameRewards();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant TeamProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.teamId != widget.teamId || oldWidget.team?.id != widget.team?.id) {
+      _resolvedTeam = widget.team ?? _teamService.getCachedTeam(widget.teamId);
+      _initialLoadCompleted = _resolvedTeam != null;
+      _loadErrorMessage = null;
+      _teamStream = _teamService.getTeamStream(widget.teamId);
+      _loadTeamDirectly();
+    }
+  }
+
+  Future<void> _loadTeamDirectly() async {
+    final targetId = widget.teamId.trim();
+    if (targetId.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _initialLoadCompleted = true;
+        if (_resolvedTeam == null) {
+          _loadErrorMessage = 'Invalid team ID.';
+        }
+      });
+      return;
+    }
+
+    try {
+      final fetched = await _teamService
+          .getTeam(targetId)
+          .timeout(const Duration(seconds: 8));
+      if (!mounted) return;
+      setState(() {
+        if (fetched != null) {
+          _resolvedTeam = fetched;
+          _loadErrorMessage = null;
+        } else if (_resolvedTeam == null) {
+          _loadErrorMessage =
+              'Could not find this team profile. It may have been removed or is temporarily unavailable.';
+        }
+        _initialLoadCompleted = true;
+      });
+    } catch (e) {
+      debugPrint('[TeamProfileScreen] _loadTeamDirectly error: $e');
+      if (!mounted) return;
+      setState(() {
+        if (_resolvedTeam == null) {
+          _loadErrorMessage =
+              'Failed to load team details. Please check your connection and try again.';
+        }
+        _initialLoadCompleted = true;
+      });
+    }
   }
 
   /// Privacy & Data Minimization (Play Policy):
@@ -75,11 +153,30 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     String avatar = '';
 
     try {
-      final userRow = await SupabaseService.client
-          .from('users')
-          .select()
-          .or('id.eq.$cleanUid,uid.eq.$cleanUid')
-          .maybeSingle();
+      Map<String, dynamic>? userRow;
+      final userUuid = SupabaseService.toUuid(cleanUid);
+      try {
+        final rows = await SupabaseService.client
+            .from('users')
+            .select()
+            .eq('id', TeamService.isValidUuid(cleanUid) ? cleanUid : userUuid)
+            .limit(1);
+        if (rows.isNotEmpty) {
+          userRow = Map<String, dynamic>.from(rows.first);
+        }
+      } catch (_) {}
+      if (userRow == null && !TeamService.isValidUuid(cleanUid)) {
+        try {
+          final rows = await SupabaseService.client
+              .from('users')
+              .select()
+              .eq('id', cleanUid)
+              .limit(1);
+          if (rows.isNotEmpty) {
+            userRow = Map<String, dynamic>.from(rows.first);
+          }
+        } catch (_) {}
+      }
       if (userRow != null) {
         final un = (userRow['username'] ?? '').toString().trim();
         final gid = (userRow['gamer_id'] ?? userRow['game_id'] ?? '').toString().trim();
@@ -622,24 +719,133 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         final textSec = ThemeService.textSecondary;
         final appBarBg = ThemeService.appBarBg;
 
-        return StreamBuilder<TeamModel?>(
-          stream: _teamService.getTeamStream(widget.teamId),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return Scaffold(
-                backgroundColor: bg,
-                body: const Center(
-                    child: CircularProgressIndicator(color: Color(0xFFFF6B00))),
-              );
-            }
+        final initialTeam = _resolvedTeam ??
+            widget.team ??
+            _teamService.getCachedTeam(widget.teamId);
 
-            final team = snapshot.data;
+        return StreamBuilder<TeamModel?>(
+          initialData: initialTeam,
+          stream: _teamStream ?? _teamService.getTeamStream(widget.teamId),
+          builder: (context, snapshot) {
+            if (snapshot.data != null) {
+              _resolvedTeam = snapshot.data;
+            }
+            final team = snapshot.data ??
+                _resolvedTeam ??
+                widget.team ??
+                _teamService.getCachedTeam(widget.teamId);
+
             if (team == null) {
+              final bool isWaiting = !_initialLoadCompleted &&
+                  snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasError;
+
+              if (isWaiting) {
+                return Scaffold(
+                  backgroundColor: bg,
+                  appBar: AppBar(
+                    backgroundColor: appBarBg,
+                    elevation: 0,
+                    leading: IconButton(
+                      icon: Icon(Icons.arrow_back_rounded, color: textPri),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    title: Text(
+                      'Loading Team...',
+                      style: TextStyle(
+                        color: textPri,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  body: const Center(
+                    child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
+                  ),
+                );
+              }
+
               return Scaffold(
                 backgroundColor: bg,
+                appBar: AppBar(
+                  backgroundColor: appBarBg,
+                  elevation: 0,
+                  leading: IconButton(
+                    icon: Icon(Icons.arrow_back_rounded, color: textPri),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  title: Text(
+                    'Team Profile',
+                    style: TextStyle(
+                      color: textPri,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
                 body: Center(
-                    child: Text('Team not found',
-                        style: TextStyle(color: textPri))),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.shield_outlined,
+                          size: 56,
+                          color: textSec.withOpacity(0.5),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Team Not Found',
+                          style: TextStyle(
+                            color: textPri,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _loadErrorMessage ??
+                              'Could not load this team profile right now.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: textSec,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                              label: const Text('Go Back'),
+                            ),
+                            const SizedBox(width: 12),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1877F2),
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _initialLoadCompleted = false;
+                                  _loadErrorMessage = null;
+                                  _teamStream =
+                                      _teamService.getTeamStream(widget.teamId);
+                                });
+                                _loadTeamDirectly();
+                              },
+                              icon: const Icon(Icons.refresh_rounded, size: 16),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               );
             }
 
@@ -648,11 +854,18 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         final hasRequested = team.hasRequestedJoin(currentUid);
 
         return StreamBuilder<List<TeamModel>>(
-          stream: currentUid.isNotEmpty
-              ? _teamService.getUserTeamsStream(currentUid)
-              : Stream.value([]),
+          initialData: currentUid.isNotEmpty
+              ? _teamService.getCachedUserTeams(currentUid)
+              : const <TeamModel>[],
+          stream: _userTeamsStream ??
+              (currentUid.isNotEmpty
+                  ? _teamService.getUserTeamsStream(currentUid)
+                  : Stream.value(const <TeamModel>[])),
           builder: (context, userTeamsSnap) {
-            final userTeams = userTeamsSnap.data ?? [];
+            final userTeams = userTeamsSnap.data ??
+                (currentUid.isNotEmpty
+                    ? (_teamService.getCachedUserTeams(currentUid) ?? const <TeamModel>[])
+                    : const <TeamModel>[]);
             final myLeaderTeams =
                 userTeams.where((t) => t.isLeader(currentUid)).toList();
             final myTeamId = myLeaderTeams.isNotEmpty
@@ -660,9 +873,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 : (userTeams.isNotEmpty ? userTeams.first.id : '');
 
             return StreamBuilder<List<Map<String, dynamic>>>(
-              stream: SupabaseService.client
-                  .from('active_matches')
-                  .stream(primaryKey: ['id']),
+              stream: _activeMatchesStream ??
+                  SupabaseService.client
+                      .from('active_matches')
+                      .stream(primaryKey: ['id']),
               builder: (context, activeSnap) {
                 final streamMatches = activeSnap.data ?? [];
                 final activeMatches = [

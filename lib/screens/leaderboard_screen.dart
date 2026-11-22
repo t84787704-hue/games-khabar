@@ -455,7 +455,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => TeamProfileScreen(teamId: team.id),
+                builder: (_) => TeamProfileScreen(
+                  teamId: team.id,
+                  team: team,
+                ),
               ),
             );
           },
