@@ -28,6 +28,9 @@ class GamingNewsService {
     // A) GOOGLE NEWS MEGA RSS (Covers PUBG, BGMI, Free Fire, COD, Valorant, GTA 6, GTA 5, Fortnite, Minecraft, LOL, MLBB, Genshin, Apex, CS2, Dota 2, Overwatch, Elden Ring, God of War, Spider-Man, Zelda, EA FC 25, FIFA, Forza Horizon, Clash of Clans, Roblox, Cyberpunk, The Last of Us)
     'https://news.google.com/rss/search?q=PUBG+OR+BGMI+OR+Free+Fire+OR+Call+of+Duty+OR+COD+OR+Valorant+OR+GTA+6+OR+GTA+5+OR+Fortnite+OR+Minecraft+OR+League+of+Legends+OR+Mobile+Legends+OR+Genshin+Impact+OR+Apex+Legends+OR+Counter-Strike+2+OR+CS2+OR+Dota+2+OR+Overwatch+OR+Elden+Ring+OR+God+of+War+OR+Spider-Man+OR+Zelda+OR+EA+FC+25+OR+FIFA+OR+Forza+Horizon+OR+Clash+of+Clans+OR+Roblox+OR+Cyberpunk+OR+The+Last+of+Us&hl=en-US&gl=US&ceid=US:en',
 
+    // A2) ALL 14 APP GAMES DEDICATED RSS (Free Fire, Free Fire Max, PUBG Mobile, Call Of Duty, Clash Royale, Candy Crush, Clash of Clans, Minecraft, eFootball/Football, Asphalt 9, Brawl Stars, Stumble Guys, Ludo, 8 Ball Pool)
+    'https://news.google.com/rss/search?q=%22Free+Fire%22+OR+%22Free+Fire+MAX%22+OR+%22PUBG+Mobile%22+OR+%22Call+of+Duty+Mobile%22+OR+%22Clash+Royale%22+OR+%22Candy+Crush%22+OR+%22Clash+of+Clans%22+OR+%22Minecraft%22+OR+%22eFootball%22+OR+%22Asphalt+9%22+OR+%22Brawl+Stars%22+OR+%22Stumble+Guys%22+OR+%22Ludo+King%22+OR+%228+Ball+Pool%22&hl=en-US&gl=US&ceid=US:en',
+
     // B) TOP GAMING SITES (All platforms - Console, PC & Mobile)
     'https://feeds.feedburner.com/ign/games-all',
     'https://feeds.feedburner.com/ign/news',
@@ -744,8 +747,35 @@ class GamingNewsService {
     if (combined.contains('ROBLOX')) {
       return 'Roblox';
     }
-    if (combined.contains('CLASH OF CLANS') || combined.contains('CLASH ROYALE') || combined.contains('SUPERCELL')) {
+    if (combined.contains('FREE FIRE MAX') || combined.contains('FREEFIRE MAX')) {
+      return 'Garena Free Fire Max';
+    }
+    if (combined.contains('CLASH ROYALE')) {
+      return 'Clash Royale';
+    }
+    if (combined.contains('CLASH OF CLANS') || combined.contains('SUPERCELL')) {
       return 'Clash of Clans';
+    }
+    if (combined.contains('CANDY CRUSH')) {
+      return 'Candy Crush';
+    }
+    if (combined.contains('EFOOTBALL') || combined.contains('PES MOBILE')) {
+      return 'eFootball';
+    }
+    if (combined.contains('ASPHALT 9') || combined.contains('ASPHALT LEGENDS')) {
+      return 'Asphalt 9';
+    }
+    if (combined.contains('BRAWL STARS')) {
+      return 'Brawl Stars';
+    }
+    if (combined.contains('STUMBLE GUYS')) {
+      return 'Stumble Guys';
+    }
+    if (combined.contains('LUDO KING') || combined.contains('LUDO')) {
+      return 'Ludo';
+    }
+    if (combined.contains('8 BALL POOL') || combined.contains('MINICLIP POOL')) {
+      return '8 Ball Pool';
     }
     if (combined.contains('ELDEN RING') || combined.contains('DARK SOULS') || combined.contains('FROMSOFTWARE')) {
       return 'Elden Ring';

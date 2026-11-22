@@ -66,7 +66,7 @@ class AutoNewsScraper {
   final ValueNotifier<int> lastScrapedCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<List<RssSource>> sourcesNotifier = ValueNotifier<List<RssSource>>([]);
 
-  // Top 10 High Search Volume Sources
+  // Top High Search Volume Sources + All 14 Core App Games RSS Feeds
   static final List<Map<String, dynamic>> defaultRssSources = [
     {
       'id': 'source_1_sportskeeda',
@@ -147,6 +147,15 @@ class AutoNewsScraper {
       'category': 'GTA 6 Leaks',
       'isEnabled': true,
       'order': 10,
+    },
+    {
+      'id': 'source_11_all14_mobile_games',
+      'name': 'All 14 App Games Live Feed',
+      'url':
+          'https://news.google.com/rss/search?q=%22Free+Fire%22+OR+%22Free+Fire+MAX%22+OR+%22PUBG+Mobile%22+OR+%22Call+of+Duty+Mobile%22+OR+%22Clash+Royale%22+OR+%22Candy+Crush%22+OR+%22Clash+of+Clans%22+OR+%22Minecraft%22+OR+%22eFootball%22+OR+%22Asphalt+9%22+OR+%22Brawl+Stars%22+OR+%22Stumble+Guys%22+OR+%22Ludo+King%22+OR+%228+Ball+Pool%22&hl=en-US&gl=US&ceid=US:en',
+      'category': 'All 14 Games',
+      'isEnabled': true,
+      'order': 11,
     },
   ];
 
@@ -446,36 +455,35 @@ class AutoNewsScraper {
     return totalAdded;
   }
 
-  /// Categorization logic for Free Fire, BGMI, PUBG, GTA, MINECRAFT, ESPORTS
+  /// Categorization logic for all 14 core app games + major gaming categories
   String _detectCategory(String fullText, String hint) {
     final lower = fullText.toLowerCase();
 
-    // 1. Free Fire
+    // 1. Garena Free Fire Max
+    if (lower.contains('free fire max') || lower.contains('ff max') || lower.contains('ffmax')) {
+      return 'Garena Free Fire Max';
+    }
+
+    // 2. Free Fire
     if (lower.contains('free fire') ||
         lower.contains('freefire') ||
-        lower.contains('ff max') ||
-        lower.contains('ffmax') ||
         lower.contains('garena') ||
-        lower.contains('free fire max') ||
         lower.contains('alok') ||
         lower.contains('chrono') ||
         lower.contains('bermuda max')) {
       return 'Free Fire';
     }
 
-    // 2. BGMI
+    // 3. BGMI / PUBG Mobile
     if (lower.contains('bgmi') ||
         lower.contains('battlegrounds mobile india') ||
         lower.contains('bgis') ||
         lower.contains('bmps') ||
         lower.contains('bmsl') ||
-        lower.contains('bgmi update') ||
-        lower.contains('bgmi 3.') ||
         lower.contains('krafton india')) {
-      return 'BGMI';
+      return 'PUBG Mobile';
     }
 
-    // 3. PUBG
     if (lower.contains('pubg') ||
         lower.contains('pubgm') ||
         lower.contains('pubg mobile') ||
@@ -483,10 +491,82 @@ class AutoNewsScraper {
         lower.contains('erangel') ||
         lower.contains('san hok') ||
         lower.contains('miramar')) {
-      return 'PUBG';
+      return 'PUBG Mobile';
     }
 
-    // 4. GTA
+    // 4. Call Of Duty
+    if (lower.contains('call of duty') ||
+        lower.contains('cod mobile') ||
+        lower.contains('codm') ||
+        lower.contains('warzone') ||
+        lower.contains('black ops')) {
+      return 'Call Of Duty';
+    }
+
+    // 5. Clash Royale
+    if (lower.contains('clash royale')) {
+      return 'Clash Royale';
+    }
+
+    // 6. Candy Crush
+    if (lower.contains('candy crush')) {
+      return 'Candy Crush';
+    }
+
+    // 7. Clash of Clans
+    if (lower.contains('clash of clans')) {
+      return 'Clash of Clans';
+    }
+
+    // 8. Minecraft
+    if (lower.contains('minecraft') ||
+        lower.contains('mojang') ||
+        lower.contains('bedrock edition') ||
+        lower.contains('java edition') ||
+        lower.contains('creeper') ||
+        lower.contains('netherite') ||
+        lower.contains('redstone')) {
+      return 'Minecraft';
+    }
+
+    // 9. eFootball / Football
+    if (lower.contains('efootball') ||
+        lower.contains('ea sports fc') ||
+        lower.contains('fc 25') ||
+        lower.contains('fc 24') ||
+        lower.contains('fifa') ||
+        lower.contains('football')) {
+      return 'eFootball';
+    }
+
+    // 10. Asphalt 9
+    if (lower.contains('asphalt 9') ||
+        lower.contains('asphalt legends') ||
+        lower.contains('asphalt')) {
+      return 'Asphalt 9';
+    }
+
+    // 11. Brawl Stars
+    if (lower.contains('brawl stars') || lower.contains('brawl talk')) {
+      return 'Brawl Stars';
+    }
+
+    // 12. Stumble Guys
+    if (lower.contains('stumble guys')) {
+      return 'Stumble Guys';
+    }
+
+    // 13. Ludo
+    if (lower.contains('ludo king') || lower.contains('ludo')) {
+      return 'Ludo';
+    }
+
+    // 14. 8 Ball Pool
+    if (lower.contains('8 ball pool') || lower.contains('8ball pool')) {
+      return '8 Ball Pool';
+    }
+
+    // GTA
     if (lower.contains('gta') ||
         lower.contains('gta 6') ||
         lower.contains('gta vi') ||
@@ -500,18 +580,7 @@ class AutoNewsScraper {
       return 'GTA';
     }
 
-    // 5. MINECRAFT
-    if (lower.contains('minecraft') ||
-        lower.contains('mojang') ||
-        lower.contains('bedrock edition') ||
-        lower.contains('java edition') ||
-        lower.contains('creeper') ||
-        lower.contains('netherite') ||
-        lower.contains('redstone')) {
-      return 'MINECRAFT';
-    }
-
-    // 6. ESPORTS
+    // ESPORTS
     if (lower.contains('esports') ||
         lower.contains('e-sports') ||
         lower.contains('tournament') ||
@@ -521,10 +590,6 @@ class AutoNewsScraper {
         lower.contains('cs:go') ||
         lower.contains('cs2') ||
         lower.contains('counter-strike') ||
-        lower.contains('call of duty') ||
-        lower.contains('cod') ||
-        lower.contains('warzone') ||
-        lower.contains('codm') ||
         lower.contains('fortnite') ||
         lower.contains('league of legends') ||
         lower.contains('dota') ||
@@ -534,11 +599,21 @@ class AutoNewsScraper {
 
     // Use hint if valid category
     final upperHint = hint.toUpperCase();
+    if (upperHint.contains('FREE FIRE MAX')) return 'Garena Free Fire Max';
     if (upperHint.contains('FREE FIRE')) return 'Free Fire';
-    if (upperHint.contains('BGMI')) return 'BGMI';
-    if (upperHint.contains('PUBG')) return 'PUBG';
+    if (upperHint.contains('BGMI') || upperHint.contains('PUBG')) return 'PUBG Mobile';
+    if (upperHint.contains('COD') || upperHint.contains('CALL OF DUTY')) return 'Call Of Duty';
+    if (upperHint.contains('CLASH ROYALE')) return 'Clash Royale';
+    if (upperHint.contains('CANDY CRUSH')) return 'Candy Crush';
+    if (upperHint.contains('CLASH OF CLANS')) return 'Clash of Clans';
+    if (upperHint.contains('MINECRAFT')) return 'Minecraft';
+    if (upperHint.contains('EFOOTBALL') || upperHint.contains('FOOTBALL')) return 'eFootball';
+    if (upperHint.contains('ASPHALT')) return 'Asphalt 9';
+    if (upperHint.contains('BRAWL STARS')) return 'Brawl Stars';
+    if (upperHint.contains('STUMBLE GUYS')) return 'Stumble Guys';
+    if (upperHint.contains('LUDO')) return 'Ludo';
+    if (upperHint.contains('8 BALL POOL')) return '8 Ball Pool';
     if (upperHint.contains('GTA')) return 'GTA';
-    if (upperHint.contains('MINECRAFT')) return 'MINECRAFT';
     if (upperHint.contains('ESPORTS')) return 'ESPORTS';
 
     return 'Gaming News';
@@ -854,7 +929,7 @@ class AutoNewsScraper {
     return noTags.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  /// Save to Supabase with isAuto: true
+  /// Save to Supabase with isAuto: true (both 'news' and 'steam_news' so the main feed displays it)
   Future<bool> _saveNews({
     required Map<String, String> titleMap,
     required Map<String, String> descriptionMap,
@@ -865,7 +940,8 @@ class AutoNewsScraper {
   }) async {
     try {
       final newId = 'news_${DateTime.now().millisecondsSinceEpoch}_${sourceUrl.hashCode.abs()}';
-      final nowStr = DateTime.now().toIso8601String();
+      final nowUtc = DateTime.now().toUtc();
+      final nowStr = nowUtc.toIso8601String();
       await SupabaseService.client.from('news').upsert({
         'id': newId,
         'title': titleMap,
@@ -884,6 +960,42 @@ class AutoNewsScraper {
         'timeAgo': 'time_just_now'.tr(),
         'sourceUrl': sourceUrl,
       }).timeout(const Duration(seconds: 4));
+
+      // Also mirror into 'steam_news' so GamerFeedScreen includes all 14 games seamlessly
+      try {
+        final String enTitle = (titleMap['en'] ?? titleMap['ro'] ?? '').trim();
+        final String urTitle = (titleMap['ur'] ?? enTitle).trim();
+        final String enDesc = (descriptionMap['en'] ?? descriptionMap['ro'] ?? '').trim();
+        final String urDesc = (descriptionMap['ur'] ?? enDesc).trim();
+        if (enTitle.isNotEmpty && enDesc.isNotEmpty) {
+          final String uuidId = SupabaseService.toUuid('auto14_${sourceUrl}_$enTitle');
+          await SupabaseService.client.from('steam_news').upsert({
+            'id': uuidId,
+            'title': urTitle.isNotEmpty ? urTitle : enTitle,
+            'description': enDesc,
+            'shortDescription': enDesc.length > 260 ? '${enDesc.substring(0, 260)}...' : enDesc,
+            'titleMap': titleMap,
+            'descriptionMap': descriptionMap,
+            'imageUrl': imageUrl,
+            'image_url': imageUrl,
+            'created_at': nowStr,
+            'published_at': nowStr,
+            'url': sourceUrl,
+            'sourceUrl': sourceUrl,
+            'gameName': category,
+            'category': category,
+            'timestamp': (nowUtc.millisecondsSinceEpoch / 1000).floor(),
+            'timeAgo': nowStr,
+            'views': 0,
+            'isFeatured': false,
+            'isAuto': true,
+            'isFree': false,
+            'source': category,
+            'appId': 0,
+            'appid': 0,
+          }).timeout(const Duration(seconds: 4));
+        }
+      } catch (_) {}
 
       // Also trigger refresh in SupabaseStoreService so live stream reflects new Khabar immediately
       SupabaseStoreService().refreshNews();

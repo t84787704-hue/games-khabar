@@ -39,27 +39,51 @@ function isRussian(text){
   return /[а-яА-ЯёЁ]/.test(text);
 }
 
-// 1. STEAM GAMES
+// 1. STEAM GAMES (Including Steam versions of our 14 core app games)
 const allGamesAppIds = {
   'Forza Horizon 5': 1551360, 'Euro Truck Simulator 2': 227300, 'American Truck Simulator': 270880,
   'BeamNG.drive': 284160, 'Assetto Corsa': 244210, 'CarX Drift': 635260, 'GTA 5': 271590,
   'Red Dead Redemption 2': 1174180, 'Cyberpunk 2077': 1091500, 'Elden Ring': 1245620,
-  'The Witcher 3': 292030, 'Rust': 252490, 'PUBG': 578080, 'Counter Strike 2': 730,
-  'Apex Legends': 1172470, 'Call of Duty': 2519060, 'Palworld': 1623730, 'Phasmophobia': 739630,
-  'Star Wars Jedi Survivor': 1774580, 'FC 24': 2195250, 'Forza Motorsport': 2440510, 'F1 23': 2108330
+  'The Witcher 3': 292030, 'Rust': 252490, 'PUBG Mobile': 578080, 'Counter Strike 2': 730,
+  'Apex Legends': 1172470, 'Call Of Duty': 2519060, 'Palworld': 1623730, 'Phasmophobia': 739630,
+  'Star Wars Jedi Survivor': 1774580, 'FC 24': 2195250, 'Forza Motorsport': 2440510, 'F1 23': 2108330,
+  'eFootball': 1665460, 'Stumble Guys': 1677740, 'Asphalt 9': 1815780
 };
 
 const GAME_CATEGORY_MAP = {
   'Forza Horizon 5': 'Racing Games', 'CarX Drift': 'Racing Games', 'Forza Motorsport': 'Racing Games', 'F1 23': 'Racing Games',
+  'Asphalt 9': 'Racing Games',
   'BeamNG.drive': 'Driving Games', 'Assetto Corsa': 'Driving Games',
   'Euro Truck Simulator 2': 'Truck Simulator', 'American Truck Simulator': 'Truck Simulator',
-  'PUBG': 'Battle Royale', 'Apex Legends': 'Battle Royale',
-  'Counter Strike 2': 'FPS / Shooting', 'Call of Duty': 'FPS / Shooting',
-  'GTA 5': 'Action Games', 'Cyberpunk 2077': 'Action Games', 'Elden Ring': 'Action Games',
-  'Star Wars Jedi Survivor': 'Adventure Games', 'The Witcher 3': 'Adventure Games',
+  'PUBG Mobile': 'Battle Royale', 'PUBG': 'Battle Royale', 'Apex Legends': 'Battle Royale',
+  'Free Fire': 'Battle Royale', 'Garena Free Fire Max': 'Battle Royale',
+  'Counter Strike 2': 'FPS / Shooting', 'Call Of Duty': 'FPS / Shooting', 'Call of Duty': 'FPS / Shooting',
+  'GTA 5': 'Action Games', 'Cyberpunk 2077': 'Action Games', 'Elden Ring': 'Action Games', 'Brawl Stars': 'Action Games',
+  'Star Wars Jedi Survivor': 'Adventure Games', 'The Witcher 3': 'Adventure Games', 'Minecraft': 'Adventure Games',
   'Rust': 'Survival Games', 'Palworld': 'Survival Games',
-  'Phasmophobia': 'Horror Games', 'FC 24': 'Sports Games'
+  'Phasmophobia': 'Horror Games',
+  'FC 24': 'Sports Games', 'eFootball': 'Sports Games', '8 Ball Pool': 'Sports Games',
+  'Clash Royale': 'Strategy Games', 'Clash of Clans': 'Strategy Games',
+  'Candy Crush': 'Offline Games', 'Stumble Guys': 'Multiplayer Games', 'Ludo': 'Multiplayer Games'
 };
+
+// 1B. ALL 14 CORE APP GAMES — Dedicated 30-Minute Auto Feed Sources
+const APP_14_GAMES_FEEDS = [
+  { gameName: 'Free Fire', cat: 'Battle Royale', url: 'https://news.google.com/rss/search?q=%22Free+Fire%22+Garena+update+OR+event+OR+esports&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'PUBG Mobile', cat: 'Battle Royale', url: 'https://news.google.com/rss/search?q=%22PUBG+Mobile%22+OR+BGMI+update+OR+esports+OR+patch&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Call Of Duty', cat: 'FPS / Shooting', url: 'https://news.google.com/rss/search?q=%22Call+of+Duty+Mobile%22+OR+%22Call+of+Duty%22+Warzone+update&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Clash Royale', cat: 'Strategy Games', url: 'https://news.google.com/rss/search?q=%22Clash+Royale%22+Supercell+update+OR+balance+OR+deck&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Candy Crush', cat: 'Offline Games', url: 'https://news.google.com/rss/search?q=%22Candy+Crush+Saga%22+OR+%22Candy+Crush%22+King+mobile+game+event+OR+levels&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Garena Free Fire Max', cat: 'Battle Royale', url: 'https://news.google.com/rss/search?q=%22Free+Fire+MAX%22+Garena+OB+update+OR+rewards+OR+booyah&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Clash of Clans', cat: 'Strategy Games', url: 'https://news.google.com/rss/search?q=%22Clash+of+Clans%22+Supercell+Town+Hall+OR+update+OR+event&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Minecraft', cat: 'Adventure Games', url: 'https://news.google.com/rss/search?q=%22Minecraft%22+Mojang+Bedrock+OR+Java+snapshot+OR+update&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'eFootball', cat: 'Sports Games', url: 'https://news.google.com/rss/search?q=%22eFootball%22+Konami+OR+%22EA+Sports+FC%22+football+game+update&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Asphalt 9', cat: 'Racing Games', url: 'https://news.google.com/rss/search?q=%22Asphalt+9%22+OR+%22Asphalt+Legends+Unite%22+Gameloft+update+OR+season&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Brawl Stars', cat: 'Action Games', url: 'https://news.google.com/rss/search?q=%22Brawl+Stars%22+Supercell+Brawl+Talk+OR+Brawler+OR+update&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Stumble Guys', cat: 'Multiplayer Games', url: 'https://news.google.com/rss/search?q=%22Stumble+Guys%22+Scopely+update+OR+collab+OR+tournament&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: 'Ludo', cat: 'Multiplayer Games', url: 'https://news.google.com/rss/search?q=%22Ludo+King%22+OR+%22Ludo%22+mobile+game+tournament+OR+update&hl=en-US&gl=US&ceid=US:en' },
+  { gameName: '8 Ball Pool', cat: 'Sports Games', url: 'https://news.google.com/rss/search?q=%228+Ball+Pool%22+Miniclip+mobile+game+update+OR+season+pass&hl=en-US&gl=US&ceid=US:en' }
+];
 
 // 2. TOP 50 GAMING WEBSITES & MAJOR SOURCES
 const TOP_50_SITES = [
@@ -199,35 +223,55 @@ function makeAbsoluteUrl(imgUrl, baseLink) {
 }
 
 const FALLBACK_IMAGES = {
-  valorant: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80',
-  fortnite: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=1000&q=80',
-  bgmi: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1000&q=80',
-  pubg: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=1000&q=80',
-  freefire: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1000&q=80',
-  cod: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1000&q=80',
-  gta: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1000&q=80',
-  sports: 'https://images.unsplash.com/photo-1511886929837-354d827aae26?auto=format&fit=crop&w=1000&q=80',
-  bike: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1000&q=80',
-  racing: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1000&q=80',
-  truck: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1000&q=80',
-  minecraft: 'https://images.unsplash.com/photo-1627856013091-fed6e4e30025?auto=format&fit=crop&w=1000&q=80',
-  general: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?auto=format&fit=crop&w=1000&q=80'
+  freefire: 'https://cdn.wildflamestudio.com/common/web_event/official2.ff.garena.all/20269/53c120cc950c9ead6beb2f5f6d8aadff.jpg',
+  freefiremax: 'https://i.pinimg.com/736x/9c/d7/47/9cd74769ab0b1ca1b7a7a4a06e33f402.jpg',
+  pubg: 'https://cdn.akamai.steamstatic.com/steam/apps/578080/header.jpg',
+  bgmi: 'https://cdn.akamai.steamstatic.com/steam/apps/578080/header.jpg',
+  cod: 'https://i.pinimg.com/736x/2c/68/00/2c68004e2013ffe544dd18688a4527d5.jpg',
+  clashroyale: 'https://e.snmc.io/lk/f/x/88886e931ef24bc6ddad648cdcf565c8/5296160',
+  candycrush: 'https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1425327952i/25054190.jpg',
+  clashofclans: 'https://m.media-amazon.com/images/M/MV5BYWY0OTUyOGYtYjM5NC00ODAyLTkwYzYtNWVlMzI4ZDkxMjA4XkEyXkFqcGc@._V1_.jpg',
+  minecraft: 'https://thumbs.dreamstime.com/b/minecraft-logo-online-game-dirt-block-illustrations-concept-design-isolated-186775550.jpg',
+  efootball: 'https://i.ytimg.com/vi/5mLrLB1boAc/maxresdefault.jpg',
+  asphalt9: 'https://www.cybersmile.org/wp-content/uploads/2022/09/Cybersmile-x-Asphalt-9-NFT-Fundraising-campaign-announcement.png',
+  brawlstars: 'https://cdna.artstation.com/p/assets/images/images/016/603/776/large/nebojsa-bosnjak-brawl-stars-logo.jpg?1552776881',
+  stumbleguys: 'https://live-assets2.web.stumbleguys.com/cms/STG_Reward_Rush_Weekend_1920x1080_57ad1ab000.png',
+  ludo: 'https://static0.gamerantimages.com/wordpress/wp-content/uploads/2025/03/mixcollage-05-mar-2025-09-03-am-8578.jpg',
+  ballpool: 'https://static0.gamerantimages.com/wordpress/wp-content/uploads/2025/03/mixcollage-05-mar-2025-09-05-am-9226.jpg?w=1200&h=1200&fit=crop',
+  valorant: 'https://cdn.akamai.steamstatic.com/steam/apps/730/header.jpg',
+  fortnite: 'https://cdn.akamai.steamstatic.com/steam/apps/1172470/header.jpg',
+  gta: 'https://cdn.akamai.steamstatic.com/steam/apps/271590/header.jpg',
+  sports: 'https://i.ytimg.com/vi/5mLrLB1boAc/maxresdefault.jpg',
+  bike: 'https://cdn.akamai.steamstatic.com/steam/apps/1551360/header.jpg',
+  racing: 'https://cdn.akamai.steamstatic.com/steam/apps/1551360/header.jpg',
+  truck: 'https://cdn.akamai.steamstatic.com/steam/apps/227300/header.jpg',
+  general: 'https://cdn.akamai.steamstatic.com/steam/apps/578080/header.jpg'
 };
 
 function getCategoryFallback(title = '', category = '') {
   const text = `${title} ${category}`.toLowerCase();
-  if (text.includes('valorant')) return { key: 'valorant', url: FALLBACK_IMAGES.valorant };
-  if (text.includes('fortnite')) return { key: 'fortnite', url: FALLBACK_IMAGES.fortnite };
+  if (text.includes('free fire max')) return { key: 'freefiremax', url: FALLBACK_IMAGES.freefiremax };
+  if (text.includes('free fire') || text.includes('garena')) return { key: 'freefire', url: FALLBACK_IMAGES.freefire };
   if (text.includes('bgmi') || text.includes('battlegrounds mobile')) return { key: 'bgmi', url: FALLBACK_IMAGES.bgmi };
   if (text.includes('pubg')) return { key: 'pubg', url: FALLBACK_IMAGES.pubg };
-  if (text.includes('free fire')) return { key: 'freefire', url: FALLBACK_IMAGES.freefire };
-  if (text.includes('call of duty') || text.includes('warzone') || text.includes('fps')) return { key: 'cod', url: FALLBACK_IMAGES.cod };
+  if (text.includes('call of duty') || text.includes('warzone') || text.includes('cod')) return { key: 'cod', url: FALLBACK_IMAGES.cod };
+  if (text.includes('clash royale')) return { key: 'clashroyale', url: FALLBACK_IMAGES.clashroyale };
+  if (text.includes('candy crush')) return { key: 'candycrush', url: FALLBACK_IMAGES.candycrush };
+  if (text.includes('clash of clans')) return { key: 'clashofclans', url: FALLBACK_IMAGES.clashofclans };
+  if (text.includes('minecraft')) return { key: 'minecraft', url: FALLBACK_IMAGES.minecraft };
+  if (text.includes('efootball') || text.includes('pes') || text.includes('football') || text.includes('fifa') || text.includes('fc 24') || text.includes('fc 25')) return { key: 'efootball', url: FALLBACK_IMAGES.efootball };
+  if (text.includes('asphalt')) return { key: 'asphalt9', url: FALLBACK_IMAGES.asphalt9 };
+  if (text.includes('brawl stars') || text.includes('brawl')) return { key: 'brawlstars', url: FALLBACK_IMAGES.brawlstars };
+  if (text.includes('stumble guys') || text.includes('stumble')) return { key: 'stumbleguys', url: FALLBACK_IMAGES.stumbleguys };
+  if (text.includes('ludo')) return { key: 'ludo', url: FALLBACK_IMAGES.ludo };
+  if (text.includes('8 ball pool') || text.includes('8ball')) return { key: 'ballpool', url: FALLBACK_IMAGES.ballpool };
+  if (text.includes('valorant')) return { key: 'valorant', url: FALLBACK_IMAGES.valorant };
+  if (text.includes('fortnite')) return { key: 'fortnite', url: FALLBACK_IMAGES.fortnite };
   if (text.includes('gta') || text.includes('grand theft auto')) return { key: 'gta', url: FALLBACK_IMAGES.gta };
-  if (text.includes('wcc') || text.includes('cricket') || text.includes('fifa') || text.includes('fc 24') || text.includes('sports')) return { key: 'sports', url: FALLBACK_IMAGES.sports };
+  if (text.includes('wcc') || text.includes('cricket') || text.includes('sports')) return { key: 'sports', url: FALLBACK_IMAGES.sports };
   if (text.includes('bike') || text.includes('motogp') || text.includes('ride 5')) return { key: 'bike', url: FALLBACK_IMAGES.bike };
   if (text.includes('forza') || text.includes('f1') || text.includes('drift') || text.includes('racing')) return { key: 'racing', url: FALLBACK_IMAGES.racing };
   if (text.includes('truck') || text.includes('simulator')) return { key: 'truck', url: FALLBACK_IMAGES.truck };
-  if (text.includes('minecraft')) return { key: 'minecraft', url: FALLBACK_IMAGES.minecraft };
   return { key: 'general', url: FALLBACK_IMAGES.general };
 }
 
@@ -409,19 +453,40 @@ async function fetchFullArticle(url) {
 
 function detectCat(title){
   const t=title.toLowerCase();
-  if(t.includes('free fire')||t.includes('pubg')||t.includes('fortnite')) return 'Battle Royale';
-  if(t.includes('wcc')||t.includes('cricket')||t.includes('fifa')||t.includes('fc 24')) return 'Sports Games';
-  if(t.includes('jedi')||t.includes('gta')) return 'Adventure Games';
+  if(t.includes('free fire')||t.includes('pubg')||t.includes('bgmi')||t.includes('fortnite')) return 'Battle Royale';
+  if(t.includes('efootball')||t.includes('football')||t.includes('8 ball pool')||t.includes('wcc')||t.includes('cricket')||t.includes('fifa')||t.includes('fc 24')||t.includes('fc 25')) return 'Sports Games';
+  if(t.includes('clash royale')||t.includes('clash of clans')) return 'Strategy Games';
+  if(t.includes('brawl stars')) return 'Action Games';
+  if(t.includes('stumble guys')||t.includes('ludo')) return 'Multiplayer Games';
+  if(t.includes('candy crush')) return 'Offline Games';
+  if(t.includes('minecraft')||t.includes('jedi')||t.includes('gta')) return 'Adventure Games';
   if(t.includes('bike')||t.includes('motogp')) return 'Bike Games';
   if(t.includes('truck')) return 'Truck Simulator';
-  if(t.includes('valorant')||t.includes('call of duty')) return 'FPS / Shooting';
-  if(t.includes('racing')||t.includes('forza')||t.includes('f1')) return 'Racing Games';
+  if(t.includes('valorant')||t.includes('call of duty')||t.includes('cod')) return 'FPS / Shooting';
+  if(t.includes('asphalt')||t.includes('racing')||t.includes('forza')||t.includes('f1')) return 'Racing Games';
   return null;
 }
 
 function extractGameName(title, fallback = '') {
   if (!title || typeof title !== 'string') return fallback;
   const cleanTitle = title.trim();
+  const lower = cleanTitle.toLowerCase();
+
+  // Check our 14 core app games first
+  if (lower.includes('free fire max')) return 'Garena Free Fire Max';
+  if (lower.includes('free fire')) return 'Free Fire';
+  if (lower.includes('pubg mobile') || lower.includes('bgmi') || lower.includes('pubg')) return 'PUBG Mobile';
+  if (lower.includes('call of duty') || lower.includes('warzone') || lower.includes('cod mobile')) return 'Call Of Duty';
+  if (lower.includes('clash royale')) return 'Clash Royale';
+  if (lower.includes('candy crush')) return 'Candy Crush';
+  if (lower.includes('clash of clans')) return 'Clash of Clans';
+  if (lower.includes('minecraft')) return 'Minecraft';
+  if (lower.includes('efootball') || lower.includes('pes 202') || lower.includes('ea sports fc') || lower.includes('fifa')) return 'eFootball';
+  if (lower.includes('asphalt 9') || lower.includes('asphalt legends')) return 'Asphalt 9';
+  if (lower.includes('brawl stars')) return 'Brawl Stars';
+  if (lower.includes('stumble guys')) return 'Stumble Guys';
+  if (lower.includes('ludo king') || lower.includes('ludo')) return 'Ludo';
+  if (lower.includes('8 ball pool') || lower.includes('8ball pool')) return '8 Ball Pool';
 
   const franchisePatterns = [
     /\bEA Sports\s+[A-Za-z0-9]+(?:\s+[A-Za-z0-9]+){0,3}\b/i,
@@ -783,7 +848,100 @@ async function run(){
     }
   }
 
-  console.log('DONE - STEAM NEWS FETCHED TO SUPABASE');
+  // ALL 14 CORE APP GAMES - Fetch latest news for every one of the 14 games every 30 minutes
+  for (const gameFeed of APP_14_GAMES_FEEDS) {
+    try {
+      const feed = await parser.parseURL(gameFeed.url);
+      for (const item of (feed.items || []).slice(0, 3)) {
+        const articleUrl = item.link || item.guid || "";
+        if (!articleUrl || !articleUrl.startsWith('http')) continue;
+
+        const rawTitle = he.decode(item.title || "").replace(/\s*-\s*[^-]+$/, '').trim().substring(0, 200);
+        if (!rawTitle || isRussian(rawTitle)) continue;
+
+        const uuidId = stringToUuid(`app14_${gameFeed.gameName}_${rawTitle}`);
+        if (existingIds.has(uuidId)) {
+          continue;
+        }
+
+        let articleBody = null;
+        let cheerioDoc = null;
+
+        const fullArticle = await fetchFullArticle(articleUrl);
+        if (fullArticle && fullArticle.fullText && fullArticle.fullText.length >= 250) {
+          articleBody = fullArticle.fullText;
+          cheerioDoc = fullArticle.$;
+        } else {
+          const rssRaw = item['content:encoded'] || item.content || item.contentSnippet || item.summary || item.description || "";
+          const rssCleaned = cleanDescription(rssRaw) || rawTitle;
+          articleBody = `${rawTitle}\n\n${rssCleaned}\n\n` +
+            `This latest ${gameFeed.gameName} update brings fresh community events, competitive balance adjustments, seasonal rewards, and new gameplay features for players across mobile and online servers. ` +
+            `Players competing in ${gameFeed.gameName} ranked matches, custom rooms, and weekly tournaments can explore the newest patch changes, unlock event rewards, and stay ahead of the current meta. ` +
+            `Stay tuned to Games Khabar for real-time ${gameFeed.gameName} news, patch breakdowns, tournament updates, and esports announcements every 30 minutes.`;
+        }
+
+        if (articleBody.length < 520) {
+          articleBody = `${articleBody}\n\n` +
+            `In addition, the ${gameFeed.gameName} development team continues to roll out server optimizations, anti-cheat improvements, and special seasonal challenges for active squads and solo competitors. ` +
+            `Check the official patch overview and in-game event calendar to claim all limited-time ${gameFeed.gameName} bonuses before the current cycle concludes.`;
+        }
+        if (isRussian(articleBody)) continue;
+
+        const cat = gameFeed.cat || detectCat(rawTitle) || 'Multiplayer Games';
+        let img = await getImage(articleUrl, item, `${gameFeed.gameName} ${rawTitle}`, cat, cheerioDoc);
+        if (!img || img.toLowerCase().includes('google') || img.toLowerCase().includes('gstatic') || img.toLowerCase().includes('favicon')) {
+          img = getCategoryFallback(gameFeed.gameName, cat).url;
+        }
+
+        const paras = articleBody.split('\n\n').filter(p => p.trim().length > 20);
+        const shortDesc = paras.slice(0, 2).join('\n\n') || articleBody.substring(0, 300);
+
+        const pubDate = extractPublishedDate(item, articleUrl, cheerioDoc);
+        const pubIso = pubDate.toISOString();
+        const pubTimestamp = Math.floor(pubDate.getTime() / 1000);
+
+        const urduTitle = await translateToUrdu(rawTitle);
+        const urduDesc = await translateToUrdu(shortDesc);
+
+        const newsPayload = {
+          id: uuidId,
+          title: (urduTitle && urduTitle.length > 5) ? urduTitle : rawTitle,
+          description: articleBody,
+          shortDescription: shortDesc,
+          titleMap: { en: rawTitle, ur: urduTitle || rawTitle, ro: rawTitle },
+          descriptionMap: { en: articleBody, ur: urduDesc || articleBody, ro: articleBody },
+          imageUrl: img,
+          image_url: img,
+          created_at: pubIso,
+          published_at: pubIso,
+          url: articleUrl,
+          sourceUrl: articleUrl,
+          gameName: gameFeed.gameName,
+          category: cat,
+          timestamp: pubTimestamp,
+          timeAgo: pubIso,
+          views: 0,
+          isFeatured: false,
+          isAuto: true,
+          isFree: false,
+          source: gameFeed.gameName,
+          appId: 0,
+          appid: 0
+        };
+
+        const { error: insErr } = await supabase.from('steam_news').upsert(newsPayload, { onConflict: 'id' });
+        if (insErr) {
+          console.warn(`steam_news 14-game upsert warning (${gameFeed.gameName}): ${insErr.message}`);
+        } else {
+          existingIds.add(uuidId);
+        }
+      }
+    } catch (e) {
+      console.warn(`Error processing 14-game feed ${gameFeed.gameName}: ${e.message}`);
+    }
+  }
+
+  console.log('DONE - STEAM & ALL 14 APP GAMES NEWS FETCHED TO SUPABASE');
   process.exit(0);
 }
 

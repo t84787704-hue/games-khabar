@@ -55,6 +55,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   // Announcement Banner Data
   Map<String, dynamic>? _announcement;
   Timer? _timeAgoRefreshTimer;
+  Timer? _thirtyMinAutoFeedTimer;
 
   static final RegExp _uuidRegex = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -74,6 +75,22 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     _timeAgoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
+    // Every 30 minutes, auto-sync and refresh the feed including all 14 app games
+    _thirtyMinAutoFeedTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+      _runThirtyMinuteAutoFeedCycle();
+    });
+  }
+
+  Future<void> _runThirtyMinuteAutoFeedCycle() async {
+    if (!mounted) return;
+    try {
+      await SupabaseService.syncAll14AppGamesNewsInBackground(force: true);
+      if (mounted) {
+        await _loadFeed(isPullToRefresh: true);
+      }
+    } catch (e) {
+      debugPrint('[30m-AutoFeed] Background cycle error: $e');
+    }
   }
 
   Future<void> _loadCachedFeedFromDisk() async {
@@ -125,6 +142,7 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
   void dispose() {
     NewsImageResolver.onImageResolved.removeListener(_onNewsImageResolved);
     _timeAgoRefreshTimer?.cancel();
+    _thirtyMinAutoFeedTimer?.cancel();
     super.dispose();
   }
 
@@ -375,17 +393,20 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
     }
 
     try {
-      // 1. Fetch Community Posts & Steam News in parallel
+      // 1. Fetch Community Posts & Steam News (including all 14 app games) in parallel
       final postsFuture = SupabaseService.client
           .from('posts')
           .select('*')
           .order('created_at', ascending: false)
           .limit(30);
 
-      final steamNewsFuture = SupabaseService.getSteamNews(limit: 40);
+      final steamNewsFuture = SupabaseService.getSteamNews(
+        limit: 54,
+        forceRefresh: isPullToRefresh,
+      );
 
       final results = await Future.wait([postsFuture, steamNewsFuture]);
-      
+
       final fetchedPosts = List<Map<String, dynamic>>.from(results[0] as List)
           .where((p) => !_isRewardOrInvalidNewsPost(p))
           .toList();
@@ -522,15 +543,38 @@ class _GamerFeedScreenState extends State<GamerFeedScreen> {
         };
       }).toList();
 
-      // Combine community posts and steam news together
-      final combinedFeed = [...fetchedPosts, ...formattedSteamNews];
-      
-      // Sort combined feed by creation date descending
-      combinedFeed.sort((a, b) {
+      // Combine community posts and interleaved gaming news (general + all 14 app games)
+      // while preserving the balanced order of formattedSteamNews.
+      fetchedPosts.sort((a, b) {
         final dateA = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2000);
         final dateB = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2000);
         return dateB.compareTo(dateA);
       });
+
+      final List<Map<String, dynamic>> combinedFeed = [];
+      final DateTime recentCutoff = DateTime.now().subtract(const Duration(hours: 12));
+      int pIdx = 0;
+      int nIdx = 0;
+
+      // Place brand-new community posts from the last 12 hours at the top
+      while (pIdx < fetchedPosts.length) {
+        final postDate = DateTime.tryParse(fetchedPosts[pIdx]['created_at']?.toString() ?? '') ?? DateTime(2000);
+        if (postDate.isAfter(recentCutoff)) {
+          combinedFeed.add(fetchedPosts[pIdx++]);
+        } else {
+          break;
+        }
+      }
+
+      // Interleave remaining community posts with the 14-games + general news stream
+      while (nIdx < formattedSteamNews.length || pIdx < fetchedPosts.length) {
+        for (int k = 0; k < 3 && nIdx < formattedSteamNews.length; k++) {
+          combinedFeed.add(formattedSteamNews[nIdx++]);
+        }
+        if (pIdx < fetchedPosts.length) {
+          combinedFeed.add(fetchedPosts[pIdx++]);
+        }
+      }
 
       final userIds = combinedFeed
           .map((p) => p['user_id']?.toString())
