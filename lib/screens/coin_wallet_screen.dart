@@ -203,10 +203,12 @@ class CoinWalletScreen extends StatefulWidget {
     final String currencyLabel = TeamService.getGameCurrencyLabel(gameName);
     final String weekLabel = TeamService.getWeekRangeLabel();
     final String weekKey = TeamService.getWeekCycleKey();
+    final String concludedWeekKey = TeamService.getConcludedWeekKey();
+    final String concludedWeekLabel = TeamService.getConcludedWeekRangeLabel();
     final String normalizedGameKey = normalizeGameKeyForClaim(gameName);
     final String consistentRewardLabel = getConsistentRewardLabelForShare(gameName, equalPkrShare);
 
-    // Check public.reward_claims in Supabase for existing active claim in current round
+    // Check public.reward_claims in Supabase for existing active claim in current or concluded round
     Map<String, dynamic>? existingClaim;
     try {
       final allTeamClaimsRows = await SupabaseService.client
@@ -251,7 +253,11 @@ class CoinWalletScreen extends StatefulWidget {
         final String rGame = (row['game_name'] ?? '').toString().trim().toLowerCase();
         if (rGame.isNotEmpty && rGame != normalizedGameKey) continue;
         final String rWeek = (row['week_key'] ?? '').toString().trim();
-        if (rWeek != weekKey && !rWeek.startsWith('${weekKey}_r')) continue;
+        final bool matchesCurrentOrConcluded = rWeek == weekKey ||
+            rWeek.startsWith('${weekKey}_r') ||
+            (concludedWeekKey.isNotEmpty &&
+                (rWeek == concludedWeekKey || rWeek.startsWith('${concludedWeekKey}_r')));
+        if (!matchesCurrentOrConcluded) continue;
         final String rStatus = (row['status'] ?? 'pending').toString().trim().toLowerCase();
         if (rStatus == 'rejected') continue;
         if (hasResetRound && cutoffUtcMs > 0 && rStatus == 'delivered') {
@@ -402,6 +408,83 @@ class CoinWalletScreen extends StatefulWidget {
       return;
     }
 
+    // Strict Gate: Weekly reward claims unlock ONLY at Week End / Monday claim window
+    // AND ONLY for the team ranked #1 in that specific game for the concluded weekly cycle.
+    final Map<String, dynamic> teamStats =
+        TeamService().getCachedTeamWeeklyStats(activeTeam.id) ??
+            await TeamService().getTeamWeeklyCoinStats(activeTeam);
+    final bool isClaimEligible = teamStats['isClaimEligible'] == true;
+    final int liveRank =
+        (teamStats['weeklyRank'] as num?)?.toInt() ?? activeTeam.weeklyRank;
+    final int liveCoins =
+        (teamStats['weeklyCoins'] as num?)?.toInt() ?? activeTeam.weeklyCoins;
+    final bool isLiveTopRank = liveRank == 1 && liveCoins > 0;
+
+    if (!isClaimEligible) {
+      if (!context.mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: ThemeService.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: isDark ? const Color(0xFFFFB800) : const Color(0xFFD97706),
+              width: 1.4,
+            ),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.lock_clock_rounded, color: goldTextColor, size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Weekly Claim Unlocks at Week End (Monday)',
+                  style: TextStyle(
+                    color: strongBodyTextColor,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            isLiveTopRank
+                ? 'Note: ${activeTeam.name} [${activeTeam.tag}] is currently Rank #1 in the active $gameName weekly cycle ($weekLabel) with ${NumberFormat('#,###').format(liveCoins)} G-Coins!\n\n'
+                    'Weekly reward claims remain locked during the active weekly cycle and unlock strictly at the end of the week (Monday claim window) if your team finishes at Rank #1 in $gameName.'
+                : 'Note: Weekly reward claims (${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR in $currencyLabel, divided equally among active members) unlock strictly at the end of the weekly cycle (Monday claim window) and only for the Rank #1 team in $gameName.\n\n'
+                    'Contribute G-Coins from your Personal Wallet to help ${activeTeam.name} [${activeTeam.tag}] finish at Rank #1 by the end of the week ($weekLabel)!',
+            style: TextStyle(
+              color: strongBodyTextColor,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              height: 1.45,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GamerTheme.neonGreen,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Got It',
+                style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final String targetClaimWeekKey =
+        concludedWeekKey.isNotEmpty ? concludedWeekKey : weekKey;
+    final String targetClaimWeekLabel =
+        concludedWeekLabel.isNotEmpty ? concludedWeekLabel : weekLabel;
+
     final prefs = await SharedPreferences.getInstance();
     final identity = await resolveLockedProfileGameIdentity(
       userId: cleanUid,
@@ -486,7 +569,7 @@ class CoinWalletScreen extends StatefulWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '🏆 Total Team Prize: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR ($weekLabel)',
+                      '🏆 Total Team Prize: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR ($targetClaimWeekLabel)',
                       style: TextStyle(
                         color: strongBodyTextColor,
                         fontWeight: FontWeight.w700,
@@ -631,8 +714,8 @@ class CoinWalletScreen extends StatefulWidget {
       for (final rawDup in dupRows) {
         final d = Map<String, dynamic>.from(rawDup);
         final String dWeek = (d['week_key'] ?? '').toString().trim();
-        if (dWeek == weekKey) hasSameWeekRow = true;
-        if (dWeek != weekKey && !dWeek.startsWith('${weekKey}_r')) continue;
+        if (dWeek == targetClaimWeekKey) hasSameWeekRow = true;
+        if (dWeek != targetClaimWeekKey && !dWeek.startsWith('${targetClaimWeekKey}_r')) continue;
         final String dStatus = (d['status'] ?? 'pending').toString().trim().toLowerCase();
         if (dStatus == 'pending' || dStatus == 'processing') {
           activePendingDup = d;
@@ -644,7 +727,7 @@ class CoinWalletScreen extends StatefulWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'You already have an active submitted claim (${activePendingDup['claim_code']}) for $gameName in week $weekKey.',
+              'You already have an active submitted claim (${activePendingDup['claim_code']}) for $gameName in week $targetClaimWeekKey.',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
             ),
             backgroundColor: const Color(0xFFB45309),
@@ -655,8 +738,8 @@ class CoinWalletScreen extends StatefulWidget {
       }
 
       final String effectiveWeekKey = hasSameWeekRow
-          ? '${weekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(9)}'
-          : weekKey;
+          ? '${targetClaimWeekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(9)}'
+          : targetClaimWeekKey;
 
       final Map<String, dynamic> newClaimPayload = {
         'claim_code': claimCode,
@@ -682,7 +765,7 @@ class CoinWalletScreen extends StatefulWidget {
         if (errStr.contains('23505') || errStr.contains('duplicate') || errStr.contains('unique')) {
           final fallbackPayload = {
             ...newClaimPayload,
-            'week_key': '${weekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+            'week_key': '${targetClaimWeekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
           };
           insertedRows = await SupabaseService.client
               .from('reward_claims')
@@ -710,7 +793,7 @@ class CoinWalletScreen extends StatefulWidget {
           type: 'game_currency_redemption',
           title: '🎁 #1 Team Claimed $gameName - $consistentRewardLabel',
           description:
-              'Claim $claimCode • Game UID: $playerGameUid$ignSuffix • Your Share: $equalPkrShare PKR / 1,500 PKR Total Team Prize • Team: $fullTeamName ($weekLabel) • Status: Claim Done (Delivery in 24–48 hrs)',
+              'Claim $claimCode • Game UID: $playerGameUid$ignSuffix • Your Share: $equalPkrShare PKR / 1,500 PKR Total Team Prize • Team: $fullTeamName ($targetClaimWeekLabel) • Status: Claim Done (Delivery in 24–48 hrs)',
         );
       } catch (_) {}
 
@@ -1346,6 +1429,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     int? currentRank,
     String? activeTeamName,
   }) {
+    final bool isDark = ThemeService.isDarkMode;
+    final Color noteTextColor = isDark ? Colors.white : const Color(0xFF000000);
+    final Color goldTextColor = isDark ? const Color(0xFFFFD700) : const Color(0xFF92400E);
     final currencyLabel = TeamService.getGameCurrencyLabel(gameName);
     showDialog(
       context: context,
@@ -1353,25 +1439,28 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         backgroundColor: ThemeService.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: Color(0xFFFFB800), width: 1.4),
+          side: BorderSide(
+            color: isDark ? const Color(0xFFFFB800) : const Color(0xFFD97706),
+            width: 1.4,
+          ),
         ),
         title: Row(
           children: [
             Icon(
-              hasTeam ? Icons.emoji_events_rounded : Icons.groups_rounded,
-              color: const Color(0xFFFFB800),
+              hasTeam ? Icons.lock_clock_rounded : Icons.groups_rounded,
+              color: goldTextColor,
               size: 26,
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 hasTeam
-                    ? 'Rank #1 Team Required to Redeem'
-                    : 'Active Team & Rank #1 Required',
+                    ? 'Unlocks at Week End (Monday) for #1 Team'
+                    : 'Active Team & Rank #1 at Week End Required',
                 style: TextStyle(
-                  color: ThemeService.textPrimary,
+                  color: noteTextColor,
                   fontWeight: FontWeight.w900,
-                  fontSize: 15.5,
+                  fontSize: 15,
                 ),
               ),
             ),
@@ -1379,34 +1468,47 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ),
         content: Text(
           hasTeam
-              ? 'Weekly game-currency reward redemption (${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR equivalent in $currencyLabel, divided equally among up to 4 members) is strictly unlocked for members of the Rank #1 team in $gameName.\n\n'
-                  'Your team (${activeTeamName ?? 'Active Team'}) is currently Rank #${currentRank ?? '-'} in $gameName. Contribute G-Coins from your Personal Wallet to help your team reach Rank #1! All personal G-Coins in your Personal Wallet remain 100% safe across weekly resets.'
-              : 'Weekly game-currency reward redemption (${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR equivalent in $currencyLabel, divided equally among up to 4 active members) is strictly unlocked for members of the Rank #1 team in $gameName.\n\n'
+              ? 'Note: Weekly game-currency reward redemption (${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR equivalent in $currencyLabel, divided equally among up to 4 active members) remains locked during the active weekly cycle and unlocks strictly at the end of the week (Monday claim window) for members of the Rank #1 team in $gameName.\n\n'
+                  'Your team (${activeTeamName ?? 'Active Team'}) is currently Rank #${currentRank ?? '-'} in the active $gameName cycle. Contribute G-Coins from your Personal Wallet to help your team finish at Rank #1 by week\'s end! All personal G-Coins in your Personal Wallet remain 100% safe across weekly resets.'
+              : 'Note: Weekly game-currency reward redemption (${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR equivalent in $currencyLabel, divided equally among up to 4 active members) unlocks strictly at the end of the weekly cycle (Monday claim window) for members of the Rank #1 team in $gameName.\n\n'
                   'All G-Coins in your Personal Wallet remain 100% safe in your balance and history. Join or create a 4-member Free Fire or PUBG team and contribute coins to compete for Rank #1!',
           style: TextStyle(
-            color: ThemeService.textSecondary,
-            fontSize: 13,
+            color: noteTextColor,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
             height: 1.45,
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Got It', style: TextStyle(color: ThemeService.textSecondary)),
+            child: Text(
+              'Got It',
+              style: TextStyle(
+                color: noteTextColor,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: GamerTheme.neonGreen,
               foregroundColor: Colors.black,
+              iconColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             icon: Icon(
               hasTeam ? Icons.leaderboard_rounded : Icons.shield_rounded,
               size: 16,
+              color: Colors.black,
             ),
             label: Text(
               hasTeam ? 'View Weekly Leaderboard' : 'Join / Create Team',
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w900,
+                fontSize: 12.5,
+              ),
             ),
             onPressed: () {
               Navigator.pop(ctx);
@@ -1454,7 +1556,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       return;
     }
 
-    // 2. Find user's team for this game (or primary team) and verify Rank #1 status
+    // 2. Find user's team for this game (or primary team)
     TeamModel? matchingTeam;
     for (final t in activeTeams) {
       if (TeamService.matchesGameName(t.game, gameName)) {
@@ -1469,29 +1571,22 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         await _teamService.getTeamWeeklyCoinStats(activeTeam);
     final int weeklyRank = (stats['weeklyRank'] as num?)?.toInt() ??
         (activeTeam.weeklyRank > 0 ? activeTeam.weeklyRank : 2);
-    final int teamWeeklyCoins = (stats['weeklyCoins'] as num?)?.toInt() ?? activeTeam.weeklyCoins;
-    final bool isRankOneWinner = matchesSelectedGame && weeklyRank == 1 && teamWeeklyCoins > 0;
-
-    // Rule 3: Winner-Only Redemption — strictly members of the #1 team in that game
-    if (!isRankOneWinner) {
-      _showWinnerOnlyRedemptionDialog(
-        gameName: gameName,
-        hasTeam: true,
-        currentRank: matchesSelectedGame ? weeklyRank : null,
-        activeTeamName: '${activeTeam.name} [${activeTeam.tag}] (${activeTeam.game})',
-      );
-      return;
-    }
+    final bool isClaimEligible =
+        matchesSelectedGame && (stats['isClaimEligible'] == true);
 
     final int memberCount = activeTeam.memberCount.clamp(1, TeamModel.maxMembers);
     final int equalPkrShare = TeamService.getEqualPkrShare(memberCount);
     final String currencyLabel = TeamService.getGameCurrencyLabel(gameName);
     final String weekLabel = TeamService.getWeekRangeLabel();
     final String weekKey = TeamService.getWeekCycleKey();
+    final String concludedWeekKey =
+        (stats['concludedWeekKey'] ?? TeamService.getConcludedWeekKey()).toString();
+    final String concludedWeekLabel =
+        (stats['concludedWeekRangeLabel'] ?? TeamService.getConcludedWeekRangeLabel()).toString();
     final String normalizedGameKey = _normalizeGameNameForClaim(gameName);
     final String consistentRewardLabel = _getConsistentRewardLabel(gameName, equalPkrShare);
 
-    // Check public.reward_claims in Supabase for existing active claim in current round
+    // Check public.reward_claims in Supabase for existing active claim in current or concluded round
     Map<String, dynamic>? existingClaim;
     try {
       final allTeamClaimsRows = await SupabaseService.client
@@ -1537,7 +1632,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         final String rGame = (row['game_name'] ?? '').toString().trim().toLowerCase();
         if (rGame.isNotEmpty && rGame != normalizedGameKey) continue;
         final String rWeek = (row['week_key'] ?? '').toString().trim();
-        if (rWeek != weekKey && !rWeek.startsWith('${weekKey}_r')) continue;
+        final bool matchesCurrentOrConcluded = rWeek == weekKey ||
+            rWeek.startsWith('${weekKey}_r') ||
+            (concludedWeekKey.isNotEmpty &&
+                (rWeek == concludedWeekKey || rWeek.startsWith('${concludedWeekKey}_r')));
+        if (!matchesCurrentOrConcluded) continue;
         final String rStatus = (row['status'] ?? 'pending').toString().trim().toLowerCase();
         if (rStatus == 'rejected') continue;
         if (hasResetRound && cutoffUtcMs > 0 && rStatus == 'delivered') {
@@ -1616,7 +1715,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Note: A weekly #1 reward claim has already been submitted for your account in $gameName for week $weekKey ($weekLabel). Duplicate claims are not allowed.',
+                  'Note: A weekly #1 reward claim has already been submitted for your account in $gameName. Duplicate claims are not allowed.',
                   style: TextStyle(
                     color: strongBodyTextColor,
                     fontSize: 12.2,
@@ -1761,6 +1860,22 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       return;
     }
 
+    // Rule 3: Winner-Only & Week-End / Monday Window Redemption
+    if (!isClaimEligible) {
+      _showWinnerOnlyRedemptionDialog(
+        gameName: gameName,
+        hasTeam: true,
+        currentRank: matchesSelectedGame ? weeklyRank : null,
+        activeTeamName: '${activeTeam.name} [${activeTeam.tag}] (${activeTeam.game})',
+      );
+      return;
+    }
+
+    final String targetClaimWeekKey =
+        concludedWeekKey.isNotEmpty ? concludedWeekKey : weekKey;
+    final String targetClaimWeekLabel =
+        concludedWeekLabel.isNotEmpty ? concludedWeekLabel : weekLabel;
+
     final prefs = await SharedPreferences.getInstance();
     final identity = await CoinWalletScreen.resolveLockedProfileGameIdentity(
       userId: _userId,
@@ -1845,7 +1960,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '🏆 Total Team Prize: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR ($weekLabel)',
+                      '🏆 Total Team Prize: ${NumberFormat('#,###').format(TeamService.weeklyGameRewardPkr)} PKR ($targetClaimWeekLabel)',
                       style: TextStyle(
                         color: strongBodyTextColor,
                         fontWeight: FontWeight.w700,
@@ -1991,8 +2106,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       for (final rawDup in dupRows) {
         final d = Map<String, dynamic>.from(rawDup);
         final String dWeek = (d['week_key'] ?? '').toString().trim();
-        if (dWeek == weekKey) hasSameWeekRow = true;
-        if (dWeek != weekKey && !dWeek.startsWith('${weekKey}_r')) continue;
+        if (dWeek == targetClaimWeekKey) hasSameWeekRow = true;
+        if (dWeek != targetClaimWeekKey && !dWeek.startsWith('${targetClaimWeekKey}_r')) continue;
         final String dStatus = (d['status'] ?? 'pending').toString().trim().toLowerCase();
         if (dStatus == 'pending' || dStatus == 'processing') {
           activePendingDup = d;
@@ -2004,7 +2119,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'You already have an active submitted claim (${activePendingDup['claim_code']}) for $gameName in week $weekKey.',
+              'You already have an active submitted claim (${activePendingDup['claim_code']}) for $gameName in week $targetClaimWeekKey.',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
             ),
             backgroundColor: const Color(0xFFB45309),
@@ -2015,8 +2130,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
       }
 
       final String effectiveWeekKey = hasSameWeekRow
-          ? '${weekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(9)}'
-          : weekKey;
+          ? '${targetClaimWeekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(9)}'
+          : targetClaimWeekKey;
 
       // 1. Insert into public.reward_claims
       final Map<String, dynamic> newClaimPayload = {
@@ -2043,7 +2158,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         if (errStr.contains('23505') || errStr.contains('duplicate') || errStr.contains('unique')) {
           final fallbackPayload = {
             ...newClaimPayload,
-            'week_key': '${weekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+            'week_key': '${targetClaimWeekKey}_r${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
           };
           insertedRows = await SupabaseService.client
               .from('reward_claims')
@@ -2072,7 +2187,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
           type: 'game_currency_redemption',
           title: '🎁 #1 Team Claimed $gameName - $consistentRewardLabel',
           description:
-              'Claim $claimCode • Game UID: $playerGameUid$ignSuffix • Your Share: $equalPkrShare PKR / 1,500 PKR Total Team Prize • Team: $fullTeamName ($weekLabel) • Status: Claim Done (Delivery in 24–48 hrs)',
+              'Claim $claimCode • Game UID: $playerGameUid$ignSuffix • Your Share: $equalPkrShare PKR / 1,500 PKR Total Team Prize • Team: $fullTeamName ($targetClaimWeekLabel) • Status: Claim Done (Delivery in 24–48 hrs)',
         );
       } catch (_) {}
 
@@ -2516,11 +2631,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: _currentWalletPage == 0
-                                    ? (isDark ? GamerTheme.neonGreen : const Color(0xFF047857))
-                                    : ThemeService.textSecondary,
+                                    ? (isDark ? GamerTheme.neonGreen : const Color(0xFF065F46))
+                                    : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
                                 fontWeight: _currentWalletPage == 0
                                     ? FontWeight.w900
-                                    : FontWeight.w600,
+                                    : FontWeight.w700,
                                 fontSize: 12.5,
                               ),
                             ),
@@ -2539,12 +2654,14 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
                       decoration: BoxDecoration(
                         color: _currentWalletPage == 1
-                            ? const Color(0xFFFFD700).withOpacity(isDark ? 0.2 : 0.18)
+                            ? const Color(0xFFFFD700).withOpacity(isDark ? 0.2 : 0.24)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: _currentWalletPage == 1
-                              ? const Color(0xFFFFD700).withOpacity(0.75)
+                              ? (isDark
+                                  ? const Color(0xFFFFD700).withOpacity(0.75)
+                                  : const Color(0xFFD97706))
                               : Colors.transparent,
                           width: 1.2,
                         ),
@@ -2561,11 +2678,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: _currentWalletPage == 1
-                                    ? (isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309))
-                                    : ThemeService.textSecondary,
+                                    ? (isDark ? const Color(0xFFFFD700) : const Color(0xFF92400E))
+                                    : (isDark ? Colors.white70 : const Color(0xFF1E293B)),
                                 fontWeight: _currentWalletPage == 1
                                     ? FontWeight.w900
-                                    : FontWeight.w600,
+                                    : FontWeight.w700,
                                 fontSize: 12.5,
                               ),
                             ),
@@ -2613,9 +2730,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       ? 'Swipe left for Team Wallet ($teamSubtitle) →'
                       : '← Swipe right for Personal Wallet',
                   style: TextStyle(
-                    color: ThemeService.textSecondary,
+                    color: isDark ? ThemeService.textSecondary : const Color(0xFF334155),
                     fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -2890,6 +3007,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             (primaryTeam.weeklyRank > 0 ? primaryTeam.weeklyRank : 1);
         final bool isRankOne =
             (stats['isRankOne'] as bool?) ?? (rank == 1 && teamCoins > 0);
+        final bool isClaimUnlocked = stats['isClaimEligible'] == true;
+        final String concludedWeekKey =
+            (stats['concludedWeekKey'] ?? TeamService.getConcludedWeekKey()).toString();
 
         final currentGamer = GamerAuthService().currentGamer;
         final String currentGamerHandle = currentGamer != null
@@ -2955,7 +3075,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           '🛡️ ${teamItem.name} [${teamItem.tag}] • $teamGameLabel',
                           style: TextStyle(
                             color: isSelected
-                                ? (isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309))
+                                ? (isDark ? const Color(0xFFFFD700) : const Color(0xFF92400E))
                                 : ThemeService.textPrimary,
                             fontSize: 11.5,
                             fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
@@ -3176,7 +3296,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               Text(
                                 NumberFormat('#,###').format(teamCoins),
                                 style: TextStyle(
-                                  color: isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309),
+                                  color: isDark ? const Color(0xFFFFD700) : const Color(0xFF92400E),
                                   fontSize: 30,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -3194,15 +3314,18 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            isRankOne
+                            isClaimUnlocked
                                 ? '🔓 #1 Winner Redemption Unlocked in Team Profile for ${primaryTeam.name} [${primaryTeam.tag}]!'
-                                : '🔒 Redeem Locked in Team Profile — Finish Rank #1 at the end of the week to unlock & divide 1,500 PKR equally among active team members.',
+                                : (isRankOne
+                                    ? 'Note: Currently Rank #1 in Active Cycle — Weekly reward claim remains locked mid-week and unlocks at Week End (Monday) if ${primaryTeam.name} [${primaryTeam.tag}] finishes Rank #1.'
+                                    : 'Note: Redeem Locked in Team Profile — Finish Rank #1 at the end of the week (Monday claim window) to unlock & divide 1,500 PKR equally among active team members.'),
                             style: TextStyle(
-                              color: isRankOne
+                              color: isClaimUnlocked
                                   ? (isDark ? GamerTheme.neonGreen : const Color(0xFF047857))
-                                  : ThemeService.textSecondary,
+                                  : (isDark ? Colors.white : const Color(0xFF000000)),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
+                              height: 1.35,
                             ),
                           ),
                         ],
@@ -3298,9 +3421,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Your Reward Package if Rank #1: $shareRewardLabel (Divided equally among active members at week\'s end)',
+                      'Note: Your Reward Package if Rank #1 at Week End: $shareRewardLabel (Divided equally among active members at week\'s end)',
                       style: TextStyle(
-                        color: ThemeService.textPrimary,
+                        color: isDark ? Colors.white : const Color(0xFF000000),
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
@@ -3416,7 +3539,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                             if (status == 'rejected') continue;
                             final bool weekMatches = cWeek.isEmpty ||
                                 cWeek == currentWeekKey ||
-                                cWeek.startsWith('${currentWeekKey}_r');
+                                cWeek.startsWith('${currentWeekKey}_r') ||
+                                (concludedWeekKey.isNotEmpty &&
+                                    (cWeek == concludedWeekKey ||
+                                        cWeek.startsWith('${concludedWeekKey}_r')));
                             if (weekMatches &&
                                 (cGame.isEmpty || cGame == normalizedTeamGameKey)) {
                               if (hasResetRound && cutoffUtcMs > 0 && status == 'delivered') {
@@ -3630,8 +3756,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                           color: coins > 0
                                               ? (isDark
                                                   ? const Color(0xFFFFD700)
-                                                  : const Color(0xFFB45309))
-                                              : ThemeService.textSecondary,
+                                                  : const Color(0xFF92400E))
+                                              : (isDark
+                                                  ? ThemeService.textSecondary
+                                                  : const Color(0xFF334155)),
                                           fontSize: 12.5,
                                           fontWeight: FontWeight.w900,
                                         ),
@@ -3655,168 +3783,200 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                     ),
                                   ),
                                   // Per-Member Reward Share & Individual Claim Action / Status
-                                  if (isRankOne) ...[
-                                    const SizedBox(height: 10),
-                                    Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 8,
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: ThemeService.card,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: hasMemberClaimed
+                                            ? (isDark
+                                                ? GamerTheme.neonGreen.withOpacity(0.55)
+                                                : const Color(0xFF059669))
+                                            : (isClaimUnlocked
+                                                ? (isDark
+                                                    ? const Color(0xFFFFD700).withOpacity(0.45)
+                                                    : const Color(0xFFD97706))
+                                                : ThemeService.border),
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: ThemeService.card,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: hasMemberClaimed
-                                              ? (isDark
-                                                  ? GamerTheme.neonGreen.withOpacity(0.55)
-                                                  : const Color(0xFF059669))
-                                              : (isDark
-                                                  ? const Color(0xFFFFD700).withOpacity(0.45)
-                                                  : const Color(0xFFD97706)),
-                                        ),
-                                      ),
-                                      child: Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        alignment: WrapAlignment.spaceBetween,
-                                        crossAxisAlignment: WrapCrossAlignment.center,
-                                        children: [
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.card_giftcard_rounded,
-                                                color: isDark
-                                                    ? const Color(0xFFFFD700)
-                                                    : const Color(0xFFD97706),
-                                                size: 15,
-                                              ),
-                                              const SizedBox(width: 5),
-                                              Flexible(
-                                                child: Text(
-                                                  'Reward Share: $shareRewardLabel',
-                                                  style: TextStyle(
-                                                    color: ThemeService.textPrimary,
-                                                    fontSize: 11.5,
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          if (hasMemberClaimed)
-                                            InkWell(
-                                              onTap: isCurrentUser
-                                                  ? () => _handleRedeemItem(
-                                                        displayGameName,
-                                                        shareRewardLabel,
-                                                        0,
-                                                        wallet,
-                                                        activeTeams,
-                                                      )
-                                                  : null,
-                                              borderRadius: BorderRadius.circular(8),
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 10,
-                                                  vertical: 5,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: isDark
-                                                      ? GamerTheme.neonGreen.withOpacity(0.16)
-                                                      : const Color(0xFFD1FAE5),
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  border: Border.all(
-                                                    color: isDark
-                                                        ? GamerTheme.neonGreen.withOpacity(0.6)
-                                                        : const Color(0xFF059669),
-                                                  ),
-                                                ),
-                                                child: Text(
-                                                  isMemberClaimDelivered
-                                                      ? '✅ Claim Done (Delivered)'
-                                                      : '✅ Claim Done',
-                                                  style: TextStyle(
-                                                    color: isDark
-                                                        ? GamerTheme.neonGreen
-                                                        : const Color(0xFF065F46),
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w900,
-                                                  ),
-                                                ),
-                                              ),
-                                            )
-                                          else if (isCurrentUser)
-                                            SizedBox(
-                                              height: 32,
-                                              child: ElevatedButton.icon(
-                                                onPressed: () => _handleRedeemItem(
-                                                  displayGameName,
-                                                  shareRewardLabel,
-                                                  0,
-                                                  wallet,
-                                                  activeTeams,
-                                                ),
-                                                icon: const Icon(
-                                                  Icons.redeem_rounded,
-                                                  size: 14,
-                                                  color: Colors.black,
-                                                ),
-                                                label: Text(
-                                                  'Claim $shareRewardLabel',
-                                                  style: const TextStyle(
-                                                    color: Colors.black,
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w900,
-                                                  ),
-                                                ),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: GamerTheme.neonGreen,
-                                                  foregroundColor: Colors.black,
-                                                  iconColor: Colors.black,
-                                                  elevation: 0,
-                                                  padding: const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius: BorderRadius.circular(8),
-                                                  ),
-                                                ),
-                                              ),
-                                            )
-                                          else
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 9,
-                                                vertical: 4,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: isDark
-                                                    ? const Color(0xFFFFB800).withOpacity(0.14)
-                                                    : const Color(0xFFFEF3C7),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(
-                                                  color: isDark
-                                                      ? const Color(0xFFFFB800).withOpacity(0.45)
-                                                      : const Color(0xFFD97706),
-                                                ),
-                                              ),
+                                    ),
+                                    child: Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      alignment: WrapAlignment.spaceBetween,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.card_giftcard_rounded,
+                                              color: (isClaimUnlocked || hasMemberClaimed)
+                                                  ? (isDark
+                                                      ? const Color(0xFFFFD700)
+                                                      : const Color(0xFFD97706))
+                                                  : ThemeService.textSecondary,
+                                              size: 15,
+                                            ),
+                                            const SizedBox(width: 5),
+                                            Flexible(
                                               child: Text(
-                                                '⏳ Not Claimed Yet',
+                                                'Reward Share: $shareRewardLabel',
                                                 style: TextStyle(
-                                                  color: isDark
-                                                      ? const Color(0xFFFFB800)
-                                                      : const Color(0xFF92400E),
-                                                  fontSize: 10.5,
+                                                  color: ThemeService.textPrimary,
+                                                  fontSize: 11.5,
                                                   fontWeight: FontWeight.w800,
                                                 ),
                                               ),
                                             ),
-                                        ],
-                                      ),
+                                          ],
+                                        ),
+                                        if (hasMemberClaimed)
+                                          InkWell(
+                                            onTap: isCurrentUser
+                                                ? () => _handleRedeemItem(
+                                                      displayGameName,
+                                                      shareRewardLabel,
+                                                      0,
+                                                      wallet,
+                                                      activeTeams,
+                                                    )
+                                                : null,
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 5,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? GamerTheme.neonGreen.withOpacity(0.16)
+                                                    : const Color(0xFFD1FAE5),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: isDark
+                                                      ? GamerTheme.neonGreen.withOpacity(0.6)
+                                                      : const Color(0xFF059669),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                isMemberClaimDelivered
+                                                    ? '✅ Claim Done (Delivered)'
+                                                    : '✅ Claim Done',
+                                                style: TextStyle(
+                                                  color: isDark
+                                                      ? GamerTheme.neonGreen
+                                                      : const Color(0xFF065F46),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        else if (!isClaimUnlocked)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 9,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? const Color(0xFFFFB800).withOpacity(0.14)
+                                                  : const Color(0xFFFEF3C7),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: isDark
+                                                    ? const Color(0xFFFFB800).withOpacity(0.45)
+                                                    : const Color(0xFFD97706),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              isRankOne
+                                                  ? '🔒 Locked (Unlocks Week End / Monday)'
+                                                  : '🔒 Locked (Rank #1 at Week End Required)',
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? const Color(0xFFFFB800)
+                                                    : const Color(0xFF92400E),
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          )
+                                        else if (isCurrentUser)
+                                          SizedBox(
+                                            height: 32,
+                                            child: ElevatedButton.icon(
+                                              onPressed: () => _handleRedeemItem(
+                                                displayGameName,
+                                                shareRewardLabel,
+                                                0,
+                                                wallet,
+                                                activeTeams,
+                                              ),
+                                              icon: const Icon(
+                                                Icons.redeem_rounded,
+                                                size: 14,
+                                                color: Colors.black,
+                                              ),
+                                              label: Text(
+                                                'Claim $shareRewardLabel',
+                                                style: const TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: GamerTheme.neonGreen,
+                                                foregroundColor: Colors.black,
+                                                iconColor: Colors.black,
+                                                elevation: 0,
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        else
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 9,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? const Color(0xFFFFB800).withOpacity(0.14)
+                                                  : const Color(0xFFFEF3C7),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: isDark
+                                                    ? const Color(0xFFFFB800).withOpacity(0.45)
+                                                    : const Color(0xFFD97706),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              '⏳ Pending Claim',
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? const Color(0xFFFFB800)
+                                                    : const Color(0xFF92400E),
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ],
                               ),
                             );
@@ -4272,6 +4432,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         final String currencyLabel = TeamService.getGameCurrencyLabel(displayGameLabel);
         final String weekLabel = TeamService.getWeekRangeLabel();
         final bool isRankOneWinner = weeklyRank == 1 && teamWeeklyCoins > 0;
+        final bool isClaimUnlocked = stats?['isClaimEligible'] == true;
 
         // Calculate current user's weekly contribution strictly to this team & game
         int myWeeklyContrib = 0;
@@ -4293,9 +4454,11 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             color: ThemeService.card,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isRankOneWinner
-                  ? const Color(0xFFFFD700).withOpacity(0.65)
-                  : GamerTheme.neonGreen.withOpacity(0.45),
+              color: isClaimUnlocked
+                  ? GamerTheme.neonGreen.withOpacity(0.75)
+                  : (isRankOneWinner
+                      ? const Color(0xFFFFD700).withOpacity(0.65)
+                      : GamerTheme.neonGreen.withOpacity(0.45)),
               width: 1.2,
             ),
           ),
@@ -4383,15 +4546,21 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Game: $displayGameLabel • Members: $memberCount/${TeamModel.maxMembers} • ${isRankOneWinner ? '#1 Winner Redemption Unlocked 🔓' : 'Reach #1 to Redeem ($weekLabel)'}',
+                          'Game: $displayGameLabel • Members: $memberCount/${TeamModel.maxMembers} • ${isClaimUnlocked ? '#1 Winner Redemption Unlocked 🔓' : (isRankOneWinner ? 'Live Rank #1 • Claim Unlocks Week End (Mon) 🔒' : 'Finish #1 at Week End to Redeem ($weekLabel)')}',
                           style: TextStyle(
-                            color: isRankOneWinner
+                            color: isClaimUnlocked
                                 ? (ThemeService.isDarkMode
                                     ? GamerTheme.neonGreen
                                     : const Color(0xFF047857))
-                                : ThemeService.textSecondary,
+                                : (isRankOneWinner
+                                    ? (ThemeService.isDarkMode
+                                        ? const Color(0xFFFFB800)
+                                        : const Color(0xFF92400E))
+                                    : ThemeService.textSecondary),
                             fontSize: 11,
-                            fontWeight: isRankOneWinner ? FontWeight.w800 : FontWeight.normal,
+                            fontWeight: (isClaimUnlocked || isRankOneWinner)
+                                ? FontWeight.w800
+                                : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -4492,8 +4661,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           child: Text(
                             'Equal Share: ${NumberFormat('#,###').format(equalPkrShare)} PKR / member',
                             style: TextStyle(
-                              color: ThemeService.textSecondary,
-                              fontWeight: FontWeight.w700,
+                              color: ThemeService.isDarkMode
+                                  ? Colors.white
+                                  : const Color(0xFF000000),
+                              fontWeight: FontWeight.w800,
                               fontSize: 10.8,
                             ),
                           ),
@@ -4996,6 +5167,17 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         TeamService.matchesGameName(evaluatedTeam.game, _selectedGameTab) &&
         teamRankInGame == 1 &&
         teamWeeklyCoinsInGame > 0;
+    final bool isClaimUnlockedInSelectedGame = hasTeam &&
+        evaluatedTeam != null &&
+        TeamService.matchesGameName(evaluatedTeam.game, _selectedGameTab) &&
+        (cachedTeamStats?['isClaimEligible'] == true);
+
+    final Color amberText = ThemeService.isDarkMode
+        ? const Color(0xFFFFB800)
+        : const Color(0xFF92400E);
+    final Color greenText = ThemeService.isDarkMode
+        ? GamerTheme.neonGreen
+        : const Color(0xFF047857);
 
     final packsMap = {
       'Free Fire': [
@@ -5041,13 +5223,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
               )
             else
               Text(
-                isRankOneInSelectedGame
+                isClaimUnlockedInSelectedGame
                     ? '🥇 #1 Team Unlocked'
-                    : (hasTeam ? 'Requires Rank #1 🏆' : 'Requires #1 Team 🔒'),
+                    : (isRankOneInSelectedGame
+                        ? '🥇 Live #1 • Unlocks Week End 🔒'
+                        : (hasTeam ? 'Requires Rank #1 🏆' : 'Requires #1 Team 🔒')),
                 style: TextStyle(
-                  color: isRankOneInSelectedGame
-                      ? GamerTheme.neonGreen
-                      : const Color(0xFFFFB800),
+                  color: isClaimUnlockedInSelectedGame ? greenText : amberText,
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                 ),
@@ -5091,7 +5273,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
             final title = pack['title'] as String;
             final cost = pack['cost'] as int;
             final icon = pack['icon'] as String;
-            final canRedeem = !isLoadingTeams && isRankOneInSelectedGame;
+            final canRedeem = !isLoadingTeams && isClaimUnlockedInSelectedGame;
 
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
@@ -5137,15 +5319,17 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                               ? '⏳ Checking active team rank...'
                               : (!hasTeam
                                   ? '🛡️ Join a 4-Member Team • Weekly #1 Team Only (1,500 PKR Pool)'
-                                  : (!isRankOneInSelectedGame
-                                      ? '🏆 Weekly Rank #1 Team Only • Your Current Share: ${NumberFormat('#,###').format(TeamService.getEqualPkrShare(evaluatedTeam!.memberCount.clamp(1, TeamModel.maxMembers)))} PKR (${evaluatedTeam.memberCount.clamp(1, TeamModel.maxMembers)}/4 members • 1,500 PKR Pool)'
-                                      : '🥇 Rank #1 Unlocked • Your Current Share: ${NumberFormat('#,###').format(TeamService.getEqualPkrShare(evaluatedTeam.memberCount.clamp(1, TeamModel.maxMembers)))} PKR (${evaluatedTeam.memberCount.clamp(1, TeamModel.maxMembers)}/4 members • 1,500 PKR Pool)')),
+                                  : (isClaimUnlockedInSelectedGame
+                                      ? '🥇 Rank #1 Unlocked • Your Current Share: ${NumberFormat('#,###').format(TeamService.getEqualPkrShare(evaluatedTeam!.memberCount.clamp(1, TeamModel.maxMembers)))} PKR (${evaluatedTeam.memberCount.clamp(1, TeamModel.maxMembers)}/4 members • 1,500 PKR Pool)'
+                                      : (isRankOneInSelectedGame
+                                          ? '🥇 Live Rank #1 • Unlocks at Week End (Mon) • Your Share: ${NumberFormat('#,###').format(TeamService.getEqualPkrShare(evaluatedTeam!.memberCount.clamp(1, TeamModel.maxMembers)))} PKR (${evaluatedTeam.memberCount.clamp(1, TeamModel.maxMembers)}/4 members)'
+                                          : '🏆 Weekly Rank #1 Team Only (Unlocks Week End) • Your Share: ${NumberFormat('#,###').format(TeamService.getEqualPkrShare(evaluatedTeam!.memberCount.clamp(1, TeamModel.maxMembers)))} PKR (${evaluatedTeam.memberCount.clamp(1, TeamModel.maxMembers)}/4 members • 1,500 PKR Pool)'))),
                           style: TextStyle(
                             color: isLoadingTeams
                                 ? ThemeService.textSecondary
-                                : (isRankOneInSelectedGame
-                                    ? GamerTheme.neonGreen
-                                    : const Color(0xFFFFB800)),
+                                : (isClaimUnlockedInSelectedGame
+                                    ? greenText
+                                    : amberText),
                             fontSize: 11.3,
                             fontWeight: FontWeight.w700,
                             height: 1.3,
@@ -5161,15 +5345,18 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           ? ThemeService.cardSecondary
                           : (canRedeem
                               ? GamerTheme.neonGreen
-                              : const Color(0xFFFFB800).withOpacity(0.18)),
+                              : (ThemeService.isDarkMode
+                                  ? const Color(0xFFFFB800).withOpacity(0.18)
+                                  : const Color(0xFFFEF3C7))),
                       foregroundColor: isLoadingTeams
                           ? ThemeService.textSecondary
-                          : (canRedeem
-                              ? Colors.black
-                              : const Color(0xFFFFB800)),
+                          : (canRedeem ? Colors.black : amberText),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
+                        side: canRedeem
+                            ? BorderSide.none
+                            : BorderSide(color: amberText.withOpacity(0.5)),
                       ),
                       elevation: 0,
                     ),
@@ -5187,15 +5374,13 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           ? '...'
                           : (!hasTeam
                               ? 'Join Team'
-                              : (!isRankOneInSelectedGame ? '#1 Only' : 'Redeem')),
+                              : (canRedeem ? 'Redeem' : 'Week End #1')),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                         color: isLoadingTeams
                             ? ThemeService.textSecondary
-                            : (canRedeem
-                                ? Colors.black
-                                : const Color(0xFFFFB800)),
+                            : (canRedeem ? Colors.black : amberText),
                       ),
                     ),
                   ),
@@ -5391,10 +5576,15 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
 
     final bool isDelivered = status == 'delivered';
     final bool isRejected = status == 'rejected';
+    final bool isDark = ThemeService.isDarkMode;
 
     final Color accentColor = isDelivered
-        ? GamerTheme.neonGreen
-        : (isRejected ? GamerTheme.redAccent : const Color(0xFFFFB800));
+        ? (isDark ? GamerTheme.neonGreen : const Color(0xFF047857))
+        : (isRejected
+            ? GamerTheme.redAccent
+            : (isDark ? const Color(0xFFFFB800) : const Color(0xFF92400E)));
+    final Color goldColor = isDark ? const Color(0xFFFFD700) : const Color(0xFF92400E);
+    final Color greenColor = isDark ? GamerTheme.neonGreen : const Color(0xFF047857);
 
     final DateTime? timestamp =
         DateTime.tryParse((claim['delivered_at'] ?? claim['created_at'] ?? '').toString());
@@ -5428,7 +5618,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 child: Icon(
                   isDelivered
                       ? Icons.verified_rounded
-                      : (isRejected ? Icons.cancel_rounded : Icons.card_giftcard_rounded),
+                      : (isRejected ? Icons.cancel_rounded : Icons.check_circle_rounded),
                   color: accentColor,
                   size: 20,
                 ),
@@ -5468,8 +5658,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 ),
                 child: Text(
                   isDelivered
-                      ? '✅ Reward Sent'
-                      : (isRejected ? '❌ Rejected' : '⏳ Pending Delivery (24–48 hrs)'),
+                      ? '✅ Claim Done (Delivered)'
+                      : (isRejected ? '❌ Rejected' : '✅ Claim Done (24–48 hrs)'),
                   style: TextStyle(
                     color: accentColor,
                     fontSize: 10.5,
@@ -5492,21 +5682,21 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                   decoration: BoxDecoration(
                     color: ThemeService.cardSecondary,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
+                    border: Border.all(color: goldColor.withOpacity(0.5)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         'Claim ID: $claimCode',
-                        style: const TextStyle(
-                          color: Color(0xFFFFD700),
+                        style: TextStyle(
+                          color: goldColor,
                           fontWeight: FontWeight.w900,
                           fontSize: 11,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.copy_rounded, size: 12, color: Color(0xFFFFD700)),
+                      Icon(Icons.copy_rounded, size: 12, color: goldColor),
                     ],
                   ),
                 ),
@@ -5537,7 +5727,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 child: Text(
                   'Team: $teamName',
                   style: TextStyle(
-                    color: ThemeService.textSecondary,
+                    color: ThemeService.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 11,
                   ),
@@ -5552,8 +5742,8 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 ),
                 child: Text(
                   'Your Share: ${NumberFormat('#,###').format(shareAmountPkr)} PKR / 1,500 PKR Pool',
-                  style: const TextStyle(
-                    color: GamerTheme.neonGreen,
+                  style: TextStyle(
+                    color: greenColor,
                     fontWeight: FontWeight.w800,
                     fontSize: 11,
                   ),
@@ -5578,9 +5768,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                       ? 'Reward Sent! آپ کا ریوارڈ بھیج دیا گیا ہے — براہِ کرم اپنا گیم اکاؤنٹ چیک کر لیں۔\n(Claim ID: $claimCode • Game UID: $playerUid)'
                       : (isRejected
                           ? 'Claim Status: Rejected${adminNote.isNotEmpty ? ' • Note: $adminNote' : ''}'
-                          : '⏳ Status: Pending Delivery (24–48 hrs) • Claim ID: $claimCode • Game UID: $playerUid'),
+                          : '✅ Claim Done • Pending Delivery (24–48 hrs) • Claim ID: $claimCode • Game UID: $playerUid'),
                   style: TextStyle(
-                    color: isDelivered ? GamerTheme.neonGreen : accentColor,
+                    color: isDelivered ? greenColor : accentColor,
                     fontWeight: FontWeight.w800,
                     fontSize: 11.8,
                     height: 1.4,
@@ -5782,16 +5972,19 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
   }
 
   Widget _buildTxTile(CoinTransaction tx) {
+    final bool isDark = ThemeService.isDarkMode;
     final isCredit = tx.amount > 0;
     final isWeeklyReward = tx.type == 'weekly_team_reward';
     final isTeamContribution = tx.type == 'team_weekly_contribution';
     final isRedemption = tx.type == 'game_currency_redemption' || tx.type == 'store_purchase';
 
     final Color color = isWeeklyReward
-        ? const Color(0xFFFFD700)
+        ? (isDark ? const Color(0xFFFFD700) : const Color(0xFF92400E))
         : (isTeamContribution
-            ? GamerTheme.accentBlue
-            : (isCredit ? GamerTheme.neonGreen : GamerTheme.redAccent));
+            ? (isDark ? GamerTheme.accentBlue : const Color(0xFF1D4ED8))
+            : (isCredit
+                ? (isDark ? GamerTheme.neonGreen : const Color(0xFF047857))
+                : GamerTheme.redAccent));
 
     String statusLabel = isCredit ? 'Added to Personal Wallet' : 'Spent';
     if (isWeeklyReward) {
@@ -5799,7 +5992,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
     } else if (isTeamContribution) {
       statusLabel = 'Contributed to Team';
     } else if (isRedemption) {
-      statusLabel = 'Pending Delivery (24–48 hrs)';
+      statusLabel = 'Claim Done (24–48 hrs)';
     }
 
     return Container(

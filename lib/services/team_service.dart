@@ -1941,6 +1941,45 @@ class TeamService {
     return '${start.day} ${months[start.month - 1]} – ${end.day} ${months[end.month - 1]}';
   }
 
+  /// Returns true only during the Week-End / Monday Claim Window:
+  /// - Monday (00:00–23:59 UTC or local/PKT time), immediately following the conclusion
+  ///   of the 7-day weekly cycle, OR
+  /// - Sunday final hour (23:00–23:59 UTC) at the end of the weekly cycle.
+  /// Mid-week coin transfers during the active weekly cycle remain locked until Week End / Monday.
+  static bool isWeeklyClaimWindowOpen([DateTime? date]) {
+    final nowUtc = (date ?? DateTime.now()).toUtc();
+    final nowLocal = (date ?? DateTime.now()).toLocal();
+    final bool isMondayUtcOrLocal =
+        nowUtc.weekday == DateTime.monday || nowLocal.weekday == DateTime.monday;
+    final bool isSundayCloseUtc =
+        nowUtc.weekday == DateTime.sunday && nowUtc.hour >= 23;
+    return isMondayUtcOrLocal || isSundayCloseUtc;
+  }
+
+  /// Returns a sample UTC date inside the concluded weekly cycle that is eligible
+  /// for the Week-End / Monday Claim Window.
+  /// - On Monday, returns the just-concluded previous 7-day week (Monday–Sunday before today's Monday 00:00 UTC reset),
+  ///   so brand-new coin contributions made in the new Monday cycle never unlock claims prematurely.
+  /// - On Sunday final hour (23:00–23:59 UTC), returns the concluding week.
+  static DateTime getConcludedWeekSampleDate([DateTime? date]) {
+    final nowUtc = (date ?? DateTime.now()).toUtc();
+    if (nowUtc.weekday == DateTime.sunday && nowUtc.hour >= 23) {
+      return getWeekStartUtc(nowUtc);
+    }
+    final currentWeekStart = getWeekStartUtc(nowUtc);
+    return currentWeekStart.subtract(const Duration(days: 3));
+  }
+
+  /// Week key (e.g. "2026-11-16") of the concluded weekly cycle evaluated during Monday claim window
+  static String getConcludedWeekKey([DateTime? date]) {
+    return getWeekCycleKey(getConcludedWeekSampleDate(date));
+  }
+
+  /// Human-readable range label (e.g. "16 Nov – 22 Nov") of the concluded weekly cycle
+  static String getConcludedWeekRangeLabel([DateTime? date]) {
+    return getWeekRangeLabel(getConcludedWeekSampleDate(date));
+  }
+
   /// Eligible transaction types that count toward a member's Weekly Team Coin contribution.
   /// Under the Personal Wallet First + Manual Team Contribution rule, earned coins go to the
   /// user's Personal Wallet first, and only manual contributions ('team_weekly_contribution')
@@ -2128,6 +2167,9 @@ class TeamService {
       if (optimisticBreakdown.isNotEmpty) 'memberBreakdown': optimisticBreakdown,
       'weekRangeLabel': weekLabel,
       'weekKey': weekKey,
+      // Contributing coins in the active weekly cycle NEVER unlocks reward claiming immediately
+      'isClaimWindowOpen': prevCached?['isClaimWindowOpen'] ?? isWeeklyClaimWindowOpen(),
+      'isClaimEligible': prevCached?['isClaimEligible'] == true,
     };
     _storeTeamWeeklyStatsCache(team.id, optimisticStats);
 
@@ -2406,14 +2448,18 @@ class TeamService {
     } catch (_) {}
 
     // 2. Query coin_transactions for manual team_weekly_contribution records in this weekly cycle
+    final int weekStartMs = weekStart.millisecondsSinceEpoch;
+    final int weekEndMs = weekEnd.millisecondsSinceEpoch;
     try {
+      final DateTime queryEndBound =
+          forDate != null ? weekEnd : weekEnd.add(const Duration(hours: 2));
       final txRows = await SupabaseService.client
           .from('coin_transactions')
           .select()
           .inFilter('user_id', allUserLookupIds)
           .eq('type', 'team_weekly_contribution')
           .gte('created_at', weekStart.toIso8601String())
-          .lte('created_at', weekEnd.add(const Duration(hours: 14)).toIso8601String());
+          .lte('created_at', queryEndBound.toIso8601String());
       dbQuerySucceeded = true;
 
       for (final r in txRows) {
@@ -2555,6 +2601,12 @@ class TeamService {
             extractedWeekKey != weekKey) {
           continue;
         }
+        if (forDate != null) {
+          final int txMs = extractedContribUtcMs ?? parseUtcMs(r['created_at']);
+          if (txMs > 0 && (txMs < weekStartMs || txMs > weekEndMs)) {
+            continue;
+          }
+        }
 
         final txTeamUuid = SupabaseService.toUuid(extractedTeamId).toLowerCase();
         final txUserUuid = SupabaseService.toUuid(extractedUserId).toLowerCase();
@@ -2674,6 +2726,46 @@ class TeamService {
       }
     }
 
+    // Evaluate Week-End / Monday Claim Window eligibility against the concluded weekly cycle
+    // so mid-week or current-cycle coin contributions never prematurely unlock reward claims.
+    bool claimWindowOpen = false;
+    bool isClaimEligible = false;
+    int concludedWeekRank = 0;
+    int concludedWeekCoins = 0;
+    final String concludedWeekKey = getConcludedWeekKey();
+    final String concludedWeekRangeLabel = getConcludedWeekRangeLabel();
+
+    if (forDate == null) {
+      claimWindowOpen = isWeeklyClaimWindowOpen();
+      if (claimWindowOpen && isWeeklyCompetitionGame(normalizedGameDisplay)) {
+        try {
+          final String concludedCacheKey =
+              '${normalizedGameDisplay.toLowerCase()}_concluded_$concludedWeekKey';
+          List<Map<String, dynamic>>? concludedLeaderboard =
+              _gameLeaderboardCache[concludedCacheKey];
+          if (concludedLeaderboard == null) {
+            concludedLeaderboard = await getGameWeeklyLeaderboard(
+              normalizedGameDisplay,
+              forDate: getConcludedWeekSampleDate(),
+            );
+            _gameLeaderboardCache[concludedCacheKey] = concludedLeaderboard;
+          }
+          for (final entry in concludedLeaderboard) {
+            final eId = (entry['teamId'] ?? '').toString().trim().toLowerCase();
+            final eUuid = eId.isNotEmpty ? SupabaseService.toUuid(eId).toLowerCase() : '';
+            if (eId == teamIdLower || eUuid == teamUuidLower) {
+              concludedWeekRank = (entry['weeklyRank'] as num?)?.toInt() ?? 0;
+              concludedWeekCoins = (entry['weeklyCoins'] as num?)?.toInt() ?? 0;
+              break;
+            }
+          }
+          if (concludedWeekRank == 1 && concludedWeekCoins > 0) {
+            isClaimEligible = true;
+          }
+        } catch (_) {}
+      }
+    }
+
     if (matchedEntry != null) {
       final res = {
         ...matchedEntry,
@@ -2682,6 +2774,12 @@ class TeamService {
         'weekRangeLabel': getWeekRangeLabel(forDate),
         'weekKey': getWeekCycleKey(forDate),
         'rewardPool': weeklyGameRewardPool,
+        'isClaimWindowOpen': claimWindowOpen,
+        'isClaimEligible': isClaimEligible,
+        'concludedWeekRank': concludedWeekRank,
+        'concludedWeekCoins': concludedWeekCoins,
+        'concludedWeekKey': concludedWeekKey,
+        'concludedWeekRangeLabel': concludedWeekRangeLabel,
       };
       if (forDate == null) {
         _storeTeamWeeklyStatsCache(team.id, res);
@@ -2764,6 +2862,12 @@ class TeamService {
       'rewardPool': weeklyGameRewardPool,
       'weekRangeLabel': getWeekRangeLabel(forDate),
       'weekKey': getWeekCycleKey(forDate),
+      'isClaimWindowOpen': claimWindowOpen,
+      'isClaimEligible': isClaimEligible,
+      'concludedWeekRank': concludedWeekRank,
+      'concludedWeekCoins': concludedWeekCoins,
+      'concludedWeekKey': concludedWeekKey,
+      'concludedWeekRangeLabel': concludedWeekRangeLabel,
       'memberIds': roster,
       'memberNames': directMemberNames,
       'memberCoins': directMemberCoins,
