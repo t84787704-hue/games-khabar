@@ -197,8 +197,14 @@ class CoinWalletService extends ChangeNotifier {
     try {
       final now = DateTime.now();
 
-      int currentCoins = 1000;
-      int currentEscrow = 0;
+      int currentCoins = (_instance._currentWallet != null &&
+              (_instance._currentWallet!.userId == userId || userId.isEmpty))
+          ? _instance._currentWallet!.coins
+          : 1000;
+      int currentEscrow = (_instance._currentWallet != null &&
+              (_instance._currentWallet!.userId == userId || userId.isEmpty))
+          ? _instance._currentWallet!.escrowCoins
+          : 0;
       int currentWinnings = 0;
       int currentWins = 0;
 
@@ -207,13 +213,14 @@ class CoinWalletService extends ChangeNotifier {
             .from('users')
             .select('coins, g_coins, in_escrow, total_winnings, wins')
             .or('id.eq.$userId,uid.eq.$userId')
-            .maybeSingle();
+            .maybeSingle()
+            .timeout(const Duration(seconds: 3));
 
         if (userRow != null) {
           currentCoins = (userRow['coins'] as num?)?.toInt() ??
               (userRow['g_coins'] as num?)?.toInt() ??
-              1000;
-          currentEscrow = (userRow['in_escrow'] as num?)?.toInt() ?? 0;
+              currentCoins;
+          currentEscrow = (userRow['in_escrow'] as num?)?.toInt() ?? currentEscrow;
           currentWinnings = (userRow['total_winnings'] as num?)?.toInt() ?? 0;
           currentWins = (userRow['wins'] as num?)?.toInt() ?? 0;
         }
@@ -223,6 +230,47 @@ class CoinWalletService extends ChangeNotifier {
 
       final newCoins = (currentCoins + amount).clamp(0, 9999999);
       final newEscrow = (currentEscrow + (inEscrowChange ?? 0)).clamp(0, 9999999);
+
+      int lifetimeEarned = (_instance._currentWallet != null &&
+              (_instance._currentWallet!.userId == userId || userId.isEmpty))
+          ? _instance._currentWallet!.lifetimeEarned
+          : currentCoins;
+      int lifetimeSpent = 0;
+      int trustScore = (_instance._currentWallet != null &&
+              (_instance._currentWallet!.userId == userId || userId.isEmpty))
+          ? _instance._currentWallet!.trustScore
+          : 100;
+
+      if (amount > 0) {
+        lifetimeEarned += amount;
+      } else if (amount < 0 && (inEscrowChange == null || inEscrowChange == 0)) {
+        lifetimeSpent += amount.abs();
+      }
+
+      // Immediately update local wallet state & notifiers so UI reflects new balance right away
+      if (_instance._currentWallet != null &&
+          (_instance._currentWallet!.userId == userId || userId.isEmpty)) {
+        _instance._currentWallet = _instance._currentWallet!.copyWith(
+          coins: newCoins,
+          escrowCoins: newEscrow,
+          lifetimeEarned: lifetimeEarned,
+          updatedAt: now,
+          lastDailyBonusClaim: type == 'daily_bonus'
+              ? now
+              : _instance._currentWallet!.lastDailyBonusClaim,
+        );
+        _instance.notifyListeners();
+        _instance._saveToLocal(_instance._currentWallet!);
+      }
+
+      try {
+        final currentGamer = GamerAuthService().currentGamer;
+        if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
+          GamerAuthService().currentGamerNotifier.value =
+              currentGamer.copyWith(coins: newCoins);
+        }
+        CoinRewardService().coinsNotifier.value = newCoins;
+      } catch (_) {}
 
       final Map<String, dynamic> userUpdate = {
         'coins': newCoins,
@@ -245,37 +293,6 @@ class CoinWalletService extends ChangeNotifier {
         }
       }
 
-      try {
-        await SupabaseService.client
-            .from('users')
-            .update(userUpdate)
-            .or('id.eq.$userId,uid.eq.$userId');
-      } catch (e) {
-        debugPrint('updateCoins: users update error: $e');
-      }
-
-      int lifetimeEarned = currentCoins;
-      int lifetimeSpent = 0;
-      int trustScore = 100;
-      try {
-        final walletRow = await SupabaseService.client
-            .from('coin_wallets')
-            .select('lifetime_earned, lifetime_spent, trust_score')
-            .or('user_id.eq.$userId,id.eq.$userId')
-            .maybeSingle();
-        if (walletRow != null) {
-          lifetimeEarned = (walletRow['lifetime_earned'] as num?)?.toInt() ?? lifetimeEarned;
-          lifetimeSpent = (walletRow['lifetime_spent'] as num?)?.toInt() ?? lifetimeSpent;
-          trustScore = (walletRow['trust_score'] as num?)?.toInt() ?? trustScore;
-        }
-      } catch (_) {}
-
-      if (amount > 0) {
-        lifetimeEarned += amount;
-      } else if (amount < 0 && (inEscrowChange == null || inEscrowChange == 0)) {
-        lifetimeSpent += amount.abs();
-      }
-
       final Map<String, dynamic> walletUpdate = {
         'id': userId,
         'user_id': userId,
@@ -289,12 +306,6 @@ class CoinWalletService extends ChangeNotifier {
       };
       if (type == 'daily_bonus') {
         walletUpdate['last_daily_bonus_claim'] = now.toIso8601String();
-      }
-
-      try {
-        await SupabaseService.client.from('coin_wallets').upsert(walletUpdate);
-      } catch (e) {
-        debugPrint('updateCoins: coin_wallets upsert error: $e');
       }
 
       final String targetUuid = RegExp(
@@ -330,26 +341,39 @@ class CoinWalletService extends ChangeNotifier {
       final String combinedDesc =
           (title != null && title.isNotEmpty) ? '$title - $description' : description;
 
-      try {
-        await SupabaseService.client
-            .from('coin_transactions')
-            .insert(txData);
-      } catch (e) {
-        debugPrint('updateCoins: coin_transactions insert error: $e, trying schema-fallback');
+      // Update users and coin_wallets concurrently with a bounded timeout
+      await Future.wait([
+        Future<void>(() async {
+          try {
+            await SupabaseService.client
+                .from('users')
+                .update(userUpdate)
+                .or('id.eq.$userId,uid.eq.$userId')
+                .timeout(const Duration(seconds: 3));
+          } catch (e) {
+            debugPrint('updateCoins: users update error: $e');
+          }
+        }),
+        Future<void>(() async {
+          try {
+            await SupabaseService.client
+                .from('coin_wallets')
+                .upsert(walletUpdate)
+                .timeout(const Duration(seconds: 3));
+          } catch (e) {
+            debugPrint('updateCoins: coin_wallets upsert error: $e');
+          }
+        }),
+      ]);
+
+      // Persist transaction ledger entries non-blockingly so UI buttons never stay in Sending... state
+      Future<void>(() async {
         try {
           await SupabaseService.client
               .from('coin_transactions')
-              .insert({
-                'user_id': targetUuid,
-                'amount': amount,
-                'type': type,
-                'description': combinedDesc,
-                'balance_after': newCoins,
-                if (roomId != null && roomId.isNotEmpty) 'reference_id': roomId,
-                'created_at': now.toIso8601String(),
-              });
-        } catch (e2) {
-          debugPrint('updateCoins: fallback coin_transactions insert error: $e2, trying minimal schema');
+              .insert(txData);
+        } catch (e) {
+          debugPrint('updateCoins: coin_transactions insert error: $e, trying schema-fallback');
           try {
             await SupabaseService.client
                 .from('coin_transactions')
@@ -358,44 +382,40 @@ class CoinWalletService extends ChangeNotifier {
                   'amount': amount,
                   'type': type,
                   'description': combinedDesc,
+                  'balance_after': newCoins,
+                  if (roomId != null && roomId.isNotEmpty) 'reference_id': roomId,
                   'created_at': now.toIso8601String(),
                 });
-          } catch (e3) {
-            debugPrint('updateCoins: minimal coin_transactions insert error: $e3');
+          } catch (e2) {
+            debugPrint('updateCoins: fallback coin_transactions insert error: $e2, trying minimal schema');
+            try {
+              await SupabaseService.client
+                  .from('coin_transactions')
+                  .insert({
+                    'user_id': targetUuid,
+                    'amount': amount,
+                    'type': type,
+                    'description': combinedDesc,
+                    'created_at': now.toIso8601String(),
+                  });
+            } catch (e3) {
+              debugPrint('updateCoins: minimal coin_transactions insert error: $e3');
+            }
           }
         }
-      }
 
-      try {
-        await SupabaseService.client
-            .from('transactions')
-            .insert(txData);
-      } catch (_) {}
+        try {
+          await SupabaseService.client
+              .from('transactions')
+              .insert(txData);
+        } catch (_) {}
 
-      _instance._syncToUserDocAndNotifiers(userId, newCoins);
-
-      if (_instance._currentWallet != null &&
-          (_instance._currentWallet!.userId == userId || userId.isEmpty)) {
-        _instance._currentWallet = _instance._currentWallet!.copyWith(
-          coins: newCoins,
-          escrowCoins: newEscrow,
-          lifetimeEarned: lifetimeEarned,
-          updatedAt: now,
-          lastDailyBonusClaim: type == 'daily_bonus'
-              ? now
-              : _instance._currentWallet!.lastDailyBonusClaim,
-        );
-        _instance.notifyListeners();
-        _instance._saveToLocal(_instance._currentWallet!);
-      }
-
-      if (type != 'team_weekly_contribution' &&
-          type != 'game_currency_redemption' &&
-          type != 'weekly_team_reward') {
-        _checkTeamEligibility(userId, newCoins);
-      }
-
-
+        if (type != 'team_weekly_contribution' &&
+            type != 'game_currency_redemption' &&
+            type != 'weekly_team_reward') {
+          await _checkTeamEligibility(userId, newCoins);
+        }
+      });
     } catch (e) {
       debugPrint('CoinWalletService updateCoins error: $e');
     }

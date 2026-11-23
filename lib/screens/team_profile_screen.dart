@@ -1957,38 +1957,60 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                         const SizedBox(width: 6),
                                         Container(
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
+                                              horizontal: 7, vertical: 2.5),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFFF6B00)
-                                                .withOpacity(0.2),
+                                            color: isDark
+                                                ? const Color(0xFFFF6B00)
+                                                    .withOpacity(0.2)
+                                                : const Color(0xFFFFEDD5),
                                             borderRadius:
                                                 BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: isDark
+                                                  ? const Color(0xFFFF6B00)
+                                                      .withOpacity(0.45)
+                                                  : const Color(0xFFEA580C),
+                                              width: 0.9,
+                                            ),
                                           ),
                                           child: Text(
                                             team.tag,
-                                            style: const TextStyle(
-                                                color: Color(0xFFFF6B00),
+                                            style: TextStyle(
+                                                color: isDark
+                                                    ? const Color(0xFFFF6B00)
+                                                    : const Color(0xFFC2410C),
                                                 fontWeight: FontWeight.w900,
                                                 fontSize: 11),
                                           ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 5),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF00FF88)
-                                            .withOpacity(0.15),
+                                        color: isDark
+                                            ? const Color(0xFF00FF88)
+                                                .withOpacity(0.15)
+                                            : const Color(0xFFD1FAE5),
                                         borderRadius:
                                             BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: isDark
+                                              ? const Color(0xFF00FF88)
+                                                  .withOpacity(0.45)
+                                              : const Color(0xFF059669),
+                                          width: 0.9,
+                                        ),
                                       ),
                                       child: Text(
                                         'Game: ${TeamService.displayGameLabel(team.game)}',
-                                        style: const TextStyle(
-                                            color: Color(0xFF00FF88),
-                                            fontWeight: FontWeight.bold,
+                                        style: TextStyle(
+                                            color: isDark
+                                                ? const Color(0xFF00FF88)
+                                                : const Color(0xFF065F46),
+                                            fontWeight: FontWeight.w900,
                                             fontSize: 11),
                                       ),
                                     ),
@@ -1996,7 +2018,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     Text(
                                       '👑 Team Leader: ${team.leaderName}',
                                       style: TextStyle(
-                                          color: textSec,
+                                          color: isDark ? textSec : const Color(0xFF1E293B),
+                                          fontWeight: FontWeight.w700,
                                           fontSize: 12),
                                     ),
                                   ],
@@ -2018,17 +2041,33 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
-                                _buildRecordStat('WINS', '${team.wins}',
-                                    const Color(0xFF00FF88)),
+                                _buildRecordStat(
+                                    'WINS',
+                                    '${team.wins}',
+                                    isDark
+                                        ? const Color(0xFF00FF88)
+                                        : const Color(0xFF047857)),
                                 _buildDivider(),
-                                _buildRecordStat('LOSSES', '${team.losses}',
-                                    const Color(0xFFFF4655)),
+                                _buildRecordStat(
+                                    'LOSSES',
+                                    '${team.losses}',
+                                    isDark
+                                        ? const Color(0xFFFF4655)
+                                        : const Color(0xFFB91C1C)),
                                 _buildDivider(),
-                                _buildRecordStat('DRAWS', '${team.draws}',
-                                    const Color(0xFFFFB020)),
+                                _buildRecordStat(
+                                    'DRAWS',
+                                    '${team.draws}',
+                                    isDark
+                                        ? const Color(0xFFFFB020)
+                                        : const Color(0xFFB45309)),
                                 _buildDivider(),
-                                _buildRecordStat('POINTS', '${team.points >= (team.wins * 25) ? team.points : (team.wins * 25)}',
-                                    const Color(0xFFFF6B00)),
+                                _buildRecordStat(
+                                    'POINTS',
+                                    '${team.points >= (team.wins * 25) ? team.points : (team.wins * 25)}',
+                                    isDark
+                                        ? const Color(0xFFFF6B00)
+                                        : const Color(0xFFC2410C)),
                               ],
                             ),
                           ),
@@ -2397,18 +2436,24 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     height: 48,
                                     child: ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFFFF4655),
+                                        backgroundColor: const Color(0xFFDC2626),
                                         foregroundColor: Colors.white,
+                                        iconColor: Colors.white,
                                         shape: RoundedRectangleBorder(
                                             borderRadius:
                                                 BorderRadius.circular(10)),
                                         elevation: 0,
                                       ),
-                                      icon: const Icon(Icons.exit_to_app_rounded, size: 18),
+                                      icon: const Icon(
+                                        Icons.exit_to_app_rounded,
+                                        size: 18,
+                                        color: Colors.white,
+                                      ),
                                       label: const Text(
                                         'Leave Team',
                                         style: TextStyle(
-                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w900,
                                             fontSize: 13),
                                       ),
                                       onPressed: () async {
@@ -3053,7 +3098,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 StreamBuilder<List<Map<String, dynamic>>>(
                   stream: _rewardClaimsStream ?? SupabaseService.getRealtimeRewardClaims(),
                   builder: (context, claimsSnap) {
-                    final allClaims = claimsSnap.data ?? const <Map<String, dynamic>>[];
+                    final List<Map<String, dynamic>> allClaims = [
+                      ...SupabaseService.cachedRewardClaims,
+                      ...(claimsSnap.data ?? const <Map<String, dynamic>>[]),
+                    ];
                     final String currentWeekKey = TeamService.getWeekCycleKey();
                     final String normalizedTeamGameKey =
                         CoinWalletScreen.normalizeGameKeyForClaim(team.game);
@@ -3275,12 +3323,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Note: If ${team.name} [${team.tag}] finishes at Rank #1 on the $displayGameLabel Weekly Leaderboard at the end of the week, the ${NumberFormat('#,###').format(rewardPool)} PKR ($currencyLabel) weekly prize is unlocked and divided equally among all active team members ($equalShare PKR • $shareRewardLabel per member).',
+                                'Note: If ${team.name} [${team.tag}] finishes at Rank #1 on the $displayGameLabel Weekly Leaderboard at the end of the week, the ${NumberFormat('#,###').format(rewardPool)} PKR ($currencyLabel) weekly prize is unlocked and divided equally among all active team members ($shareRewardLabel per member).',
                                 style: TextStyle(
-                                  color: textPri.withOpacity(0.88),
-                                  fontSize: 11.2,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.38,
+                                  color: isDark ? Colors.white : const Color(0xFF000000),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.4,
                                 ),
                               ),
                               const SizedBox(height: 10),
@@ -3303,6 +3351,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                           ? Icons.verified_rounded
                                           : Icons.redeem_rounded,
                                       size: 16,
+                                      color: Colors.black,
                                     ),
                                     label: Text(
                                       hasViewerClaimed
@@ -3311,6 +3360,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                               : '✅ Claim Done • View Claim Receipt')
                                           : '🎁 Redeem Your Equal Share ($shareRewardLabel)',
                                       style: const TextStyle(
+                                        color: Colors.black,
                                         fontWeight: FontWeight.w900,
                                         fontSize: 12,
                                       ),
@@ -3318,6 +3368,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF00FF88),
                                       foregroundColor: Colors.black,
+                                      iconColor: Colors.black,
                                       elevation: 0,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(10),
@@ -3406,12 +3457,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 decoration: BoxDecoration(
                   color: isDark
                       ? const Color(0xFF1877F2).withOpacity(0.12)
-                      : const Color(0xFFEFF6FF),
+                      : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: isDark
                         ? const Color(0xFF1877F2).withOpacity(0.35)
-                        : const Color(0xFF93C5FD),
+                        : const Color(0xFFCBD5E1),
                   ),
                 ),
                 child: Row(
@@ -3419,18 +3470,18 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   children: [
                     Icon(
                       Icons.verified_user_outlined,
-                      color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8),
+                      color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0F172A),
                       size: 16,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Weekly 7-Day Rule & Privacy Notice: Earned G-Coins go to each member\'s Personal Wallet first. Members manually contribute coins from their Personal Wallet to boost ${team.name}\'s weekly total for $displayGameLabel. At week\'s end, the #1 team in $displayGameLabel receives ${NumberFormat('#,###').format(rewardPool)} PKR equivalent in $currencyLabel divided equally among its active members (up to 4). Weekly team coin scores reset to 0 each new week while personal wallets stay safe. Only public gaming handles, team rank, and coin contributions are shown.',
+                        'Note (Weekly 7-Day Rule & Privacy Notice): Earned G-Coins go to each member\'s Personal Wallet first. Members manually contribute coins from their Personal Wallet to boost ${team.name}\'s weekly total for $displayGameLabel. At week\'s end, the #1 team in $displayGameLabel receives ${NumberFormat('#,###').format(rewardPool)} PKR equivalent in $currencyLabel divided equally among its active members (up to 4). Weekly team coin scores reset to 0 each new week while personal wallets stay safe. Only public gaming handles, team rank, and coin contributions are shown.',
                         style: TextStyle(
-                          color: isDark ? textSec : const Color(0xFF1E3A8A),
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          height: 1.38,
+                          color: isDark ? Colors.white : const Color(0xFF000000),
+                          fontSize: 10.8,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
                         ),
                       ),
                     ),
@@ -3702,10 +3753,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       height: 30,
                       child: ElevatedButton.icon(
                         onPressed: onTapClaim,
-                        icon: const Icon(Icons.redeem_rounded, size: 14),
+                        icon: const Icon(Icons.redeem_rounded, size: 14, color: Colors.black),
                         label: Text(
                           'Claim $shareRewardLabel',
                           style: const TextStyle(
+                            color: Colors.black,
                             fontSize: 11,
                             fontWeight: FontWeight.w900,
                           ),
@@ -3713,6 +3765,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00FF88),
                           foregroundColor: Colors.black,
+                          iconColor: Colors.black,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           shape: RoundedRectangleBorder(
@@ -3730,7 +3783,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         border: Border.all(color: goldBorder),
                       ),
                       child: Text(
-                        '⏳ Pending Claim',
+                        '⏳ Not Claimed Yet',
                         style: TextStyle(
                           color: goldText,
                           fontSize: 10.5,
@@ -3761,6 +3814,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Widget _buildRecordStat(String label, String value, Color color) {
+    final bool isDark = ThemeService.isDarkMode;
     return Column(
       children: [
         Text(value,
@@ -3769,9 +3823,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         const SizedBox(height: 2),
         Text(label,
             style: TextStyle(
-                color: ThemeService.textSecondary,
-                fontSize: 10,
-                fontWeight: FontWeight.bold)),
+                color: isDark ? ThemeService.textSecondary : const Color(0xFF1E293B),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w900)),
       ],
     );
   }
