@@ -57,6 +57,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       GamerAuthService().currentUid ??
       (SupabaseService.client.auth.currentUser?.id ?? '');
 
+  /// Current active dark/light mode state for theme-aware high-contrast colors
+  bool get isDark => ThemeService.isDarkMode;
+
   @override
   void initState() {
     super.initState();
@@ -711,6 +714,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, _, __) {
+        final bool isDark = ThemeService.isDarkMode;
         final bg = ThemeService.bg;
         final cardColor = ThemeService.card;
         final cardSec = ThemeService.cardSecondary;
