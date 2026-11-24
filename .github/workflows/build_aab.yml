@@ -1,4 +1,4 @@
-Name: Build Games Khabar AAB for Play Store
+name: Build Games Khabar AAB for Play Store
 
 on:
   push:
