@@ -21,6 +21,8 @@ class CoinWallet {
     this.updatedAt,
   });
 
+  int get balance => coins;
+  int get currentBalance => coins;
   int get totalNetWorth => coins + escrowCoins;
 
   bool get canClaimDailyBonus {

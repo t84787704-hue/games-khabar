@@ -458,12 +458,12 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     final entryFeeCoins = _parseEntryFeeCoins(tournament['entry_fee']);
     if (entryFeeCoins > 0) {
       final wallet = await CoinWalletService().getOrCreateWallet(user.id);
-      if (wallet.balance < entryFeeCoins) {
+      if (wallet.coins < entryFeeCoins) {
         if (mounted) {
           setState(() => _registeringTournamentId = null);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Insufficient G-Coins! Entry fee is $entryFeeCoins Coins (Your balance: ${wallet.balance} Coins).'),
+              content: Text('Insufficient G-Coins! Entry fee is $entryFeeCoins Coins (Your balance: ${wallet.coins} Coins).'),
               backgroundColor: const Color(0xFFFF4655),
             ),
           );
@@ -474,7 +474,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
 
     try {
       if (entryFeeCoins > 0) {
-        final deducted = await CoinWalletService.updateCoins(
+        await CoinWalletService.updateCoins(
           userId: user.id,
           amount: -entryFeeCoins,
           type: 'tournament_entry',
@@ -482,9 +482,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           description: 'Entry fee for "${tournament['title'] ?? 'Tournament'}"',
           roomId: tournamentId,
         );
-        if (!deducted) {
-          throw 'Could not deduct entry fee coins from G-Coins Wallet.';
-        }
       }
 
       if (isSoloMatch) {
