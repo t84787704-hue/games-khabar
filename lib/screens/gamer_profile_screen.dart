@@ -78,7 +78,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
 
     GamerAuthService().currentGamerNotifier.addListener(_onGamerChanged);
 
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       _refreshSilently();
     });
   }

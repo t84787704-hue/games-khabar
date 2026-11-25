@@ -557,7 +557,7 @@ class TeamService {
         debugPrint("[TeamService] getTeamStream error: $e");
         yield getCachedTeam(cleanId);
       }
-      await Future.delayed(const Duration(seconds: 4));
+      await Future.delayed(const Duration(seconds: 30));
     }
   }
 
@@ -669,7 +669,7 @@ class TeamService {
       } catch (e) {
         debugPrint("[TeamService] getUserTeamsStream error: $e");
       }
-      await Future.delayed(const Duration(seconds: 4));
+      await Future.delayed(const Duration(seconds: 30));
     }
   }
 
@@ -681,7 +681,8 @@ class TeamService {
     final allRows = await SupabaseService.client
         .from("teams")
         .select()
-        .order("points", ascending: false);
+        .order("points", ascending: false)
+        .limit(50);
 
     if (allRows.isEmpty) return <TeamModel>[];
 
@@ -917,7 +918,7 @@ class TeamService {
       } catch (e) {
         debugPrint("[TeamService] getTeamsStream error: $e");
       }
-      await Future.delayed(const Duration(seconds: 4));
+      await Future.delayed(const Duration(seconds: 30));
     }
   }
 

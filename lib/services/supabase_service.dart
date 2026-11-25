@@ -59,10 +59,21 @@ class SupabaseService {
   static const String bucketUploads = 'posts';
   static const String bucketMatchProofs = 'screenshots';
 
-  static final Map<String, String> _headers = {
-    'apikey': supabaseAnonKey,
-    'Authorization': 'Bearer $supabaseAnonKey',
-  };
+  static String? lastBanError;
+
+  static Map<String, String> get _headers {
+    String token = supabaseAnonKey;
+    try {
+      final accessToken = client.auth.currentSession?.accessToken;
+      if (accessToken != null && accessToken.trim().isNotEmpty) {
+        token = accessToken.trim();
+      }
+    } catch (_) {}
+    return {
+      'apikey': supabaseAnonKey,
+      'Authorization': 'Bearer $token',
+    };
+  }
 
   // ============================================================
   // STEAM & ALL 14 APP GAMES NEWS METHODS (30-MINUTE AUTO CYCLE)
@@ -1148,7 +1159,7 @@ class SupabaseService {
           limit: 50,
         );
         yield messages;
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 12));
       }
     }
 
@@ -1166,7 +1177,7 @@ class SupabaseService {
           limit: 1,
         );
         yield matches.isNotEmpty ? matches.first : null;
-        await Future.delayed(const Duration(seconds: 4));
+        await Future.delayed(const Duration(seconds: 15));
       }
     }
 
@@ -1276,24 +1287,239 @@ class SupabaseService {
     required String userId,
     required String adminId,
     String? reason,
+    String? username,
   }) async {
-    return await update('users', {
-      'is_banned': true,
-      'banned_at': DateTime.now().toIso8601String(),
-      'banned_by': adminId,
-      'banned_reason': reason ?? 'admin_default_ban_reason'.tr(),
-      'updated_at': DateTime.now().toIso8601String(),
-    }, 'id', userId);
+    return await _setUserBanStatus(
+      userId: userId,
+      isBanned: true,
+      adminId: adminId,
+      reason: reason ?? 'Violating community guidelines',
+      username: username,
+    );
   }
 
-  static Future<bool> unbanUser(String userId) async {
-    return await update('users', {
-      'is_banned': false,
-      'banned_at': null,
-      'banned_reason': null,
-      'banned_by': null,
-      'updated_at': DateTime.now().toIso8601String(),
-    }, 'id', userId);
+  static Future<bool> unbanUser(String userId, {String? username}) async {
+    return await _setUserBanStatus(
+      userId: userId,
+      isBanned: false,
+      username: username,
+    );
+  }
+
+  static void _updateCachedUserBanState({
+    required String userId,
+    String? resolvedId,
+    String? resolvedUid,
+    String? username,
+    required bool isBanned,
+  }) {
+    final cleanId = userId.trim();
+    final uuidId = cleanId.isNotEmpty ? toUuid(cleanId) : '';
+    final cleanUsername = (username ?? '').trim().replaceAll('@', '').toLowerCase();
+
+    for (final row in _cachedUsers) {
+      final rId = (row['id'] ?? '').toString().trim();
+      final rUid = (row['uid'] ?? '').toString().trim();
+      final rUser = (row['username'] ?? '').toString().trim().toLowerCase();
+
+      final matchesId = (cleanId.isNotEmpty && (rId == cleanId || rUid == cleanId || rId == uuidId)) ||
+          (resolvedId != null && resolvedId.isNotEmpty && (rId == resolvedId || rUid == resolvedId)) ||
+          (resolvedUid != null && resolvedUid.isNotEmpty && (rId == resolvedUid || rUid == resolvedUid)) ||
+          (cleanUsername.isNotEmpty && rUser == cleanUsername);
+
+      if (matchesId) {
+        row['is_banned'] = isBanned;
+        row['isBanned'] = isBanned;
+      }
+    }
+  }
+
+  static Future<bool> _setUserBanStatus({
+    required String userId,
+    required bool isBanned,
+    String? adminId,
+    String? reason,
+    String? username,
+  }) async {
+    lastBanError = null;
+    final cleanId = userId.trim();
+    final cleanUsername = (username ?? '').trim().replaceAll('@', '');
+    final uuidId = cleanId.isNotEmpty ? toUuid(cleanId) : '';
+    final nowIso = DateTime.now().toIso8601String();
+
+    String? targetId;
+    String? targetUid;
+
+    // 1. Locate the exact user row so we know its real primary key `id` and `uid`
+    try {
+      Map<String, dynamic>? row;
+      if (cleanId.isNotEmpty) {
+        try {
+          row = await client
+              .from('users')
+              .select('id, uid, username')
+              .or('id.eq.$cleanId,uid.eq.$cleanId')
+              .limit(1)
+              .maybeSingle();
+        } catch (_) {}
+
+        if (row == null && uuidId.isNotEmpty && uuidId != cleanId) {
+          try {
+            row = await client
+                .from('users')
+                .select('id, uid, username')
+                .or('id.eq.$uuidId,uid.eq.$uuidId')
+                .limit(1)
+                .maybeSingle();
+          } catch (_) {}
+        }
+      }
+
+      if (row == null && cleanUsername.isNotEmpty) {
+        try {
+          row = await client
+              .from('users')
+              .select('id, uid, username')
+              .ilike('username', cleanUsername)
+              .limit(1)
+              .maybeSingle();
+        } catch (_) {}
+      }
+
+      if (row != null) {
+        final rawId = (row['id'] ?? '').toString().trim();
+        final rawUid = (row['uid'] ?? '').toString().trim();
+        if (rawId.isNotEmpty) targetId = rawId;
+        if (rawUid.isNotEmpty) targetUid = rawUid;
+      }
+    } catch (e) {
+      debugPrint('User lookup before ban update warning: $e');
+    }
+
+    // Build candidate column/value pairs to match the user row reliably
+    final List<MapEntry<String, String>> matchTargets = [];
+    if (targetId != null && targetId.isNotEmpty) {
+      matchTargets.add(MapEntry('id', targetId));
+    }
+    if (targetUid != null && targetUid.isNotEmpty) {
+      matchTargets.add(MapEntry('uid', targetUid));
+      if (targetId == null) {
+        matchTargets.add(MapEntry('id', targetUid));
+      }
+    }
+    if (cleanId.isNotEmpty) {
+      if (!matchTargets.any((e) => e.key == 'id' && e.value == cleanId)) {
+        matchTargets.add(MapEntry('id', cleanId));
+      }
+      if (!matchTargets.any((e) => e.key == 'uid' && e.value == cleanId)) {
+        matchTargets.add(MapEntry('uid', cleanId));
+      }
+      if (uuidId.isNotEmpty && uuidId != cleanId) {
+        if (!matchTargets.any((e) => e.key == 'id' && e.value == uuidId)) {
+          matchTargets.add(MapEntry('id', uuidId));
+        }
+      }
+    }
+    if (cleanUsername.isNotEmpty) {
+      matchTargets.add(MapEntry('username', cleanUsername));
+    }
+
+    if (matchTargets.isEmpty) {
+      lastBanError = 'User ID is missing';
+      return false;
+    }
+
+    // 2. Perform core ban status update with ONLY core column (`is_banned`, fallback `isBanned`)
+    // Avoid bundling non-existent optional columns in the core PATCH request.
+    final List<Map<String, dynamic>> corePayloads = [
+      {'is_banned': isBanned},
+      {'isBanned': isBanned},
+    ];
+
+    bool updated = false;
+    String? lastErr;
+
+    for (final payload in corePayloads) {
+      if (updated) break;
+      for (final target in matchTargets) {
+        try {
+          final List<dynamic> res = await client
+              .from('users')
+              .update(payload)
+              .eq(target.key, target.value)
+              .select('id');
+          if (res.isNotEmpty) {
+            updated = true;
+            break;
+          }
+        } catch (e) {
+          lastErr = e.toString();
+        }
+
+        // Fallback via direct REST PATCH in case `.select('id')` is restricted by RLS
+        try {
+          final uri = Uri.parse(
+            '$supabaseUrl/rest/v1/users?${target.key}=eq.${Uri.encodeQueryComponent(target.value)}',
+          );
+          final response = await http.patch(
+            uri,
+            headers: {
+              ..._headers,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation',
+            },
+            body: jsonEncode(payload),
+          );
+          if (response.statusCode == 200 || response.statusCode == 204) {
+            final body = response.body.trim();
+            if (body.isEmpty || body != '[]') {
+              updated = true;
+              break;
+            }
+          } else {
+            lastErr = 'HTTP ${response.statusCode}: ${response.body}';
+          }
+        } catch (e) {
+          lastErr = e.toString();
+        }
+      }
+    }
+
+    if (!updated) {
+      lastBanError = lastErr ?? 'Could not match or update user record';
+      debugPrint('banUser/unbanUser failed: $lastBanError');
+      return false;
+    }
+
+    // 3. Best-effort update for optional audit columns (ignored if columns do not exist in schema)
+    final primaryTarget = matchTargets.first;
+    final Map<String, dynamic> optionalColumns = {
+      'updated_at': nowIso,
+      'isBanned': isBanned,
+      'banned_at': isBanned ? nowIso : null,
+      'banned_by': isBanned ? (adminId?.isNotEmpty == true ? adminId : null) : null,
+      'banned_reason': isBanned ? reason : null,
+    };
+
+    for (final entry in optionalColumns.entries) {
+      try {
+        await client
+            .from('users')
+            .update({entry.key: entry.value})
+            .eq(primaryTarget.key, primaryTarget.value);
+      } catch (_) {}
+    }
+
+    // 4. Immediately update in-memory cached users so UI reflects the change right away
+    _updateCachedUserBanState(
+      userId: cleanId,
+      resolvedId: targetId,
+      resolvedUid: targetUid,
+      username: cleanUsername,
+      isBanned: isBanned,
+    );
+
+    return true;
   }
 
   static Future<bool> approveBlueTick(String userId) async {
@@ -1634,6 +1860,7 @@ class SupabaseService {
               .from('users')
               .select()
               .order('created_at', ascending: false)
+              .limit(50)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             final list = List<Map<String, dynamic>>.from(res);
@@ -1648,7 +1875,7 @@ class SupabaseService {
             yield _cachedUsers;
           }
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 
@@ -1666,6 +1893,7 @@ class SupabaseService {
               .from('posts')
               .select()
               .order('created_at', ascending: false)
+              .limit(40)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             final list = List<Map<String, dynamic>>.from(res);
@@ -1680,7 +1908,7 @@ class SupabaseService {
             yield _cachedPosts;
           }
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 
@@ -1699,6 +1927,7 @@ class SupabaseService {
               .from('reports')
               .select()
               .order('created_at', ascending: false)
+              .limit(50)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             final list = List<Map<String, dynamic>>.from(res)
@@ -1713,7 +1942,7 @@ class SupabaseService {
             yield _cachedReports.where(isRealModerationReport).toList();
           }
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 
@@ -1731,6 +1960,7 @@ class SupabaseService {
               .from('coin_transactions')
               .select()
               .order('created_at', ascending: false)
+              .limit(50)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             final list = List<Map<String, dynamic>>.from(res);
@@ -1745,7 +1975,7 @@ class SupabaseService {
             yield _cachedCoinTransactions;
           }
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 
@@ -1763,6 +1993,7 @@ class SupabaseService {
               .from('notifications')
               .select()
               .order('created_at', ascending: false)
+              .limit(40)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             final list = List<Map<String, dynamic>>.from(res);
@@ -1777,7 +2008,7 @@ class SupabaseService {
             yield _cachedNotifications;
           }
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 
@@ -1795,6 +2026,7 @@ class SupabaseService {
               .from('rooms')
               .select()
               .order('created_at', ascending: false)
+              .limit(40)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             final list = List<Map<String, dynamic>>.from(res);
@@ -1809,7 +2041,7 @@ class SupabaseService {
             yield _cachedRooms;
           }
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 30));
       }
     }
 
@@ -1827,6 +2059,7 @@ class SupabaseService {
               .from('active_matches')
               .select()
               .order('created_at', ascending: false)
+              .limit(30)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             final list = List<Map<String, dynamic>>.from(res);
@@ -1841,7 +2074,7 @@ class SupabaseService {
             yield _cachedActiveMatches;
           }
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 30));
       }
     }
 
@@ -1859,6 +2092,7 @@ class SupabaseService {
               .from('tournaments')
               .select()
               .order('created_at', ascending: false)
+              .limit(30)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             final list = List<Map<String, dynamic>>.from(res);
@@ -1873,7 +2107,7 @@ class SupabaseService {
             yield _cachedTournaments;
           }
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 30));
       }
     }
 
@@ -1891,6 +2125,7 @@ class SupabaseService {
               .from('proof_history')
               .select()
               .order('created_at', ascending: false)
+              .limit(40)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             final list = List<Map<String, dynamic>>.from(res);
@@ -1903,7 +2138,7 @@ class SupabaseService {
             yield _cachedProofHistory;
           }
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 
@@ -1926,7 +2161,7 @@ class SupabaseService {
         } catch (e) {
           debugPrint('getRealtimeSingleRoom error: $e');
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 15));
       }
     }
 
@@ -1942,6 +2177,7 @@ class SupabaseService {
               .select()
               .eq('room_id', roomId)
               .order('created_at', ascending: true)
+              .limit(60)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             yield List<Map<String, dynamic>>.from(res);
@@ -1949,7 +2185,7 @@ class SupabaseService {
         } catch (e) {
           debugPrint('getRealtimeRoomMessages error: $e');
         }
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 12));
       }
     }
 
@@ -1974,7 +2210,7 @@ class SupabaseService {
       while (true) {
         final list = await fetchRewardClaims(userId: cleanUid.isEmpty ? null : cleanUid);
         yield list;
-        await Future.delayed(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 

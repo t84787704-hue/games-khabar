@@ -513,6 +513,11 @@ class GamerSocialService {
     }
   }
 
+  final Map<String, List<String>> _alliesIdsCache = {};
+  final Map<String, List<GamerPost>> _feedPostsCache = {};
+  final Map<String, List<GamerPost>> _videoPostsCache = {};
+  final Map<String, List<GamerPost>> _userPostsCache = {};
+
   Stream<List<String>> getAlliesUserIdsStream(String uid) =>
       _getAlliesUserIdsStreamInternal(uid).asBroadcastStream();
 
@@ -522,21 +527,26 @@ class GamerSocialService {
       return;
     }
     final playerUuid = stringToUuid(uid);
+    if (_alliesIdsCache.containsKey(playerUuid)) {
+      yield _alliesIdsCache[playerUuid]!;
+    }
     while (true) {
       try {
         final res = await _runFollowsQuery((table) => _supabase
             .from(table)
             .select('following_id')
-            .eq('follower_id', playerUuid));
+            .eq('follower_id', playerUuid)
+            .limit(200));
         final list = (res as List)
             .map((item) => item['following_id'].toString())
             .where((id) => id.isNotEmpty && id != playerUuid)
             .toList();
+        _alliesIdsCache[playerUuid] = list;
         yield list;
       } catch (e) {
-        yield [];
+        yield _alliesIdsCache[playerUuid] ?? [];
       }
-      await Future.delayed(const Duration(seconds: 5));
+      await Future.delayed(const Duration(seconds: 45));
     }
   }
 
@@ -769,6 +779,10 @@ class GamerSocialService {
       _getAllPostsStreamInternal(gameTag: gameTag).asBroadcastStream();
 
   Stream<List<GamerPost>> _getAllPostsStreamInternal({String? gameTag}) async* {
+    final cacheKey = gameTag ?? 'All';
+    if (_feedPostsCache.containsKey(cacheKey)) {
+      yield _feedPostsCache[cacheKey]!;
+    }
     while (true) {
       try {
         var query = _supabase.from('posts').select();
@@ -776,14 +790,18 @@ class GamerSocialService {
           query = query.eq('game', gameTag);
         }
         final data =
-            await query.order('created_at', ascending: false).limit(100);
+            await query.order('created_at', ascending: false).limit(30);
         final list =
             (data as List).map((map) => GamerPost.fromMap(map)).toList();
+        _feedPostsCache[cacheKey] = list;
         yield list;
       } catch (e) {
         debugPrint('[GamerSocialService] getAllPosts error: $e');
+        if (_feedPostsCache.containsKey(cacheKey)) {
+          yield _feedPostsCache[cacheKey]!;
+        }
       }
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 45));
     }
   }
 
@@ -791,6 +809,10 @@ class GamerSocialService {
       _getVideosStreamInternal(gameTag: gameTag).asBroadcastStream();
 
   Stream<List<GamerPost>> _getVideosStreamInternal({String? gameTag}) async* {
+    final cacheKey = gameTag ?? 'All';
+    if (_videoPostsCache.containsKey(cacheKey)) {
+      yield _videoPostsCache[cacheKey]!;
+    }
     while (true) {
       try {
         var query =
@@ -799,16 +821,20 @@ class GamerSocialService {
           query = query.eq('game', gameTag);
         }
         final data =
-            await query.order('created_at', ascending: false).limit(100);
+            await query.order('created_at', ascending: false).limit(30);
         final list = (data as List)
             .map((map) => GamerPost.fromMap(map))
             .where((p) => p.videoUrl != null && p.videoUrl!.trim().isNotEmpty)
             .toList();
+        _videoPostsCache[cacheKey] = list;
         yield list;
       } catch (e) {
         debugPrint('[GamerSocialService] getVideosStream error: $e');
+        if (_videoPostsCache.containsKey(cacheKey)) {
+          yield _videoPostsCache[cacheKey]!;
+        }
       }
-      await Future.delayed(const Duration(seconds: 4));
+      await Future.delayed(const Duration(seconds: 45));
     }
   }
 
@@ -817,21 +843,29 @@ class GamerSocialService {
 
   Stream<List<GamerPost>> _getUserPostsStreamInternal(String userId,
       [String? username]) async* {
+    final uuid = stringToUuid(userId);
+    if (_userPostsCache.containsKey(uuid)) {
+      yield _userPostsCache[uuid]!;
+    }
     while (true) {
       try {
-        final uuid = stringToUuid(userId);
         final data = await _supabase
             .from('posts')
             .select()
             .eq('user_id', uuid)
-            .order('created_at', ascending: false);
+            .order('created_at', ascending: false)
+            .limit(30);
         final list =
             (data as List).map((map) => GamerPost.fromMap(map)).toList();
+        _userPostsCache[uuid] = list;
         yield list;
       } catch (e) {
         debugPrint('[GamerSocialService] getUserPostsStream error: $e');
+        if (_userPostsCache.containsKey(uuid)) {
+          yield _userPostsCache[uuid]!;
+        }
       }
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 45));
     }
   }
 

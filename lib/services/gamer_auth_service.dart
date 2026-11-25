@@ -83,6 +83,8 @@ class GamerAuthService {
       await prefs.remove(_cacheKey(uid));
       await prefs.remove('user_age_$uid');
       await prefs.remove('user_dob_$uid');
+      await prefs.remove('user_ign_$uid');
+      await prefs.remove('user_role_$uid');
     } catch (_) {}
   }
 
@@ -97,11 +99,13 @@ class GamerAuthService {
 
   Future<GamerUser> _hydrateLocalAge(GamerUser gamer) async {
     if (gamer.uid.isEmpty) return gamer;
-    if (gamer.age != null && gamer.dateOfBirth != null) return gamer;
     try {
       final prefs = await SharedPreferences.getInstance();
       DateTime? resolvedDob = gamer.dateOfBirth;
       int? resolvedAge = gamer.age;
+      String resolvedIgn = gamer.inGameName;
+      String resolvedRole = gamer.preferredRole;
+
       if (resolvedDob == null) {
         final rawDob = prefs.getString('user_dob_${gamer.uid}');
         if (rawDob != null && rawDob.isNotEmpty) {
@@ -113,8 +117,28 @@ class GamerAuthService {
         if (computed > 0) resolvedAge = computed;
       }
       resolvedAge ??= prefs.getInt('user_age_${gamer.uid}');
-      if (resolvedAge != gamer.age || resolvedDob != gamer.dateOfBirth) {
-        return gamer.copyWith(age: resolvedAge, dateOfBirth: resolvedDob);
+
+      if (resolvedIgn.isEmpty) {
+        final localIgn = prefs.getString('user_ign_${gamer.uid}');
+        if (localIgn != null && localIgn.trim().isNotEmpty) {
+          resolvedIgn = localIgn.trim();
+        }
+      }
+      final localRole = prefs.getString('user_role_${gamer.uid}');
+      if (localRole != null && localRole.trim().isNotEmpty) {
+        resolvedRole = localRole.trim();
+      }
+
+      if (resolvedAge != gamer.age ||
+          resolvedDob != gamer.dateOfBirth ||
+          resolvedIgn != gamer.inGameName ||
+          resolvedRole != gamer.preferredRole) {
+        return gamer.copyWith(
+          age: resolvedAge,
+          dateOfBirth: resolvedDob,
+          inGameName: resolvedIgn,
+          preferredRole: resolvedRole,
+        );
       }
     } catch (_) {}
     return gamer;
@@ -662,6 +686,8 @@ class GamerAuthService {
         'selected_rank': user.selectedRank.isNotEmpty ? user.selectedRank : 'Bronze',
         'is_rank_verified': user.isRankVerified,
         'rank_status': user.rankStatus.isNotEmpty ? user.rankStatus : 'none',
+        'in_game_name': user.inGameName.trim(),
+        'preferred_role': user.preferredRole,
         if (user.age != null) 'age': user.age,
         if (user.dateOfBirth != null)
           'date_of_birth': user.dateOfBirth!.toIso8601String().split('T').first,
@@ -692,11 +718,21 @@ class GamerAuthService {
           } else {
             await prefs.remove('user_dob_${user.uid}');
           }
+          if (user.inGameName.trim().isNotEmpty) {
+            await prefs.setString('user_ign_${user.uid}', user.inGameName.trim());
+          } else {
+            await prefs.remove('user_ign_${user.uid}');
+          }
+          if (user.preferredRole.trim().isNotEmpty) {
+            await prefs.setString('user_role_${user.uid}', user.preferredRole.trim());
+          }
         } catch (_) {}
         final savedUser = user.copyWith(
           username: cleanUsername,
           displayName: cleanDisplayName,
           gameId: cleanGameId,
+          inGameName: user.inGameName.trim(),
+          preferredRole: user.preferredRole,
         );
         currentGamerNotifier.value = savedUser;
         profileLoadErrorNotifier.value = false;
@@ -846,10 +882,16 @@ class GamerAuthService {
   Stream<GamerUser?> userProfileStream(String uid) => _userProfileStreamInternal(uid).asBroadcastStream();
 
   Stream<GamerUser?> _userProfileStreamInternal(String uid) async* {
+    if (currentGamerNotifier.value != null && currentGamerNotifier.value!.uid == uid) {
+      yield currentGamerNotifier.value;
+    } else {
+      final cached = await _loadCachedGamerProfile(uid);
+      if (cached != null) yield cached;
+    }
     while (true) {
       final user = await getUserProfile(uid);
       yield user;
-      await Future.delayed(const Duration(seconds: 4));
+      await Future.delayed(const Duration(seconds: 45));
     }
   }
 

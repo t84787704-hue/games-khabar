@@ -313,42 +313,38 @@ class _NewsPostCardState extends State<NewsPostCard> {
 
               const SizedBox(height: 10),
 
-              // Body Image
+              // Body Image (Disk + Memory cached & downsampled)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: GestureDetector(
                     onTap: _toggleExpand,
-                    child: Image.network(
-                      news.effectiveImageUrl,
+                    child: CachedNetworkImage(
+                      imageUrl: news.effectiveImageUrl,
                       height: 200,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          height: 200,
-                          width: double.infinity,
-                          color: const Color(0xFF141923),
-                          child: Center(
-                            child: SizedBox(
-                              width: 26,
-                              height: 26,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                                color: const Color(0xFF00FF88),
-                              ),
+                      memCacheWidth: 720,
+                      maxWidthDiskCache: 720,
+                      fadeInDuration: const Duration(milliseconds: 150),
+                      placeholder: (context, url) => Container(
+                        height: 200,
+                        width: double.infinity,
+                        color: const Color(0xFF141923),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF00FF88),
                             ),
                           ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) => Image.network(
-                        GamingNewsModel.getCategoryFallbackImage(
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => CachedNetworkImage(
+                        imageUrl: GamingNewsModel.getCategoryFallbackImage(
                           news.category,
                           title: news.titleEn,
                           content: news.contentEn,
@@ -357,12 +353,16 @@ class _NewsPostCardState extends State<NewsPostCard> {
                         height: 200,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (c, e, s) => Image.network(
-                          gameFallbackImages['DEFAULT']!,
+                        memCacheWidth: 720,
+                        maxWidthDiskCache: 720,
+                        errorWidget: (c, u, e) => CachedNetworkImage(
+                          imageUrl: gameFallbackImages['DEFAULT']!,
                           height: 200,
                           width: double.infinity,
                           fit: BoxFit.cover,
-                          errorBuilder: (c2, e2, s2) => _buildHeroFallbackBanner(news),
+                          memCacheWidth: 720,
+                          maxWidthDiskCache: 720,
+                          errorWidget: (c2, u2, e2) => _buildHeroFallbackBanner(news),
                         ),
                       ),
                     ),
@@ -656,28 +656,30 @@ class _NewsPostCardState extends State<NewsPostCard> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(11),
-          child: Image.network(
-            avatarUrl,
+          child: CachedNetworkImage(
+            imageUrl: avatarUrl,
             width: 42,
             height: 42,
+            memCacheWidth: 110,
+            memCacheHeight: 110,
+            maxWidthDiskCache: 110,
+            maxHeightDiskCache: 110,
             fit: BoxFit.cover,
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) return child;
-              return Container(
-                color: const Color(0xFF161C27),
-                child: const Center(
-                  child: SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: Color(0xFF00FF88),
-                    ),
+            fadeInDuration: const Duration(milliseconds: 120),
+            placeholder: (context, url) => Container(
+              color: const Color(0xFF161C27),
+              child: const Center(
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: Color(0xFF00FF88),
                   ),
                 ),
-              );
-            },
-            errorBuilder: (context, error, stackTrace) => Container(
+              ),
+            ),
+            errorWidget: (context, url, error) => Container(
               color: const Color(0xFF1A2230),
               child: Center(
                 child: Text(

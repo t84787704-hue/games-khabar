@@ -9,9 +9,14 @@ class GamingAdBanner extends StatefulWidget {
   State<GamingAdBanner> createState() => _GamingAdBannerState();
 }
 
-class _GamingAdBannerState extends State<GamingAdBanner> {
+class _GamingAdBannerState extends State<GamingAdBanner>
+    with AutomaticKeepAliveClientMixin {
   BannerAd? _bannerAd;
   bool _isAdLoaded = false;
+  bool _isLoadingAd = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -20,7 +25,10 @@ class _GamingAdBannerState extends State<GamingAdBanner> {
   }
 
   void _loadBannerAd() {
-    if (AdFreeService().isAdFree) return;
+    if (AdFreeService().isAdFree || _isAdLoaded || _isLoadingAd || _bannerAd != null) {
+      return;
+    }
+    _isLoadingAd = true;
 
     try {
       _bannerAd = BannerAd(
@@ -29,15 +37,19 @@ class _GamingAdBannerState extends State<GamingAdBanner> {
         size: AdSize.banner,
         listener: BannerAdListener(
           onAdLoaded: (_) {
+            _isLoadingAd = false;
             if (mounted) setState(() => _isAdLoaded = true);
           },
           onAdFailedToLoad: (ad, err) {
+            _isLoadingAd = false;
             ad.dispose();
+            _bannerAd = null;
             if (mounted) setState(() => _isAdLoaded = false);
           },
         ),
       )..load();
     } catch (_) {
+      _isLoadingAd = false;
       // Ignored if platform doesn't support Google Mobile Ads (e.g. testing)
     }
   }
@@ -50,6 +62,7 @@ class _GamingAdBannerState extends State<GamingAdBanner> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return ValueListenableBuilder<DateTime?>(
       valueListenable: AdFreeService.adFreeUntilNotifier,
       builder: (context, adFreeUntil, _) {

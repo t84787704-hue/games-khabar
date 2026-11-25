@@ -52,12 +52,18 @@ class GamerAvatar extends StatelessWidget {
         avatarContent = _fallbackWidget();
       }
     } else if (photoUrl.isNotEmpty && (photoUrl.startsWith('http') || photoUrl.startsWith('https'))) {
+      final int targetCachePx = (radius * 2 * 2.5).round().clamp(72, 320);
       avatarContent = CachedNetworkImage(
         imageUrl: photoUrl,
-        cacheKey: photoUrl, // ✅ FIX: naya URL aane pe cache invalidate hoga
+        cacheKey: photoUrl,
         width: radius * 2,
         height: radius * 2,
+        memCacheWidth: targetCachePx,
+        memCacheHeight: targetCachePx,
+        maxWidthDiskCache: targetCachePx,
+        maxHeightDiskCache: targetCachePx,
         fit: BoxFit.cover,
+        fadeInDuration: const Duration(milliseconds: 120),
         placeholder: (context, url) => Container(
           color: GamerTheme.cardElevated,
           child: const Center(
@@ -240,23 +246,26 @@ class GamerAvatar extends StatelessWidget {
         iconColor = const Color(0xFF60A5FA);
         gradientColors = const [Color(0xFF1E293B), Color(0xFF0F172A)];
         break;
+      case 'controller':
       case 'skull':
-        icon = Icons.dangerous_rounded;
-        iconColor = const Color(0xFFFF5252);
-        gradientColors = const [Color(0xFF3B0764), Color(0xFF180322)];
+        icon = Icons.sports_esports_rounded;
+        iconColor = const Color(0xFFFF7A00);
+        gradientColors = const [Color(0xFF31102F), Color(0xFF18081C)];
         break;
       case 'ninja':
-        icon = Icons.masks_rounded;
+      case 'shield':
+        icon = Icons.shield_rounded;
         iconColor = const Color(0xFFC084FC);
         gradientColors = const [Color(0xFF1E1B4B), Color(0xFF0F0E2A)];
         break;
       case 'crown':
-        icon = Icons.workspace_premium_rounded;
+      case 'trophy':
+        icon = Icons.emoji_events_rounded;
         iconColor = const Color(0xFFFFD700);
         gradientColors = const [Color(0xFF312E81), Color(0xFF18181B)];
         break;
       case 'crosshair':
-        icon = Icons.filter_center_focus_rounded;
+        icon = Icons.gps_fixed_rounded;
         iconColor = const Color(0xFF00E676);
         gradientColors = const [Color(0xFF064E3B), Color(0xFF022C22)];
         break;

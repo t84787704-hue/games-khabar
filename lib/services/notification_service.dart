@@ -373,8 +373,8 @@ class NotificationService {
       }, onError: (_) {});
     } catch (_) {}
 
-    // Fallback periodic poll every 20 seconds to guarantee delivery even if realtime socket drops
-    _backgroundPollingTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+    // Fallback periodic poll every 90 seconds to guarantee delivery while minimizing mobile data usage
+    _backgroundPollingTimer = Timer.periodic(const Duration(seconds: 90), (_) async {
       try {
         final userUuid = SupabaseService.toUuid(userId);
         dynamic rows;

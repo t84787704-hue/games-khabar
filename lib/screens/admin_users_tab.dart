@@ -130,20 +130,34 @@ class _AdminUsersTabState extends State<_AdminUsersTab> {
           userId: user.uid,
           adminId: sbAdminId,
           reason: 'Violating community guidelines',
+          username: user.username,
         );
       } else {
-        ok = await SupabaseService.unbanUser(user.uid);
+        ok = await SupabaseService.unbanUser(
+          user.uid,
+          username: user.username,
+        );
       }
 
       if (mounted) {
+        if (ok) {
+          setState(() {});
+        }
+        final errDetail = SupabaseService.lastBanError;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               ok
-                  ? (nextBanned ? 'User @${user.username} banned successfully' : 'User @${user.username} unbanned successfully')
-                  : 'Error updating ban status',
+                  ? (nextBanned
+                      ? 'User @${user.username} banned successfully'
+                      : 'User @${user.username} unbanned successfully')
+                  : (errDetail != null && errDetail.isNotEmpty
+                      ? 'Error updating ban status: $errDetail'
+                      : 'Error updating ban status'),
             ),
-            backgroundColor: ok ? (nextBanned ? const Color(0xFFFF4655) : const Color(0xFF00FF88)) : const Color(0xFFFF4655),
+            backgroundColor: ok
+                ? (nextBanned ? const Color(0xFFFF4655) : const Color(0xFF00FF88))
+                : const Color(0xFFFF4655),
           ),
         );
       }

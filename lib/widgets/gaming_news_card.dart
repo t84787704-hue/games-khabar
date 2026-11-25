@@ -63,25 +63,35 @@ class GamingNewsCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Left: 35% Image
+                // Left: 35% Image (Disk + Memory cached thumbnail)
                 Expanded(
                   flex: 35,
                   child: ClipRRect(
                     borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-                    child: Image.network(
-                      news.effectiveImageUrl,
+                    child: CachedNetworkImage(
+                      imageUrl: news.effectiveImageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Image.network(
-                        GamingNewsModel.getCategoryFallbackImage(
+                      memCacheWidth: 320,
+                      maxWidthDiskCache: 320,
+                      fadeInDuration: const Duration(milliseconds: 150),
+                      placeholder: (context, url) => Container(
+                        color: const Color(0xFF141923),
+                      ),
+                      errorWidget: (context, url, error) => CachedNetworkImage(
+                        imageUrl: GamingNewsModel.getCategoryFallbackImage(
                           news.category,
                           title: news.titleEn,
                           content: news.contentEn,
                         ),
                         fit: BoxFit.cover,
-                        errorBuilder: (c, e, s) => Image.network(
-                          gameFallbackImages['DEFAULT']!,
+                        memCacheWidth: 320,
+                        maxWidthDiskCache: 320,
+                        errorWidget: (c, u, e) => CachedNetworkImage(
+                          imageUrl: gameFallbackImages['DEFAULT']!,
                           fit: BoxFit.cover,
-                          errorBuilder: (c2, e2, s2) => _buildGamePosterPlaceholder(news),
+                          memCacheWidth: 320,
+                          maxWidthDiskCache: 320,
+                          errorWidget: (c2, u2, e2) => _buildGamePosterPlaceholder(news),
                         ),
                       ),
                     ),

@@ -173,6 +173,8 @@ class GamerUser {
   final int squadRoomsCount;
   final DateTime? verificationAppliedAt;
   final String gameId;
+  final String inGameName;
+  final String preferredRole;
   final int? age;
   final DateTime? dateOfBirth;
   final int coins;
@@ -242,6 +244,8 @@ class GamerUser {
     this.squadRoomsCount = 0,
     this.verificationAppliedAt,
     this.gameId = '',
+    this.inGameName = '',
+    this.preferredRole = 'All-Rounder',
     this.age,
     this.dateOfBirth,
     this.coins = 100,
@@ -584,8 +588,23 @@ class GamerUser {
         data['is_vip_member'] == true ||
         (vipPassExpires != null && vipPassExpires.isAfter(DateTime.now()));
 
+    final String rawUidStr = (data['uid'] ?? '').toString().trim();
+    final String rawIdStr = (data['id'] ?? '').toString().trim();
+    final String resolvedUid = rawUidStr.isNotEmpty
+        ? rawUidStr
+        : (rawIdStr.isNotEmpty ? rawIdStr : (fallbackUid ?? ''));
+
+    bool parseBoolFlag(dynamic val) {
+      if (val == true || val == 1) return true;
+      if (val is String) {
+        final s = val.trim().toLowerCase();
+        return s == 'true' || s == '1' || s == 't' || s == 'yes';
+      }
+      return false;
+    }
+
     return GamerUser(
-      uid: data['uid'] ?? data['id'] ?? fallbackUid ?? '',
+      uid: resolvedUid,
       username: (data['username'] != null &&
               data['username'].toString().trim().isNotEmpty)
           ? data['username'].toString().trim()
@@ -648,7 +667,9 @@ class GamerUser {
       rankRejectReason: data['rankRejectReason']?.toString() ?? '',
       isAdmin: data['isAdmin'] == true,
       isOwner: isOwner,
-      isBanned: data['isBanned'] == true || data['is_banned'] == true,
+      isBanned: parseBoolFlag(data['is_banned']) ||
+          parseBoolFlag(data['isBanned']) ||
+          parseBoolFlag(data['banned']),
       bannedAt: bannedTimestamp,
       bannedReason: data['bannedReason']?.toString() ??
           data['banned_reason']?.toString(),
@@ -665,6 +686,22 @@ class GamerUser {
       ].map((e) => e?.toString().trim() ?? '').firstWhere(
             (s) => s.isNotEmpty,
             orElse: () => '',
+          ),
+      inGameName: [
+        data['in_game_name'],
+        data['inGameName'],
+        data['ign'],
+      ].map((e) => e?.toString().trim() ?? '').firstWhere(
+            (s) => s.isNotEmpty,
+            orElse: () => '',
+          ),
+      preferredRole: [
+        data['preferred_role'],
+        data['preferredRole'],
+        data['role_in_game'],
+      ].map((e) => e?.toString().trim() ?? '').firstWhere(
+            (s) => s.isNotEmpty,
+            orElse: () => 'All-Rounder',
           ),
       age: resolvedAge,
       dateOfBirth: parsedDob,
@@ -756,6 +793,10 @@ class GamerUser {
       'verificationAppliedAt': verificationAppliedAt?.toIso8601String(),
       'gameId': gameId.trim(),
       'bgmiUid': gameId.trim(),
+      'inGameName': inGameName.trim(),
+      'in_game_name': inGameName.trim(),
+      'preferredRole': preferredRole,
+      'preferred_role': preferredRole,
       if (age != null) 'age': age,
       if (dateOfBirth != null)
         'dateOfBirth': dateOfBirth!.toIso8601String(),
@@ -842,6 +883,8 @@ class GamerUser {
     int? squadRoomsCount,
     DateTime? verificationAppliedAt,
     String? gameId,
+    String? inGameName,
+    String? preferredRole,
     int? age,
     DateTime? dateOfBirth,
     int? coins,
@@ -908,6 +951,8 @@ class GamerUser {
       verificationAppliedAt:
           verificationAppliedAt ?? this.verificationAppliedAt,
       gameId: gameId ?? this.gameId,
+      inGameName: inGameName ?? this.inGameName,
+      preferredRole: preferredRole ?? this.preferredRole,
       age: age ?? this.age,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       coins: coins ?? this.coins,

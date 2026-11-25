@@ -47,11 +47,13 @@ class CreateGamerIdScreen extends StatefulWidget {
 class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   final _usernameController = TextEditingController();
   final _displayNameController = TextEditingController();
+  final _ignController = TextEditingController();
   final _bioController = TextEditingController();
   final _rankController = TextEditingController();
   final _gameIdController = TextEditingController();
   final _referralCodeController = TextEditingController();
   final _usernameFocusNode = FocusNode();
+  final _ignFocusNode = FocusNode();
   final _gameIdFocusNode = FocusNode();
 
   DateTime? _selectedDob;
@@ -59,6 +61,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
   String _selectedGame = 'BGMI';
   String _selectedRankGame = 'BGMI (Battlegrounds Mobile India)';
+  String _selectedRole = 'All-Rounder';
   String _photoUrl = '';
   String _coverUrl = '';
   File? _pickedImageFile;
@@ -75,10 +78,18 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
   final List<Map<String, dynamic>> _gamingPresets = [
     {'id': 'preset:helmet', 'icon': Icons.sports_motorsports_rounded},
-    {'id': 'preset:skull', 'icon': Icons.dangerous_rounded},
-    {'id': 'preset:ninja', 'icon': Icons.masks_rounded},
-    {'id': 'preset:crown', 'icon': Icons.workspace_premium_rounded},
-    {'id': 'preset:crosshair', 'icon': Icons.filter_center_focus_rounded},
+    {'id': 'preset:skull', 'icon': Icons.sports_esports_rounded},
+    {'id': 'preset:ninja', 'icon': Icons.shield_rounded},
+    {'id': 'preset:crown', 'icon': Icons.emoji_events_rounded},
+    {'id': 'preset:crosshair', 'icon': Icons.gps_fixed_rounded},
+  ];
+
+  static const List<Map<String, dynamic>> _esportsRoles = [
+    {'label': 'Rusher', 'icon': Icons.flash_on_rounded},
+    {'label': 'IGL', 'icon': Icons.campaign_rounded},
+    {'label': 'Sniper', 'icon': Icons.gps_fixed_rounded},
+    {'label': 'Support', 'icon': Icons.shield_rounded},
+    {'label': 'All-Rounder', 'icon': Icons.stars_rounded},
   ];
 
   @override
@@ -99,6 +110,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _displayNameController.text = sourceUser.displayName.trim().isNotEmpty
           ? sourceUser.displayName
           : authName;
+      _ignController.text = sourceUser.inGameName.trim();
+      _selectedRole = sourceUser.preferredRole.trim().isNotEmpty
+          ? sourceUser.preferredRole.trim()
+          : 'All-Rounder';
       _bioController.text = sourceUser.bio;
       _selectedGame = GamerTheme.favoriteGames.contains(sourceUser.favoriteGame)
           ? sourceUser.favoriteGame
@@ -135,6 +150,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       }
       _rankController.text = 'Bronze';
       _gameIdController.text = '';
+      _ignController.text = '';
+      _selectedRole = 'All-Rounder';
       _selectedDob = null;
       _legacyAge = null;
     }
@@ -151,9 +168,23 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final localDob = (rawLocalDob != null && rawLocalDob.isNotEmpty)
           ? DateTime.tryParse(rawLocalDob)
           : null;
+      final localIgn = prefs.getString('user_ign_$uid');
+      final localRole = prefs.getString('user_role_$uid');
       final data = await SupabaseService.getUser(uid);
       if (mounted) {
         setState(() {
+          if (_ignController.text.trim().isEmpty) {
+            final dbIgn = (data?['in_game_name'] ?? data?['inGameName'] ?? data?['ign'] ?? '').toString().trim();
+            final resolvedIgn = dbIgn.isNotEmpty ? dbIgn : (localIgn?.trim() ?? '');
+            if (resolvedIgn.isNotEmpty) {
+              _ignController.text = resolvedIgn;
+            }
+          }
+          final dbRole = (data?['preferred_role'] ?? data?['preferredRole'] ?? '').toString().trim();
+          final resolvedRole = dbRole.isNotEmpty ? dbRole : (localRole?.trim() ?? '');
+          if (resolvedRole.isNotEmpty) {
+            _selectedRole = resolvedRole;
+          }
           if (_selectedDob == null) {
             final rawDbDob = data?['date_of_birth'] ?? data?['dateOfBirth'] ?? data?['dob'];
             DateTime? parsedDbDob;
@@ -188,9 +219,11 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   void dispose() {
     _usernameDebounce?.cancel();
     _usernameFocusNode.dispose();
+    _ignFocusNode.dispose();
     _gameIdFocusNode.dispose();
     _usernameController.dispose();
     _displayNameController.dispose();
+    _ignController.dispose();
     _bioController.dispose();
     _rankController.dispose();
     _gameIdController.dispose();
@@ -280,29 +313,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
             : '@$clean is already taken! Try another name.';
       });
     });
-  }
-
-  void _showRankComingSoonBanner() {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            Text('🚀', style: TextStyle(fontSize: 16)),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Rank verification system is undergoing upgrades!',
-                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Color(0xFF1877F2),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 3),
-      ),
-    );
   }
 
   Future<void> _pickImageFromGallery() async {
@@ -459,13 +469,16 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         if (uploaded.isNotEmpty) finalCoverUrl = uploaded;
       }
 
-      final enteredRank = _rankController.text.trim();
+      final enteredRank = _rankController.text.trim().isNotEmpty
+          ? _rankController.text.trim()
+          : 'Bronze';
+      final enteredIgn = _ignController.text.trim();
       final gamerUser = GamerUser(
         uid: uid,
         username: rawUsername,
         displayName: _displayNameController.text.trim().isNotEmpty
             ? _displayNameController.text.trim()
-            : rawUsername,
+            : (enteredIgn.isNotEmpty ? enteredIgn : rawUsername),
         photoUrl: finalPhotoUrl,
         coverUrl: finalCoverUrl.isNotEmpty ? finalCoverUrl : (widget.existingUser?.coverUrl ?? ''),
         bio: _bioController.text.trim(),
@@ -482,6 +495,8 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         reportsCount: widget.existingUser?.reportsCount ?? 0,
         isVerified: widget.existingUser?.isVerified ?? false,
         gameId: enteredGameId,
+        inGameName: enteredIgn,
+        preferredRole: _selectedRole,
         age: parsedAge,
         dateOfBirth: _selectedDob,
         createdAt: widget.existingUser?.createdAt ?? DateTime.now(),
@@ -621,27 +636,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
               ),
               title: Text(
                 widget.isEditing ? 'Edit Gamer ID' : 'Create Gamer ID',
-              style: TextStyle(
-                color: primaryTextColor,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: _isSaving ? null : _saveGamerId,
-                child: Text(
-                  widget.isEditing ? 'Save' : 'Done',
-                  style: const TextStyle(
-                    color: Color(0xFFFF7A00),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                style: TextStyle(
+                  color: primaryTextColor,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
                 ),
               ),
-              const SizedBox(width: 8),
-            ],
-          ),
+            ),
           body: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,11 +665,22 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                             CachedNetworkImage(
                               imageUrl: _coverUrl,
                               fit: BoxFit.cover,
-                              errorWidget: (_, __, ___) =>
-                                  Image.network(_defaultBgmiCoverUrl, fit: BoxFit.cover),
+                              memCacheWidth: 800,
+                              maxWidthDiskCache: 800,
+                              errorWidget: (_, __, ___) => CachedNetworkImage(
+                                imageUrl: _defaultBgmiCoverUrl,
+                                fit: BoxFit.cover,
+                                memCacheWidth: 800,
+                                maxWidthDiskCache: 800,
+                              ),
                             )
                           else
-                            Image.network(_defaultBgmiCoverUrl, fit: BoxFit.cover),
+                            CachedNetworkImage(
+                              imageUrl: _defaultBgmiCoverUrl,
+                              fit: BoxFit.cover,
+                              memCacheWidth: 800,
+                              maxWidthDiskCache: 800,
+                            ),
                           Container(color: Colors.black.withOpacity(0.25)),
                           Positioned(
                             top: 12,
@@ -940,7 +952,86 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 14),
 
-                      // 3. Game Character ID / UID
+                      // 3. In-Game Name (IGN) (Optional) & Game Character ID / UID
+                      Row(
+                        children: [
+                          Text(
+                            'In-Game Name (IGN)',
+                            style: TextStyle(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: secondaryCard,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Text(
+                              'Optional',
+                              style: TextStyle(
+                                color: subTextColor,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _ignFocusNode.requestFocus(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.badge_outlined, color: subTextColor, size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: _ignController,
+                                  focusNode: _ignFocusNode,
+                                  keyboardType: TextInputType.text,
+                                  textInputAction: TextInputAction.next,
+                                  maxLength: 30,
+                                  style: TextStyle(
+                                    color: primaryTextColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter your in-game name (IGN)',
+                                    hintStyle: TextStyle(
+                                      color: subTextColor.withOpacity(0.6),
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.edit_outlined, size: 16, color: subTextColor),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Game Character ID / UID
                       Text(
                         'Game Character ID / UID',
                         style: TextStyle(
@@ -962,7 +1053,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                           ),
                           child: Row(
                             children: [
-                              const Text('🎮', style: TextStyle(fontSize: 16)),
+                              const Icon(Icons.sports_esports_rounded, color: Color(0xFFFF7A00), size: 18),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: TextField(
@@ -997,8 +1088,64 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Character ID helps teammates search and add you in-game.',
+                        'IGN & Character ID help teammates find and add you in-game.',
                         style: TextStyle(color: subTextColor, fontSize: 11),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Preferred Role Selector
+                      Text(
+                        'Preferred Role',
+                        style: TextStyle(
+                          color: primaryTextColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _esportsRoles.map((roleData) {
+                          final roleLabel = roleData['label'] as String;
+                          final roleIcon = roleData['icon'] as IconData;
+                          final isSelected = _selectedRole == roleLabel;
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () => setState(() => _selectedRole = roleLabel),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFFFF7A00) : cardColor,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFFFF7A00) : borderColor,
+                                  width: isSelected ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    roleIcon,
+                                    size: 15,
+                                    color: isSelected ? Colors.white : const Color(0xFFFF7A00),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    roleLabel,
+                                    style: TextStyle(
+                                      color: isSelected ? Colors.white : primaryTextColor,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
                       ),
 
                       const SizedBox(height: 14),
@@ -1186,12 +1333,12 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                               fontSize: 13,
                             ),
                           ),
-                          const Text(
-                            'BGMI (Battlegrounds Mobile)',
-                            style: TextStyle(
+                          Text(
+                            _selectedGame,
+                            style: const TextStyle(
                               color: Color(0xFFFF7A00),
                               fontWeight: FontWeight.bold,
-                              fontSize: 11,
+                              fontSize: 11.5,
                             ),
                           ),
                         ],
@@ -1207,151 +1354,21 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                         mainAxisSpacing: 8,
                         childAspectRatio: 2.3,
                         children: [
-                          _buildRankGridItem('Bronze', isSelected: true),
-                          _buildRankGridItem('Silver', icon: Icons.shield_outlined),
-                          _buildRankGridItem('Gold', icon: Icons.lock_outline),
-                          _buildRankGridItem('Platinum', icon: Icons.shield_outlined),
-                          _buildRankGridItem('Diamond', icon: Icons.shield_outlined),
-                          _buildRankGridItem('Crown', icon: Icons.lock_outline),
-                          _buildRankGridItem('Ace Master', icon: Icons.shield_outlined),
-                          _buildRankGridItem('Ace Dominator', icon: Icons.lock_outline),
-                          _buildRankGridItem('Conqueror', icon: Icons.lock_outline),
+                          _buildRankGridItem('Bronze', isDark: isDark, secondaryCard: secondaryCard, borderColor: borderColor, primaryTextColor: primaryTextColor),
+                          _buildRankGridItem('Silver', isDark: isDark, secondaryCard: secondaryCard, borderColor: borderColor, primaryTextColor: primaryTextColor),
+                          _buildRankGridItem('Gold', isDark: isDark, secondaryCard: secondaryCard, borderColor: borderColor, primaryTextColor: primaryTextColor),
+                          _buildRankGridItem('Platinum', isDark: isDark, secondaryCard: secondaryCard, borderColor: borderColor, primaryTextColor: primaryTextColor),
+                          _buildRankGridItem('Diamond', isDark: isDark, secondaryCard: secondaryCard, borderColor: borderColor, primaryTextColor: primaryTextColor),
+                          _buildRankGridItem('Crown', isDark: isDark, secondaryCard: secondaryCard, borderColor: borderColor, primaryTextColor: primaryTextColor),
+                          _buildRankGridItem('Ace Master', isDark: isDark, secondaryCard: secondaryCard, borderColor: borderColor, primaryTextColor: primaryTextColor),
+                          _buildRankGridItem('Ace Dominator', isDark: isDark, secondaryCard: secondaryCard, borderColor: borderColor, primaryTextColor: primaryTextColor),
+                          _buildRankGridItem('Conqueror', isDark: isDark, secondaryCard: secondaryCard, borderColor: borderColor, primaryTextColor: primaryTextColor),
                         ],
                       ),
-
-                      const SizedBox(height: 18),
-
-                      // 8. Rank Proof (My Game & Rank Proof + Instruction + Coming Soon)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'My Game & Rank Proof',
-                                style: TextStyle(
-                                  color: primaryTextColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13.5,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.shield_outlined, size: 15, color: Color(0xFF1877F2)),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1877F2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Row(
-                              children: [
-                                Text('🚀 ', style: TextStyle(fontSize: 9)),
-                                Text(
-                                  'COMING SOON',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 9.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Rank verification instruction box
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE0F2FE),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFBAE6FD)),
-                        ),
-                        child: const Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Upload a screenshot of your in-game profile showing your rank to get a verified rank badge.',
-                                style: TextStyle(
-                                  color: Color(0xFF0369A1),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      // Rank Verification Coming Soon Box
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE0F2FE),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFBAE6FD)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.info_outline_rounded, size: 15, color: Color(0xFF0284C7)),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Screenshot must clearly show your in-game IGN and current rank.',
-                                    style: TextStyle(
-                                      color: Color(0xFF0369A1),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(Icons.lock_clock_outlined, size: 15, color: Color(0xFF0369A1)),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Rank Verification Coming Soon',
-                                        style: TextStyle(
-                                          color: Color(0xFF0369A1),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Text(
-                                        'Manual rank verification is currently undergoing system upgrades.',
-                                        style: TextStyle(
-                                          color: const Color(0xFF0369A1).withOpacity(0.8),
-                                          fontSize: 10,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.keyboard_arrow_down, size: 18, color: Color(0xFF0284C7)),
-                              ],
-                            ),
-                          ],
-                        ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Select your current in-season tier for squad & tournament matchmaking.',
+                        style: TextStyle(color: subTextColor, fontSize: 11),
                       ),
 
                       // ═════════════════════════════════════════════════════════
@@ -1498,36 +1515,49 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     );
   }
 
-  Widget _buildRankGridItem(String rank, {bool isSelected = false, IconData? icon}) {
+  Widget _buildRankGridItem(
+    String rank, {
+    required bool isDark,
+    required Color secondaryCard,
+    required Color borderColor,
+    required Color primaryTextColor,
+  }) {
+    final currentRank = _rankController.text.trim().isNotEmpty
+        ? _rankController.text.trim()
+        : 'Bronze';
+    final isSelected = currentRank.toLowerCase() == rank.toLowerCase();
     return InkWell(
-      onTap: _showRankComingSoonBanner,
+      onTap: () => setState(() => _rankController.text = rank),
       borderRadius: BorderRadius.circular(8),
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFF7A00) : const Color(0xFFE2E8F0),
+          color: isSelected ? const Color(0xFFFF7A00) : secondaryCard,
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFFF7A00) : borderColor,
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (isSelected)
-              const Icon(Icons.check, size: 13, color: Colors.white)
-            else if (icon != null)
-              Icon(icon, size: 13, color: const Color(0xFF475569)),
-            const SizedBox(width: 4),
-            Text(
-              rank,
-              style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF0F172A),
-                fontWeight: FontWeight.bold,
-                fontSize: 11,
-              ),
+            Icon(
+              isSelected ? Icons.check_circle_rounded : Icons.military_tech_outlined,
+              size: 14,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? const Color(0xFF8B949E) : const Color(0xFF475569)),
             ),
             const SizedBox(width: 4),
-            Icon(
-              Icons.lock,
-              size: 11,
-              color: isSelected ? Colors.white70 : const Color(0xFF475569),
+            Flexible(
+              child: Text(
+                rank,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : primaryTextColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
             ),
           ],
         ),

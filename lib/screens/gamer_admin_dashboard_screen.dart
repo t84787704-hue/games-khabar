@@ -1060,12 +1060,20 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
           userId: user.uid,
           adminId: sbAdminId,
           reason: 'Violating community guidelines or banned by admin',
+          username: user.username,
         );
       } else {
-        ok = await SupabaseService.unbanUser(user.uid);
+        ok = await SupabaseService.unbanUser(
+          user.uid,
+          username: user.username,
+        );
       }
 
       if (mounted) {
+        if (ok) {
+          setState(() {});
+        }
+        final errDetail = SupabaseService.lastBanError;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1073,7 +1081,9 @@ class _GamerAdminDashboardScreenState extends State<GamerAdminDashboardScreen>
                   ? (nextBanned
                       ? 'User @${user.username} banned successfully'
                       : 'User @${user.username} unbanned successfully')
-                  : 'Error updating ban status',
+                  : (errDetail != null && errDetail.isNotEmpty
+                      ? 'Error updating ban status: $errDetail'
+                      : 'Error updating ban status'),
             ),
             backgroundColor: ok
                 ? (nextBanned
