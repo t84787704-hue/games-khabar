@@ -56,6 +56,45 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     '8 Ball Pool': ['London', 'Sydney', 'Moscow', 'Las Vegas'],
   };
 
+  static const String kLastTeamStandingRule =
+      'All joined teams play together in one room; the last team standing wins the prize pool.';
+
+  String _getFormatSlotMeaning(String format) {
+    final lower = format.trim().toLowerCase();
+    if (lower.contains('solo')) {
+      return '1 Slot = 1 Player';
+    } else if (lower.contains('duo')) {
+      return '1 Slot = 1 Team (2 players)';
+    } else if (lower.contains('squad')) {
+      return '1 Slot = 1 Team (4 players)';
+    } else if (lower.contains('single')) {
+      return '1 Slot = 1 Team/Entry in a single match room';
+    }
+    return '1 Slot = 1 Team';
+  }
+
+  String _getMaxSlotsHelperText(String format, int maxSlots) {
+    final slots = maxSlots > 0 ? maxSlots : 0;
+    final lower = format.trim().toLowerCase();
+    if (lower.contains('solo')) {
+      final label = slots == 1 ? 'Player' : 'Players';
+      return '$slots $label • up to $slots ${label.toLowerCase()} (1 Slot = 1 Player)';
+    } else if (lower.contains('duo')) {
+      final label = slots == 1 ? 'Team' : 'Teams';
+      final totalPlayers = slots * 2;
+      return '$slots $label • up to $totalPlayers players';
+    } else if (lower.contains('squad')) {
+      final label = slots == 1 ? 'Team' : 'Teams';
+      final totalPlayers = slots * 4;
+      return '$slots $label • up to $totalPlayers players';
+    } else if (lower.contains('single')) {
+      final label = slots == 1 ? 'Team/Entry' : 'Teams/Entries';
+      return '$slots $label in 1 custom room';
+    }
+    final label = slots == 1 ? 'Team' : 'Teams';
+    return '$slots $label';
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -284,29 +323,44 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final format = (data['match_format'] ?? data['format'] ?? 'Squad 4v4').toString();
     final prizePool = data['prize_pool'] ?? data['prize'] ?? '1000';
     final entryFee = data['entry_fee'] ?? 'Free';
-    final maxSlots = data['max_slots'] ?? data['total_teams'] ?? 25;
-    final joinedSlots = data['joined_teams_count'] ?? data['teams_joined'] ?? 0;
+    final maxSlots = int.tryParse((data['max_slots'] ?? data['total_teams'] ?? 25).toString()) ?? 25;
+    final joinedSlots = int.tryParse((data['joined_teams_count'] ?? data['current_teams'] ?? data['teams_joined'] ?? 0).toString()) ?? 0;
     final status = (data['status'] ?? 'upcoming').toString().toLowerCase();
     final roomId = (data['room_id'] ?? '').toString();
     final roomPass = (data['room_password'] ?? '').toString();
 
     DateTime? matchDateTime;
     if (data['match_time'] != null) {
-      matchDateTime = DateTime.tryParse(data['match_time'].toString());
+      matchDateTime = DateTime.tryParse(data['match_time'].toString())?.toLocal();
     }
 
     final formattedDate = matchDateTime != null
         ? DateFormat('dd MMM yyyy, hh:mm a').format(matchDateTime)
         : (data['date_str']?.toString() ?? 'TBA');
 
+    final bool isSlotsFull = maxSlots > 0 && joinedSlots >= maxSlots;
+    final bool isEntryWindowClosed = matchDateTime != null &&
+        DateTime.now().isAfter(matchDateTime.subtract(const Duration(minutes: 15)));
+    final bool isCancelledUnder2 = status == 'cancelled' ||
+        (isEntryWindowClosed && status != 'completed' && joinedSlots < 2);
+
     Color statusColor = const Color(0xFF38BDF8);
     String statusText = 'UPCOMING';
-    if (status == 'live') {
-      statusColor = const Color(0xFFFF4655);
-      statusText = 'LIVE 🔴';
-    } else if (status == 'completed') {
+    if (status == 'completed') {
       statusColor = const Color(0xFF00FF88);
       statusText = 'COMPLETED ✓';
+    } else if (isCancelledUnder2) {
+      statusColor = const Color(0xFFFF4655);
+      statusText = 'CANCELLED (REFUNDED)';
+    } else if (status == 'live') {
+      statusColor = const Color(0xFFFF4655);
+      statusText = 'LIVE 🔴';
+    } else if (isSlotsFull) {
+      statusColor = const Color(0xFFFF8A00);
+      statusText = 'SLOTS FULL 🔒';
+    } else if (isEntryWindowClosed) {
+      statusColor = const Color(0xFFFF8A00);
+      statusText = 'ENTRY LOCKED 🔒';
     }
 
     return Container(
@@ -334,7 +388,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: ThemeService.cardSecondary, borderRadius: BorderRadius.circular(6)),
-                child: Text(format, style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                child: Text('$format • ${_getFormatSlotMeaning(format)}', style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w600)),
               ),
               const Spacer(),
               Container(
@@ -356,6 +410,16 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               Icon(Icons.calendar_today_rounded, size: 13, color: ThemeService.textSecondary),
               const SizedBox(width: 5),
               Text(formattedDate, style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5)),
+              const SizedBox(width: 8),
+              const Icon(Icons.lock_clock_rounded, size: 13, color: Color(0xFFFF8A00)),
+              const SizedBox(width: 4),
+              const Expanded(
+                child: Text(
+                  'Locks 15m before start (Min 2 slots)',
+                  style: TextStyle(color: Color(0xFFFF8A00), fontSize: 11, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -367,8 +431,34 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               const Text('🎟️ Fee: ', style: TextStyle(color: Colors.grey, fontSize: 12)),
               Text('$entryFee', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
               const Spacer(),
-              Text('Slots: $joinedSlots/$maxSlots', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+              Text('Slots: $joinedSlots/$maxSlots (${_getMaxSlotsHelperText(format, maxSlots)})', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5)),
             ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00FF88).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.25)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.emoji_events_rounded, size: 14, color: Color(0xFF00FF88)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    kLastTeamStandingRule,
+                    style: TextStyle(
+                      color: ThemeService.textPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           Container(
@@ -444,7 +534,10 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final prizeController = TextEditingController(text: existingData?['prize_pool']?.toString() ?? '1000');
     final feeController = TextEditingController(text: existingData?['entry_fee']?.toString() ?? 'Free');
     final slotsController = TextEditingController(text: existingData?['max_slots']?.toString() ?? '25');
-    final rulesController = TextEditingController(text: existingData?['rules'] ?? 'No hacks, fair play required.');
+    final rulesController = TextEditingController(
+      text: existingData?['rules'] ??
+          '$kLastTeamStandingRule\n• Entries lock 15 minutes before start or when Slots Full.\n• Minimum 2 slots/teams required; otherwise cancelled with automatic entry fee refund to G-Coins Wallet.',
+    );
     final roomIdController = TextEditingController(text: existingData?['room_id'] ?? '');
     final roomPassController = TextEditingController(text: existingData?['room_password'] ?? '');
 
@@ -479,296 +572,364 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
       backgroundColor: ThemeService.card,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 20),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      isEdit ? 'Edit Tournament ⚙️' : 'Create Tournament 🏆',
-                      style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.w900),
-                    ),
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: titleController,
-                  style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    labelText: 'Tournament Title',
-                    filled: true,
-                    fillColor: ThemeService.cardSecondary,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        builder: (context, setModalState) {
+          final parsedSlots = int.tryParse(slotsController.text.trim()) ?? 0;
+          final slotMeaningText = _getFormatSlotMeaning(selectedFormat);
+          final maxSlotsHelperText = _getMaxSlotsHelperText(selectedFormat, parsedSlots);
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 20),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isEdit ? 'Edit Tournament ⚙️' : 'Create Tournament 🏆',
+                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 18, fontWeight: FontWeight.w900),
+                      ),
+                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        key: ValueKey('game_dropdown_$selectedGame'),
-                        value: selectedGame,
-                        dropdownColor: ThemeService.card,
-                        decoration: InputDecoration(
-                          labelText: 'Game',
-                          filled: true,
-                          fillColor: ThemeService.cardSecondary,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        items: _gameList.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setModalState(() {
-                              selectedGame = val;
-                              selectedMap = _gameMaps[selectedGame]?.first ?? 'Default';
-                            });
-                          }
-                        },
-                      ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: titleController,
+                    style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                    decoration: InputDecoration(
+                      labelText: 'Tournament Title',
+                      filled: true,
+                      fillColor: ThemeService.cardSecondary,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedFormat,
-                        dropdownColor: ThemeService.card,
-                        decoration: InputDecoration(
-                          labelText: 'Format',
-                          filled: true,
-                          fillColor: ThemeService.cardSecondary,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        items: ['Solo', 'Duo', 'Squad 4v4', 'Single Match'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
-                        onChanged: (val) => setModalState(() => selectedFormat = val!),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: prizeController,
-                        keyboardType: TextInputType.number,
-                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-                        decoration: InputDecoration(
-                          labelText: 'Prize Pool (Coins)',
-                          filled: true,
-                          fillColor: ThemeService.cardSecondary,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          key: ValueKey('game_dropdown_$selectedGame'),
+                          value: selectedGame,
+                          isExpanded: true,
+                          dropdownColor: ThemeService.card,
+                          decoration: InputDecoration(
+                            labelText: 'Game',
+                            filled: true,
+                            fillColor: ThemeService.cardSecondary,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          items: _gameList.map((g) => DropdownMenuItem(value: g, child: Text(g, overflow: TextOverflow.ellipsis))).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setModalState(() {
+                                selectedGame = val;
+                                selectedMap = _gameMaps[selectedGame]?.first ?? 'Default';
+                              });
+                            }
+                          },
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: feeController,
-                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-                        decoration: InputDecoration(
-                          labelText: 'Entry Fee',
-                          filled: true,
-                          fillColor: ThemeService.cardSecondary,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: selectedFormat,
+                          isExpanded: true,
+                          dropdownColor: ThemeService.card,
+                          decoration: InputDecoration(
+                            labelText: 'Format',
+                            helperText: slotMeaningText,
+                            helperMaxLines: 2,
+                            helperStyle: const TextStyle(
+                              color: Color(0xFF00FF88),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            filled: true,
+                            fillColor: ThemeService.cardSecondary,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          items: ['Solo', 'Duo', 'Squad 4v4', 'Single Match'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+                          onChanged: (val) => setModalState(() => selectedFormat = val!),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: slotsController,
-                        keyboardType: TextInputType.number,
-                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-                        decoration: InputDecoration(
-                          labelText: 'Max Slots',
-                          filled: true,
-                          fillColor: ThemeService.cardSecondary,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: prizeController,
+                          keyboardType: TextInputType.number,
+                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Prize Pool (Coins)',
+                            filled: true,
+                            fillColor: ThemeService.cardSecondary,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        key: ValueKey('map_dropdown_${selectedGame}_$selectedMap'),
-                        value: selectedMap,
-                        dropdownColor: ThemeService.card,
-                        decoration: InputDecoration(
-                          labelText: 'Map Name',
-                          filled: true,
-                          fillColor: ThemeService.cardSecondary,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        items: (_gameMaps[selectedGame] ?? ['Default']).map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setModalState(() => selectedMap = val);
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: roomIdController,
-                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-                        decoration: InputDecoration(
-                          labelText: 'Room ID',
-                          filled: true,
-                          fillColor: ThemeService.cardSecondary,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: feeController,
+                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Entry Fee',
+                            filled: true,
+                            fillColor: ThemeService.cardSecondary,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: roomPassController,
-                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
-                        decoration: InputDecoration(
-                          labelText: 'Room Password',
-                          filled: true,
-                          fillColor: ThemeService.cardSecondary,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: slotsController,
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) => setModalState(() {}),
+                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Max Slots',
+                            helperText: maxSlotsHelperText,
+                            helperMaxLines: 2,
+                            helperStyle: const TextStyle(
+                              color: Color(0xFF38BDF8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            filled: true,
+                            fillColor: ThemeService.cardSecondary,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                InkWell(
-                  onTap: () async {
-                    final pickedDate = await showDatePicker(
-                      context: ctx,
-                      initialDate: selectedDateTime,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (pickedDate != null) {
-                      final pickedTime = await showTimePicker(
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          key: ValueKey('map_dropdown_${selectedGame}_$selectedMap'),
+                          value: selectedMap,
+                          isExpanded: true,
+                          dropdownColor: ThemeService.card,
+                          decoration: InputDecoration(
+                            labelText: 'Map Name',
+                            filled: true,
+                            fillColor: ThemeService.cardSecondary,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          items: (_gameMaps[selectedGame] ?? ['Default']).map((m) => DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis))).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setModalState(() => selectedMap = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: roomIdController,
+                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Room ID',
+                            filled: true,
+                            fillColor: ThemeService.cardSecondary,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: roomPassController,
+                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Room Password',
+                            filled: true,
+                            fillColor: ThemeService.cardSecondary,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: () async {
+                      final pickedDate = await showDatePicker(
                         context: ctx,
-                        initialTime: TimeOfDay.fromDateTime(selectedDateTime),
+                        initialDate: selectedDateTime,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
                       );
-                      if (pickedTime != null) {
-                        setModalState(() {
-                          selectedDateTime = DateTime(
-                            pickedDate.year,
-                            pickedDate.month,
-                            pickedDate.day,
-                            pickedTime.hour,
-                            pickedTime.minute,
-                          );
-                        });
+                      if (pickedDate != null) {
+                        final pickedTime = await showTimePicker(
+                          context: ctx,
+                          initialTime: TimeOfDay.fromDateTime(selectedDateTime),
+                        );
+                        if (pickedTime != null) {
+                          setModalState(() {
+                            selectedDateTime = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                          });
+                        }
                       }
-                    }
-                  },
-                  child: Container(
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: ThemeService.cardSecondary,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: ThemeService.border),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.access_time_filled_rounded, color: Color(0xFF00FF88), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Match Time: ${DateFormat('dd MMM yyyy, hh:mm a').format(selectedDateTime)}',
+                            style: TextStyle(color: ThemeService.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: ThemeService.cardSecondary,
+                      color: const Color(0xFF00FF88).withOpacity(0.08),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: ThemeService.border),
+                      border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.3)),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.access_time_filled_rounded, color: Color(0xFF00FF88), size: 18),
-                        const SizedBox(width: 8),
+                        const Row(
+                          children: [
+                            Icon(Icons.shield_rounded, color: Color(0xFF00FF88), size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'Last Team Standing & Entry Lock Rules',
+                              style: TextStyle(
+                                color: Color(0xFF00FF88),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
                         Text(
-                          'Match Time: ${DateFormat('dd MMM yyyy, hh:mm a').format(selectedDateTime)}',
-                          style: TextStyle(color: ThemeService.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
+                          '• $kLastTeamStandingRule\n'
+                          '• Format ($selectedFormat): $slotMeaningText ($maxSlotsHelperText).\n'
+                          '• Entry Lock: Locks 15 minutes before match start or immediately when Slots Full.\n'
+                          '• Minimum 2 Slots/Teams: If ≥ 2 join, remaining slots lock & match proceeds; if < 2 join, tournament cancels & entry fee auto-refunds to G-Coins Wallet.',
+                          style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontSize: 11.5,
+                            height: 1.4,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      final title = titleController.text.trim();
-                      if (title.isEmpty) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(content: Text('Please enter a tournament title!'), backgroundColor: Color(0xFFFF4655)),
-                        );
-                        return;
-                      }
-
-                      // 🔒 SECURE PAYLOAD: Sending both 'game_name' and 'game' to match database columns
-                      final payload = {
-                        'title': title,
-                        'game_name': selectedGame,
-                        'game': selectedGame, 
-                        'match_format': selectedFormat,
-                        'prize_pool': prizeController.text.trim(),
-                        'entry_fee': feeController.text.trim(),
-                        'max_slots': int.tryParse(slotsController.text.trim()) ?? 25,
-                        'map_name': selectedMap,
-                        'room_id': roomIdController.text.trim(),
-                        'room_password': roomPassController.text.trim(),
-                        'match_time': selectedDateTime.toIso8601String(),
-                        'rules': rulesController.text.trim(),
-                        'status': 'upcoming',
-                        'updated_at': DateTime.now().toIso8601String(),
-                      };
-
-                      try {
-                        if (isEdit) {
-                          await SupabaseService.client
-                              .from('tournaments')
-                              .update(payload)
-                              .eq('id', existingData['id']);
-                        } else {
-                          payload['created_at'] = DateTime.now().toIso8601String();
-                          payload['joined_teams_count'] = 0;
-                          await SupabaseService.client.from('tournaments').insert(payload);
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final title = titleController.text.trim();
+                        if (title.isEmpty) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(content: Text('Please enter a tournament title!'), backgroundColor: Color(0xFFFF4655)),
+                          );
+                          return;
                         }
 
-                        Navigator.pop(ctx);
-                        setState(() {}); // Refresh local UI state
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(isEdit ? 'Tournament Updated! 🚀' : 'Tournament Published Successfully! 🏆'),
-                            backgroundColor: const Color(0xFF00FF88),
-                          ),
-                        );
-                      } catch (e) {
-                        print('=== TOURNAMENT SAVE ERROR: $e ===');
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(
-                            content: Text('Error saving: $e'),
-                            backgroundColor: const Color(0xFFFF4655),
-                            duration: const Duration(seconds: 5),
-                          ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00FF88),
-                      foregroundColor: const Color(0xFF0B0F14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        final maxSlotsVal = int.tryParse(slotsController.text.trim()) ?? 25;
+                        // 🔒 SECURE PAYLOAD: Sending both 'game_name' and 'game' to match database columns
+                        final payload = {
+                          'title': title,
+                          'game_name': selectedGame,
+                          'game': selectedGame, 
+                          'match_format': selectedFormat,
+                          'prize_pool': prizeController.text.trim(),
+                          'entry_fee': feeController.text.trim(),
+                          'max_slots': maxSlotsVal,
+                          'map_name': selectedMap,
+                          'room_id': roomIdController.text.trim(),
+                          'room_password': roomPassController.text.trim(),
+                          'match_time': selectedDateTime.toIso8601String(),
+                          'rules': rulesController.text.trim(),
+                          'status': 'upcoming',
+                          'updated_at': DateTime.now().toIso8601String(),
+                        };
+
+                        try {
+                          if (isEdit) {
+                            await SupabaseService.client
+                                .from('tournaments')
+                                .update(payload)
+                                .eq('id', existingData['id']);
+                          } else {
+                            payload['created_at'] = DateTime.now().toIso8601String();
+                            payload['joined_teams_count'] = 0;
+                            await SupabaseService.client.from('tournaments').insert(payload);
+                          }
+
+                          Navigator.pop(ctx);
+                          setState(() {}); // Refresh local UI state
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isEdit ? 'Tournament Updated! 🚀' : 'Tournament Published Successfully! 🏆'),
+                              backgroundColor: const Color(0xFF00FF88),
+                            ),
+                          );
+                        } catch (e) {
+                          print('=== TOURNAMENT SAVE ERROR: $e ===');
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text('Error saving: $e'),
+                              backgroundColor: const Color(0xFFFF4655),
+                              duration: const Duration(seconds: 5),
+                            ),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00FF88),
+                        foregroundColor: const Color(0xFF0B0F14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text(isEdit ? 'Save Changes' : 'Publish Tournament 🚀', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
                     ),
-                    child: Text(isEdit ? 'Save Changes' : 'Publish Tournament 🚀', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

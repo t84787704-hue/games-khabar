@@ -402,6 +402,36 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     );
   }
 
+  static const String kLastTeamStandingRule =
+      'All joined teams play together in one room; the last team standing wins the prize pool.';
+
+  String _getFormatSlotMeaning(String format) {
+    final lower = format.trim().toLowerCase();
+    if (lower == 'solo') {
+      return '1 Slot = 1 Player';
+    } else if (lower == 'duo') {
+      return '1 Slot = 1 Team (2 players)';
+    } else if (lower.contains('single')) {
+      return '1 Slot = 1 Team/Entry in a single match room';
+    } else {
+      return '1 Slot = 1 Team (4 players)';
+    }
+  }
+
+  String _getMaxSlotsHelperText(String format, int maxSlots) {
+    final safeSlots = maxSlots > 0 ? maxSlots : 1;
+    final lower = format.trim().toLowerCase();
+    if (lower == 'solo') {
+      return '$safeSlots ${safeSlots == 1 ? 'Player' : 'Players'} • 1 Slot = 1 Player';
+    } else if (lower == 'duo') {
+      return '$safeSlots ${safeSlots == 1 ? 'Team' : 'Teams'} • up to ${safeSlots * 2} players';
+    } else if (lower.contains('single')) {
+      return '$safeSlots ${safeSlots == 1 ? 'Team/Entry' : 'Teams/Entries'} • 1 Slot = 1 Team/Entry in a single match room';
+    } else {
+      return '$safeSlots ${safeSlots == 1 ? 'Team' : 'Teams'} • up to ${safeSlots * 4} players';
+    }
+  }
+
   Widget _buildTournamentCard(Map<String, dynamic> data) {
     final bool isDark = ThemeService.isDarkMode;
     final Color greenText = isDark ? const Color(0xFF00FF88) : const Color(0xFF065F46);
@@ -418,37 +448,57 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final format = (data['match_format'] ?? data['format'] ?? 'Squad 4v4').toString();
     final prizePool = data['prize_pool'] ?? data['prize'] ?? '1000';
     final entryFee = data['entry_fee'] ?? 'Free';
-    final maxSlots = data['max_slots'] ?? data['total_teams'] ?? 25;
-    final joinedSlots = data['joined_teams_count'] ?? data['teams_joined'] ?? 0;
+    final int maxSlots = int.tryParse((data['max_slots'] ?? data['total_teams'] ?? 25).toString()) ?? 25;
+    final int joinedSlots = int.tryParse((data['joined_teams_count'] ?? data['teams_joined'] ?? data['current_teams'] ?? 0).toString()) ?? 0;
     final status = (data['status'] ?? 'upcoming').toString().toLowerCase();
     final roomId = (data['room_id'] ?? '').toString();
     final roomPass = (data['room_password'] ?? '').toString();
 
     DateTime? matchDateTime;
     if (data['match_time'] != null) {
-      matchDateTime = DateTime.tryParse(data['match_time'].toString());
+      matchDateTime = DateTime.tryParse(data['match_time'].toString())?.toLocal();
     }
 
     final formattedDate = matchDateTime != null
         ? DateFormat('dd MMM yyyy, hh:mm a').format(matchDateTime)
         : (data['date_str']?.toString() ?? 'TBA');
 
+    final bool isFull = joinedSlots >= maxSlots && maxSlots > 0;
+    final bool isWithin15Mins = matchDateTime != null &&
+        DateTime.now().isAfter(matchDateTime.subtract(const Duration(minutes: 15)));
+    final bool isEntryLocked = isFull || isWithin15Mins;
+
     Color statusColor = blueText;
     String statusText = 'UPCOMING';
-    if (status == 'live') {
+    if (status == 'cancelled') {
+      statusColor = const Color(0xFFFF4655);
+      statusText = 'CANCELLED (REFUNDED)';
+    } else if (status == 'live') {
       statusColor = const Color(0xFFFF4655);
       statusText = 'LIVE 🔴';
     } else if (status == 'completed') {
       statusColor = greenText;
       statusText = 'COMPLETED ✓';
+    } else if (isFull) {
+      statusColor = const Color(0xFFFF8A00);
+      statusText = 'SLOTS FULL 🔒';
+    } else if (isWithin15Mins && joinedSlots >= 2) {
+      statusColor = const Color(0xFFFF8A00);
+      statusText = 'ENTRY LOCKED 🔒';
     }
+
+    final String slotCapacityHelper = _getMaxSlotsHelperText(format, maxSlots);
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: status == 'live' ? const Color(0xFFFF4655).withOpacity(0.5) : ThemeService.border),
+        border: Border.all(
+          color: status == 'live' || status == 'cancelled'
+              ? const Color(0xFFFF4655).withOpacity(0.5)
+              : ThemeService.border,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,7 +518,10 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: ThemeService.cardSecondary, borderRadius: BorderRadius.circular(6)),
-                child: Text(format, style: TextStyle(color: ThemeService.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)),
+                child: Text(
+                  '$format • ${_getFormatSlotMeaning(format)}',
+                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w700),
+                ),
               ),
               const Spacer(),
               Container(
@@ -489,7 +542,12 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
             children: [
               Icon(Icons.calendar_today_rounded, size: 13, color: ThemeService.textSecondary),
               const SizedBox(width: 5),
-              Text(formattedDate, style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600)),
+              Expanded(
+                child: Text(
+                  '$formattedDate • ${isEntryLocked ? "Entry Locked" : "Entry locks 15m before start"}',
+                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -503,6 +561,42 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               const Spacer(),
               Text('Slots: $joinedSlots/$maxSlots', style: TextStyle(color: blueText, fontWeight: FontWeight.w900, fontSize: 12)),
             ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$slotCapacityHelper • Min 2 slots required (auto-refund if <2)',
+            style: TextStyle(
+              color: ThemeService.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: greenBg.withOpacity(isDark ? 0.65 : 0.75),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: greenBorder.withOpacity(0.6)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.emoji_events_rounded, size: 14, color: greenText),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    kLastTeamStandingRule,
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF000000),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           Container(
@@ -577,8 +671,11 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final titleController = TextEditingController(text: existingData?['title'] ?? '');
     final prizeController = TextEditingController(text: existingData?['prize_pool']?.toString() ?? '1000');
     final feeController = TextEditingController(text: existingData?['entry_fee']?.toString() ?? 'Free');
-    final slotsController = TextEditingController(text: existingData?['max_slots']?.toString() ?? '25');
-    final rulesController = TextEditingController(text: existingData?['rules'] ?? 'No hacks, fair play required.');
+    final slotsController = TextEditingController(text: existingData?['max_slots']?.toString() ?? '4');
+    final rulesController = TextEditingController(
+      text: existingData?['rules'] ??
+          '$kLastTeamStandingRule Entry locks 15 minutes before start or when slots are full. Minimum 2 joined slots/teams required or tournament cancels with automatic G-Coins refund.',
+    );
     final roomIdController = TextEditingController(text: existingData?['room_id'] ?? '');
     final roomPassController = TextEditingController(text: existingData?['room_password'] ?? '');
 
@@ -593,6 +690,9 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
       selectedGame = _gameList[0];
     }
     String selectedFormat = existingData?['match_format'] ?? 'Squad 4v4';
+    if (!['Solo', 'Duo', 'Squad 4v4', 'Single Match'].contains(selectedFormat)) {
+      selectedFormat = 'Squad 4v4';
+    }
 
     String selectedMap = existingData?['map_name'] ?? (_gameMaps[selectedGame]?.first ?? 'Default');
     if (!(_gameMaps[selectedGame] ?? []).contains(selectedMap)) {
@@ -615,6 +715,10 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
+          final int parsedMaxSlots = int.tryParse(slotsController.text.trim()) ?? 4;
+          final String dynamicSlotsHelper = _getMaxSlotsHelperText(selectedFormat, parsedMaxSlots);
+          final String formatSlotRule = _getFormatSlotMeaning(selectedFormat);
+
           Future<void> performSave() async {
             if (isSaving) return;
             final title = titleController.text.trim();
@@ -640,7 +744,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               'match_format': selectedFormat,
               'prize_pool': prizeController.text.trim(),
               'entry_fee': feeController.text.trim(),
-              'max_slots': int.tryParse(slotsController.text.trim()) ?? 25,
+              'max_slots': (int.tryParse(slotsController.text.trim()) ?? 4).clamp(2, 100),
               'map_name': selectedMap,
               'room_id': roomIdController.text.trim(),
               'room_password': roomPassController.text.trim(),
@@ -748,11 +852,13 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                   ),
                   const SizedBox(height: 10),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           key: ValueKey('game_dropdown_$selectedGame'),
                           value: selectedGame,
+                          isExpanded: true,
                           dropdownColor: ThemeService.card,
                           decoration: InputDecoration(
                             labelText: 'Game',
@@ -760,7 +866,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                             fillColor: ThemeService.cardSecondary,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                          items: _gameList.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+                          items: _gameList.map((g) => DropdownMenuItem(value: g, child: Text(g, overflow: TextOverflow.ellipsis))).toList(),
                           onChanged: (val) {
                             if (val != null) {
                               setModalState(() {
@@ -775,14 +881,37 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: selectedFormat,
+                          isExpanded: true,
                           dropdownColor: ThemeService.card,
                           decoration: InputDecoration(
                             labelText: 'Format',
+                            helperText: formatSlotRule,
+                            helperMaxLines: 2,
+                            helperStyle: TextStyle(
+                              color: ThemeService.isDarkMode ? const Color(0xFF00FF88) : const Color(0xFF047857),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
                             filled: true,
                             fillColor: ThemeService.cardSecondary,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                          items: ['Solo', 'Duo', 'Squad 4v4', 'Single Match'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+                          items: const [
+                            DropdownMenuItem(value: 'Solo', child: Text('Solo (1 Player/Slot)')),
+                            DropdownMenuItem(value: 'Duo', child: Text('Duo (2 Players/Slot)')),
+                            DropdownMenuItem(value: 'Squad 4v4', child: Text('Squad 4v4 (4 Players/Slot)')),
+                            DropdownMenuItem(value: 'Single Match', child: Text('Single Match (1 Team/Slot)')),
+                          ],
+                          selectedItemBuilder: (context) => ['Solo', 'Duo', 'Squad 4v4', 'Single Match']
+                              .map((f) => Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      f,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                                    ),
+                                  ))
+                              .toList(),
                           onChanged: (val) => setModalState(() => selectedFormat = val!),
                         ),
                       ),
@@ -821,14 +950,23 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                   ),
                   const SizedBox(height: 10),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: TextField(
                           controller: slotsController,
                           keyboardType: TextInputType.number,
+                          onChanged: (_) => setModalState(() {}),
                           style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
                           decoration: InputDecoration(
                             labelText: 'Max Slots',
+                            helperText: dynamicSlotsHelper,
+                            helperMaxLines: 2,
+                            helperStyle: TextStyle(
+                              color: ThemeService.isDarkMode ? const Color(0xFFFFD700) : const Color(0xFFB45309),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
                             filled: true,
                             fillColor: ThemeService.cardSecondary,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -840,6 +978,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                         child: DropdownButtonFormField<String>(
                           key: ValueKey('map_dropdown_${selectedGame}_$selectedMap'),
                           value: selectedMap,
+                          isExpanded: true,
                           dropdownColor: ThemeService.card,
                           decoration: InputDecoration(
                             labelText: 'Map Name',
@@ -847,7 +986,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                             fillColor: ThemeService.cardSecondary,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                          items: (_gameMaps[selectedGame] ?? ['Default']).map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                          items: (_gameMaps[selectedGame] ?? ['Default']).map((m) => DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis))).toList(),
                           onChanged: (val) {
                             if (val != null) {
                               setModalState(() => selectedMap = val);
@@ -931,12 +1070,54 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                             size: 18,
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            'Match Time: ${DateFormat('dd MMM yyyy, hh:mm a').format(selectedDateTime)}',
-                            style: TextStyle(color: ThemeService.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
+                          Expanded(
+                            child: Text(
+                              'Match Time: ${DateFormat('dd MMM yyyy, hh:mm a').format(selectedDateTime)} (Entry locks 15m before)',
+                              style: TextStyle(color: ThemeService.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(11),
+                    decoration: BoxDecoration(
+                      color: ThemeService.cardSecondary,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: ThemeService.isDarkMode
+                            ? const Color(0xFF00FF88).withOpacity(0.35)
+                            : const Color(0xFF059669).withOpacity(0.45),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '🏆 Last Team Standing & Entry Lock Rules',
+                          style: TextStyle(
+                            color: ThemeService.isDarkMode ? const Color(0xFF00FF88) : const Color(0xFF047857),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '• $kLastTeamStandingRule\n'
+                          '• $formatSlotRule ($dynamicSlotsHelper).\n'
+                          '• New entries lock 15 minutes before match start or immediately when Slots Full.\n'
+                          '• At entry close: if ≥ 2 slots/teams joined, remaining slots lock and match proceeds; if < 2 joined, tournament cancels and entry fee coins auto-refund to G-Coins Wallet.',
+                          style: TextStyle(
+                            color: ThemeService.isDarkMode ? Colors.white : const Color(0xFF000000),
+                            fontSize: 11,
+                            height: 1.38,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (inlineSaveError != null) ...[

@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/coin_wallet_service.dart';
 import '../services/supabase_service.dart';
 import '../services/team_service.dart';
 import '../services/gamer_auth_service.dart';
@@ -33,6 +35,9 @@ class TournamentDetailScreen extends StatefulWidget {
 }
 
 class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
+  static const String kLastTeamStandingRule =
+      'All joined teams play together in one room; the last team standing wins the prize pool.';
+
   Map<String, dynamic>? _tournament;
   List<Map<String, dynamic>> _registrations = [];
   bool _isLoading = true;
@@ -43,6 +48,57 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   String? _winnerLeaderId;
 
   String get currentUid => GamerAuthService().currentUid ?? '';
+
+  String _getFormatSlotMeaning(String format) {
+    final lower = format.trim().toLowerCase();
+    if (lower.contains('solo')) {
+      return '1 Slot = 1 Player';
+    } else if (lower.contains('duo')) {
+      return '1 Slot = 1 Team (2 players)';
+    } else if (lower.contains('squad')) {
+      return '1 Slot = 1 Team (4 players)';
+    } else if (lower.contains('single')) {
+      return '1 Slot = 1 Team/Entry in a single match room';
+    }
+    return '1 Slot = 1 Team';
+  }
+
+  String _getMaxSlotsHelperText(String format, int maxSlots) {
+    final slots = maxSlots > 0 ? maxSlots : 0;
+    final lower = format.trim().toLowerCase();
+    if (lower.contains('solo')) {
+      final label = slots == 1 ? 'Player' : 'Players';
+      return '$slots $label • up to $slots ${label.toLowerCase()}';
+    } else if (lower.contains('duo')) {
+      final label = slots == 1 ? 'Team' : 'Teams';
+      final totalPlayers = slots * 2;
+      return '$slots $label • up to $totalPlayers players';
+    } else if (lower.contains('squad')) {
+      final label = slots == 1 ? 'Team' : 'Teams';
+      final totalPlayers = slots * 4;
+      return '$slots $label • up to $totalPlayers players';
+    } else if (lower.contains('single')) {
+      final label = slots == 1 ? 'Team/Entry' : 'Teams/Entries';
+      return '$slots $label in 1 custom room';
+    }
+    final label = slots == 1 ? 'Team' : 'Teams';
+    return '$slots $label';
+  }
+
+  int _parseEntryFeeCoins(dynamic rawFee) {
+    if (rawFee == null) return 0;
+    if (rawFee is num) return rawFee.toInt() > 0 ? rawFee.toInt() : 0;
+    final str = rawFee.toString().trim().toLowerCase();
+    if (str.isEmpty || str == 'free' || str == '0') return 0;
+    final digits = RegExp(r'\d+').firstMatch(str)?.group(0);
+    return digits != null ? (int.tryParse(digits) ?? 0) : 0;
+  }
+
+  bool _isWithin15MinEntryLock(DateTime? matchTime) {
+    if (matchTime == null) return false;
+    final lockCutoff = matchTime.subtract(const Duration(minutes: 15));
+    return DateTime.now().isAfter(lockCutoff) || DateTime.now().isAtSameMomentAs(lockCutoff);
+  }
 
   String get effectiveTournamentId {
     if (widget.tournamentId != null && widget.tournamentId!.isNotEmpty) {
@@ -165,6 +221,54 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         }
       } catch (e) {
         debugPrint('[TournamentDetail] Error loading registrations: $e');
+      }
+
+      // Check Entry Lock & Minimum 2 Teams Rule (15 minutes before match start)
+      if (_tournament != null && tId.isNotEmpty) {
+        final rawStatusPre = (_tournament?['status'] ?? 'upcoming').toString().trim().toLowerCase();
+        final matchTimeStr = _tournament?['match_time']?.toString();
+        final matchTimeLocal = matchTimeStr != null ? DateTime.tryParse(matchTimeStr)?.toLocal() : null;
+        final joinedCount = _registrations.isNotEmpty
+            ? _registrations.length
+            : (int.tryParse((_tournament?['current_teams'] ?? _tournament?['joined_teams_count'] ?? 0).toString()) ?? 0);
+
+        if (rawStatusPre != 'completed' && _isWithin15MinEntryLock(matchTimeLocal) && joinedCount < 2) {
+          if (rawStatusPre != 'cancelled') {
+            _tournament!['status'] = 'cancelled';
+            try {
+              await SupabaseService.client
+                  .from('tournaments')
+                  .update({'status': 'cancelled'})
+                  .eq('id', tId);
+            } catch (_) {}
+          }
+
+          final entryFeeCoins = _parseEntryFeeCoins(_tournament?['entry_fee']);
+          if (entryFeeCoins > 0 && _registrations.isNotEmpty) {
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              for (final r in _registrations) {
+                final regUid = (r['leader_id'] ?? r['user_id'] ?? '').toString().trim();
+                if (regUid.isEmpty) continue;
+                final refundKey = 'refunded_cancelled_tournament_${tId}_$regUid';
+                if (prefs.getBool(refundKey) == true) continue;
+
+                await prefs.setBool(refundKey, true);
+                await CoinWalletService.updateCoins(
+                  userId: regUid,
+                  amount: entryFeeCoins,
+                  type: 'refund',
+                  title: 'Tournament Cancelled Refund',
+                  description:
+                      'Auto-refunded $entryFeeCoins G-Coins: fewer than 2 teams joined "${_tournament?['title'] ?? 'Tournament'}" before entry lock (15m rule).',
+                  roomId: tId,
+                );
+              }
+            } catch (e) {
+              debugPrint('[TournamentDetail] Auto-refund error: $e');
+            }
+          }
+        }
       }
 
       // Check winning team info ONLY when the tournament row itself is genuinely completed/approved
@@ -485,13 +589,14 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
         final title = (_tournament?['title'] ?? 'Tournament').toString();
         final game = (_tournament?['game'] ?? _tournament?['game_name'] ?? 'Free Fire').toString().toUpperCase();
-        final mode = (_tournament?['game_mode'] ?? _tournament?['match_format'] ?? 'Squad (4v4)').toString();
+        final mode = (_tournament?['game_mode'] ?? _tournament?['match_format'] ?? 'Squad 4v4').toString();
+        final slotMeaning = _getFormatSlotMeaning(mode);
         final mapName = (_tournament?['map_name'] ?? _tournament?['map'] ?? 'Erangel').toString();
         final prizePool = (_tournament?['prize_pool'] is num)
             ? (_tournament?['prize_pool'] as num).toInt()
             : int.tryParse(_tournament?['prize_pool']?.toString() ?? '1000') ?? 1000;
         final entryFee = _tournament?['entry_fee'] ?? 0;
-        final entryFeeText = entryFee == 0 ? 'Free Coins' : '$entryFee Coins';
+        final entryFeeText = (entryFee == 0 || entryFee.toString().toLowerCase() == 'free') ? 'Free Coins' : '$entryFee Coins';
         final rawStatus = (_tournament?['status'] ?? 'upcoming').toString().toLowerCase();
         final rawProofStatus = (_tournament?['proof_status'] ?? '').toString().toLowerCase();
         final proofUrl = (_tournament?['proof_url'] ?? '').toString().trim();
@@ -524,10 +629,16 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         }
         final String formattedDate = matchTime != null ? DateFormat('dd MMM, hh:mm a').format(matchTime) : 'Scheduled';
 
-        final maxTeams = _tournament?['max_teams'] ?? _tournament?['max_slots'] ?? 16;
+        final maxTeams = int.tryParse((_tournament?['max_teams'] ?? _tournament?['max_slots'] ?? 16).toString()) ?? 16;
         final currentTeams = _registrations.isNotEmpty
             ? _registrations.length
-            : (_tournament?['current_teams'] ?? _tournament?['joined_teams_count'] ?? 0);
+            : (int.tryParse((_tournament?['current_teams'] ?? _tournament?['joined_teams_count'] ?? 0).toString()) ?? 0);
+        final maxSlotsHelperText = _getMaxSlotsHelperText(mode, maxTeams);
+
+        final bool isSlotsFull = maxTeams > 0 && currentTeams >= maxTeams;
+        final bool isEntryWindowClosed = _isWithin15MinEntryLock(matchTime);
+        final bool isCancelledUnder2 = rawStatus == 'cancelled' || (!isTournamentCompleted && isEntryWindowClosed && currentTeams < 2);
+        final bool isEntryLockedProceeding = !isTournamentCompleted && !isCancelledUnder2 && (isSlotsFull || isEntryWindowClosed);
 
         // Check if current user is part of winning team
         final bool isUserInWinningTeam = isTournamentCompleted &&
@@ -645,7 +756,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Map: $mapName • Mode: $mode',
+                                  'Map: $mapName • Mode: $mode ($slotMeaning)',
                                   style: const TextStyle(
                                     color: Color(0xFF90E0EF),
                                     fontWeight: FontWeight.w600,
@@ -686,21 +797,35 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                   decoration: BoxDecoration(
                                     color: (isTournamentCompleted
                                             ? accentGreen
-                                            : const Color(0xFFFFD700))
+                                            : isCancelledUnder2
+                                                ? const Color(0xFFFF4655)
+                                                : const Color(0xFFFFD700))
                                         .withOpacity(0.15),
                                     borderRadius: BorderRadius.circular(6),
                                     border: Border.all(
                                       color: isTournamentCompleted
                                           ? accentGreen
-                                          : const Color(0xFFFFD700).withOpacity(0.5),
+                                          : isCancelledUnder2
+                                              ? const Color(0xFFFF4655)
+                                              : const Color(0xFFFFD700).withOpacity(0.5),
                                     ),
                                   ),
                                   child: Text(
-                                    isTournamentCompleted ? 'COMPLETED' : (rawStatus.isNotEmpty ? rawStatus.toUpperCase() : 'UPCOMING'),
+                                    isTournamentCompleted
+                                        ? 'COMPLETED'
+                                        : isCancelledUnder2
+                                            ? 'CANCELLED (REFUNDED)'
+                                            : isSlotsFull
+                                                ? 'SLOTS FULL'
+                                                : isEntryLockedProceeding
+                                                    ? 'ENTRY LOCKED'
+                                                    : (rawStatus.isNotEmpty ? rawStatus.toUpperCase() : 'UPCOMING'),
                                     style: TextStyle(
                                       color: isTournamentCompleted
                                           ? accentGreen
-                                          : (isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309)),
+                                          : isCancelledUnder2
+                                              ? const Color(0xFFFF4655)
+                                              : (isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309)),
                                       fontWeight: FontWeight.bold,
                                       fontSize: 11,
                                     ),
@@ -737,12 +862,20 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 Icon(
                                   isTournamentCompleted
                                       ? Icons.check_circle_rounded
-                                      : (rawStatus == 'upcoming'
-                                          ? Icons.schedule_rounded
-                                          : Icons.play_circle_filled_rounded),
+                                      : isCancelledUnder2
+                                          ? Icons.cancel_rounded
+                                          : isEntryLockedProceeding
+                                              ? Icons.lock_clock_rounded
+                                              : (rawStatus == 'upcoming'
+                                                  ? Icons.schedule_rounded
+                                                  : Icons.play_circle_filled_rounded),
                                   color: isTournamentCompleted
                                       ? accentGreen
-                                      : accentSky,
+                                      : isCancelledUnder2
+                                          ? const Color(0xFFFF4655)
+                                          : isEntryLockedProceeding
+                                              ? const Color(0xFFFF8A00)
+                                              : accentSky,
                                   size: 14,
                                 ),
                                 const SizedBox(width: 5),
@@ -750,17 +883,27 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                   child: Text(
                                     isTournamentCompleted
                                         ? 'Tournament Status: Successfully Completed'
-                                        : (rawStatus == 'upcoming'
-                                            ? 'Tournament Status: Upcoming & Open for Registration'
-                                            : 'Tournament Status: Active & In Progress'),
+                                        : isCancelledUnder2
+                                            ? 'Tournament Status: Cancelled (< 2 Teams • Entry Fee Auto-Refunded)'
+                                            : isSlotsFull
+                                                ? 'Tournament Status: Slots Full • Entries Locked & Match Proceeding'
+                                                : isEntryLockedProceeding
+                                                    ? 'Tournament Status: Entry Locked (15m Before Start • Match Proceeding)'
+                                                    : (rawStatus == 'upcoming'
+                                                        ? 'Tournament Status: Upcoming & Open for Registration'
+                                                        : 'Tournament Status: Active & In Progress'),
                                     style: TextStyle(
                                       color: isTournamentCompleted
                                           ? accentGreen
-                                          : accentSky,
+                                          : isCancelledUnder2
+                                              ? const Color(0xFFFF4655)
+                                              : isEntryLockedProceeding
+                                                  ? const Color(0xFFFF8A00)
+                                                  : accentSky,
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
-                                    maxLines: 1,
+                                    maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -774,7 +917,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 Expanded(
                                   child: _buildGridItem(
                                     icon: Icons.sports_esports_outlined,
-                                    label: 'Mode',
+                                    label: 'Mode ($slotMeaning)',
                                     value: mode,
                                     isDark: isDark,
                                   ),
@@ -805,12 +948,55 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                 Expanded(
                                   child: _buildGridItem(
                                     icon: Icons.group_outlined,
-                                    label: 'Slots',
-                                    value: '$currentTeams / $maxTeams Teams',
+                                    label: 'Slots ($maxSlotsHelperText)',
+                                    value: '$currentTeams / $maxTeams',
                                     isDark: isDark,
                                   ),
                                 ),
                               ],
+                            ),
+                            const SizedBox(height: 12),
+                            // Rule 2 & 3: Last Team Standing Mode & Entry Lock Rules Banner
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: accentGreen.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: accentGreen.withOpacity(0.35)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.emoji_events_rounded, size: 16, color: accentGreen),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          kLastTeamStandingRule,
+                                          style: TextStyle(
+                                            color: textPri,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '• Format ($mode): $slotMeaning ($maxSlotsHelperText).\n'
+                                    '• Entry Lock: Locks 15 minutes before match start or immediately when Slots Full.\n'
+                                    '• Minimum 2 Slots/Teams Rule: If ≥ 2 join, remaining slots lock & match proceeds; if < 2 join, tournament cancels & entry fee coins auto-refund to G-Coins Wallet.',
+                                    style: TextStyle(
+                                      color: textSec,
+                                      fontSize: 11.5,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
