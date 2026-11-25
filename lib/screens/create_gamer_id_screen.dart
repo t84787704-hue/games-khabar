@@ -27,7 +27,6 @@ import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../widgets/gamer_avatar.dart';
-import 'coin_store_screen.dart';
 import 'gamer_auth_screen.dart';
 import 'gamer_main_navigation_screen.dart';
 
@@ -70,11 +69,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   bool? _isUsernameAvailable;
   String? _usernameStatusText;
   String _lastCheckedUsername = '';
-
-  String _selectedFrame = '';
-  List<String> _unlockedFrames = [];
-  String _selectedBadge = '';
-  List<String> _unlockedBadges = [];
 
   static const String _defaultBgmiCoverUrl =
       'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80';
@@ -134,10 +128,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
           : ((sourceUser.age != null && sourceUser.age! > 0) ? sourceUser.age : null);
       _photoUrl = sourceUser.photoUrl.trim().isNotEmpty ? sourceUser.photoUrl : authAvatar;
       _coverUrl = sourceUser.coverUrl;
-      _selectedFrame = sourceUser.activeFrame;
-      _unlockedFrames = List<String>.from(sourceUser.unlockedFrames);
-      _selectedBadge = sourceUser.activeBadge;
-      _unlockedBadges = List<String>.from(sourceUser.unlockedBadges);
     } else {
       if (fbUser != null) {
         _displayNameController.text = authName;
@@ -148,18 +138,14 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _selectedDob = null;
       _legacyAge = null;
     }
-    _loadStorePerks();
+    _loadSavedProfileMetadata();
   }
 
-  Future<void> _loadStorePerks() async {
+  Future<void> _loadSavedProfileMetadata() async {
     final uid = widget.existingUser?.uid ?? GamerAuthService().currentUid;
     if (uid == null) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final localFrame = prefs.getString('user_active_frame_$uid') ?? '';
-      final localFrames = prefs.getStringList('user_unlocked_frames_$uid') ?? [];
-      final localBadge = prefs.getString('user_active_badge_$uid') ?? '';
-      final localBadges = prefs.getStringList('user_unlocked_badges_$uid') ?? [];
       final localAge = prefs.getInt('user_age_$uid');
       final rawLocalDob = prefs.getString('user_dob_$uid');
       final localDob = (rawLocalDob != null && rawLocalDob.isNotEmpty)
@@ -168,12 +154,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       final data = await SupabaseService.getUser(uid);
       if (mounted) {
         setState(() {
-          if (data != null) {
-            _selectedFrame = (data['activeFrame'] as String?) ?? localFrame;
-            _unlockedFrames = List<String>.from(data['unlockedFrames'] ?? localFrames);
-            _selectedBadge = (data['activeBadge'] as String?) ?? localBadge;
-            _unlockedBadges = List<String>.from(data['unlockedBadges'] ?? localBadges);
-          }
           if (_selectedDob == null) {
             final rawDbDob = data?['date_of_birth'] ?? data?['dateOfBirth'] ?? data?['dob'];
             DateTime? parsedDbDob;
@@ -321,28 +301,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         backgroundColor: Color(0xFF1877F2),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 3),
-      ),
-    );
-  }
-
-  void _showLockedItemBanner(String itemName) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$itemName is locked! Unlock in Coin Store.'),
-        backgroundColor: const Color(0xFF1877F2),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'STORE',
-          textColor: Colors.white,
-          onPressed: () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
-            );
-            _loadStorePerks();
-          },
-        ),
       ),
     );
   }
@@ -527,10 +485,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         age: parsedAge,
         dateOfBirth: _selectedDob,
         createdAt: widget.existingUser?.createdAt ?? DateTime.now(),
-        activeFrame: _selectedFrame,
-        unlockedFrames: _unlockedFrames,
-        activeBadge: _selectedBadge,
-        unlockedBadges: _unlockedBadges,
       );
 
       final saved = await GamerAuthService().saveGamerProfile(gamerUser);
@@ -772,7 +726,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                   : 'Gamer',
                               radius: 40,
                               borderColor: Colors.transparent,
-                              frameId: _selectedFrame,
                             ),
                           ),
                           InkWell(
@@ -870,71 +823,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Avatar Frame Section
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const Text('🏆', style: TextStyle(fontSize: 16)),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Avatar Frame',
-                                style: TextStyle(
-                                  color: primaryTextColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                          InkWell(
-                            onTap: () async {
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
-                              );
-                              _loadStorePerks();
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00C853),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.storefront_rounded, size: 12, color: Colors.white),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'STORE',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _buildFrameChip('None', '', '🚫', isNone: true),
-                            _buildFrameChip('Neon Fire', 'neon_fire', '🔥'),
-                            _buildFrameChip('Royal', 'royal_crown', '👑'),
-                            _buildFrameChip('Cyber Grid', 'cyber_glitch', '⚡'),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 18),
-
                       // 2. Gamer Username
                       Row(
                         children: [
@@ -1333,37 +1221,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
 
                       const SizedBox(height: 18),
 
-                      // 8. Gamer Badge Section
-                      Row(
-                        children: [
-                          const Icon(Icons.shield_outlined, size: 16, color: Color(0xFF1877F2)),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Gamer Badge',
-                            style: TextStyle(
-                              color: primaryTextColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _buildBadgeChip('None', '', Colors.grey),
-                            _buildBadgeChip('PRO ELITE', 'pro_elite', const Color(0xFF1877F2)),
-                            _buildBadgeChip('ASSASSIN 💀', 'kd_assassin', const Color(0xFFE11D48)),
-                            _buildBadgeChip('CHAMP 🏆', 'room_champion', const Color(0xFFF59E0B)),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      // 9. Rank Proof (My Game & Rank Proof + Instruction + Coming Soon)
+                      // 8. Rank Proof (My Game & Rank Proof + Instruction + Coming Soon)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1637,105 +1495,6 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         ),
         );
       },
-    );
-  }
-
-  Widget _buildFrameChip(String title, String frameId, String emoji, {bool isNone = false}) {
-    final isSelected = _selectedFrame == frameId;
-    final isUnlocked = isNone || _unlockedFrames.contains(frameId);
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: InkWell(
-        onTap: () {
-          if (isUnlocked) {
-            setState(() => _selectedFrame = frameId);
-          } else {
-            _showLockedItemBanner(title);
-          }
-        },
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFFFE8D6) : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected ? const Color(0xFFFF7A00) : const Color(0xFFE2E8F0),
-              width: isSelected ? 1.5 : 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(emoji, style: const TextStyle(fontSize: 13)),
-              const SizedBox(width: 4),
-              Text(
-                title,
-                style: TextStyle(
-                  color: isSelected ? const Color(0xFFFF7A00) : const Color(0xFF0F172A),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-              if (!isUnlocked) ...[
-                const SizedBox(width: 4),
-                const Icon(Icons.lock_rounded, size: 12, color: Colors.amber),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBadgeChip(String label, String badgeId, Color badgeColor) {
-    final isNone = badgeId.isEmpty;
-    final isSelected = _selectedBadge == badgeId;
-    final isUnlocked = isNone || _unlockedBadges.contains(badgeId);
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: InkWell(
-        onTap: () {
-          if (isUnlocked) {
-            setState(() => _selectedBadge = badgeId);
-          } else {
-            _showLockedItemBanner(label);
-          }
-        },
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: isNone
-                ? (isSelected ? const Color(0xFFE2E8F0) : const Color(0xFFF1F5F9))
-                : badgeColor,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isSelected ? Colors.black87 : Colors.transparent,
-              width: isSelected ? 1.5 : 0,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: isNone ? const Color(0xFF0F172A) : Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 11,
-                ),
-              ),
-              if (!isUnlocked) ...[
-                const SizedBox(width: 4),
-                const Icon(Icons.lock_rounded, size: 11, color: Colors.amber),
-              ],
-            ],
-          ),
-        ),
-      ),
     );
   }
 

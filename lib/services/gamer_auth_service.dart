@@ -662,8 +662,6 @@ class GamerAuthService {
         'selected_rank': user.selectedRank.isNotEmpty ? user.selectedRank : 'Bronze',
         'is_rank_verified': user.isRankVerified,
         'rank_status': user.rankStatus.isNotEmpty ? user.rankStatus : 'none',
-        'active_frame': user.activeFrame,
-        'active_badge': user.activeBadge,
         if (user.age != null) 'age': user.age,
         if (user.dateOfBirth != null)
           'date_of_birth': user.dateOfBirth!.toIso8601String().split('T').first,
