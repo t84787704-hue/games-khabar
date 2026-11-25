@@ -49,14 +49,90 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
   int _lastSyncedBalance = -1;
   bool _isBackgroundSyncing = false;
 
+  // Cached streams so setState / filter changes / background syncs never recreate streams
+  late String _effectiveUserId;
+  Stream<CoinWallet>? _walletStream;
+  Stream<List<CoinTransaction>>? _transactionsStream;
+  Stream<List<Map<String, dynamic>>>? _rewardClaimsStream;
+
+  // Sticky last-known-good state so transient empty/loading snapshots never reset values to 0
+  int _cachedValidBalance = 0;
+  int _cachedTotalCredited = 0;
+  int _cachedTotalSpent = 0;
+  List<CoinTransaction> _cachedValidTxs = const <CoinTransaction>[];
+  List<Map<String, dynamic>> _cachedRewardClaims = const <Map<String, dynamic>>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _initPassbookStreamsAndCache();
+  }
+
+  @override
+  void didUpdateWidget(covariant CoinHistorySheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) {
+      _initPassbookStreamsAndCache();
+    }
+  }
+
+  void _initPassbookStreamsAndCache() {
+    _effectiveUserId = widget.userId.trim().isNotEmpty
+        ? widget.userId.trim()
+        : (GamerAuthService().currentUid?.trim() ?? '');
+
+    // Seed initial balance from in-memory wallet / auth / reward notifiers
+    final int walletCoins = _walletService.currentWallet?.coins ?? 0;
+    final int gamerCoins = GamerAuthService().currentGamer?.coins ?? 0;
+    final int notifierCoins = CoinRewardService().coinsNotifier.value;
+    final int initialSeedBalance = walletCoins > 0
+        ? walletCoins
+        : (gamerCoins > 0 ? gamerCoins : (notifierCoins > 0 ? notifierCoins : 0));
+    if (initialSeedBalance > 0) {
+      _cachedValidBalance = initialSeedBalance;
+    }
+
+    // Seed initial transactions and totals from CoinWalletService memory cache
+    final initialTxs = _walletService.getCachedTransactions(_effectiveUserId);
+    if (initialTxs.isNotEmpty) {
+      _cachedValidTxs = initialTxs;
+      _recomputeAndCacheSummaryFromTxs(initialTxs);
+    }
+
+    _walletStream = _walletService.walletStream(_effectiveUserId);
+    _transactionsStream = _walletService.transactionsStream(_effectiveUserId);
+    _rewardClaimsStream = _effectiveUserId.isNotEmpty
+        ? SupabaseService.getRealtimeRewardClaims(userId: _effectiveUserId)
+        : Stream.value(const <Map<String, dynamic>>[]).asBroadcastStream();
+  }
+
+  void _recomputeAndCacheSummaryFromTxs(List<CoinTransaction> txs) {
+    if (txs.isEmpty) return;
+    int added = 0;
+    int deducted = 0;
+    for (final tx in txs) {
+      if (tx.amount > 0) {
+        added += tx.amount;
+      } else if (tx.amount < 0) {
+        deducted += tx.amount.abs();
+      }
+    }
+    if (added > 0 || deducted > 0) {
+      _cachedTotalCredited = added;
+      _cachedTotalSpent = deducted;
+      final int net = (added - deducted).clamp(0, 9999999);
+      if (net > 0 || _cachedValidBalance == 0) {
+        _cachedValidBalance = net;
+      }
+    }
+  }
+
   /// Background Safe Auto-Sync
   Future<void> _safeBackgroundSync(int targetCoins) async {
     if (targetCoins <= 0 || _isBackgroundSyncing) return;
     _isBackgroundSyncing = true;
     try {
-      final currentUserId = widget.userId.isNotEmpty
-          ? widget.userId
-          : (GamerAuthService().currentUid ?? '');
+      final currentUserId = _effectiveUserId;
       if (currentUserId.isEmpty) return;
 
       // 1. Update coins in Supabase users table
@@ -101,6 +177,8 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, _, __) {
         final isDark = ThemeService.isDarkMode;
+        final Color goldTextColor = isDark ? const Color(0xFFFFD700) : const Color(0xFFB45309);
+        final Color greenTextColor = isDark ? GamerTheme.neonGreen : const Color(0xFF047857);
 
         return Container(
           height: sheetHeight,
@@ -115,117 +193,123 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               ),
             ],
           ),
-          child: Column(
-            children: [
-              // Drag Handle
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: ThemeService.border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
+          child: StreamBuilder<CoinWallet>(
+            stream: _walletStream,
+            initialData: _walletService.currentWallet,
+            builder: (context, walletSnap) {
+              final int liveWalletCoins = walletSnap.data?.coins ?? 0;
+              if (liveWalletCoins > 0 && _cachedValidTxs.isEmpty) {
+                _cachedValidBalance = liveWalletCoins;
+              }
 
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFD700).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.4)),
-                      ),
-                      child: const Text('🪙', style: TextStyle(fontSize: 20)),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'passbook_sheet_title'.tr(),
-                            style: TextStyle(
-                              color: ThemeService.textPrimary,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'passbook_sheet_subtitle'.tr(),
-                            style: TextStyle(
-                              color: ThemeService.textSecondary,
-                              fontSize: 11.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.close_rounded, color: ThemeService.textPrimary),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // Wallet Stats & Balance Banner
-              StreamBuilder<List<Map<String, dynamic>>>(
-                stream: SupabaseService.client
-                    .from('users')
-                    .stream(primaryKey: ['id'])
-                    .eq('id', widget.userId),
-                builder: (context, userSnap) {
-                  int currentCoins = 0;
-                  int inEscrow = 0;
-                  if (userSnap.hasData && userSnap.data != null && userSnap.data!.isNotEmpty) {
-                    final data = userSnap.data!.first;
-                    final rawCoins = data['coins'] ?? data['g_coins'] ?? data['gCoins'];
-                    if (rawCoins is num) currentCoins = rawCoins.toInt();
-                    final rawEscrow = data['in_escrow'] ?? data['inEscrow'];
-                    if (rawEscrow is num) inEscrow = rawEscrow.toInt();
+              return StreamBuilder<List<CoinTransaction>>(
+                stream: _transactionsStream,
+                initialData: _cachedValidTxs.isNotEmpty ? _cachedValidTxs : null,
+                builder: (context, txSnap) {
+                  final incomingTxs = txSnap.data;
+                  if (incomingTxs != null && incomingTxs.isNotEmpty) {
+                    _cachedValidTxs = incomingTxs;
+                    _recomputeAndCacheSummaryFromTxs(incomingTxs);
+                  } else if (incomingTxs != null &&
+                      incomingTxs.isEmpty &&
+                      _cachedValidTxs.isNotEmpty) {
+                    debugPrint(
+                      '[CoinHistorySheet] Ignored transient empty transactions snapshot; preserving ${_cachedValidTxs.length} cached transactions.',
+                    );
                   }
 
-                  return StreamBuilder<List<CoinTransaction>>(
-                    stream: _walletService.transactionsStream(widget.userId),
-                    builder: (context, txSnap) {
-                      final allTxs = txSnap.data ?? [];
+                  final List<CoinTransaction> allTxs = _cachedValidTxs;
+                  final int totalAdded = _cachedTotalCredited;
+                  final int totalDeducted = _cachedTotalSpent;
+                  final int expectedBalance =
+                      (totalAdded - totalDeducted).clamp(0, 9999999);
 
-                      int totalAdded = 0;
-                      int totalDeducted = 0;
+                  final int displayCoins = (totalAdded > 0 || totalDeducted > 0)
+                      ? expectedBalance
+                      : (_cachedValidBalance > 0
+                          ? _cachedValidBalance
+                          : liveWalletCoins);
 
-                      for (final tx in allTxs) {
-                        if (tx.amount > 0) {
-                          totalAdded += tx.amount;
-                        } else if (tx.amount < 0) {
-                          totalDeducted += tx.amount.abs();
-                        }
-                      }
+                  if (expectedBalance > 0 &&
+                      liveWalletCoins != expectedBalance &&
+                      _lastSyncedBalance != expectedBalance) {
+                    _lastSyncedBalance = expectedBalance;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _safeBackgroundSync(expectedBalance);
+                    });
+                  }
 
-                      final int expectedBalance = (totalAdded - totalDeducted).clamp(0, 9999999);
+                  return Column(
+                    children: [
+                      // Drag Handle
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: ThemeService.border,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
 
-                      final int displayCoins = (currentCoins > 0 && currentCoins == expectedBalance)
-                          ? currentCoins
-                          : (expectedBalance > 0 ? expectedBalance : currentCoins);
+                      // Header
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFD700).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFFFD700).withOpacity(0.4),
+                                ),
+                              ),
+                              child: const Text('🪙', style: TextStyle(fontSize: 20)),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'passbook_sheet_title'.tr(),
+                                    style: TextStyle(
+                                      color: ThemeService.textPrimary,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'passbook_sheet_subtitle'.tr(),
+                                    style: TextStyle(
+                                      color: ThemeService.textSecondary,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: ThemeService.textPrimary,
+                              ),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
 
-                      if (expectedBalance > 0 && currentCoins != expectedBalance && _lastSyncedBalance != expectedBalance) {
-                        _lastSyncedBalance = expectedBalance;
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          _safeBackgroundSync(expectedBalance);
-                        });
-                      }
-
-                      return Padding(
+                      // Wallet Stats & Balance Banner
+                      Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Container(
                           padding: const EdgeInsets.all(16),
@@ -257,9 +341,13 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                           const Text('🪙', style: TextStyle(fontSize: 18)),
                                           const SizedBox(width: 6),
                                           Text(
-                                            'coins_amount_format'.tr(args: [NumberFormat("#,###").format(displayCoins)]),
-                                            style: const TextStyle(
-                                              color: Color(0xFFFFD700),
+                                            'coins_amount_format'.tr(
+                                              args: [
+                                                NumberFormat("#,###").format(displayCoins),
+                                              ],
+                                            ),
+                                            style: TextStyle(
+                                              color: goldTextColor,
                                               fontSize: 20,
                                               fontWeight: FontWeight.w900,
                                             ),
@@ -272,20 +360,30 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   Material(
                                     color: Colors.transparent,
                                     child: InkWell(
-                                      onTap: () => _openRewardClaimModal(context, widget.userId),
+                                      onTap: () => _openRewardClaimModal(
+                                        context,
+                                        _effectiveUserId,
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 13,
+                                          vertical: 8,
+                                        ),
                                         decoration: BoxDecoration(
                                           gradient: const LinearGradient(
-                                            colors: [Color(0xFF00FF88), Color(0xFF00C853)],
+                                            colors: [
+                                              Color(0xFF00FF88),
+                                              Color(0xFF00C853),
+                                            ],
                                             begin: Alignment.topLeft,
                                             end: Alignment.bottomRight,
                                           ),
                                           borderRadius: BorderRadius.circular(12),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: const Color(0xFF00FF88).withOpacity(0.35),
+                                              color: const Color(0xFF00FF88)
+                                                  .withOpacity(0.35),
                                               blurRadius: 8,
                                               offset: const Offset(0, 2),
                                             ),
@@ -320,29 +418,42 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   // Added (Income)
                                   Expanded(
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: GamerTheme.neonGreen.withOpacity(0.08),
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: GamerTheme.neonGreen.withOpacity(0.2)),
+                                        border: Border.all(
+                                          color: GamerTheme.neonGreen.withOpacity(0.25),
+                                        ),
                                       ),
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.arrow_downward_rounded, color: GamerTheme.neonGreen, size: 16),
+                                          Icon(
+                                            Icons.arrow_downward_rounded,
+                                            color: greenTextColor,
+                                            size: 16,
+                                          ),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   'label_total_credited'.tr(),
-                                                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 10),
+                                                  style: TextStyle(
+                                                    color: ThemeService.textSecondary,
+                                                    fontSize: 10,
+                                                  ),
                                                 ),
                                                 Text(
                                                   '+${NumberFormat("#,###").format(totalAdded)}',
-                                                  style: const TextStyle(
-                                                    color: GamerTheme.neonGreen,
-                                                    fontWeight: FontWeight.bold,
+                                                  style: TextStyle(
+                                                    color: greenTextColor,
+                                                    fontWeight: FontWeight.w900,
                                                     fontSize: 13,
                                                   ),
                                                   overflow: TextOverflow.ellipsis,
@@ -358,29 +469,42 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   // Deducted (Expense)
                                   Expanded(
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: GamerTheme.redAccent.withOpacity(0.08),
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: GamerTheme.redAccent.withOpacity(0.2)),
+                                        border: Border.all(
+                                          color: GamerTheme.redAccent.withOpacity(0.25),
+                                        ),
                                       ),
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.arrow_upward_rounded, color: GamerTheme.redAccent, size: 16),
+                                          const Icon(
+                                            Icons.arrow_upward_rounded,
+                                            color: GamerTheme.redAccent,
+                                            size: 16,
+                                          ),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   'label_total_spent'.tr(),
-                                                  style: TextStyle(color: ThemeService.textSecondary, fontSize: 10),
+                                                  style: TextStyle(
+                                                    color: ThemeService.textSecondary,
+                                                    fontSize: 10,
+                                                  ),
                                                 ),
                                                 Text(
                                                   '-${NumberFormat("#,###").format(totalDeducted)}',
                                                   style: const TextStyle(
                                                     color: GamerTheme.redAccent,
-                                                    fontWeight: FontWeight.bold,
+                                                    fontWeight: FontWeight.w900,
                                                     fontSize: 13,
                                                   ),
                                                   overflow: TextOverflow.ellipsis,
@@ -402,18 +526,25 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: GamerTheme.neonGreen,
                                     foregroundColor: Colors.black,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                   ),
                                   icon: const Icon(Icons.storefront_rounded, size: 16),
                                   label: Text(
                                     'btn_open_coin_store_sheet'.tr(),
-                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                   onPressed: () {
                                     Navigator.pop(context);
                                     Navigator.push(
                                       context,
-                                      MaterialPageRoute(builder: (_) => const CoinStoreScreen()),
+                                      MaterialPageRoute(
+                                        builder: (_) => const CoinStoreScreen(),
+                                      ),
                                     );
                                   },
                                 ),
@@ -421,86 +552,107 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                             ],
                           ),
                         ),
-                      );
-                    },
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Filter Tabs
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            _buildFilterChip(
+                              'tab_all_activities'.tr(),
+                              0,
+                              Icons.list_alt_rounded,
+                            ),
+                            const SizedBox(width: 8),
+                            _buildFilterChip(
+                              'tab_earned'.tr(),
+                              1,
+                              Icons.add_circle_outline_rounded,
+                              activeColor: greenTextColor,
+                            ),
+                            const SizedBox(width: 8),
+                            _buildFilterChip(
+                              'tab_spent'.tr(),
+                              2,
+                              Icons.remove_circle_outline_rounded,
+                              activeColor: GamerTheme.redAccent,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Transactions & Reward Claims List
+                      Expanded(
+                        child: StreamBuilder<List<Map<String, dynamic>>>(
+                          stream: _rewardClaimsStream,
+                          initialData: _cachedRewardClaims.isNotEmpty
+                              ? _cachedRewardClaims
+                              : null,
+                          builder: (context, claimsSnap) {
+                            final incomingClaims = claimsSnap.data;
+                            if (incomingClaims != null && incomingClaims.isNotEmpty) {
+                              _cachedRewardClaims = incomingClaims;
+                            }
+                            final List<Map<String, dynamic>> rewardClaims =
+                                _selectedFilter == 0
+                                    ? _cachedRewardClaims
+                                    : const <Map<String, dynamic>>[];
+
+                            if (txSnap.connectionState == ConnectionState.waiting &&
+                                allTxs.isEmpty &&
+                                claimsSnap.connectionState == ConnectionState.waiting &&
+                                rewardClaims.isEmpty) {
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  color: GamerTheme.accentBlue,
+                                ),
+                              );
+                            }
+
+                            List<CoinTransaction> transactions = List.from(allTxs);
+                            if (rewardClaims.isNotEmpty) {
+                              transactions = transactions
+                                  .where((tx) => tx.type != 'game_currency_redemption')
+                                  .toList();
+                            }
+
+                            if (_selectedFilter == 1) {
+                              transactions =
+                                  transactions.where((tx) => tx.amount > 0).toList();
+                            } else if (_selectedFilter == 2) {
+                              transactions =
+                                  transactions.where((tx) => tx.amount < 0).toList();
+                            }
+
+                            if (rewardClaims.isEmpty && transactions.isEmpty) {
+                              return _buildEmptyState();
+                            }
+
+                            final totalItems =
+                                rewardClaims.length + transactions.length;
+                            return ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                              itemCount: totalItems,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                if (index < rewardClaims.length) {
+                                  return _buildRewardClaimCard(rewardClaims[index]);
+                                }
+                                final tx = transactions[index - rewardClaims.length];
+                                return _buildTransactionCard(tx);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   );
                 },
-              ),
-              const SizedBox(height: 14),
-
-              // Filter Tabs
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    _buildFilterChip('tab_all_activities'.tr(), 0, Icons.list_alt_rounded),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('tab_earned'.tr(), 1, Icons.add_circle_outline_rounded, activeColor: GamerTheme.neonGreen),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('tab_spent'.tr(), 2, Icons.remove_circle_outline_rounded, activeColor: GamerTheme.redAccent),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Transactions & Reward Claims List
-              Expanded(
-                child: StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: widget.userId.isNotEmpty
-                      ? SupabaseService.getRealtimeRewardClaims(userId: widget.userId)
-                      : Stream.value(const <Map<String, dynamic>>[]).asBroadcastStream(),
-                  builder: (context, claimsSnap) {
-                    final List<Map<String, dynamic>> rewardClaims =
-                        _selectedFilter == 0 ? (claimsSnap.data ?? const []) : const [];
-
-                    return StreamBuilder<List<CoinTransaction>>(
-                      stream: _walletService.transactionsStream(widget.userId),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting &&
-                            !snapshot.hasData &&
-                            claimsSnap.connectionState == ConnectionState.waiting &&
-                            !claimsSnap.hasData) {
-                          return const Center(
-                            child: CircularProgressIndicator(color: GamerTheme.accentBlue),
-                          );
-                        }
-
-                        List<CoinTransaction> transactions = List.from(snapshot.data ?? []);
-                        if (rewardClaims.isNotEmpty) {
-                          transactions = transactions
-                              .where((tx) => tx.type != 'game_currency_redemption')
-                              .toList();
-                        }
-
-                        if (_selectedFilter == 1) {
-                          transactions = transactions.where((tx) => tx.amount > 0).toList();
-                        } else if (_selectedFilter == 2) {
-                          transactions = transactions.where((tx) => tx.amount < 0).toList();
-                        }
-
-                        if (rewardClaims.isEmpty && transactions.isEmpty) {
-                          return _buildEmptyState();
-                        }
-
-                        final totalItems = rewardClaims.length + transactions.length;
-                        return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                          itemCount: totalItems,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            if (index < rewardClaims.length) {
-                              return _buildRewardClaimCard(rewardClaims[index]);
-                            }
-                            final tx = transactions[index - rewardClaims.length];
-                            return _buildTransactionCard(tx);
-                          },
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
+              );
+            },
           ),
         );
       },

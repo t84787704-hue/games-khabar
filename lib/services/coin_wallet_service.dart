@@ -1033,27 +1033,38 @@ class CoinWalletService extends ChangeNotifier {
     }
   }
 
-  Stream<List<CoinTransaction>> transactionsStream(String userId) {
-    if (userId.isEmpty) return Stream.value(const <CoinTransaction>[]).asBroadcastStream();
-    try {
-      final userUuid = SupabaseService.toUuid(userId);
-      return SupabaseService.client
-          .from('coin_transactions')
-          .stream(primaryKey: ['id'])
-          .map((rows) {
-        final filtered = rows
-            .where((r) {
-              final uid = r['user_id']?.toString() ?? r['userId']?.toString() ?? '';
-              final toUid = r['to']?.toString() ?? '';
-              final fromUid = r['from']?.toString() ?? '';
-              return uid == userId ||
-                  uid == userUuid ||
-                  toUid == userId ||
-                  toUid == userUuid ||
-                  fromUid == userId ||
-                  fromUid == userUuid;
-            })
-            .map((r) {
+  final Map<String, List<CoinTransaction>> _cachedTransactionsByUser = {};
+
+  List<CoinTransaction> getCachedTransactions(String userId) {
+    if (userId.trim().isEmpty) return const <CoinTransaction>[];
+    final key = userId.trim().toLowerCase();
+    final uuidKey = SupabaseService.toUuid(userId.trim()).toLowerCase();
+    return _cachedTransactionsByUser[key] ??
+        _cachedTransactionsByUser[uuidKey] ??
+        const <CoinTransaction>[];
+  }
+
+  List<CoinTransaction> _parseAndFilterUserTransactions(
+    Iterable<dynamic> rows,
+    String userId,
+  ) {
+    final cleanUid = userId.trim().toLowerCase();
+    final userUuid = SupabaseService.toUuid(userId.trim()).toLowerCase();
+
+    final filtered = rows
+        .whereType<Map>()
+        .where((r) {
+          final uid = (r['user_id'] ?? r['userId'] ?? '').toString().trim().toLowerCase();
+          final toUid = (r['to'] ?? '').toString().trim().toLowerCase();
+          final fromUid = (r['from'] ?? '').toString().trim().toLowerCase();
+          return uid == cleanUid ||
+              uid == userUuid ||
+              toUid == cleanUid ||
+              toUid == userUuid ||
+              fromUid == cleanUid ||
+              fromUid == userUuid;
+        })
+        .map((r) {
           final map = Map<String, dynamic>.from(r);
           if (map['userId'] == null && map['user_id'] != null) {
             map['userId'] = map['user_id'];
@@ -1065,13 +1076,107 @@ class CoinWalletService extends ChangeNotifier {
             map['roomId'] = map['reference_id'];
           }
           return CoinTransaction.fromMap(map);
-        }).toList();
-        filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-        return filtered;
-      }).asBroadcastStream();
-    } catch (_) {
+        })
+        .toList();
+
+    filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return filtered;
+  }
+
+  Stream<List<CoinTransaction>> transactionsStream(String userId) {
+    final trimmedUid = userId.trim();
+    if (trimmedUid.isEmpty) {
       return Stream.value(const <CoinTransaction>[]).asBroadcastStream();
     }
+
+    final cacheKey = trimmedUid.toLowerCase();
+    final userUuid = SupabaseService.toUuid(trimmedUid);
+    final uuidKey = userUuid.toLowerCase();
+
+    late StreamController<List<CoinTransaction>> controller;
+    StreamSubscription? realtimeSub;
+
+    void emitSafely(List<CoinTransaction> txs, {required String source}) {
+      if (txs.isNotEmpty) {
+        _cachedTransactionsByUser[cacheKey] = txs;
+        _cachedTransactionsByUser[uuidKey] = txs;
+        if (!controller.isClosed) {
+          controller.add(txs);
+        }
+      } else {
+        final previous = _cachedTransactionsByUser[cacheKey] ??
+            _cachedTransactionsByUser[uuidKey];
+        if (previous != null && previous.isNotEmpty) {
+          debugPrint(
+            '[CoinWalletService] Guarded against empty emission from $source; keeping ${previous.length} cached transactions for $trimmedUid',
+          );
+          if (!controller.isClosed) {
+            controller.add(previous);
+          }
+        } else if (!controller.isClosed) {
+          controller.add(const <CoinTransaction>[]);
+        }
+      }
+    }
+
+    Future<void> fetchInitialRestSnapshot() async {
+      try {
+        final dynamic rows = await SupabaseService.client
+            .from('coin_transactions')
+            .select()
+            .or('user_id.eq.$trimmedUid,user_id.eq.$userUuid')
+            .order('created_at', ascending: false);
+        if (rows is List) {
+          final parsed = _parseAndFilterUserTransactions(rows, trimmedUid);
+          if (parsed.isNotEmpty) {
+            emitSafely(parsed, source: 'REST initial query');
+          }
+        }
+      } catch (e) {
+        debugPrint('[CoinWalletService] REST coin_transactions fallback notice: $e');
+      }
+    }
+
+    controller = StreamController<List<CoinTransaction>>.broadcast(
+      onListen: () {
+        final cached = getCachedTransactions(trimmedUid);
+        if (cached.isNotEmpty && !controller.isClosed) {
+          controller.add(cached);
+        }
+
+        fetchInitialRestSnapshot();
+
+        try {
+          realtimeSub = SupabaseService.client
+              .from('coin_transactions')
+              .stream(primaryKey: ['id'])
+              .listen(
+            (rows) {
+              final filtered = _parseAndFilterUserTransactions(rows, trimmedUid);
+              emitSafely(filtered, source: 'Supabase Realtime');
+            },
+            onError: (err) {
+              debugPrint('[CoinWalletService] Realtime coin_transactions error: $err');
+              final fallback = getCachedTransactions(trimmedUid);
+              if (!controller.isClosed) {
+                controller.add(fallback);
+              }
+            },
+          );
+        } catch (e) {
+          debugPrint('[CoinWalletService] transactionsStream setup error: $e');
+          final fallback = getCachedTransactions(trimmedUid);
+          if (!controller.isClosed) {
+            controller.add(fallback);
+          }
+        }
+      },
+      onCancel: () {
+        realtimeSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   Future<Map<String, dynamic>> purchaseStoreItem({
