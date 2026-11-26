@@ -118,6 +118,10 @@ class NewsCard extends StatelessWidget {
                           CachedNetworkImage(
                             imageUrl: news.effectiveImageUrl,
                             fit: BoxFit.cover,
+                            memCacheWidth: 320,
+                            memCacheHeight: 320,
+                            maxWidthDiskCache: 320,
+                            maxHeightDiskCache: 320,
                             placeholder: (context, url) => Container(
                               color: const Color(0xFF1E1E24),
                               child: const Center(
@@ -131,14 +135,10 @@ class NewsCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            errorWidget: (context, url, error) => Image.network(
-                              news.effectiveImageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (c, e, s) => Container(
-                                color: const Color(0xFF1E1E24),
-                                child: const Center(
-                                  child: Icon(Icons.sports_esports, color: Color(0xFF00FF88), size: 28),
-                                ),
+                            errorWidget: (context, url, error) => Container(
+                              color: const Color(0xFF1E1E24),
+                              child: const Center(
+                                child: Icon(Icons.sports_esports, color: Color(0xFF00FF88), size: 28),
                               ),
                             ),
                           ),

@@ -998,12 +998,21 @@ class CoinWalletService extends ChangeNotifier {
       }
       await SupabaseService.client.from('coin_transactions').insert(map);
       await SupabaseService.client.from('transactions').insert(map);
+      _cachedTransactionsTimeByUser.clear();
     } catch (e) {
       debugPrint('CoinWalletService recordTransaction error: $e');
     }
   }
 
+  static const Duration _txCacheTtl = Duration(seconds: 45);
   final Map<String, List<CoinTransaction>> _cachedTransactionsByUser = {};
+  final Map<String, DateTime> _cachedTransactionsTimeByUser = {};
+
+  bool _isTxCacheFresh(String key) {
+    final ts = _cachedTransactionsTimeByUser[key];
+    if (ts == null) return false;
+    return DateTime.now().difference(ts) < _txCacheTtl;
+  }
 
   List<CoinTransaction> getCachedTransactions(String userId) {
     if (userId.trim().isEmpty) return const <CoinTransaction>[];
@@ -1070,6 +1079,8 @@ class CoinWalletService extends ChangeNotifier {
       if (txs.isNotEmpty) {
         _cachedTransactionsByUser[cacheKey] = txs;
         _cachedTransactionsByUser[uuidKey] = txs;
+        _cachedTransactionsTimeByUser[cacheKey] = DateTime.now();
+        _cachedTransactionsTimeByUser[uuidKey] = DateTime.now();
         if (!controller.isClosed) {
           controller.add(txs);
         }
@@ -1089,13 +1100,19 @@ class CoinWalletService extends ChangeNotifier {
       }
     }
 
-    Future<void> fetchInitialRestSnapshot() async {
+    Future<void> fetchInitialRestSnapshot({bool force = false}) async {
+      if (!force &&
+          (_isTxCacheFresh(cacheKey) || _isTxCacheFresh(uuidKey)) &&
+          getCachedTransactions(trimmedUid).isNotEmpty) {
+        return;
+      }
       try {
         final dynamic rows = await SupabaseService.client
             .from('coin_transactions')
             .select()
             .or('user_id.eq.$trimmedUid,user_id.eq.$userUuid')
-            .order('created_at', ascending: false);
+            .order('created_at', ascending: false)
+            .limit(100);
         if (rows is List) {
           final parsed = _parseAndFilterUserTransactions(rows, trimmedUid);
           if (parsed.isNotEmpty) {
@@ -1120,6 +1137,8 @@ class CoinWalletService extends ChangeNotifier {
           realtimeSub = SupabaseService.client
               .from('coin_transactions')
               .stream(primaryKey: ['id'])
+              .eq('user_id', userUuid)
+              .limit(50)
               .listen(
             (rows) {
               final filtered = _parseAndFilterUserTransactions(rows, trimmedUid);
@@ -1143,6 +1162,7 @@ class CoinWalletService extends ChangeNotifier {
       },
       onCancel: () {
         realtimeSub?.cancel();
+        realtimeSub = null;
       },
     );
 

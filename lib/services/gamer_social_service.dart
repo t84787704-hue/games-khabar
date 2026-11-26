@@ -513,13 +513,46 @@ class GamerSocialService {
     }
   }
 
+  static const Duration _cacheTtl = Duration(seconds: 60);
+  static const int defaultPageSize = 15;
+
   final Map<String, List<String>> _alliesIdsCache = {};
+  final Map<String, DateTime> _alliesCacheTime = {};
   final Map<String, List<GamerPost>> _feedPostsCache = {};
+  final Map<String, DateTime> _feedCacheTime = {};
   final Map<String, List<GamerPost>> _videoPostsCache = {};
+  final Map<String, DateTime> _videoCacheTime = {};
   final Map<String, List<GamerPost>> _userPostsCache = {};
+  final Map<String, DateTime> _userPostsCacheTime = {};
+  final Map<String, bool> _likedStatusCache = {};
+  final Map<String, List<PostComment>> _commentsCache = {};
+
+  final StreamController<MapEntry<String, bool>> _likeUpdatesController =
+      StreamController<MapEntry<String, bool>>.broadcast();
+  final StreamController<String> _commentUpdatesController =
+      StreamController<String>.broadcast();
+
+  bool _isTtlValid(Map<String, DateTime> timestamps, String key) {
+    final ts = timestamps[key];
+    if (ts == null) return false;
+    return DateTime.now().difference(ts) < _cacheTtl;
+  }
+
+  /// Invalidates feed and post caches on explicit pull-to-refresh or post creation/deletion.
+  void invalidateFeedCache([String? gameTag]) {
+    if (gameTag == null) {
+      _feedCacheTime.clear();
+      _videoCacheTime.clear();
+      _userPostsCacheTime.clear();
+    } else {
+      _feedCacheTime.remove(gameTag);
+      _videoCacheTime.remove(gameTag);
+    }
+  }
 
   Stream<List<String>> getAlliesUserIdsStream(String uid) =>
-      _getAlliesUserIdsStreamInternal(uid).asBroadcastStream();
+      _getAlliesUserIdsStreamInternal(uid)
+          .asBroadcastStream(onCancel: (sub) => sub.cancel());
 
   Stream<List<String>> _getAlliesUserIdsStreamInternal(String uid) async* {
     if (uid.isEmpty) {
@@ -532,21 +565,25 @@ class GamerSocialService {
     }
     while (true) {
       try {
-        final res = await _runFollowsQuery((table) => _supabase
-            .from(table)
-            .select('following_id')
-            .eq('follower_id', playerUuid)
-            .limit(200));
-        final list = (res as List)
-            .map((item) => item['following_id'].toString())
-            .where((id) => id.isNotEmpty && id != playerUuid)
-            .toList();
-        _alliesIdsCache[playerUuid] = list;
-        yield list;
+        if (!_isTtlValid(_alliesCacheTime, playerUuid) ||
+            !_alliesIdsCache.containsKey(playerUuid)) {
+          final res = await _runFollowsQuery((table) => _supabase
+              .from(table)
+              .select('following_id')
+              .eq('follower_id', playerUuid)
+              .limit(200));
+          final list = (res as List)
+              .map((item) => item['following_id'].toString())
+              .where((id) => id.isNotEmpty && id != playerUuid)
+              .toList();
+          _alliesIdsCache[playerUuid] = list;
+          _alliesCacheTime[playerUuid] = DateTime.now();
+          yield list;
+        }
       } catch (e) {
         yield _alliesIdsCache[playerUuid] ?? [];
       }
-      await Future.delayed(const Duration(seconds: 45));
+      await Future.delayed(const Duration(seconds: 60));
     }
   }
 
@@ -767,6 +804,7 @@ class GamerSocialService {
           .select()
           .single();
 
+      invalidateFeedCache();
       feedRefreshNotifier.value++;
       return response['id'].toString();
     } catch (e) {
@@ -775,8 +813,61 @@ class GamerSocialService {
     }
   }
 
+  /// Paginated fetch of feed posts (page size 15–20) with TTL cache for page 0.
+  Future<List<GamerPost>> fetchFeedPostsPage({
+    String? gameTag,
+    int page = 0,
+    int pageSize = defaultPageSize,
+    bool forceRefresh = false,
+  }) async {
+    final cacheKey = gameTag ?? 'All';
+    if (page == 0 &&
+        !forceRefresh &&
+        _isTtlValid(_feedCacheTime, cacheKey) &&
+        _feedPostsCache.containsKey(cacheKey)) {
+      final cached = _feedPostsCache[cacheKey]!;
+      return cached.length > pageSize ? cached.sublist(0, pageSize) : cached;
+    }
+
+    try {
+      final int start = page * pageSize;
+      final int end = start + pageSize - 1;
+      var query = _supabase.from('posts').select();
+      if (gameTag != null && gameTag != 'All') {
+        query = query.eq('game', gameTag);
+      }
+      final data =
+          await query.order('created_at', ascending: false).range(start, end);
+      final list =
+          (data as List).map((map) => GamerPost.fromMap(map)).toList();
+
+      if (page == 0) {
+        _feedPostsCache[cacheKey] = list;
+        _feedCacheTime[cacheKey] = DateTime.now();
+      } else {
+        final existing = List<GamerPost>.from(_feedPostsCache[cacheKey] ?? []);
+        final existingIds = existing.map((e) => e.postId).toSet();
+        for (final item in list) {
+          if (!existingIds.contains(item.postId)) {
+            existing.add(item);
+          }
+        }
+        _feedPostsCache[cacheKey] = existing;
+        _feedCacheTime[cacheKey] = DateTime.now();
+      }
+      return list;
+    } catch (e) {
+      debugPrint('[GamerSocialService] fetchFeedPostsPage error: $e');
+      if (page == 0 && _feedPostsCache.containsKey(cacheKey)) {
+        return _feedPostsCache[cacheKey]!;
+      }
+      return [];
+    }
+  }
+
   Stream<List<GamerPost>> getAllPostsStream({String? gameTag}) =>
-      _getAllPostsStreamInternal(gameTag: gameTag).asBroadcastStream();
+      _getAllPostsStreamInternal(gameTag: gameTag)
+          .asBroadcastStream(onCancel: (sub) => sub.cancel());
 
   Stream<List<GamerPost>> _getAllPostsStreamInternal({String? gameTag}) async* {
     final cacheKey = gameTag ?? 'All';
@@ -785,28 +876,33 @@ class GamerSocialService {
     }
     while (true) {
       try {
-        var query = _supabase.from('posts').select();
-        if (gameTag != null && gameTag != 'All') {
-          query = query.eq('game', gameTag);
+        if (!_isTtlValid(_feedCacheTime, cacheKey) ||
+            !_feedPostsCache.containsKey(cacheKey)) {
+          var query = _supabase.from('posts').select();
+          if (gameTag != null && gameTag != 'All') {
+            query = query.eq('game', gameTag);
+          }
+          final data =
+              await query.order('created_at', ascending: false).limit(20);
+          final list =
+              (data as List).map((map) => GamerPost.fromMap(map)).toList();
+          _feedPostsCache[cacheKey] = list;
+          _feedCacheTime[cacheKey] = DateTime.now();
+          yield list;
         }
-        final data =
-            await query.order('created_at', ascending: false).limit(30);
-        final list =
-            (data as List).map((map) => GamerPost.fromMap(map)).toList();
-        _feedPostsCache[cacheKey] = list;
-        yield list;
       } catch (e) {
         debugPrint('[GamerSocialService] getAllPosts error: $e');
         if (_feedPostsCache.containsKey(cacheKey)) {
           yield _feedPostsCache[cacheKey]!;
         }
       }
-      await Future.delayed(const Duration(seconds: 45));
+      await Future.delayed(const Duration(seconds: 60));
     }
   }
 
   Stream<List<GamerPost>> getVideosStream({String? gameTag}) =>
-      _getVideosStreamInternal(gameTag: gameTag).asBroadcastStream();
+      _getVideosStreamInternal(gameTag: gameTag)
+          .asBroadcastStream(onCancel: (sub) => sub.cancel());
 
   Stream<List<GamerPost>> _getVideosStreamInternal({String? gameTag}) async* {
     final cacheKey = gameTag ?? 'All';
@@ -815,31 +911,36 @@ class GamerSocialService {
     }
     while (true) {
       try {
-        var query =
-            _supabase.from('posts').select().not('video_url', 'is', null);
-        if (gameTag != null && gameTag != 'All') {
-          query = query.eq('game', gameTag);
+        if (!_isTtlValid(_videoCacheTime, cacheKey) ||
+            !_videoPostsCache.containsKey(cacheKey)) {
+          var query =
+              _supabase.from('posts').select().not('video_url', 'is', null);
+          if (gameTag != null && gameTag != 'All') {
+            query = query.eq('game', gameTag);
+          }
+          final data =
+              await query.order('created_at', ascending: false).limit(20);
+          final list = (data as List)
+              .map((map) => GamerPost.fromMap(map))
+              .where((p) => p.videoUrl != null && p.videoUrl!.trim().isNotEmpty)
+              .toList();
+          _videoPostsCache[cacheKey] = list;
+          _videoCacheTime[cacheKey] = DateTime.now();
+          yield list;
         }
-        final data =
-            await query.order('created_at', ascending: false).limit(30);
-        final list = (data as List)
-            .map((map) => GamerPost.fromMap(map))
-            .where((p) => p.videoUrl != null && p.videoUrl!.trim().isNotEmpty)
-            .toList();
-        _videoPostsCache[cacheKey] = list;
-        yield list;
       } catch (e) {
         debugPrint('[GamerSocialService] getVideosStream error: $e');
         if (_videoPostsCache.containsKey(cacheKey)) {
           yield _videoPostsCache[cacheKey]!;
         }
       }
-      await Future.delayed(const Duration(seconds: 45));
+      await Future.delayed(const Duration(seconds: 60));
     }
   }
 
   Stream<List<GamerPost>> getUserPostsStream(String userId, [String? username]) =>
-      _getUserPostsStreamInternal(userId, username).asBroadcastStream();
+      _getUserPostsStreamInternal(userId, username)
+          .asBroadcastStream(onCancel: (sub) => sub.cancel());
 
   Stream<List<GamerPost>> _getUserPostsStreamInternal(String userId,
       [String? username]) async* {
@@ -849,23 +950,27 @@ class GamerSocialService {
     }
     while (true) {
       try {
-        final data = await _supabase
-            .from('posts')
-            .select()
-            .eq('user_id', uuid)
-            .order('created_at', ascending: false)
-            .limit(30);
-        final list =
-            (data as List).map((map) => GamerPost.fromMap(map)).toList();
-        _userPostsCache[uuid] = list;
-        yield list;
+        if (!_isTtlValid(_userPostsCacheTime, uuid) ||
+            !_userPostsCache.containsKey(uuid)) {
+          final data = await _supabase
+              .from('posts')
+              .select()
+              .eq('user_id', uuid)
+              .order('created_at', ascending: false)
+              .limit(20);
+          final list =
+              (data as List).map((map) => GamerPost.fromMap(map)).toList();
+          _userPostsCache[uuid] = list;
+          _userPostsCacheTime[uuid] = DateTime.now();
+          yield list;
+        }
       } catch (e) {
         debugPrint('[GamerSocialService] getUserPostsStream error: $e');
         if (_userPostsCache.containsKey(uuid)) {
           yield _userPostsCache[uuid]!;
         }
       }
-      await Future.delayed(const Duration(seconds: 45));
+      await Future.delayed(const Duration(seconds: 60));
     }
   }
 
@@ -873,6 +978,7 @@ class GamerSocialService {
       {required String postId, required String userId}) async {
     try {
       await _supabase.from('posts').delete().eq('id', postId);
+      invalidateFeedCache();
       feedRefreshNotifier.value++;
     } catch (e) {
       debugPrint('[GamerSocialService] Error deleting post: $e');
@@ -1029,6 +1135,7 @@ class GamerSocialService {
       } catch (_) {}
     }
 
+    invalidateFeedCache();
     feedRefreshNotifier.value++;
     return response['id']?.toString() ?? '';
   }
@@ -1084,6 +1191,7 @@ class GamerSocialService {
         }
       } catch (_) {}
 
+      invalidateFeedCache();
       feedRefreshNotifier.value++;
       return true;
     } catch (e) {
@@ -1092,28 +1200,41 @@ class GamerSocialService {
     }
   }
 
-  Stream<bool> isPostLikedStream(String postId, String userId) =>
-      _isPostLikedStreamInternal(postId, userId).asBroadcastStream();
-
-  Stream<bool> _isPostLikedStreamInternal(String postId, String userId) async* {
+  /// Event-driven + cached stream of whether [userId] liked [postId].
+  /// Queries Supabase at most once per (userId, postId) session and emits
+  /// instant local updates when [toggleLike] is called (zero 3-second polling!).
+  Stream<bool> isPostLikedStream(String postId, String userId) {
     if (userId.isEmpty || postId.isEmpty) {
-      yield false;
-      return;
+      return Stream.value(false);
     }
-    while (true) {
-      try {
-        final existing = await _supabase
-            .from('likes')
-            .select('id')
-            .eq('post_id', postId)
-            .eq('user_id', userId)
-            .maybeSingle();
-        yield existing != null;
-      } catch (e) {
-        yield false;
+    final cacheKey = '$userId:$postId';
+    Stream<bool> stream() async* {
+      if (_likedStatusCache.containsKey(cacheKey)) {
+        yield _likedStatusCache[cacheKey]!;
+      } else {
+        try {
+          final existing = await _supabase
+              .from('likes')
+              .select('id')
+              .eq('post_id', postId)
+              .eq('user_id', userId)
+              .maybeSingle();
+          final liked = existing != null;
+          _likedStatusCache[cacheKey] = liked;
+          yield liked;
+        } catch (e) {
+          yield _likedStatusCache[cacheKey] ?? false;
+        }
       }
-      await Future.delayed(const Duration(seconds: 3));
+
+      await for (final update in _likeUpdatesController.stream) {
+        if (update.key == cacheKey) {
+          yield update.value;
+        }
+      }
     }
+
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   Future<void> toggleLike({
@@ -1121,6 +1242,7 @@ class GamerSocialService {
     required String userId,
     String? postAuthorId,
   }) async {
+    final cacheKey = '$userId:$postId';
     try {
       final existing = await _supabase
           .from('likes')
@@ -1130,8 +1252,16 @@ class GamerSocialService {
           .maybeSingle();
 
       if (existing != null) {
+        _likedStatusCache[cacheKey] = false;
+        if (!_likeUpdatesController.isClosed) {
+          _likeUpdatesController.add(MapEntry(cacheKey, false));
+        }
         await _supabase.from('likes').delete().eq('id', existing['id']);
       } else {
+        _likedStatusCache[cacheKey] = true;
+        if (!_likeUpdatesController.isClosed) {
+          _likeUpdatesController.add(MapEntry(cacheKey, true));
+        }
         await _supabase.from('likes').insert({
           'post_id': postId,
           'user_id': userId,
@@ -1156,27 +1286,46 @@ class GamerSocialService {
   }
 
   Stream<List<PostComment>> getCommentsStream(String postId) =>
-      _getCommentsStreamInternal(postId).asBroadcastStream();
+      _getCommentsStreamInternal(postId)
+          .asBroadcastStream(onCancel: (sub) => sub.cancel());
 
   Stream<List<PostComment>> _getCommentsStreamInternal(String postId) async* {
     if (postId.isEmpty) {
       yield [];
       return;
     }
-    while (true) {
-      try {
-        final data = await _supabase
-            .from('comments')
-            .select()
-            .eq('post_id', postId)
-            .order('created_at', ascending: true);
-        final list =
-            (data as List).map((map) => PostComment.fromMap(map)).toList();
-        yield list;
-      } catch (e) {
-        yield [];
+    if (_commentsCache.containsKey(postId)) {
+      yield _commentsCache[postId]!;
+    }
+
+    Future<List<PostComment>> fetchComments() async {
+      final data = await _supabase
+          .from('comments')
+          .select()
+          .eq('post_id', postId)
+          .order('created_at', ascending: true)
+          .limit(50);
+      final list =
+          (data as List).map((map) => PostComment.fromMap(map)).toList();
+      _commentsCache[postId] = list;
+      return list;
+    }
+
+    try {
+      yield await fetchComments();
+    } catch (_) {
+      yield _commentsCache[postId] ?? [];
+    }
+
+    // Only refresh when a new comment is added on this post (no 3-second polling loop!)
+    await for (final updatedPostId in _commentUpdatesController.stream) {
+      if (updatedPostId == postId) {
+        try {
+          yield await fetchComments();
+        } catch (_) {
+          yield _commentsCache[postId] ?? [];
+        }
       }
-      await Future.delayed(const Duration(seconds: 3));
     }
   }
 
@@ -1195,6 +1344,10 @@ class GamerSocialService {
         'user_id': userId,
         'content': text,
       });
+
+      if (!_commentUpdatesController.isClosed) {
+        _commentUpdatesController.add(postId);
+      }
 
       if (postAuthorId != null && postAuthorId.isNotEmpty && postAuthorId != userId) {
         try {

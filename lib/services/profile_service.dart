@@ -77,37 +77,115 @@ class ProfileFeedItem {
   }
 }
 
-/// Service dedicated to querying and syncing Profile posts.
+/// Service dedicated to querying and syncing Profile posts with TTL caching
+/// and pagination to minimize mobile data usage.
 class ProfileService {
   static final ProfileService _instance = ProfileService._internal();
   factory ProfileService() => _instance;
   ProfileService._internal();
 
-  /// Fetch user posts directly from Supabase posts table.
-  /// STRICT: only fetches posts where user_id equals this user's UUID.
-  Future<List<ProfileFeedItem>> getUserPostsFromSupabase(String userId) async {
-    if (userId.isEmpty) return [];
+  static const int defaultPageSize = 15;
+  static const Duration _cacheTtl = Duration(seconds: 60);
+
+  final Map<String, List<ProfileFeedItem>> _userPostsCache = {};
+  final Map<String, DateTime> _cacheTimestamp = {};
+
+  bool _isCacheValid(String uuid) {
+    final ts = _cacheTimestamp[uuid];
+    if (ts == null || !_userPostsCache.containsKey(uuid)) return false;
+    return DateTime.now().difference(ts) < _cacheTtl;
+  }
+
+  /// Clears cached profile posts for [userId] (or all users if null) on explicit refresh.
+  void invalidateCache([String? userId]) {
+    if (userId == null || userId.trim().isEmpty) {
+      _userPostsCache.clear();
+      _cacheTimestamp.clear();
+      return;
+    }
+    final uuid = SupabaseService.toUuid(userId.trim());
+    _userPostsCache.remove(uuid);
+    _cacheTimestamp.remove(uuid);
+  }
+
+  /// Paginated fetch of user posts from Supabase `posts` table.
+  /// Guarded by [page] and [pageSize] (default 15) to reduce mobile data usage.
+  Future<List<ProfileFeedItem>> fetchUserPostsPage({
+    required String userId,
+    int page = 0,
+    int pageSize = defaultPageSize,
+    bool forceRefresh = false,
+  }) async {
+    final uid = userId.trim();
+    if (uid.isEmpty) return [];
+    final uuid = SupabaseService.toUuid(uid);
+
+    if (page == 0 && !forceRefresh && _isCacheValid(uuid)) {
+      final cached = _userPostsCache[uuid]!;
+      return cached.length > pageSize ? cached.sublist(0, pageSize) : cached;
+    }
+
     try {
-      final uuid = SupabaseService.toUuid(userId);
+      final int start = page * pageSize;
+      final int end = start + pageSize - 1;
+
       final rows = await SupabaseService.client
           .from('posts')
           .select()
-          .eq('user_id', uuid) // ✅ strict — no foreign posts
-          .order('created_at', ascending: false);
-      return (rows as List)
+          .eq('user_id', uuid)
+          .order('created_at', ascending: false)
+          .range(start, end);
+
+      final items = (rows as List)
           .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
           .toList();
+
+      if (page == 0) {
+        _userPostsCache[uuid] = items;
+        _cacheTimestamp[uuid] = DateTime.now();
+      } else {
+        final existing = List<ProfileFeedItem>.from(_userPostsCache[uuid] ?? []);
+        final existingIds = existing.map((e) => e.id).toSet();
+        for (final item in items) {
+          if (!existingIds.contains(item.id)) {
+            existing.add(item);
+          }
+        }
+        _userPostsCache[uuid] = existing;
+        _cacheTimestamp[uuid] = DateTime.now();
+      }
+
+      return items;
     } catch (e) {
-      debugPrint('ProfileService getUserPostsFromSupabase error: $e');
+      debugPrint('ProfileService fetchUserPostsPage error: $e');
+      if (page == 0 && _userPostsCache.containsKey(uuid)) {
+        return _userPostsCache[uuid]!;
+      }
       return [];
     }
   }
 
-  /// Real-time stream of user posts directly from Supabase.
+  /// Fetch user posts directly from Supabase posts table (bounded + cached).
   /// STRICT: only fetches posts where user_id equals this user's UUID.
+  Future<List<ProfileFeedItem>> getUserPostsFromSupabase(
+    String userId, {
+    int limit = 20,
+    bool forceRefresh = false,
+  }) async {
+    return fetchUserPostsPage(
+      userId: userId,
+      page: 0,
+      pageSize: limit,
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  /// Stream of user posts from Supabase with TTL deduplication, bounded limit,
+  /// and automatic cancellation when the widget leaves the screen.
   Stream<List<ProfileFeedItem>> getUserPostsAndClipsStream({
     String? userId,
     String? username,
+    int limit = 20,
   }) {
     Stream<List<ProfileFeedItem>> stream() async* {
       final uid =
@@ -120,56 +198,51 @@ class ProfileService {
 
       final uuid = SupabaseService.toUuid(uid);
 
+      // Immediately emit cached data if available to avoid blank flicker on tab switch
+      if (_userPostsCache.containsKey(uuid)) {
+        yield _userPostsCache[uuid]!;
+      }
+
       while (true) {
         try {
-          final rows = await SupabaseService.client
-              .from('posts')
-              .select()
-              .eq('user_id', uuid) // ✅ strict — no foreign posts
-              .order('created_at', ascending: false);
-
-          final List<ProfileFeedItem> items = (rows as List)
-              .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
-              .toList();
-
-          yield items;
+          if (!_isCacheValid(uuid)) {
+            final items = await fetchUserPostsPage(
+              userId: uid,
+              page: 0,
+              pageSize: limit,
+              forceRefresh: true,
+            );
+            yield items;
+          }
         } catch (e) {
           debugPrint('[ProfileService] Stream error: $e');
-          yield <ProfileFeedItem>[];
+          yield _userPostsCache[uuid] ?? <ProfileFeedItem>[];
         }
-        await Future.delayed(const Duration(seconds: 4));
+        await Future.delayed(const Duration(seconds: 60));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
-  /// One-shot fetch of user posts.
+  /// One-shot fetch of user posts (uses TTL cache unless [forceRefresh] is true).
   /// STRICT: only fetches posts where user_id equals this user's UUID.
   Future<List<ProfileFeedItem>> getUserPostsAndClips({
     String? userId,
     String? username,
+    int limit = 20,
+    bool forceRefresh = false,
   }) async {
     final uid =
         (userId != null && userId.trim().isNotEmpty) ? userId.trim() : '';
 
     if (uid.isEmpty) return [];
 
-    try {
-      final uuid = SupabaseService.toUuid(uid);
-
-      final rows = await SupabaseService.client
-          .from('posts')
-          .select()
-          .eq('user_id', uuid) // ✅ strict — no foreign posts
-          .order('created_at', ascending: false);
-
-      return (rows as List)
-          .map((r) => ProfileFeedItem.fromMap(Map<String, dynamic>.from(r)))
-          .toList();
-    } catch (e) {
-      debugPrint('[ProfileService] Error fetching user posts: $e');
-      return [];
-    }
+    return fetchUserPostsPage(
+      userId: uid,
+      page: 0,
+      pageSize: limit,
+      forceRefresh: forceRefresh,
+    );
   }
 }

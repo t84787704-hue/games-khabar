@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../constants/gamer_theme.dart';
 import '../models/coin_transaction_model.dart';
 import '../models/coin_wallet_model.dart';
@@ -45,10 +46,15 @@ class CoinHistorySheet extends StatefulWidget {
 }
 
 class _CoinHistorySheetState extends State<CoinHistorySheet> {
+  static const int _pageSize = 20;
+
   final CoinWalletService _walletService = CoinWalletService();
+  final ScrollController _scrollController = ScrollController();
   int _selectedFilter = 0; // 0: All, 1: Added (+), 2: Deducted (-)
   int _lastSyncedBalance = -1;
   bool _isBackgroundSyncing = false;
+  int _visibleCount = _pageSize;
+  bool _isLoadingMore = false;
 
   // Cached streams so setState / filter changes / background syncs never recreate streams
   late String _effectiveUserId;
@@ -66,13 +72,41 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _initPassbookStreamsAndCache();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_isLoadingMore || !_scrollController.hasClients) return;
+    final totalAvailable = _cachedRewardClaims.length + _cachedValidTxs.length;
+    final hasMore = _visibleCount < totalAvailable;
+    if (!hasMore) return;
+
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      setState(() => _isLoadingMore = true);
+      Future.delayed(const Duration(milliseconds: 120), () {
+        if (!mounted) return;
+        setState(() {
+          _visibleCount += _pageSize;
+          _isLoadingMore = false;
+        });
+      });
+    }
   }
 
   @override
   void didUpdateWidget(covariant CoinHistorySheet oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.userId != widget.userId) {
+      _visibleCount = _pageSize;
       _initPassbookStreamsAndCache();
     }
   }
@@ -636,11 +670,31 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
 
                             final totalItems =
                                 rewardClaims.length + transactions.length;
+                            final hasMore = _visibleCount < totalItems;
+                            final displayedCount =
+                                hasMore ? _visibleCount : totalItems;
+
                             return ListView.separated(
+                              controller: _scrollController,
                               padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                              itemCount: totalItems,
+                              itemCount: displayedCount + (hasMore ? 1 : 0),
                               separatorBuilder: (_, __) => const SizedBox(height: 12),
                               itemBuilder: (context, index) {
+                                if (index >= displayedCount) {
+                                  return const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: GamerTheme.accentBlue,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
                                 if (index < rewardClaims.length) {
                                   return _buildRewardClaimCard(rewardClaims[index]);
                                 }
@@ -666,7 +720,10 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
     final isSelected = _selectedFilter == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedFilter = index),
+        onTap: () => setState(() {
+          _selectedFilter = index;
+          _visibleCount = _pageSize;
+        }),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -909,7 +966,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               ),
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: GamerTheme.neonGreen.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
@@ -918,69 +975,44 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                     width: 1.2,
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.receipt_long_rounded,
+                    const Icon(
+                      Icons.receipt_long_rounded,
+                      color: GamerTheme.neonGreen,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        '📸 Tap to View Delivery Proof Screenshot',
+                        style: TextStyle(
                           color: GamerTheme.neonGreen,
-                          size: 16,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11.5,
                         ),
-                        const SizedBox(width: 6),
-                        const Expanded(
-                          child: Text(
-                            '📸 Delivery Proof Screenshot (Tap to View Full Screen)',
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: GamerTheme.neonGreen.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.zoom_out_map_rounded, size: 12, color: GamerTheme.neonGreen),
+                          SizedBox(width: 4),
+                          Text(
+                            'View Proof',
                             style: TextStyle(
                               color: GamerTheme.neonGreen,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10.5,
                             ),
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: GamerTheme.neonGreen.withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.zoom_out_map_rounded, size: 12, color: GamerTheme.neonGreen),
-                              SizedBox(width: 3),
-                              Text(
-                                'View',
-                                style: TextStyle(
-                                  color: GamerTheme.neonGreen,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 10.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(9),
-                      child: SizedBox(
-                        height: 135,
-                        width: double.infinity,
-                        child: Image.network(
-                          proofImageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: ThemeService.card,
-                            alignment: Alignment.center,
-                            child: const Text(
-                              'Unable to load delivery proof screenshot',
-                              style: TextStyle(color: Colors.white54, fontSize: 11),
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
                     ),
                   ],
@@ -1046,10 +1078,21 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
               child: InteractiveViewer(
                 minScale: 0.8,
                 maxScale: 4.5,
-                child: Image.network(
-                  imageUrl,
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Padding(
+                  memCacheWidth: 1080,
+                  maxWidthDiskCache: 1080,
+                  placeholder: (_, __) => const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: GamerTheme.neonGreen,
+                        strokeWidth: 2.5,
+                      ),
+                    ),
+                  ),
+                  errorWidget: (_, __, ___) => const Padding(
                     padding: EdgeInsets.all(32),
                     child: Text(
                       'Failed to load delivery proof screenshot',

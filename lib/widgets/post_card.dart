@@ -59,11 +59,15 @@ class PostCard extends StatefulWidget {
 }
 
 class _PostCardState extends State<PostCard> {
+  static final Map<String, bool> _repostCheckCache = {};
+
   final GamerSocialService _socialService = GamerSocialService();
   final GamerAuthService _authService = GamerAuthService();
   bool _isAuthorVerified = false;
   bool _isRepostedByMe = false;
   int _repostsCountDelta = 0;
+  Stream<bool>? _likeStream;
+  String? _likeStreamKey;
 
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
@@ -243,6 +247,14 @@ class _PostCardState extends State<PostCard> {
   Future<void> _checkIfReposted() async {
     final uid = _authService.currentUid ?? widget.currentUserId;
     if (uid == null || uid.isEmpty || postId.isEmpty) return;
+    final cacheKey = '$uid:$postId';
+    if (_repostCheckCache.containsKey(cacheKey)) {
+      final cached = _repostCheckCache[cacheKey]!;
+      if (mounted && cached != _isRepostedByMe) {
+        setState(() => _isRepostedByMe = cached);
+      }
+      return;
+    }
     try {
       final res = await SupabaseService.client
           .from('reposts')
@@ -250,10 +262,21 @@ class _PostCardState extends State<PostCard> {
           .eq('post_id', postId)
           .eq('user_id', uid)
           .maybeSingle();
-      if (mounted && res != null) {
-        setState(() => _isRepostedByMe = true);
+      final reposted = res != null;
+      _repostCheckCache[cacheKey] = reposted;
+      if (mounted && reposted != _isRepostedByMe) {
+        setState(() => _isRepostedByMe = reposted);
       }
     } catch (_) {}
+  }
+
+  Stream<bool> _getLikeStream(String currentUid) {
+    final key = '$currentUid:$postId';
+    if (_likeStream == null || _likeStreamKey != key) {
+      _likeStreamKey = key;
+      _likeStream = _socialService.isPostLikedStream(postId, currentUid);
+    }
+    return _likeStream!;
   }
 
   Future<void> _checkVerification() async {
@@ -484,6 +507,7 @@ class _PostCardState extends State<PostCard> {
     final curUid = _authService.currentUid ?? widget.currentUserId ?? '';
     if (curUid.isEmpty || postId.isEmpty) return;
 
+    _repostCheckCache['$curUid:$postId'] = true;
     setState(() {
       _isRepostedByMe = true;
       _repostsCountDelta++;
@@ -524,6 +548,7 @@ class _PostCardState extends State<PostCard> {
     final curUid = _authService.currentUid ?? widget.currentUserId ?? '';
     if (curUid.isEmpty || postId.isEmpty) return;
 
+    _repostCheckCache['$curUid:$postId'] = false;
     setState(() {
       _isRepostedByMe = false;
       _repostsCountDelta--;
@@ -715,6 +740,8 @@ class _PostCardState extends State<PostCard> {
                               height: 100,
                               width: double.infinity,
                               fit: BoxFit.cover,
+                              memCacheWidth: 480,
+                              maxWidthDiskCache: 480,
                             ),
                           ),
                         ],
@@ -952,6 +979,8 @@ class _PostCardState extends State<PostCard> {
                   width: double.infinity,
                   height: 200,
                   fit: BoxFit.cover,
+                  memCacheWidth: 720,
+                  maxWidthDiskCache: 720,
                   placeholder: (_, __) => Container(
                     height: 200,
                     color: GamerTheme.cardElevated,
@@ -1023,6 +1052,8 @@ class _PostCardState extends State<PostCard> {
                           height: 120,
                           width: double.infinity,
                           fit: BoxFit.cover,
+                          memCacheWidth: 480,
+                          maxWidthDiskCache: 480,
                           placeholder: (_, __) => Container(
                             height: 120,
                             color: GamerTheme.cardElevated,
@@ -1047,7 +1078,7 @@ class _PostCardState extends State<PostCard> {
               children: [
                 // Like Button
                 StreamBuilder<bool>(
-                  stream: _socialService.isPostLikedStream(postId, currentUid),
+                  stream: _getLikeStream(currentUid),
                   builder: (context, snapshot) {
                     final isLiked = snapshot.data ?? false;
                     return InkWell(
@@ -1192,6 +1223,13 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   final _socialService = GamerSocialService();
   final _authService = GamerAuthService();
   bool _isSending = false;
+  late final Stream<List<PostComment>> _commentsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _commentsStream = _socialService.getCommentsStream(widget.postId);
+  }
 
   @override
   void dispose() {
@@ -1271,7 +1309,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
 
             Expanded(
               child: StreamBuilder<List<PostComment>>(
-                stream: _socialService.getCommentsStream(widget.postId),
+                stream: _commentsStream,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator(color: GamerTheme.accentBlue));

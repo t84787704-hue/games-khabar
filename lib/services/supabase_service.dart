@@ -1715,12 +1715,13 @@ class SupabaseService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getProofHistoryLogs() async {
+  static Future<List<Map<String, dynamic>>> getProofHistoryLogs({int limit = 40}) async {
     try {
       final res = await client
           .from('proof_history')
           .select()
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .limit(limit);
       if (res is List) {
         _cachedProofHistory = List<Map<String, dynamic>>.from(res);
         return _cachedProofHistory;
@@ -1728,10 +1729,31 @@ class SupabaseService {
     } catch (e) {
       debugPrint('[SupabaseService] getProofHistoryLogs error: $e');
     }
-    return [];
+    return _cachedProofHistory;
   }
 
-  // IN-MEMORY CACHES PREVENTING ANY 1-SECOND DISAPPEARING DATA OR FLICKERING
+  // IN-MEMORY CACHES WITH TTL DEDUPLICATION PREVENTING REPEATED FETCHES ON TAB SWITCH
+  static const Duration _cacheTtl = Duration(seconds: 45);
+  static final Map<String, DateTime> _cacheTimestamps = {};
+
+  static bool _isCacheFresh(String key) {
+    final ts = _cacheTimestamps[key];
+    if (ts == null) return false;
+    return DateTime.now().difference(ts) < _cacheTtl;
+  }
+
+  static void _markCacheFresh(String key) {
+    _cacheTimestamps[key] = DateTime.now();
+  }
+
+  static void invalidateCache([String? key]) {
+    if (key == null) {
+      _cacheTimestamps.clear();
+    } else {
+      _cacheTimestamps.remove(key);
+    }
+  }
+
   static List<Map<String, dynamic>> _cachedUsers = [];
   static List<Map<String, dynamic>> _cachedPosts = [];
   static List<Map<String, dynamic>> _cachedReports = [];
@@ -1774,50 +1796,66 @@ class SupabaseService {
       updated.insert(0, Map<String, dynamic>.from(claim));
     }
     _cachedRewardClaims = updated;
+    _cacheTimestamps.removeWhere((k, _) => k.startsWith('reward_claims'));
   }
 
   static Future<List<Map<String, dynamic>>> fetchRewardClaims({
     String? userId,
-    int limit = 5000,
+    int limit = 50,
+    bool forceRefresh = false,
   }) async {
     final String cleanUid = (userId ?? '').trim();
+    final String cacheKey =
+        cleanUid.isNotEmpty ? 'reward_claims:$cleanUid' : 'reward_claims:all';
+
+    if (!forceRefresh && _isCacheFresh(cacheKey) && _cachedRewardClaims.isNotEmpty) {
+      if (cleanUid.isNotEmpty) {
+        final cachedForUser = _cachedRewardClaims
+            .where((c) => (c['user_id'] ?? '').toString().trim() == cleanUid)
+            .toList();
+        if (cachedForUser.isNotEmpty) return cachedForUser;
+      } else {
+        return _cachedRewardClaims;
+      }
+    }
+
     try {
       if (cleanUid.isNotEmpty) {
+        final int effectiveLimit = limit > 50 ? 25 : limit;
         final res = await client
             .from('reward_claims')
             .select()
             .eq('user_id', cleanUid)
             .order('created_at', ascending: false)
-            .limit(limit)
+            .limit(effectiveLimit)
             .timeout(const Duration(seconds: 8));
         if (res is List) {
           final list = res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
           for (final item in list) {
             upsertCachedRewardClaim(item);
           }
+          _markCacheFresh(cacheKey);
           if (list.isNotEmpty) return list;
           return _cachedRewardClaims
               .where((c) => (c['user_id'] ?? '').toString().trim() == cleanUid)
               .toList();
         }
       } else {
-        // Admin query across 1,000 to 100,000+ users:
-        // 1. Fetch all pending claims first so historical delivered claims never push out pending claims
-        // 2. Fetch latest claims of all statuses and merge deduplicated by id / claim_code
+        final int effectiveLimit = limit > 100 ? 50 : limit;
         final results = await Future.wait<dynamic>([
           client
               .from('reward_claims')
               .select()
               .eq('status', 'pending')
               .order('created_at', ascending: false)
-              .limit(limit)
+              .limit(effectiveLimit)
               .timeout(const Duration(seconds: 8))
               .catchError((_) => <dynamic>[]),
           client
               .from('reward_claims')
               .select()
               .order('created_at', ascending: false)
-              .limit(limit)
+              .limit(effectiveLimit)
               .timeout(const Duration(seconds: 8)),
         ]);
 
@@ -1848,6 +1886,7 @@ class SupabaseService {
         if (list.isNotEmpty || _cachedRewardClaims.isEmpty) {
           _cachedRewardClaims = list;
         }
+        _markCacheFresh(cacheKey);
         return _cachedRewardClaims;
       }
     } catch (e) {
@@ -1857,7 +1896,7 @@ class SupabaseService {
           'reward_claims',
           filters: cleanUid.isNotEmpty ? {'user_id': 'eq.$cleanUid'} : null,
           order: 'created_at.desc',
-          limit: limit,
+          limit: cleanUid.isNotEmpty ? 25 : 50,
         );
         if (fallback.isNotEmpty) {
           if (cleanUid.isEmpty) {
@@ -1867,6 +1906,7 @@ class SupabaseService {
               upsertCachedRewardClaim(item);
             }
           }
+          _markCacheFresh(cacheKey);
           return fallback;
         }
       } catch (_) {}
@@ -1881,9 +1921,8 @@ class SupabaseService {
   }
 
   // ============================================================
-  // BULLETPROOF REALTIME STREAMS (REST-FIRST + SAFE PERIODIC REFRESH)
-  // NEVER depends on unconfigured Postgres CDC WebSocket publications.
-  // NEVER emits empty list if records exist.
+  // BULLETPROOF REALTIME STREAMS (REST-FIRST + TTL CACHE + ONCANCEL CLEANUP)
+  // Cancels cleanly when the listening screen/tab is disposed.
   // ============================================================
 
   static Stream<List<Map<String, dynamic>>> getRealtimeUsers() {
@@ -1893,17 +1932,20 @@ class SupabaseService {
       }
       while (true) {
         try {
-          final res = await client
-              .from('users')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(50)
-              .timeout(const Duration(seconds: 4));
-          if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res);
-            if (list.isNotEmpty || _cachedUsers.isEmpty) {
-              _cachedUsers = list;
-              yield list;
+          if (!_isCacheFresh('users') || _cachedUsers.isEmpty) {
+            final res = await client
+                .from('users')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(30)
+                .timeout(const Duration(seconds: 4));
+            if (res is List) {
+              final list = List<Map<String, dynamic>>.from(res);
+              if (list.isNotEmpty || _cachedUsers.isEmpty) {
+                _cachedUsers = list;
+                _markCacheFresh('users');
+                yield list;
+              }
             }
           }
         } catch (e) {
@@ -1912,11 +1954,11 @@ class SupabaseService {
             yield _cachedUsers;
           }
         }
-        await Future.delayed(const Duration(seconds: 45));
+        await Future.delayed(const Duration(seconds: 60));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimePosts() {
@@ -1926,17 +1968,20 @@ class SupabaseService {
       }
       while (true) {
         try {
-          final res = await client
-              .from('posts')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(40)
-              .timeout(const Duration(seconds: 4));
-          if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res);
-            if (list.isNotEmpty || _cachedPosts.isEmpty) {
-              _cachedPosts = list;
-              yield list;
+          if (!_isCacheFresh('posts') || _cachedPosts.isEmpty) {
+            final res = await client
+                .from('posts')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(20)
+                .timeout(const Duration(seconds: 4));
+            if (res is List) {
+              final list = List<Map<String, dynamic>>.from(res);
+              if (list.isNotEmpty || _cachedPosts.isEmpty) {
+                _cachedPosts = list;
+                _markCacheFresh('posts');
+                yield list;
+              }
             }
           }
         } catch (e) {
@@ -1945,11 +1990,11 @@ class SupabaseService {
             yield _cachedPosts;
           }
         }
-        await Future.delayed(const Duration(seconds: 45));
+        await Future.delayed(const Duration(seconds: 60));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeReports() {
@@ -1960,18 +2005,21 @@ class SupabaseService {
       }
       while (true) {
         try {
-          final res = await client
-              .from('reports')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(50)
-              .timeout(const Duration(seconds: 4));
-          if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res)
-                .where(isRealModerationReport)
-                .toList();
-            _cachedReports = list;
-            yield list;
+          if (!_isCacheFresh('reports') || _cachedReports.isEmpty) {
+            final res = await client
+                .from('reports')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(30)
+                .timeout(const Duration(seconds: 4));
+            if (res is List) {
+              final list = List<Map<String, dynamic>>.from(res)
+                  .where(isRealModerationReport)
+                  .toList();
+              _cachedReports = list;
+              _markCacheFresh('reports');
+              yield list;
+            }
           }
         } catch (e) {
           debugPrint('getRealtimeReports error: $e');
@@ -1979,11 +2027,11 @@ class SupabaseService {
             yield _cachedReports.where(isRealModerationReport).toList();
           }
         }
-        await Future.delayed(const Duration(seconds: 45));
+        await Future.delayed(const Duration(seconds: 60));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeCoinTransactions() {
@@ -1993,17 +2041,20 @@ class SupabaseService {
       }
       while (true) {
         try {
-          final res = await client
-              .from('coin_transactions')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(50)
-              .timeout(const Duration(seconds: 4));
-          if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res);
-            if (list.isNotEmpty || _cachedCoinTransactions.isEmpty) {
-              _cachedCoinTransactions = list;
-              yield list;
+          if (!_isCacheFresh('coin_transactions') || _cachedCoinTransactions.isEmpty) {
+            final res = await client
+                .from('coin_transactions')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(30)
+                .timeout(const Duration(seconds: 4));
+            if (res is List) {
+              final list = List<Map<String, dynamic>>.from(res);
+              if (list.isNotEmpty || _cachedCoinTransactions.isEmpty) {
+                _cachedCoinTransactions = list;
+                _markCacheFresh('coin_transactions');
+                yield list;
+              }
             }
           }
         } catch (e) {
@@ -2012,11 +2063,11 @@ class SupabaseService {
             yield _cachedCoinTransactions;
           }
         }
-        await Future.delayed(const Duration(seconds: 45));
+        await Future.delayed(const Duration(seconds: 60));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeNotifications() {
@@ -2026,17 +2077,20 @@ class SupabaseService {
       }
       while (true) {
         try {
-          final res = await client
-              .from('notifications')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(40)
-              .timeout(const Duration(seconds: 4));
-          if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res);
-            if (list.isNotEmpty || _cachedNotifications.isEmpty) {
-              _cachedNotifications = list;
-              yield list;
+          if (!_isCacheFresh('notifications') || _cachedNotifications.isEmpty) {
+            final res = await client
+                .from('notifications')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(25)
+                .timeout(const Duration(seconds: 4));
+            if (res is List) {
+              final list = List<Map<String, dynamic>>.from(res);
+              if (list.isNotEmpty || _cachedNotifications.isEmpty) {
+                _cachedNotifications = list;
+                _markCacheFresh('notifications');
+                yield list;
+              }
             }
           }
         } catch (e) {
@@ -2045,11 +2099,11 @@ class SupabaseService {
             yield _cachedNotifications;
           }
         }
-        await Future.delayed(const Duration(seconds: 45));
+        await Future.delayed(const Duration(seconds: 60));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeRooms() {
@@ -2059,17 +2113,20 @@ class SupabaseService {
       }
       while (true) {
         try {
-          final res = await client
-              .from('rooms')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(40)
-              .timeout(const Duration(seconds: 4));
-          if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res);
-            if (list.isNotEmpty || _cachedRooms.isEmpty) {
-              _cachedRooms = list;
-              yield list;
+          if (!_isCacheFresh('rooms') || _cachedRooms.isEmpty) {
+            final res = await client
+                .from('rooms')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(25)
+                .timeout(const Duration(seconds: 4));
+            if (res is List) {
+              final list = List<Map<String, dynamic>>.from(res);
+              if (list.isNotEmpty || _cachedRooms.isEmpty) {
+                _cachedRooms = list;
+                _markCacheFresh('rooms');
+                yield list;
+              }
             }
           }
         } catch (e) {
@@ -2078,11 +2135,11 @@ class SupabaseService {
             yield _cachedRooms;
           }
         }
-        await Future.delayed(const Duration(seconds: 30));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeActiveMatches() {
@@ -2092,17 +2149,20 @@ class SupabaseService {
       }
       while (true) {
         try {
-          final res = await client
-              .from('active_matches')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(30)
-              .timeout(const Duration(seconds: 4));
-          if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res);
-            if (list.isNotEmpty || _cachedActiveMatches.isEmpty) {
-              _cachedActiveMatches = list;
-              yield list;
+          if (!_isCacheFresh('active_matches') || _cachedActiveMatches.isEmpty) {
+            final res = await client
+                .from('active_matches')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(20)
+                .timeout(const Duration(seconds: 4));
+            if (res is List) {
+              final list = List<Map<String, dynamic>>.from(res);
+              if (list.isNotEmpty || _cachedActiveMatches.isEmpty) {
+                _cachedActiveMatches = list;
+                _markCacheFresh('active_matches');
+                yield list;
+              }
             }
           }
         } catch (e) {
@@ -2111,11 +2171,11 @@ class SupabaseService {
             yield _cachedActiveMatches;
           }
         }
-        await Future.delayed(const Duration(seconds: 30));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeTournaments() {
@@ -2125,17 +2185,20 @@ class SupabaseService {
       }
       while (true) {
         try {
-          final res = await client
-              .from('tournaments')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(30)
-              .timeout(const Duration(seconds: 4));
-          if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res);
-            if (list.isNotEmpty || _cachedTournaments.isEmpty) {
-              _cachedTournaments = list;
-              yield list;
+          if (!_isCacheFresh('tournaments') || _cachedTournaments.isEmpty) {
+            final res = await client
+                .from('tournaments')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(20)
+                .timeout(const Duration(seconds: 4));
+            if (res is List) {
+              final list = List<Map<String, dynamic>>.from(res);
+              if (list.isNotEmpty || _cachedTournaments.isEmpty) {
+                _cachedTournaments = list;
+                _markCacheFresh('tournaments');
+                yield list;
+              }
             }
           }
         } catch (e) {
@@ -2144,11 +2207,11 @@ class SupabaseService {
             yield _cachedTournaments;
           }
         }
-        await Future.delayed(const Duration(seconds: 30));
+        await Future.delayed(const Duration(seconds: 45));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeProofHistory() {
@@ -2158,16 +2221,19 @@ class SupabaseService {
       }
       while (true) {
         try {
-          final res = await client
-              .from('proof_history')
-              .select()
-              .order('created_at', ascending: false)
-              .limit(40)
-              .timeout(const Duration(seconds: 4));
-          if (res is List) {
-            final list = List<Map<String, dynamic>>.from(res);
-            _cachedProofHistory = list;
-            yield list;
+          if (!_isCacheFresh('proof_history') || _cachedProofHistory.isEmpty) {
+            final res = await client
+                .from('proof_history')
+                .select()
+                .order('created_at', ascending: false)
+                .limit(30)
+                .timeout(const Duration(seconds: 4));
+            if (res is List) {
+              final list = List<Map<String, dynamic>>.from(res);
+              _cachedProofHistory = list;
+              _markCacheFresh('proof_history');
+              yield list;
+            }
           }
         } catch (e) {
           debugPrint('getRealtimeProofHistory error: $e');
@@ -2175,11 +2241,11 @@ class SupabaseService {
             yield _cachedProofHistory;
           }
         }
-        await Future.delayed(const Duration(seconds: 45));
+        await Future.delayed(const Duration(seconds: 60));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeSingleRoom(String roomId) {
@@ -2198,11 +2264,11 @@ class SupabaseService {
         } catch (e) {
           debugPrint('getRealtimeSingleRoom error: $e');
         }
-        await Future.delayed(const Duration(seconds: 15));
+        await Future.delayed(const Duration(seconds: 20));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeRoomMessages(String roomId) {
@@ -2214,7 +2280,7 @@ class SupabaseService {
               .select()
               .eq('room_id', roomId)
               .order('created_at', ascending: true)
-              .limit(60)
+              .limit(50)
               .timeout(const Duration(seconds: 4));
           if (res is List) {
             yield List<Map<String, dynamic>>.from(res);
@@ -2222,11 +2288,11 @@ class SupabaseService {
         } catch (e) {
           debugPrint('getRealtimeRoomMessages error: $e');
         }
-        await Future.delayed(const Duration(seconds: 12));
+        await Future.delayed(const Duration(seconds: 15));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 
   static Stream<List<Map<String, dynamic>>> getRealtimeRewardClaims({String? userId}) {
@@ -2245,12 +2311,15 @@ class SupabaseService {
         }
       }
       while (true) {
-        final list = await fetchRewardClaims(userId: cleanUid.isEmpty ? null : cleanUid);
+        final list = await fetchRewardClaims(
+          userId: cleanUid.isEmpty ? null : cleanUid,
+          limit: cleanUid.isEmpty ? 50 : 20,
+        );
         yield list;
-        await Future.delayed(const Duration(seconds: 45));
+        await Future.delayed(const Duration(seconds: 60));
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(onCancel: (sub) => sub.cancel());
   }
 }
