@@ -540,13 +540,17 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       return;
     }
 
+    final entryFeeCoins = _parseEntryFeeCoins(tournament['entry_fee']);
+
     if (isEntryLocked || rawStatus == 'cancelled') {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             currentTeams < 2
-                ? 'Tournament cancelled (< 2 teams joined 15m before start). Entry fees auto-refunded.'
+                ? (entryFeeCoins > 0
+                    ? 'Tournament cancelled (< 2 teams joined 15m before start). Entry fees auto-refunded.'
+                    : 'Tournament cancelled (< 2 teams joined 15m before start).')
                 : 'Entry Locked! Registrations close 15 minutes before match start.',
           ),
           backgroundColor: const Color(0xFFFF4655),
@@ -619,7 +623,6 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
       }
     }
 
-    final entryFeeCoins = _parseEntryFeeCoins(tournament['entry_fee']);
     if (entryFeeCoins > 0) {
       final wallet = await CoinWalletService().getOrCreateWallet(user.id);
       if (wallet.gCoins < entryFeeCoins) {
@@ -982,7 +985,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                             isCompleted
                                                 ? 'Completed 🏆'
                                                 : isCancelled
-                                                    ? 'Cancelled (Refunded)'
+                                                    ? (entryFeeCoins > 0
+                                                        ? 'Cancelled (Refunded)'
+                                                        : 'Cancelled (< 2 Teams)')
                                                     : prizeBadge,
                                             style: TextStyle(
                                               color: isCompleted
@@ -1063,6 +1068,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                     isEntryWindowClosed,
                                     currentTeams,
                                     maxTeams,
+                                    entryFeeCoins,
                                   ),
                                   const SizedBox(height: 12),
                                   ClipRRect(
@@ -1235,7 +1241,9 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                                               isCompleted
                                                   ? 'View Results & Winners 👑'
                                                   : isCancelled
-                                                      ? 'Cancelled (< 2 Teams • Entry Fee Refunded)'
+                                                      ? (entryFeeCoins > 0
+                                                          ? 'Cancelled (< 2 Teams • Entry Fee Refunded)'
+                                                          : 'Cancelled (< 2 Teams)')
                                                       : isRegistered
                                                           ? '✓ Registered • View Details'
                                                           : isFull
@@ -1285,6 +1293,7 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     bool isEntryWindowClosed,
     int currentTeams,
     int maxTeams,
+    int entryFeeCoins,
   ) {
     if (isCompleted) {
       return Container(
@@ -1321,14 +1330,16 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: const Color(0xFFFF4655).withOpacity(0.4)),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.cancel_rounded, size: 18, color: Color(0xFFFF4655)),
-            SizedBox(width: 8),
+            const Icon(Icons.cancel_rounded, size: 18, color: Color(0xFFFF4655)),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Fewer than 2 teams joined 15m before start • Tournament Cancelled & Entry Fee Auto-Refunded to G-Coins Wallet',
-                style: TextStyle(
+                entryFeeCoins > 0
+                    ? 'Fewer than 2 teams joined 15m before start • Tournament Cancelled & Entry Fee Auto-Refunded to G-Coins Wallet'
+                    : 'Fewer than 2 teams joined 15m before start • Tournament Cancelled (< 2 Teams)',
+                style: const TextStyle(
                   color: Color(0xFFFF4655),
                   fontSize: 11.5,
                   fontWeight: FontWeight.bold,

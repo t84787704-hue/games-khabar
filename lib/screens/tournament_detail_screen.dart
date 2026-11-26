@@ -532,12 +532,16 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       return;
     }
 
+    final entryFeeCoins = _parseEntryFeeCoins(_tournament?['entry_fee']);
+
     if (_isWithin15MinEntryLock(matchTime) || rawStatus == 'cancelled') {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             currentTeams < 2
-                ? 'Tournament cancelled (< 2 teams joined 15m before start). Entry fees auto-refunded.'
+                ? (entryFeeCoins > 0
+                    ? 'Tournament cancelled (< 2 teams joined 15m before start). Entry fees auto-refunded.'
+                    : 'Tournament cancelled (< 2 teams joined 15m before start).')
                 : 'Entry Locked! Registrations close 15 minutes before match start.',
           ),
           backgroundColor: const Color(0xFFFF4655),
@@ -591,7 +595,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         }
       }
 
-      final entryFeeCoins = _parseEntryFeeCoins(_tournament?['entry_fee']);
       if (entryFeeCoins > 0) {
         final wallet = await CoinWalletService().getOrCreateWallet(uid);
         final availableGCoins = WalletRepository.instance.currentGCoins > 0
@@ -1302,7 +1305,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                       isTournamentCompleted
                                           ? 'COMPLETED'
                                           : isCancelledUnder2
-                                              ? 'CANCELLED (REFUNDED)'
+                                              ? (entryFeeCoins > 0
+                                                  ? 'CANCELLED (REFUNDED)'
+                                                  : 'MATCH CANCELLED')
                                               : isSlotsFull
                                                   ? 'SLOTS FULL'
                                                   : isEntryLockedProceeding
@@ -1404,7 +1409,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                       isTournamentCompleted
                                           ? 'Tournament Status: Successfully Completed'
                                           : isCancelledUnder2
-                                              ? 'Tournament Status: Cancelled (< 2 Teams • Entry Fee Auto-Refunded)'
+                                              ? (entryFeeCoins > 0
+                                                  ? 'Tournament Status: Cancelled (< 2 Teams • Entry Fee Auto-Refunded)'
+                                                  : 'Tournament Status: Cancelled (< 2 Teams)')
                                               : isSlotsFull
                                                   ? 'Tournament Status: Slots Full ($maxTeams / $maxTeams) • Entries Locked & Match Proceeding'
                                                   : isEntryLockedProceeding
@@ -1536,7 +1543,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                     Text(
                                       '• Format ($mode): $slotMeaning ($maxSlotsHelperText).\n'
                                       '• Max Capacity & Entry Lock: Registration caps at $maxTeams slots ($maxSlotsHelperText) and locks 15 minutes before match start or immediately when all $maxTeams slots are full.\n'
-                                      '• Minimum 2 Squads/Teams Rule: At least 2 squads/teams must join before entry lock for the match to proceed. If fewer than 2 join, the tournament cancels and any entry fee auto-refunds to your G-Coins Wallet.',
+                                      '${entryFeeCoins > 0 ? "• Minimum 2 Squads/Teams Rule: At least 2 squads/teams must join before entry lock for the match to proceed. If fewer than 2 join, the tournament cancels and the entry fee auto-refunds to your G-Coins Wallet." : "• Minimum 2 Squads/Teams Rule: At least 2 squads/teams must join before entry lock for the match to proceed. If fewer than 2 join before the 15-minute cutoff, the tournament is cancelled."}',
                                       style: TextStyle(
                                         color: textSec,
                                         fontSize: 11.5,
@@ -1623,7 +1630,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                                   ? '✓ You Are Registered for This Match'
                                                   : '✓ Squad Registered for This Tournament')
                                               : isCancelledUnder2
-                                                  ? 'Cancelled (< 2 Teams • Refunded)'
+                                                  ? (entryFeeCoins > 0
+                                                      ? 'Cancelled (< 2 Teams • Entry Fee Refunded)'
+                                                      : 'Cancelled (< 2 Teams)')
                                                   : isSlotsFull
                                                       ? 'Slots Full ($currentTeams / $maxTeams)'
                                                       : isEntryWindowClosed
@@ -2297,7 +2306,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                             const SizedBox(height: 4),
                                             Text(
                                               isCancelledUnder2
-                                                  ? 'This tournament did not reach the minimum 2 squads requirement before entry lock.'
+                                                  ? (entryFeeCoins > 0
+                                                      ? 'This tournament did not reach the minimum 2 squads requirement before entry lock. Your entry fee has been auto-refunded to your G-Coins Wallet.'
+                                                      : 'This tournament did not reach the minimum 2 squads requirement before entry lock.')
                                                   : 'This tournament is currently UPCOMING ($formattedDate). Win proof submission will unlock automatically once the match begins and completes.',
                                               style: TextStyle(
                                                 color: textSec,
