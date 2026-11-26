@@ -1781,6 +1781,12 @@ class SupabaseService {
     final String code = (claim['claim_code'] ?? '').toString().trim();
     if (id.isEmpty && code.isEmpty) return;
 
+    final Map<String, dynamic> normalizedClaim = Map<String, dynamic>.from(claim);
+    final String status =
+        (normalizedClaim['status'] ?? '').toString().trim().toLowerCase();
+    final String rawDeliveredAt =
+        (normalizedClaim['delivered_at'] ?? '').toString().trim();
+
     final updated = List<Map<String, dynamic>>.from(_cachedRewardClaims);
     final int idx = updated.indexWhere((c) {
       final cId = (c['id'] ?? '').toString().trim();
@@ -1790,10 +1796,19 @@ class SupabaseService {
       return false;
     });
 
+    if (status == 'delivered' && rawDeliveredAt.isEmpty) {
+      final String existingDeliveredAt = idx >= 0
+          ? (updated[idx]['delivered_at'] ?? '').toString().trim()
+          : '';
+      normalizedClaim['delivered_at'] = existingDeliveredAt.isNotEmpty
+          ? existingDeliveredAt
+          : DateTime.now().toUtc().toIso8601String();
+    }
+
     if (idx >= 0) {
-      updated[idx] = {...updated[idx], ...claim};
+      updated[idx] = {...updated[idx], ...normalizedClaim};
     } else {
-      updated.insert(0, Map<String, dynamic>.from(claim));
+      updated.insert(0, normalizedClaim);
     }
     _cachedRewardClaims = updated;
     _cacheTimestamps.removeWhere((k, _) => k.startsWith('reward_claims'));

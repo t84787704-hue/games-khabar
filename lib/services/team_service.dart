@@ -124,6 +124,37 @@ class TeamService {
     return dt.toUtc().millisecondsSinceEpoch;
   }
 
+  /// Extracts the UTC `delivered_at` timestamp from a reward claim map
+  /// (falling back to `updated_at` or `created_at` only if `delivered_at` is absent).
+  static DateTime? parseDeliveredAtUtc(Map<String, dynamic>? claim) {
+    if (claim == null) return null;
+    for (final key in const ['delivered_at', 'updated_at', 'created_at']) {
+      final raw = (claim[key] ?? '').toString().trim();
+      if (raw.isEmpty) continue;
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) {
+        return parsed.toUtc();
+      }
+    }
+    return null;
+  }
+
+  /// Returns true when [claim] has status `Delivered` and at least 24 hours have passed
+  /// since `delivered_at` (`DateTime.now().toUtc().difference(deliveredAt) >= Duration(hours: 24)`).
+  static bool isDeliveredClaimExpired24h(
+    Map<String, dynamic>? claim, {
+    DateTime? nowUtc,
+  }) {
+    if (claim == null) return false;
+    final String status =
+        (claim['status'] ?? '').toString().trim().toLowerCase();
+    if (status != 'delivered') return false;
+    final DateTime? deliveredAt = parseDeliveredAtUtc(claim);
+    if (deliveredAt == null) return false;
+    final DateTime referenceUtc = (nowUtc ?? DateTime.now()).toUtc();
+    return referenceUtc.difference(deliveredAt) >= const Duration(hours: 24);
+  }
+
   /// Evaluates whether [team] has completed a delivered weekly reward cycle in [weekKey]
   /// based on [allClaims] from `public.reward_claims`.
   /// When a team's submitted weekly reward claim(s) are marked 'delivered' (and no older
@@ -234,10 +265,21 @@ class TeamService {
 
     final bool hasCompletedDeliveredRound =
         deliveredCount > 0 && !hasUnfinishedPendingInBatch;
+    final DateTime? latestDeliveredAtUtc = latestDeliveredMs > 1
+        ? DateTime.fromMillisecondsSinceEpoch(latestDeliveredMs, isUtc: true)
+        : null;
+    final bool isDeliveredExpired24h = hasCompletedDeliveredRound &&
+        latestDeliveredAtUtc != null &&
+        DateTime.now().toUtc().difference(latestDeliveredAtUtc) >=
+            const Duration(hours: 24);
+
     return {
       'hasCompletedDeliveredRound': hasCompletedDeliveredRound,
+      'hasReset': hasCompletedDeliveredRound,
       'cutoffUtcMs': hasCompletedDeliveredRound ? latestDeliveredMs : 0,
       'deliveredCount': deliveredCount,
+      'latestDeliveredAtUtc': latestDeliveredAtUtc?.toIso8601String(),
+      'isDeliveredExpired24h': isDeliveredExpired24h,
     };
   }
 

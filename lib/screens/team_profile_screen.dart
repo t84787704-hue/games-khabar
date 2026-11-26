@@ -3117,8 +3117,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       allClaims: allClaims,
                       weekKey: currentWeekKey,
                     );
-                    final bool hasResetRound = (resetInfo['hasReset'] as bool?) ?? false;
-                    final int cutoffUtcMs = (resetInfo['cutoffUtcMs'] as num?)?.toInt() ?? 0;
+                    final bool isTeamDeliveredRoundExpired24h =
+                        (resetInfo['isDeliveredExpired24h'] as bool?) ?? false;
 
                     final String shareRewardLabel =
                         CoinWalletScreen.getConsistentRewardLabelForShare(
@@ -3133,7 +3133,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     final bool isViewerTeamMember =
                         viewerUid.isNotEmpty && team.isMember(viewerUid);
 
-                    Map<String, dynamic>? findMemberClaim(String memberId) {
+                    Map<String, dynamic>? findRawMemberClaim(String memberId) {
                       final cleanM = memberId.trim();
                       if (cleanM.isEmpty) return null;
                       final cleanMLower = cleanM.toLowerCase();
@@ -3152,7 +3152,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                         final cWeek = (c['week_key'] ?? '').toString().trim();
                         final cGame = (c['game_name'] ?? '').toString().trim().toLowerCase();
                         final String status =
-                            (c['status'] ?? 'pending').toString().toLowerCase();
+                            (c['status'] ?? 'pending').toString().trim().toLowerCase();
                         if (status == 'rejected') continue;
                         final bool weekMatches = cWeek.isEmpty ||
                             cWeek == currentWeekKey ||
@@ -3162,19 +3162,22 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                     cWeek.startsWith('${concludedWeekKey}_r')));
                         if (weekMatches &&
                             (cGame.isEmpty || cGame == normalizedTeamGameKey)) {
-                          if (hasResetRound && cutoffUtcMs > 0 && status == 'delivered') {
-                            final int claimTs = TeamService.parseUtcMs(
-                              c['delivered_at'] ?? c['updated_at'] ?? c['created_at'],
-                            );
-                            if (claimTs <= 0 || claimTs <= cutoffUtcMs) {
-                              // Completed & delivered round has been reset to 0
-                              continue;
-                            }
-                          }
                           return c;
                         }
                       }
                       return null;
+                    }
+
+                    bool isClaimDeliveredAndExpired24h(Map<String, dynamic>? claim) {
+                      if (claim == null) return false;
+                      final String status =
+                          (claim['status'] ?? '').toString().trim().toLowerCase();
+                      if (status != 'delivered') return false;
+                      final DateTime? deliveredAt =
+                          TeamService.parseDeliveredAtUtc(claim);
+                      if (deliveredAt == null) return false;
+                      return DateTime.now().toUtc().difference(deliveredAt) >=
+                          const Duration(hours: 24);
                     }
 
                     final List<Map<String, dynamic>> rowsToRender =
@@ -3196,12 +3199,30 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 };
                               }).toList();
 
+                    bool anyMemberDeliveredExpired24h = isTeamDeliveredRoundExpired24h;
+                    for (final m in rowsToRender) {
+                      final String mUid = (m['userId'] ?? '').toString().trim();
+                      final rawC = findRawMemberClaim(mUid);
+                      if (isClaimDeliveredAndExpired24h(rawC)) {
+                        anyMemberDeliveredExpired24h = true;
+                        break;
+                      }
+                    }
+
+                    final Map<String, dynamic>? rawViewerClaim =
+                        isViewerTeamMember ? findRawMemberClaim(viewerUid) : null;
+                    final bool isViewerDeliveredExpired24h =
+                        isClaimDeliveredAndExpired24h(rawViewerClaim);
                     final Map<String, dynamic>? viewerClaim =
-                        isViewerTeamMember ? findMemberClaim(viewerUid) : null;
+                        isViewerDeliveredExpired24h ? null : rawViewerClaim;
                     final bool hasViewerClaimed = viewerClaim != null;
                     final bool isViewerClaimDelivered =
                         (viewerClaim?['status'] ?? '').toString().toLowerCase() == 'delivered';
                     final bool isSectionUnlocked = isClaimUnlocked || hasViewerClaimed;
+                    final bool shouldHideWeeklyRedeemCard =
+                        (isViewerDeliveredExpired24h || anyMemberDeliveredExpired24h) &&
+                            !isClaimUnlocked &&
+                            !hasViewerClaimed;
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3222,11 +3243,21 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           );
                           final String role = (m['role'] ?? 'Member').toString();
                           final int coins = (m['weeklyCoins'] as num?)?.toInt() ?? 0;
-                          final Map<String, dynamic>? memberClaim = findMemberClaim(mUid);
+                          final Map<String, dynamic>? rawMemberClaim =
+                              findRawMemberClaim(mUid);
+                          final bool isMemberClaimExpired24h =
+                              isClaimDeliveredAndExpired24h(rawMemberClaim);
+                          final Map<String, dynamic>? memberClaim =
+                              isMemberClaimExpired24h ? null : rawMemberClaim;
                           final bool hasMemberClaimed = memberClaim != null;
                           final bool isMemberClaimDelivered =
                               (memberClaim?['status'] ?? '').toString().toLowerCase() ==
                                   'delivered';
+                          final bool hideMemberRewardShareSection =
+                              isMemberClaimExpired24h ||
+                                  (anyMemberDeliveredExpired24h &&
+                                      !isClaimUnlocked &&
+                                      !hasMemberClaimed);
 
                           return _buildMemberContributionRow(
                             memberUid: mUid,
@@ -3244,6 +3275,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                             shareRewardLabel: shareRewardLabel,
                             hasMemberClaimed: hasMemberClaimed,
                             isMemberClaimDelivered: isMemberClaimDelivered,
+                            hideRewardShareSection: hideMemberRewardShareSection,
                             onTapClaim: isCurrentUser && (isClaimUnlocked || hasMemberClaimed)
                                 ? () => CoinWalletScreen.openWinnerTeamMemberClaimDialog(
                                       context: context,
@@ -3256,226 +3288,228 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                                 : null,
                           );
                         }),
-                        const SizedBox(height: 6),
+                        if (!shouldHideWeeklyRedeemCard) ...[
+                          const SizedBox(height: 6),
 
-                        // Dedicated Team Profile Weekly Winner Reward Redeem Card (Always visible: Locked vs Unlocked)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(13),
-                          decoration: BoxDecoration(
-                            color: isSectionUnlocked
-                                ? (isDark
-                                    ? const Color(0xFF00FF88).withOpacity(0.08)
-                                    : const Color(0xFFECFDF5))
-                                : (isDark
-                                    ? const Color(0xFFFFB800).withOpacity(0.08)
-                                    : const Color(0xFFFFFBEB)),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isSectionUnlocked ? greenBorder : goldBorder,
-                              width: 1.2,
+                          // Dedicated Team Profile Weekly Winner Reward Redeem Card (Expires 24h after Delivered)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(13),
+                            decoration: BoxDecoration(
+                              color: isSectionUnlocked
+                                  ? (isDark
+                                      ? const Color(0xFF00FF88).withOpacity(0.08)
+                                      : const Color(0xFFECFDF5))
+                                  : (isDark
+                                      ? const Color(0xFFFFB800).withOpacity(0.08)
+                                      : const Color(0xFFFFFBEB)),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSectionUnlocked ? greenBorder : goldBorder,
+                                width: 1.2,
+                              ),
                             ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 6,
-                                alignment: WrapAlignment.spaceBetween,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        isSectionUnlocked
-                                            ? Icons.lock_open_rounded
-                                            : Icons.lock_outline_rounded,
-                                        color: isSectionUnlocked ? greenText : goldText,
-                                        size: 17,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Flexible(
-                                        child: Text(
-                                          'Weekly Winner Reward Redeem',
-                                          style: TextStyle(
-                                            color: textPri,
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 13,
-                                          ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  alignment: WrapAlignment.spaceBetween,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          isSectionUnlocked
+                                              ? Icons.lock_open_rounded
+                                              : Icons.lock_outline_rounded,
+                                          color: isSectionUnlocked ? greenText : goldText,
+                                          size: 17,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 9,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isSectionUnlocked ? greenBg : goldBg,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: isSectionUnlocked ? greenBorder : goldBorder,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      isClaimUnlocked
-                                          ? '🔓 UNLOCKED (Rank #1 • Monday Claim)'
-                                          : (hasViewerClaimed
-                                              ? '✅ CLAIM DONE'
-                                              : (isTopRank
-                                                  ? '🔒 LOCKED (Unlocks Week End / Mon)'
-                                                  : '🔒 LOCKED (Need Rank #1 at Week End)')),
-                                      style: TextStyle(
-                                        color: isSectionUnlocked ? greenBadgeText : goldText,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 10.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Note: If ${team.name} [${team.tag}] finishes at Rank #1 on the $displayGameLabel Weekly Leaderboard at the end of the week, the ${NumberFormat('#,###').format(rewardPool)} PKR ($currencyLabel) weekly prize is unlocked and divided equally among all active team members ($shareRewardLabel per member).',
-                                softWrap: true,
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : const Color(0xFF000000),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.4,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              if (isViewerTeamMember && (isClaimUnlocked || hasViewerClaimed))
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () =>
-                                        CoinWalletScreen.openWinnerTeamMemberClaimDialog(
-                                      context: context,
-                                      activeTeam: team,
-                                      userId: viewerUid,
-                                      onClaimSubmitted: () {
-                                        if (mounted) setState(() {});
-                                      },
-                                    ),
-                                    icon: Icon(
-                                      hasViewerClaimed
-                                          ? Icons.verified_rounded
-                                          : Icons.redeem_rounded,
-                                      size: 16,
-                                      color: Colors.black,
-                                    ),
-                                    label: Text(
-                                      hasViewerClaimed
-                                          ? (isViewerClaimDelivered
-                                              ? '✅ Claim Done (Delivered) • View Details'
-                                              : '✅ Claim Done • View Claim Receipt')
-                                          : '🎁 Redeem Your Equal Share ($shareRewardLabel)',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF00FF88),
-                                      foregroundColor: Colors.black,
-                                      iconColor: Colors.black,
-                                      minimumSize: const Size(double.infinity, 40),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 10,
-                                      ),
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              else if (!isClaimUnlocked)
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton.icon(
-                                    onPressed: () {
-                                      final String lockMsg = isTopRank
-                                          ? '🔒 ${team.name} [${team.tag}] is currently Rank #1 in the active $displayGameLabel weekly cycle! Weekly reward claims unlock only at the end of the weekly cycle (Monday claim window) if your team finishes at Rank #1.'
-                                          : '🔒 Redeem is currently locked. Contribute G-Coins to help ${team.name} [${team.tag}] finish at Rank #1 in $displayGameLabel at the end of the week (Monday claim window) to unlock $shareRewardLabel per member!';
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            lockMsg,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w700,
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Text(
+                                            'Weekly Winner Reward Redeem',
+                                            style: TextStyle(
+                                              color: textPri,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 13,
                                             ),
                                           ),
-                                          backgroundColor: const Color(0xFF92400E),
-                                          behavior: SnackBarBehavior.floating,
                                         ),
-                                      );
-                                    },
-                                    icon: Icon(
-                                      Icons.lock_rounded,
-                                      size: 15,
-                                      color: goldText,
+                                      ],
                                     ),
-                                    label: Text(
-                                      isTopRank
-                                          ? '🔒 Redeem Locked — Unlocks at Week End (Monday) for #1 Team ($shareRewardLabel)'
-                                          : '🔒 Redeem Locked — Finish Rank #1 at Week End to Unlock ($shareRewardLabel)',
-                                      textAlign: TextAlign.center,
-                                      softWrap: true,
-                                      style: TextStyle(
-                                        color: goldText,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 11.5,
-                                      ),
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      backgroundColor: goldBg,
-                                      minimumSize: const Size(double.infinity, 40),
+                                    Container(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 10,
+                                        horizontal: 9,
+                                        vertical: 4,
                                       ),
-                                      side: BorderSide(color: goldBorder, width: 1.1),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
+                                      decoration: BoxDecoration(
+                                        color: isSectionUnlocked ? greenBg : goldBg,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: isSectionUnlocked ? greenBorder : goldBorder,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        isClaimUnlocked
+                                            ? '🔓 UNLOCKED (Rank #1 • Monday Claim)'
+                                            : (hasViewerClaimed
+                                                ? '✅ CLAIM DONE'
+                                                : (isTopRank
+                                                    ? '🔒 LOCKED (Unlocks Week End / Mon)'
+                                                    : '🔒 LOCKED (Need Rank #1 at Week End)')),
+                                        style: TextStyle(
+                                          color: isSectionUnlocked ? greenBadgeText : goldText,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 10.5,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                )
-                              else
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: greenBg,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: greenBorder),
-                                  ),
-                                  child: Text(
-                                    '🔓 Rank #1 Winner Redemption Unlocked for ${team.name} Members ($shareRewardLabel / member)',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: greenBadgeText,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 11.2,
-                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Note: If ${team.name} [${team.tag}] finishes at Rank #1 on the $displayGameLabel Weekly Leaderboard at the end of the week, the ${NumberFormat('#,###').format(rewardPool)} PKR ($currencyLabel) weekly prize is unlocked and divided equally among all active team members ($shareRewardLabel per member).',
+                                  softWrap: true,
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : const Color(0xFF000000),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.4,
                                   ),
                                 ),
-                            ],
+                                const SizedBox(height: 10),
+                                if (isViewerTeamMember && (isClaimUnlocked || hasViewerClaimed))
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () =>
+                                          CoinWalletScreen.openWinnerTeamMemberClaimDialog(
+                                        context: context,
+                                        activeTeam: team,
+                                        userId: viewerUid,
+                                        onClaimSubmitted: () {
+                                          if (mounted) setState(() {});
+                                        },
+                                      ),
+                                      icon: Icon(
+                                        hasViewerClaimed
+                                            ? Icons.verified_rounded
+                                            : Icons.redeem_rounded,
+                                        size: 16,
+                                        color: Colors.black,
+                                      ),
+                                      label: Text(
+                                        hasViewerClaimed
+                                            ? (isViewerClaimDelivered
+                                                ? '✅ Claim Done (Delivered) • View Details'
+                                                : '✅ Claim Done • View Claim Receipt')
+                                            : '🎁 Redeem Your Equal Share ($shareRewardLabel)',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF00FF88),
+                                        foregroundColor: Colors.black,
+                                        iconColor: Colors.black,
+                                        minimumSize: const Size(double.infinity, 40),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 10,
+                                        ),
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else if (!isClaimUnlocked)
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () {
+                                        final String lockMsg = isTopRank
+                                            ? '🔒 ${team.name} [${team.tag}] is currently Rank #1 in the active $displayGameLabel weekly cycle! Weekly reward claims unlock only at the end of the weekly cycle (Monday claim window) if your team finishes at Rank #1.'
+                                            : '🔒 Redeem is currently locked. Contribute G-Coins to help ${team.name} [${team.tag}] finish at Rank #1 in $displayGameLabel at the end of the week (Monday claim window) to unlock $shareRewardLabel per member!';
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              lockMsg,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            backgroundColor: const Color(0xFF92400E),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      },
+                                      icon: Icon(
+                                        Icons.lock_rounded,
+                                        size: 15,
+                                        color: goldText,
+                                      ),
+                                      label: Text(
+                                        isTopRank
+                                            ? '🔒 Redeem Locked — Unlocks at Week End (Monday) for #1 Team ($shareRewardLabel)'
+                                            : '🔒 Redeem Locked — Finish Rank #1 at Week End to Unlock ($shareRewardLabel)',
+                                        textAlign: TextAlign.center,
+                                        softWrap: true,
+                                        style: TextStyle(
+                                          color: goldText,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 11.5,
+                                        ),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        backgroundColor: goldBg,
+                                        minimumSize: const Size(double.infinity, 40),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 10,
+                                        ),
+                                        side: BorderSide(color: goldBorder, width: 1.1),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: greenBg,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: greenBorder),
+                                    ),
+                                    child: Text(
+                                      '🔓 Rank #1 Winner Redemption Unlocked for ${team.name} Members ($shareRewardLabel / member)',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: greenBadgeText,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 11.2,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     );
                   },
@@ -3543,6 +3577,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     String shareRewardLabel = '',
     bool hasMemberClaimed = false,
     bool isMemberClaimDelivered = false,
+    bool hideRewardShareSection = false,
     VoidCallback? onTapClaim,
   }) {
     final bool isDark = ThemeService.isDarkMode;
@@ -3700,7 +3735,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               ),
             ),
           ),
-          if (shareRewardLabel.isNotEmpty) ...[
+          if (shareRewardLabel.isNotEmpty && !hideRewardShareSection) ...[
             const SizedBox(height: 8),
             Container(
               width: double.infinity,

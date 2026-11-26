@@ -260,14 +260,10 @@ class CoinWalletScreen extends StatefulWidget {
         if (!matchesCurrentOrConcluded) continue;
         final String rStatus = (row['status'] ?? 'pending').toString().trim().toLowerCase();
         if (rStatus == 'rejected') continue;
-        if (hasResetRound && cutoffUtcMs > 0 && rStatus == 'delivered') {
-          final int claimTs = TeamService.parseUtcMs(
-            row['delivered_at'] ?? row['updated_at'] ?? row['created_at'],
-          );
-          if (claimTs <= 0 || claimTs <= cutoffUtcMs) {
-            // Delivered claim belongs to a completed/reset round; do not block new round
-            continue;
-          }
+        if (rStatus == 'delivered' &&
+            TeamService.isDeliveredClaimExpired24h(row)) {
+          // Delivered claim has expired after 24 hours; do not show or block new round
+          continue;
         }
         existingClaim = row;
         break;
@@ -1639,13 +1635,9 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
         if (!matchesCurrentOrConcluded) continue;
         final String rStatus = (row['status'] ?? 'pending').toString().trim().toLowerCase();
         if (rStatus == 'rejected') continue;
-        if (hasResetRound && cutoffUtcMs > 0 && rStatus == 'delivered') {
-          final int claimTs = TeamService.parseUtcMs(
-            row['delivered_at'] ?? row['updated_at'] ?? row['created_at'],
-          );
-          if (claimTs <= 0 || claimTs <= cutoffUtcMs) {
-            continue;
-          }
+        if (rStatus == 'delivered' &&
+            TeamService.isDeliveredClaimExpired24h(row)) {
+          continue;
         }
         existingClaim = row;
         break;
@@ -3513,10 +3505,10 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                           allClaims: allClaims,
                           weekKey: currentWeekKey,
                         );
-                        final bool hasResetRound = (resetInfo['hasReset'] as bool?) ?? false;
-                        final int cutoffUtcMs = (resetInfo['cutoffUtcMs'] as num?)?.toInt() ?? 0;
+                        final bool isTeamDeliveredRoundExpired24h =
+                            (resetInfo['isDeliveredExpired24h'] as bool?) ?? false;
 
-                        Map<String, dynamic>? findMemberClaim(String memberId) {
+                        Map<String, dynamic>? findRawMemberClaim(String memberId) {
                           final cleanM = memberId.trim();
                           if (cleanM.isEmpty) return null;
                           final cleanMLower = cleanM.toLowerCase();
@@ -3535,7 +3527,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                             final cWeek = (c['week_key'] ?? '').toString().trim();
                             final cGame = (c['game_name'] ?? '').toString().trim().toLowerCase();
                             final String status =
-                                (c['status'] ?? 'pending').toString().toLowerCase();
+                                (c['status'] ?? 'pending').toString().trim().toLowerCase();
                             if (status == 'rejected') continue;
                             final bool weekMatches = cWeek.isEmpty ||
                                 cWeek == currentWeekKey ||
@@ -3545,19 +3537,20 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                         cWeek.startsWith('${concludedWeekKey}_r')));
                             if (weekMatches &&
                                 (cGame.isEmpty || cGame == normalizedTeamGameKey)) {
-                              if (hasResetRound && cutoffUtcMs > 0 && status == 'delivered') {
-                                final int claimTs = TeamService.parseUtcMs(
-                                  c['delivered_at'] ?? c['updated_at'] ?? c['created_at'],
-                                );
-                                if (claimTs <= 0 || claimTs <= cutoffUtcMs) {
-                                  // Completed & delivered round has been reset to 0
-                                  continue;
-                                }
-                              }
                               return c;
                             }
                           }
                           return null;
+                        }
+
+                        bool anyMemberDeliveredExpired24h = isTeamDeliveredRoundExpired24h;
+                        for (final m in memberBreakdown) {
+                          final String mUid = (m['userId'] ?? '').toString().trim();
+                          final rawC = findRawMemberClaim(mUid);
+                          if (TeamService.isDeliveredClaimExpired24h(rawC)) {
+                            anyMemberDeliveredExpired24h = true;
+                            break;
+                          }
                         }
 
                         return Column(
@@ -3644,11 +3637,20 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                             final double shareRatio =
                                 teamCoins > 0 ? (coins / teamCoins).clamp(0.0, 1.0) : 0.0;
 
-                            final Map<String, dynamic>? memberClaim = findMemberClaim(mUid);
+                            final Map<String, dynamic>? rawMemberClaim = findRawMemberClaim(mUid);
+                            final bool isMemberClaimExpired24h =
+                                TeamService.isDeliveredClaimExpired24h(rawMemberClaim);
+                            final Map<String, dynamic>? memberClaim =
+                                isMemberClaimExpired24h ? null : rawMemberClaim;
                             final bool hasMemberClaimed = memberClaim != null;
                             final bool isMemberClaimDelivered =
                                 (memberClaim?['status'] ?? '').toString().toLowerCase() ==
                                     'delivered';
+                            final bool hideMemberRewardShareSection =
+                                isMemberClaimExpired24h ||
+                                    (anyMemberDeliveredExpired24h &&
+                                        !isClaimUnlocked &&
+                                        !hasMemberClaimed);
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
@@ -3782,201 +3784,203 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                                       ),
                                     ),
                                   ),
-                                  // Per-Member Reward Share & Individual Claim Action / Status
-                                  const SizedBox(height: 10),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: ThemeService.card,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: hasMemberClaimed
-                                            ? (isDark
-                                                ? GamerTheme.neonGreen.withOpacity(0.55)
-                                                : const Color(0xFF059669))
-                                            : (isClaimUnlocked
-                                                ? (isDark
-                                                    ? const Color(0xFFFFD700).withOpacity(0.45)
-                                                    : const Color(0xFFD97706))
-                                                : ThemeService.border),
+                                  // Per-Member Reward Share & Individual Claim Action / Status (Expires 24h after Delivered)
+                                  if (!hideMemberRewardShareSection) ...[
+                                    const SizedBox(height: 10),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 8,
                                       ),
-                                    ),
-                                    child: Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      alignment: WrapAlignment.spaceBetween,
-                                      crossAxisAlignment: WrapCrossAlignment.center,
-                                      children: [
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.card_giftcard_rounded,
-                                              color: (isClaimUnlocked || hasMemberClaimed)
+                                      decoration: BoxDecoration(
+                                        color: ThemeService.card,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: hasMemberClaimed
+                                              ? (isDark
+                                                  ? GamerTheme.neonGreen.withOpacity(0.55)
+                                                  : const Color(0xFF059669))
+                                              : (isClaimUnlocked
                                                   ? (isDark
-                                                      ? const Color(0xFFFFD700)
+                                                      ? const Color(0xFFFFD700).withOpacity(0.45)
                                                       : const Color(0xFFD97706))
-                                                  : ThemeService.textSecondary,
-                                              size: 15,
-                                            ),
-                                            const SizedBox(width: 5),
-                                            Flexible(
-                                              child: Text(
-                                                'Reward Share: $shareRewardLabel',
-                                                style: TextStyle(
-                                                  color: ThemeService.textPrimary,
-                                                  fontSize: 11.5,
-                                                  fontWeight: FontWeight.w800,
+                                                  : ThemeService.border),
+                                        ),
+                                      ),
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        alignment: WrapAlignment.spaceBetween,
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        children: [
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.card_giftcard_rounded,
+                                                color: (isClaimUnlocked || hasMemberClaimed)
+                                                    ? (isDark
+                                                        ? const Color(0xFFFFD700)
+                                                        : const Color(0xFFD97706))
+                                                    : ThemeService.textSecondary,
+                                                size: 15,
+                                              ),
+                                              const SizedBox(width: 5),
+                                              Flexible(
+                                                child: Text(
+                                                  'Reward Share: $shareRewardLabel',
+                                                  style: TextStyle(
+                                                    color: ThemeService.textPrimary,
+                                                    fontSize: 11.5,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (hasMemberClaimed)
-                                          InkWell(
-                                            onTap: isCurrentUser
-                                                ? () => _handleRedeemItem(
-                                                      displayGameName,
-                                                      shareRewardLabel,
-                                                      0,
-                                                      wallet,
-                                                      activeTeams,
-                                                    )
-                                                : null,
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: Container(
+                                            ],
+                                          ),
+                                          if (hasMemberClaimed)
+                                            InkWell(
+                                              onTap: isCurrentUser
+                                                  ? () => _handleRedeemItem(
+                                                        displayGameName,
+                                                        shareRewardLabel,
+                                                        0,
+                                                        wallet,
+                                                        activeTeams,
+                                                      )
+                                                  : null,
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 5,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: isDark
+                                                      ? GamerTheme.neonGreen.withOpacity(0.16)
+                                                      : const Color(0xFFD1FAE5),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                    color: isDark
+                                                        ? GamerTheme.neonGreen.withOpacity(0.6)
+                                                        : const Color(0xFF059669),
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  isMemberClaimDelivered
+                                                      ? '✅ Claim Done (Delivered)'
+                                                      : '✅ Claim Done',
+                                                  style: TextStyle(
+                                                    color: isDark
+                                                        ? GamerTheme.neonGreen
+                                                        : const Color(0xFF065F46),
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                          else if (!isClaimUnlocked)
+                                            Container(
                                               padding: const EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                                vertical: 5,
+                                                horizontal: 9,
+                                                vertical: 4,
                                               ),
                                               decoration: BoxDecoration(
                                                 color: isDark
-                                                    ? GamerTheme.neonGreen.withOpacity(0.16)
-                                                    : const Color(0xFFD1FAE5),
+                                                    ? const Color(0xFFFFB800).withOpacity(0.14)
+                                                    : const Color(0xFFFEF3C7),
                                                 borderRadius: BorderRadius.circular(8),
                                                 border: Border.all(
                                                   color: isDark
-                                                      ? GamerTheme.neonGreen.withOpacity(0.6)
-                                                      : const Color(0xFF059669),
+                                                      ? const Color(0xFFFFB800).withOpacity(0.45)
+                                                      : const Color(0xFFD97706),
                                                 ),
                                               ),
                                               child: Text(
-                                                isMemberClaimDelivered
-                                                    ? '✅ Claim Done (Delivered)'
-                                                    : '✅ Claim Done',
+                                                isRankOne
+                                                    ? '🔒 Locked (Unlocks Week End / Monday)'
+                                                    : '🔒 Locked (Rank #1 at Week End Required)',
                                                 style: TextStyle(
                                                   color: isDark
-                                                      ? GamerTheme.neonGreen
-                                                      : const Color(0xFF065F46),
-                                                  fontSize: 11,
+                                                      ? const Color(0xFFFFB800)
+                                                      : const Color(0xFF92400E),
+                                                  fontSize: 10.5,
                                                   fontWeight: FontWeight.w900,
                                                 ),
                                               ),
-                                            ),
-                                          )
-                                        else if (!isClaimUnlocked)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 9,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: isDark
-                                                  ? const Color(0xFFFFB800).withOpacity(0.14)
-                                                  : const Color(0xFFFEF3C7),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: isDark
-                                                    ? const Color(0xFFFFB800).withOpacity(0.45)
-                                                    : const Color(0xFFD97706),
-                                              ),
-                                            ),
-                                            child: Text(
-                                              isRankOne
-                                                  ? '🔒 Locked (Unlocks Week End / Monday)'
-                                                  : '🔒 Locked (Rank #1 at Week End Required)',
-                                              style: TextStyle(
-                                                color: isDark
-                                                    ? const Color(0xFFFFB800)
-                                                    : const Color(0xFF92400E),
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                          )
-                                        else if (isCurrentUser)
-                                          SizedBox(
-                                            height: 32,
-                                            child: ElevatedButton.icon(
-                                              onPressed: () => _handleRedeemItem(
-                                                displayGameName,
-                                                shareRewardLabel,
-                                                0,
-                                                wallet,
-                                                activeTeams,
-                                              ),
-                                              icon: const Icon(
-                                                Icons.redeem_rounded,
-                                                size: 14,
-                                                color: Colors.black,
-                                              ),
-                                              label: Text(
-                                                'Claim $shareRewardLabel',
-                                                style: const TextStyle(
+                                            )
+                                          else if (isCurrentUser)
+                                            SizedBox(
+                                              height: 32,
+                                              child: ElevatedButton.icon(
+                                                onPressed: () => _handleRedeemItem(
+                                                  displayGameName,
+                                                  shareRewardLabel,
+                                                  0,
+                                                  wallet,
+                                                  activeTeams,
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.redeem_rounded,
+                                                  size: 14,
                                                   color: Colors.black,
-                                                  fontSize: 11,
+                                                ),
+                                                label: Text(
+                                                  'Claim $shareRewardLabel',
+                                                  style: const TextStyle(
+                                                    color: Colors.black,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: GamerTheme.neonGreen,
+                                                  foregroundColor: Colors.black,
+                                                  iconColor: Colors.black,
+                                                  elevation: 0,
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                          else
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 9,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? const Color(0xFFFFB800).withOpacity(0.14)
+                                                    : const Color(0xFFFEF3C7),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: isDark
+                                                      ? const Color(0xFFFFB800).withOpacity(0.45)
+                                                      : const Color(0xFFD97706),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                '⏳ Pending Claim',
+                                                style: TextStyle(
+                                                  color: isDark
+                                                      ? const Color(0xFFFFB800)
+                                                      : const Color(0xFF92400E),
+                                                  fontSize: 10.5,
                                                   fontWeight: FontWeight.w900,
                                                 ),
                                               ),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: GamerTheme.neonGreen,
-                                                foregroundColor: Colors.black,
-                                                iconColor: Colors.black,
-                                                elevation: 0,
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 10,
-                                                ),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                ),
-                                              ),
                                             ),
-                                          )
-                                        else
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 9,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: isDark
-                                                  ? const Color(0xFFFFB800).withOpacity(0.14)
-                                                  : const Color(0xFFFEF3C7),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: isDark
-                                                    ? const Color(0xFFFFB800).withOpacity(0.45)
-                                                    : const Color(0xFFD97706),
-                                              ),
-                                            ),
-                                            child: Text(
-                                              '⏳ Pending Claim',
-                                              style: TextStyle(
-                                                color: isDark
-                                                    ? const Color(0xFFFFB800)
-                                                    : const Color(0xFF92400E),
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
                             );
