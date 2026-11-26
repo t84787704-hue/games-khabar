@@ -55,6 +55,8 @@ class WalletRepository extends ChangeNotifier {
     int newGCoins, {
     String? userId,
     CoinWallet? wallet,
+    int? lifetimeEarned,
+    int? lifetimeSpent,
   }) {
     final sanitized = newGCoins.clamp(0, 999999999);
     final uid = resolveActiveUserId(userId);
@@ -63,14 +65,24 @@ class WalletRepository extends ChangeNotifier {
     }
 
     if (wallet != null) {
-      final syncedWallet = wallet.coins == sanitized
+      final syncedWallet = (wallet.coins == sanitized &&
+              lifetimeEarned == null &&
+              lifetimeSpent == null)
           ? wallet
-          : wallet.copyWith(coins: sanitized, updatedAt: DateTime.now());
+          : wallet.copyWith(
+              coins: sanitized,
+              lifetimeEarned: lifetimeEarned ?? wallet.lifetimeEarned,
+              lifetimeSpent: lifetimeSpent ?? wallet.lifetimeSpent,
+              updatedAt: DateTime.now(),
+            );
       walletNotifier.value = syncedWallet;
       _cacheWalletLocally(syncedWallet);
     } else if (walletNotifier.value != null) {
-      final updated = walletNotifier.value!.copyWith(
+      final current = walletNotifier.value!;
+      final updated = current.copyWith(
         coins: sanitized,
+        lifetimeEarned: lifetimeEarned ?? current.lifetimeEarned,
+        lifetimeSpent: lifetimeSpent ?? current.lifetimeSpent,
         updatedAt: DateTime.now(),
       );
       walletNotifier.value = updated;
