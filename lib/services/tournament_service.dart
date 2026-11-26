@@ -178,6 +178,7 @@ class TournamentService extends ChangeNotifier {
           .select()
           .eq('isLive', true)
           .order('startTime', ascending: true)
+          .limit(30)
           .timeout(const Duration(seconds: 4));
 
       final supabaseRooms = (res as List).map((d) => TournamentRoom.fromSupabase(d)).toList();
@@ -241,11 +242,13 @@ class TournamentService extends ChangeNotifier {
       }
       yield _filterRoomsByGame(_rooms, gameName);
 
-      // 2. Immediate REST fetch from Supabase
+      // 2. Immediate bounded REST fetch from Supabase
       try {
         final res = await SupabaseService.client
             .from('tournament_rooms')
             .select()
+            .eq('isLive', true)
+            .limit(30)
             .timeout(const Duration(seconds: 3));
         if (res is List && res.isNotEmpty) {
           final supabaseRooms = res.map((d) => TournamentRoom.fromSupabase(d)).toList();
@@ -292,15 +295,17 @@ class TournamentService extends ChangeNotifier {
         }
       } catch (e) {
         debugPrint('TournamentService realtime stream notice: $e');
-        // Periodic poll fallback
+        // Periodic poll fallback with lower frequency to save mobile data
         while (true) {
-          await Future.delayed(const Duration(seconds: 6));
+          await Future.delayed(const Duration(seconds: 30));
           yield _filterRoomsByGame(_rooms, gameName);
         }
       }
     }
 
-    return stream().asBroadcastStream();
+    return stream().asBroadcastStream(
+      onCancel: (subscription) => subscription.cancel(),
+    );
   }
 
   Future<bool> joinRoom({

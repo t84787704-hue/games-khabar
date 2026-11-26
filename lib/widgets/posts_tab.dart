@@ -242,7 +242,7 @@ class _PostsTabState extends State<PostsTab>
                   displayName: item.displayName,
                   userPhoto: effectiveAvatar,
                   text: item.text,
-                  mediaUrl: item.mediaUrl,
+                  imageUrl: item.mediaUrl,
                   gameTag: item.gameTag,
                   likesCount: item.likesCount,
                   commentsCount: item.commentsCount,

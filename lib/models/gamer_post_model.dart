@@ -35,7 +35,8 @@ class GamerPost {
     this.userPhoto = '',
     required this.displayName,
     required this.text,
-    this.imageUrl,
+    String? imageUrl,
+    String? mediaUrl,
     this.videoUrl,
     this.gameTag = 'BGMI',
     this.userRank = 'Ace',
@@ -54,7 +55,9 @@ class GamerPost {
     this.isVerified = false,
     this.isDemoAccount = false,
     this.createdAt,
-  });
+  }) : imageUrl = imageUrl ?? mediaUrl;
+
+  String? get mediaUrl => imageUrl ?? videoUrl;
 
   GamerRankBadge getRankBadge() {
     final lowerRank = userRank.toLowerCase().trim();
@@ -243,6 +246,7 @@ class GamerPost {
     String? displayName,
     String? text,
     String? imageUrl,
+    String? mediaUrl,
     String? videoUrl,
     String? gameTag,
     String? userRank,
@@ -269,7 +273,7 @@ class GamerPost {
       userPhoto: userPhoto ?? this.userPhoto,
       displayName: displayName ?? this.displayName,
       text: text ?? this.text,
-      imageUrl: imageUrl ?? this.imageUrl,
+      imageUrl: imageUrl ?? mediaUrl ?? this.imageUrl,
       videoUrl: videoUrl ?? this.videoUrl,
       gameTag: gameTag ?? this.gameTag,
       userRank: userRank ?? this.userRank,
