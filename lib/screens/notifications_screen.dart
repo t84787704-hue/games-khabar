@@ -763,34 +763,87 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return const SizedBox.shrink();
   }
 
+  DateTime? _parseMatchTimeUtc(dynamic rawMatchTime) {
+    final str = rawMatchTime?.toString().trim();
+    if (str == null || str.isEmpty) return null;
+    return DateTime.tryParse(str)?.toUtc();
+  }
+
+  void _showTournamentUnavailableMessage([String? title]) {
+    if (!mounted) return;
+    final cleanTitle = (title ?? '').trim();
+    final hasValidTitle = cleanTitle.isNotEmpty &&
+        !cleanTitle.toLowerCase().contains('tournament registered') &&
+        !cleanTitle.toLowerCase().contains('tournament champion') &&
+        cleanTitle.toLowerCase() != 'tournament';
+    final message = hasValidTitle
+        ? 'This tournament ("$cleanTitle") has already ended or is no longer available.'
+        : 'This tournament has already ended or is no longer available.';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(
+                Icons.event_busy_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFFF4655),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+  }
+
   Future<void> _navigateToTournament(InAppNotification notif) async {
     final data = notif.data ?? {};
-    String? tId = (data['tournament_id'] ?? data['tournamentId'] ?? data['id'])?.toString();
-    String? tTitle = (data['tournament_title'] ?? data['tournamentTitle'] ?? data['title'])?.toString();
+    String? tId = (data['tournament_id'] ?? data['tournamentId'] ?? data['id'])
+        ?.toString()
+        .trim();
+    String? tTitle = (data['tournament_title'] ??
+            data['tournamentTitle'] ??
+            data['title'])
+        ?.toString()
+        .trim();
 
-    // Check if this is a tournament victory notification (e.g. Your team "mtk" won "Free11"!)
-    final bool isWinNotif = notif.title.toLowerCase().contains('champion') ||
-        notif.title.toLowerCase().contains('won') ||
-        notif.body.toLowerCase().contains('won') ||
-        notif.type == 'tournament_result';
+    final winTournMatch = RegExp(
+      r'(?:won|tournament|for)\s+["“]([^"”]+)["”]',
+      caseSensitive: false,
+    ).firstMatch(notif.body);
+    final String? parsedBodyTitle =
+        (winTournMatch?.group(1))?.toString().trim();
 
-    final winTeamMatch = RegExp(r'team\s+["“]([^"”]+)["”]', caseSensitive: false).firstMatch(notif.body);
-    final winTournMatch = RegExp(r'won\s+["“]([^"”]+)["”]|tournament\s+["“]([^"”]+)["”]', caseSensitive: false).firstMatch(notif.body);
-    final String? winTeam = (data['team_name'] ?? data['teamName'] ?? winTeamMatch?.group(1))?.toString();
-    final String? winTourn = (data['tournament_title'] ?? data['tournamentTitle'] ?? winTournMatch?.group(1))?.toString();
-
-    if (winTourn != null && winTourn.isNotEmpty) {
-      tTitle = winTourn;
-    } else if (tTitle == null || tTitle.isEmpty || tTitle.contains('Tournament Champion')) {
-      final match = RegExp(r'won\s+["“]([^"”]+)["”]|tournament\s+["“]([^"”]+)["”]', caseSensitive: false).firstMatch(notif.body);
-      if (match != null) {
-        tTitle = match.group(1) ?? match.group(2);
+    if (tTitle == null ||
+        tTitle.isEmpty ||
+        tTitle.toLowerCase().contains('tournament champion') ||
+        tTitle.toLowerCase().contains('tournament registered')) {
+      if (parsedBodyTitle != null && parsedBodyTitle.isNotEmpty) {
+        tTitle = parsedBodyTitle;
       }
     }
 
     Map<String, dynamic>? tournamentMap;
 
-    // 1. If ID is present, try finding in Supabase
+    // 1. If tournament_id is present, query Supabase by exact ID
     if (tId != null && tId.isNotEmpty) {
       try {
         final row = await SupabaseService.client
@@ -806,16 +859,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     // 2. Only search by title if notification carried no tournament_id at all
-    if (tournamentMap == null && (tId == null || tId.isEmpty) && tTitle != null && tTitle.isNotEmpty) {
+    if (tournamentMap == null &&
+        (tId == null || tId.isEmpty) &&
+        tTitle != null &&
+        tTitle.isNotEmpty) {
       try {
-        var query = SupabaseService.client
+        final row = await SupabaseService.client
             .from('tournaments')
             .select()
-            .ilike('title', tTitle);
-        if (isWinNotif) {
-          query = query.eq('status', 'completed');
-        }
-        final row = await query
+            .ilike('title', tTitle)
             .order('created_at', ascending: false)
             .limit(1)
             .maybeSingle();
@@ -828,24 +880,57 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (!mounted) return;
 
+    // 3. Verify that the tournament record exists in Supabase and has not already ended/expired/been deleted
+    if (tournamentMap == null) {
+      _showTournamentUnavailableMessage(tTitle);
+      return;
+    }
+
+    final rawStatus =
+        (tournamentMap['status'] ?? '').toString().trim().toLowerCase();
+    final rawProofStatus =
+        (tournamentMap['proof_status'] ?? '').toString().trim().toLowerCase();
+    final matchTimeUtc = _parseMatchTimeUtc(tournamentMap['match_time']);
+    final nowUtc = DateTime.now().toUtc();
+    final currentTeams = int.tryParse(
+          (tournamentMap['current_teams'] ??
+                  tournamentMap['joined_teams_count'] ??
+                  0)
+              .toString(),
+        ) ??
+        0;
+
+    final bool hasEntryLockPassed = matchTimeUtc != null &&
+        (nowUtc.isAfter(matchTimeUtc.subtract(const Duration(minutes: 15))) ||
+            nowUtc.isAtSameMomentAs(
+                matchTimeUtc.subtract(const Duration(minutes: 15))));
+
+    final bool isEndedOrExpired = rawStatus == 'completed' ||
+        rawStatus == 'cancelled' ||
+        rawStatus == 'ended' ||
+        rawStatus == 'expired' ||
+        rawProofStatus == 'approved' ||
+        rawProofStatus == 'accepted' ||
+        (hasEntryLockPassed && currentTeams < 2) ||
+        (matchTimeUtc != null &&
+            nowUtc.isAfter(matchTimeUtc.add(const Duration(hours: 3)))) ||
+        (matchTimeUtc == null &&
+            nowUtc.difference(notif.createdAt.toUtc()).inDays >= 2);
+
+    if (isEndedOrExpired) {
+      _showTournamentUnavailableMessage(
+          tournamentMap['title']?.toString() ?? tTitle);
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => TournamentDetailScreen(
           tournamentId: tId,
           tournament: tournamentMap,
-          initialData: tournamentMap ?? {
-            if (tId != null && tId.isNotEmpty) 'id': tId,
-            if (tTitle != null && tTitle.isNotEmpty) 'title': tTitle,
-            if (isWinNotif) ...{
-              'status': 'completed',
-              'proof_status': 'approved',
-              if (winTeam != null) 'winner_team_name': winTeam,
-              if (winTeam != null) 'proof_team_name': winTeam,
-              if (data['team_id'] != null) 'winner_team_id': data['team_id'].toString(),
-            },
-          },
-          isRegistered: tournamentMap == null ? isWinNotif : false,
+          initialData: tournamentMap,
+          isRegistered: false,
         ),
       ),
     );

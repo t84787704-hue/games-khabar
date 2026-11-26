@@ -455,30 +455,50 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final roomPass = (data['room_password'] ?? '').toString();
 
     DateTime? matchDateTime;
+    DateTime? matchTimeUtc;
     if (data['match_time'] != null) {
-      matchDateTime = DateTime.tryParse(data['match_time'].toString())?.toLocal();
+      final parsed = DateTime.tryParse(data['match_time'].toString());
+      matchTimeUtc = parsed?.toUtc();
+      matchDateTime = parsed?.toLocal();
     }
 
     final formattedDate = matchDateTime != null
         ? DateFormat('dd MMM yyyy, hh:mm a').format(matchDateTime)
         : (data['date_str']?.toString() ?? 'TBA');
 
+    final String entryFeeStr = entryFee.toString().trim().toLowerCase();
+    final int entryFeeCoins = (entryFeeStr.isEmpty ||
+            entryFeeStr == 'free' ||
+            entryFeeStr == '0' ||
+            entryFeeStr.contains('free'))
+        ? 0
+        : (int.tryParse(
+                RegExp(r'\d+').firstMatch(entryFeeStr)?.group(0) ?? '0') ??
+            0);
+
     final bool isFull = joinedSlots >= maxSlots && maxSlots > 0;
-    final bool isWithin15Mins = matchDateTime != null &&
-        DateTime.now().isAfter(matchDateTime.subtract(const Duration(minutes: 15)));
+    final bool isWithin15Mins = matchTimeUtc != null &&
+        !DateTime.now()
+            .toUtc()
+            .isBefore(matchTimeUtc.subtract(const Duration(minutes: 15)));
     final bool isEntryLocked = isFull || isWithin15Mins;
+    final bool isCancelledUnder2 = (status != 'completed' &&
+            isWithin15Mins &&
+            (status == 'cancelled' || joinedSlots < 2)) ||
+        (matchTimeUtc == null && status == 'cancelled');
 
     Color statusColor = blueText;
     String statusText = 'UPCOMING';
-    if (status == 'cancelled') {
+    if (status == 'completed') {
+      statusColor = greenText;
+      statusText = 'COMPLETED ✓';
+    } else if (isCancelledUnder2) {
       statusColor = const Color(0xFFFF4655);
-      statusText = 'CANCELLED (REFUNDED)';
+      statusText =
+          entryFeeCoins > 0 ? 'CANCELLED (REFUNDED)' : 'CANCELLED (< 2 TEAMS)';
     } else if (status == 'live') {
       statusColor = const Color(0xFFFF4655);
       statusText = 'LIVE 🔴';
-    } else if (status == 'completed') {
-      statusColor = greenText;
-      statusText = 'COMPLETED ✓';
     } else if (isFull) {
       statusColor = const Color(0xFFFF8A00);
       statusText = 'SLOTS FULL 🔒';
@@ -495,7 +515,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
         color: ThemeService.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: status == 'live' || status == 'cancelled'
+          color: status == 'live' || isCancelledUnder2
               ? const Color(0xFFFF4655).withOpacity(0.5)
               : ThemeService.border,
         ),
@@ -554,7 +574,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
           Row(
             children: [
               Text('🪙 Prize: ', style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
-              Text('$prizePool Coins', style: TextStyle(color: goldText, fontWeight: FontWeight.w900, fontSize: 12)),
+              Text('$prizePool G-Coins', style: TextStyle(color: goldText, fontWeight: FontWeight.w900, fontSize: 12)),
               const SizedBox(width: 12),
               Text('🎟️ Fee: ', style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
               Text('$entryFee', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.w800, fontSize: 12)),
@@ -564,7 +584,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
           ),
           const SizedBox(height: 4),
           Text(
-            '$slotCapacityHelper • Min 2 slots required (auto-refund if <2)',
+            '$slotCapacityHelper • Min 2 slots required${entryFeeCoins > 0 ? " (auto-refund if <2)" : ""}',
             style: TextStyle(
               color: ThemeService.textSecondary,
               fontSize: 11,
@@ -671,10 +691,10 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     final titleController = TextEditingController(text: existingData?['title'] ?? '');
     final prizeController = TextEditingController(text: existingData?['prize_pool']?.toString() ?? '1000');
     final feeController = TextEditingController(text: existingData?['entry_fee']?.toString() ?? 'Free');
-    final slotsController = TextEditingController(text: existingData?['max_slots']?.toString() ?? '4');
+    final slotsController = TextEditingController(text: existingData?['max_slots']?.toString() ?? '16');
     final rulesController = TextEditingController(
       text: existingData?['rules'] ??
-          '$kLastTeamStandingRule Entry locks 15 minutes before start or when slots are full. Minimum 2 joined slots/teams required or tournament cancels with automatic G-Coins refund.',
+          '$kLastTeamStandingRule Entry locks 15 minutes before start or when slots are full. Minimum 2 joined slots/teams required or tournament cancels.',
     );
     final roomIdController = TextEditingController(text: existingData?['room_id'] ?? '');
     final roomPassController = TextEditingController(text: existingData?['room_password'] ?? '');
@@ -702,7 +722,10 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
     DateTime selectedDateTime = DateTime.now().add(const Duration(days: 1));
 
     if (existingData?['match_time'] != null) {
-      selectedDateTime = DateTime.tryParse(existingData!['match_time'].toString()) ?? selectedDateTime;
+      final parsed = DateTime.tryParse(existingData!['match_time'].toString());
+      if (parsed != null) {
+        selectedDateTime = parsed.toLocal();
+      }
     }
 
     bool isSaving = false;
@@ -715,7 +738,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
-          final int parsedMaxSlots = int.tryParse(slotsController.text.trim()) ?? 4;
+          final int parsedMaxSlots = int.tryParse(slotsController.text.trim()) ?? 16;
           final String dynamicSlotsHelper = _getMaxSlotsHelperText(selectedFormat, parsedMaxSlots);
           final String formatSlotRule = _getFormatSlotMeaning(selectedFormat);
 
@@ -738,20 +761,36 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
               inlineSaveError = null;
             });
 
+            final DateTime matchTimeUtc = selectedDateTime.toUtc();
+            final DateTime lockCutoffUtc =
+                matchTimeUtc.subtract(const Duration(minutes: 15));
+            final bool isBeforeEntryLock =
+                DateTime.now().toUtc().isBefore(lockCutoffUtc);
+            final String existingStatus = (existingData?['status'] ?? 'upcoming')
+                .toString()
+                .trim()
+                .toLowerCase();
+            final String resolvedStatus = (!isEdit ||
+                    (existingStatus != 'completed' && isBeforeEntryLock))
+                ? 'upcoming'
+                : existingStatus;
+            final int clampedMaxSlots =
+                (int.tryParse(slotsController.text.trim()) ?? 16).clamp(2, 100);
+
             final payload = <String, dynamic>{
               'title': title,
               'game_name': selectedGame,
               'match_format': selectedFormat,
               'prize_pool': prizeController.text.trim(),
               'entry_fee': feeController.text.trim(),
-              'max_slots': (int.tryParse(slotsController.text.trim()) ?? 4).clamp(2, 100),
+              'max_slots': clampedMaxSlots,
               'map_name': selectedMap,
               'room_id': roomIdController.text.trim(),
               'room_password': roomPassController.text.trim(),
-              'match_time': selectedDateTime.toIso8601String(),
+              'match_time': matchTimeUtc.toIso8601String(),
               'rules': rulesController.text.trim(),
-              'status': existingData?['status'] ?? 'upcoming',
-              'updated_at': DateTime.now().toIso8601String(),
+              'status': resolvedStatus,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
             };
 
             try {
@@ -763,7 +802,7 @@ class AdminTournamentsTabState extends State<AdminTournamentsTab> {
                       .eq('id', existingData['id']),
                 );
               } else {
-                payload['created_at'] = DateTime.now().toIso8601String();
+                payload['created_at'] = DateTime.now().toUtc().toIso8601String();
                 payload['joined_teams_count'] = 0;
                 await _runWithNetworkRetry(
                   () => SupabaseService.client.from('tournaments').insert(payload),

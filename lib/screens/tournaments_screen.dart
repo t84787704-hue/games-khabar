@@ -129,14 +129,19 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
     return 'Free Entry • 0 G-Coins';
   }
 
+  DateTime? _parseMatchTimeUtc(dynamic rawMatchTime) {
+    final str = rawMatchTime?.toString().trim();
+    if (str == null || str.isEmpty) return null;
+    return DateTime.tryParse(str)?.toUtc();
+  }
+
   bool _isWithin15MinEntryLock(Map<String, dynamic> item) {
-    final matchTimeStr = item['match_time']?.toString();
-    if (matchTimeStr == null || matchTimeStr.isEmpty) return false;
-    final matchTime = DateTime.tryParse(matchTimeStr)?.toLocal();
-    if (matchTime == null) return false;
-    final lockCutoff = matchTime.subtract(const Duration(minutes: 15));
-    final now = DateTime.now();
-    return now.isAfter(lockCutoff) || now.isAtSameMomentAs(lockCutoff);
+    final matchTimeUtc = _parseMatchTimeUtc(item['match_time']);
+    if (matchTimeUtc == null) return false;
+    final lockCutoffUtc = matchTimeUtc.subtract(const Duration(minutes: 15));
+    final nowUtc = DateTime.now().toUtc();
+    return nowUtc.isAfter(lockCutoffUtc) ||
+        nowUtc.isAtSameMomentAs(lockCutoffUtc);
   }
 
   Future<void> _evaluateEntryLockAndMinTeamsRule(
@@ -150,8 +155,20 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
             (item['status'] ?? 'upcoming').toString().trim().toLowerCase();
         if (status == 'completed') continue;
 
+        final matchTimeUtc = _parseMatchTimeUtc(item['match_time']);
         final isEntryClosed = _isWithin15MinEntryLock(item);
-        if (!isEntryClosed) continue;
+        if (!isEntryClosed) {
+          // If a future tournament before entry lock was erroneously marked 'cancelled', restore it to 'upcoming'
+          if (status == 'cancelled' && matchTimeUtc != null) {
+            item['status'] = 'upcoming';
+            try {
+              await _supabase
+                  .from('tournaments')
+                  .update({'status': 'upcoming'}).eq('id', tId);
+            } catch (_) {}
+          }
+          continue;
+        }
 
         final currentTeams = int.tryParse(
               item['current_teams']?.toString() ??
@@ -882,12 +899,14 @@ class _TournamentsScreenState extends State<TournamentsScreen> {
                               .trim()
                               .toLowerCase();
                           final isCompleted = status == 'completed';
+                          final matchTimeUtc =
+                              _parseMatchTimeUtc(item['match_time']);
                           final isEntryWindowClosed =
                               _isWithin15MinEntryLock(item);
-                          final isCancelled = status == 'cancelled' ||
-                              (!isCompleted &&
+                          final isCancelled = (!isCompleted &&
                                   isEntryWindowClosed &&
-                                  currentTeams < 2);
+                                  (status == 'cancelled' || currentTeams < 2)) ||
+                              (matchTimeUtc == null && status == 'cancelled');
                           final isEntryLocked = !isCompleted &&
                               !isCancelled &&
                               (isFull || isEntryWindowClosed);

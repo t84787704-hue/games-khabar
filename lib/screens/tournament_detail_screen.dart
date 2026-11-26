@@ -41,6 +41,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   Map<String, dynamic>? _tournament;
   List<Map<String, dynamic>> _registrations = [];
   bool _isLoading = true;
+  bool _isTournamentUnavailable = false;
   bool _isUploadingProof = false;
   bool _isRegistering = false;
   bool _isUserRegistered = false;
@@ -50,6 +51,27 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   String? _winnerTeamTag;
   List<String> _winnerMemberIds = [];
   String? _winnerLeaderId;
+
+  bool _isFullTournamentRecord(Map<String, dynamic>? data) {
+    if (data == null) return false;
+    final hasId = data['id'] != null && data['id'].toString().trim().isNotEmpty;
+    final hasGameOrFormat = data['game_name'] != null ||
+        data['game'] != null ||
+        data['game_mode'] != null ||
+        data['match_format'] != null ||
+        data['format'] != null;
+    final hasTimestampOrStatus = data['match_time'] != null ||
+        data['created_at'] != null ||
+        data['max_slots'] != null ||
+        data['max_teams'] != null;
+    return hasId && hasGameOrFormat && hasTimestampOrStatus;
+  }
+
+  DateTime? _parseMatchTimeUtc(dynamic rawMatchTime) {
+    final str = rawMatchTime?.toString().trim();
+    if (str == null || str.isEmpty) return null;
+    return DateTime.tryParse(str)?.toUtc();
+  }
 
   String get currentUid =>
       SupabaseService.client.auth.currentUser?.id ??
@@ -113,9 +135,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
   bool _isWithin15MinEntryLock(DateTime? matchTime) {
     if (matchTime == null) return false;
-    final lockCutoff = matchTime.subtract(const Duration(minutes: 15));
-    return DateTime.now().isAfter(lockCutoff) ||
-        DateTime.now().isAtSameMomentAs(lockCutoff);
+    final lockCutoffUtc =
+        matchTime.toUtc().subtract(const Duration(minutes: 15));
+    final nowUtc = DateTime.now().toUtc();
+    return nowUtc.isAfter(lockCutoffUtc) ||
+        nowUtc.isAtSameMomentAs(lockCutoffUtc);
   }
 
   bool _hasMatchStarted(DateTime? matchTime, String rawStatus) {
@@ -128,8 +152,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       return true;
     }
     if (matchTime == null) return false;
-    return DateTime.now().isAfter(matchTime) ||
-        DateTime.now().isAtSameMomentAs(matchTime);
+    final nowUtc = DateTime.now().toUtc();
+    final matchUtc = matchTime.toUtc();
+    return nowUtc.isAfter(matchUtc) || nowUtc.isAtSameMomentAs(matchUtc);
   }
 
   String get effectiveTournamentId {
@@ -148,15 +173,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     super.initState();
     _isUserRegistered = widget.isRegistered;
     final initData = widget.tournament ?? widget.initialData;
-    if (initData != null &&
-        initData['status'] != null &&
-        initData['game_mode'] != null) {
-      _tournament = Map<String, dynamic>.from(initData);
+    if (_isFullTournamentRecord(initData)) {
+      _tournament = Map<String, dynamic>.from(initData!);
       _isLoading = false;
     } else {
-      if (initData != null) {
-        _tournament = Map<String, dynamic>.from(initData);
-      }
+      _tournament = null;
       _isLoading = true;
     }
     _loadTournamentData();
@@ -259,11 +280,43 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
       if (res != null) {
         _tournament = Map<String, dynamic>.from(res);
+        _isTournamentUnavailable = false;
         tId = _tournament!['id']?.toString() ?? tId;
+      } else if (!_isFullTournamentRecord(_tournament)) {
+        // The requested tournament record does not exist in Supabase (deleted or expired)
+        _tournament = null;
+        _isTournamentUnavailable = true;
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'This tournament has already ended or is no longer available.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                backgroundColor: const Color(0xFFFF4655),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            );
+        }
+        return;
       }
 
       if (tId.isEmpty && res == null && _tournament == null) {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() {
+            _isTournamentUnavailable = true;
+            _isLoading = false;
+          });
+        }
         return;
       }
 
@@ -330,16 +383,14 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         }
       }
 
-      // Check Entry Lock & Minimum 2 Teams Rule (15 minutes before match start)
+      // Check Entry Lock & Minimum 2 Teams Rule (15 minutes before match start in UTC)
       if (_tournament != null && tId.isNotEmpty) {
         final rawStatusPre = (_tournament?['status'] ?? 'upcoming')
             .toString()
             .trim()
             .toLowerCase();
-        final matchTimeStr = _tournament?['match_time']?.toString();
-        final matchTimeLocal = matchTimeStr != null
-            ? DateTime.tryParse(matchTimeStr)?.toLocal()
-            : null;
+        final matchTimeUtc = _parseMatchTimeUtc(_tournament?['match_time']);
+        final bool isEntryWindowClosed = _isWithin15MinEntryLock(matchTimeUtc);
         final joinedCount = _registrations.isNotEmpty
             ? _registrations.length
             : (int.tryParse((_tournament?['current_teams'] ??
@@ -348,8 +399,19 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                         .toString()) ??
                     0);
 
-        if (rawStatusPre != 'completed' &&
-            _isWithin15MinEntryLock(matchTimeLocal) &&
+        // If a future tournament before the 15m entry lock cutoff was mistakenly marked 'cancelled', restore it to 'upcoming'
+        if (rawStatusPre == 'cancelled' &&
+            matchTimeUtc != null &&
+            !isEntryWindowClosed) {
+          _tournament!['status'] = 'upcoming';
+          try {
+            await SupabaseService.client
+                .from('tournaments')
+                .update({'status': 'upcoming'})
+                .eq('id', tId);
+          } catch (_) {}
+        } else if (rawStatusPre != 'completed' &&
+            isEntryWindowClosed &&
             joinedCount < 2) {
           if (rawStatusPre != 'cancelled') {
             _tournament!['status'] = 'cancelled';
@@ -1046,10 +1108,10 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
 
         final bool isSlotsFull = maxTeams > 0 && currentTeams >= maxTeams;
         final bool isEntryWindowClosed = _isWithin15MinEntryLock(matchTime);
-        final bool isCancelledUnder2 = rawStatus == 'cancelled' ||
-            (!isTournamentCompleted &&
+        final bool isCancelledUnder2 = (!isTournamentCompleted &&
                 isEntryWindowClosed &&
-                currentTeams < 2);
+                (rawStatus == 'cancelled' || currentTeams < 2)) ||
+            (matchTime == null && rawStatus == 'cancelled');
         final bool isEntryLockedProceeding = !isTournamentCompleted &&
             !isCancelledUnder2 &&
             (isSlotsFull || isEntryWindowClosed);
@@ -1104,34 +1166,116 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
               ),
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.share_rounded, size: 20),
-                color: accentGreen,
-                tooltip: 'Share Tournament',
-                onPressed: () {
-                  AppShareService.shareTournament(
-                    title: title,
-                    game: game,
-                    prize: prizePoolText,
-                    fee: entryFeeText,
-                    map: mapName,
-                  );
-                },
-              ),
+              if (!_isTournamentUnavailable && _tournament != null)
+                IconButton(
+                  icon: const Icon(Icons.share_rounded, size: 20),
+                  color: accentGreen,
+                  tooltip: 'Share Tournament',
+                  onPressed: () {
+                    AppShareService.shareTournament(
+                      title: title,
+                      game: game,
+                      prize: prizePoolText,
+                      fee: entryFeeText,
+                      map: mapName,
+                    );
+                  },
+                ),
             ],
           ),
           body: _isLoading
               ? Center(child: CircularProgressIndicator(color: accentGreen))
-              : RefreshIndicator(
-                  color: accentGreen,
-                  onRefresh: _loadTournamentData,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 1. Dynamic Top Banner (Non-clipping responsive layout)
+              : (_isTournamentUnavailable || _tournament == null)
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: cardBg,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: const Color(0xFFFF4655).withOpacity(0.45),
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color:
+                                      const Color(0xFFFF4655).withOpacity(0.14),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.event_busy_rounded,
+                                  color: Color(0xFFFF4655),
+                                  size: 44,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Tournament Ended or Unavailable',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: textPri,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 17,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'This tournament has already ended or is no longer available.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: textSec,
+                                  fontSize: 13,
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 44,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: accentGreen,
+                                    foregroundColor: Colors.black,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  onPressed: () => Navigator.pop(context),
+                                  icon: const Icon(
+                                    Icons.arrow_back_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text(
+                                    'Go Back',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  : RefreshIndicator(
+                      color: accentGreen,
+                      onRefresh: _loadTournamentData,
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. Dynamic Top Banner (Non-clipping responsive layout)
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(18),
