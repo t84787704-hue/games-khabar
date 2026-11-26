@@ -23,6 +23,7 @@ import '../services/gamer_social_service.dart';
 import '../services/supabase_service.dart';
 import '../services/language_service.dart';
 import '../services/coin_wallet_service.dart';
+import '../services/wallet_repository.dart';
 import 'coin_wallet_screen.dart';
 import '../services/app_share_service.dart';
 import '../widgets/gamer_avatar.dart';
@@ -77,6 +78,8 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     _prefetchCurrentUser();
 
     GamerAuthService().currentGamerNotifier.addListener(_onGamerChanged);
+    WalletRepository.instance.gCoinsBalance.addListener(_onWalletBalanceChanged);
+    WalletRepository.instance.refreshForCurrentUser();
 
     _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       _refreshSilently();
@@ -142,9 +145,22 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     } catch (_) {}
   }
 
+  void _onWalletBalanceChanged() {
+    if (!mounted || !_isOwnProfile) return;
+    final int liveCoins = WalletRepository.instance.currentGCoins;
+    if (liveCoins > 0 && _cachedUser != null && _cachedUser!.coins != liveCoins) {
+      setState(() {
+        _cachedUser = _cachedUser!.copyWith(coins: liveCoins);
+      });
+    } else {
+      setState(() {});
+    }
+  }
+
   @override
   void dispose() {
     GamerAuthService().currentGamerNotifier.removeListener(_onGamerChanged);
+    WalletRepository.instance.gCoinsBalance.removeListener(_onWalletBalanceChanged);
     _refreshTimer?.cancel();
     _socialController.dispose();
     _tabController.dispose();
@@ -204,7 +220,36 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
           .maybeSingle();
 
       if (row != null) {
-        return GamerUser.fromMap(row, userId);
+        var gamer = GamerUser.fromMap(row, userId);
+
+        // Always read authoritative G-Coins balance from public.coin_wallets.g_coins
+        try {
+          if (_isOwnProfile) {
+            final wallet = await CoinWalletService().getOrCreateWallet(userId);
+            final int liveBalance = WalletRepository.instance.currentGCoins > 0
+                ? WalletRepository.instance.currentGCoins
+                : wallet.gCoins;
+            if (liveBalance > 0 || gamer.coins != liveBalance) {
+              gamer = gamer.copyWith(coins: liveBalance);
+            }
+          } else {
+            final walletRow = await SupabaseService.client
+                .from('coin_wallets')
+                .select('g_coins, coins')
+                .eq('user_id', userId)
+                .maybeSingle();
+            if (walletRow != null) {
+              final int gVal = (walletRow['g_coins'] as num?)?.toInt() ?? 0;
+              final int cVal = (walletRow['coins'] as num?)?.toInt() ?? 0;
+              final int resolvedWalletCoins = gVal > 0 ? gVal : cVal;
+              if (resolvedWalletCoins > 0) {
+                gamer = gamer.copyWith(coins: resolvedWalletCoins);
+              }
+            }
+          }
+        } catch (_) {}
+
+        return gamer;
       }
     } catch (e) {
       debugPrint('[GamerProfile] Fetch error: $e');
@@ -381,7 +426,7 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        'coins_count_label'.tr(args: ['$coins']),
+                        '${NumberFormat('#,###').format(coins)} G-Coins',
                         style: TextStyle(
                           color: badgeColor,
                           fontSize: 10,
@@ -640,7 +685,15 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                             // Leader & Member Eligibility Banner sirf apni profile par dikhega
                             if (isOwnProfile) ...[
                               const SizedBox(height: 14),
-                              _buildTeamEligibilityCard(user.coins),
+                              ValueListenableBuilder<int>(
+                                valueListenable: WalletRepository.instance.gCoinsBalance,
+                                builder: (context, repoCoins, _) {
+                                  final int liveGCoins = repoCoins > 0
+                                      ? repoCoins
+                                      : (CoinWalletService().currentWallet?.gCoins ?? user.coins);
+                                  return _buildTeamEligibilityCard(liveGCoins);
+                                },
+                              ),
                             ],
 
                             const SizedBox(height: 14),
@@ -890,47 +943,82 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                               ),
                             ),
 
-                          // 3. G-Coins Balance (Locked: Sirf profile owner ko dikhega)
-                          if (isOwnProfile)
-                            _buildAboutTile(
-                              icon: Icons.monetization_on_rounded,
-                              iconColor: const Color(0xFFFFD700),
-                              title: 'g_coins_label'.tr(),
-                              subtitle: '${NumberFormat('#,###').format(user.coins)} Coins',
-                              trailing: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: ThemeService.cardSecondary,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(Icons.history_rounded, size: 18, color: Color(0xFFFFD700)),
-                              ),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const CoinWalletScreen()),
-                                );
-                              },
-                            ),
+                          // 3. G-Coins Balance & 4. eSports Team Eligibility (Live Synced with WalletRepository)
+                          ValueListenableBuilder<int>(
+                            valueListenable: WalletRepository.instance.gCoinsBalance,
+                            builder: (context, repoCoins, _) {
+                              final int liveGCoins = isOwnProfile
+                                  ? (repoCoins > 0
+                                      ? repoCoins
+                                      : (CoinWalletService().currentWallet?.gCoins ?? user.coins))
+                                  : user.coins;
+                              final String formattedGCoins =
+                                  '${NumberFormat('#,###').format(liveGCoins)} G-Coins';
 
-                          // 4. eSports Team Eligibility (Public Status)
-                          _buildAboutTile(
-                            icon: user.coins >= 1000
-                                ? Icons.verified_user_rounded
-                                : user.coins >= 500
-                                    ? Icons.shield_outlined
-                                    : Icons.warning_amber_rounded,
-                            iconColor: user.coins >= 1000
-                                ? const Color(0xFF00FF88)
-                                : user.coins >= 500
-                                    ? const Color(0xFFFFB800)
-                                    : const Color(0xFFFF4655),
-                            title: 'esports_team_status'.tr(),
-                            subtitle: user.coins >= 1000
-                                ? 'esports_status_leader'.tr()
-                                : user.coins >= 500
-                                    ? 'esports_status_member'.tr()
-                                    : 'esports_status_ineligible'.tr(),
+                              String esportsSubtitle;
+                              if (liveGCoins >= 1000) {
+                                final trLeader = 'esports_status_leader'.tr();
+                                esportsSubtitle = (trLeader.isNotEmpty && trLeader != 'esports_status_leader')
+                                    ? trLeader
+                                    : 'Leader & Member Eligible';
+                              } else if (liveGCoins >= 500) {
+                                final trMember = 'esports_status_member'.tr();
+                                esportsSubtitle = (trMember.isNotEmpty && trMember != 'esports_status_member')
+                                    ? trMember
+                                    : 'Team Member Eligible';
+                              } else {
+                                final trIneligible = 'esports_status_ineligible'.tr();
+                                esportsSubtitle = (trIneligible.isNotEmpty && trIneligible != 'esports_status_ineligible')
+                                    ? trIneligible
+                                    : 'Ineligible (Min 500 G-Coins)';
+                              }
+
+                              return Column(
+                                children: [
+                                  if (isOwnProfile)
+                                    _buildAboutTile(
+                                      icon: Icons.monetization_on_rounded,
+                                      iconColor: const Color(0xFFFFD700),
+                                      title: 'G-Coins',
+                                      subtitle: formattedGCoins,
+                                      trailing: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: ThemeService.cardSecondary,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(
+                                          Icons.history_rounded,
+                                          size: 18,
+                                          color: Color(0xFFFFD700),
+                                        ),
+                                      ),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const CoinWalletScreen(),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  _buildAboutTile(
+                                    icon: liveGCoins >= 1000
+                                        ? Icons.verified_user_rounded
+                                        : liveGCoins >= 500
+                                            ? Icons.shield_outlined
+                                            : Icons.warning_amber_rounded,
+                                    iconColor: liveGCoins >= 1000
+                                        ? const Color(0xFF00FF88)
+                                        : liveGCoins >= 500
+                                            ? const Color(0xFFFFB800)
+                                            : const Color(0xFFFF4655),
+                                    title: 'esports_team_status'.tr(),
+                                    subtitle: esportsSubtitle,
+                                  ),
+                                ],
+                              );
+                            },
                           ),
 
                           // 5. Squad Referral Code (Locked: Sirf profile owner ko dikhega)

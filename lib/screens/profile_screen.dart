@@ -5,6 +5,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/supabase_service.dart';
@@ -19,6 +20,8 @@ import 'privacy_policy_screen.dart';
 import 'follow_us_screen.dart';
 import '../constants/gamer_theme.dart';
 import '../services/gamer_auth_service.dart';
+import '../services/coin_wallet_service.dart';
+import '../services/wallet_repository.dart';
 import '../models/gamer_user_model.dart';
 import 'verification_screen.dart';
 import '../widgets/coin_history_sheet.dart';
@@ -64,6 +67,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadSettings();
+    WalletRepository.instance.refreshForCurrentUser();
+    final uid = GamerAuthService().currentUid ?? '';
+    if (uid.isNotEmpty) {
+      CoinWalletService().getOrCreateWallet(uid);
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -424,24 +432,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             actions: [
-              StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _getUserCoinsStream(),
-                builder: (context, snapshot) {
-                  int coins = 0;
-                  try {
-                    final rows = snapshot.data;
-                    if (rows != null && rows.isNotEmpty) {
-                      final data = rows.first;
-                      final rawCoins = data['gCoins'] ?? data['coins'];
-                      if (rawCoins is num) {
-                        coins = rawCoins.toInt();
-                      }
-                    } else {
-                      coins = GamerAuthService().currentGamer?.coins ?? 0;
-                    }
-                  } catch (_) {
-                    coins = GamerAuthService().currentGamer?.coins ?? 0;
-                  }
+              ValueListenableBuilder<int>(
+                valueListenable: WalletRepository.instance.gCoinsBalance,
+                builder: (context, repoCoins, _) {
+                  final int liveCoins = repoCoins > 0
+                      ? repoCoins
+                      : (CoinWalletService().currentWallet?.gCoins ??
+                          GamerAuthService().currentGamer?.coins ??
+                          0);
+                  final String formattedCoins = NumberFormat('#,###').format(liveCoins);
                   return GestureDetector(
                     onTap: () {
                       Navigator.push(
@@ -463,7 +462,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const Text('🪙', style: TextStyle(fontSize: 13)),
                           const SizedBox(width: 4),
                           Text(
-                            'g_coins_count'.tr(args: ['$coins']),
+                            '$formattedCoins G-Coins',
                             style: const TextStyle(
                               color: Color(0xFFFFD700),
                               fontWeight: FontWeight.w900,

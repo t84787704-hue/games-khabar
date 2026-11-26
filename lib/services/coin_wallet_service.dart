@@ -16,6 +16,7 @@ import 'coin_reward_service.dart';
 import 'notification_service.dart';
 import 'supabase_service.dart';
 import 'team_service.dart';
+import 'wallet_repository.dart';
 
 class CoinWalletService extends ChangeNotifier {
   static final CoinWalletService _instance = CoinWalletService._internal();
@@ -23,32 +24,41 @@ class CoinWalletService extends ChangeNotifier {
   CoinWalletService._internal();
 
   CoinWallet? _currentWallet;
-  CoinWallet? get currentWallet => _currentWallet;
+  CoinWallet? get currentWallet =>
+      _currentWallet ?? WalletRepository.instance.walletNotifier.value;
+
+  ValueListenable<int> get gCoinsBalance => WalletRepository.instance.gCoinsBalance;
 
   StreamSubscription? _walletSub;
 
   Future<void> _syncToUserDocAndNotifiers(String userId, int coins) async {
     if (userId.isEmpty) return;
-    try {
-      await SupabaseService.client.from('users').update({
-        'coins': coins,
-        'g_coins': coins,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).or('id.eq.$userId,uid.eq.$userId');
-    } catch (e) {
-      debugPrint('CoinWalletService _syncToUserDocAndNotifiers error: $e');
+
+    if (_currentWallet != null &&
+        (_currentWallet!.userId == userId || userId.isEmpty)) {
+      _currentWallet = _currentWallet!.copyWith(
+        coins: coins,
+        updatedAt: DateTime.now(),
+      );
+      _saveToLocal(_currentWallet!);
     }
 
-    try {
-      final currentGamer = GamerAuthService().currentGamer;
-      if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
-        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: coins);
-      }
-    } catch (_) {}
+    WalletRepository.instance.publishLiveBalance(
+      coins,
+      userId: userId,
+      wallet: _currentWallet,
+    );
 
     try {
       CoinRewardService().coinsNotifier.value = coins;
     } catch (_) {}
+
+    notifyListeners();
+
+    await WalletRepository.instance.persistWalletToSupabase(
+      userId: userId,
+      gCoins: coins,
+    );
   }
 
   static Future<void> _checkTeamEligibility(String userId, int newCoins) async {
@@ -193,53 +203,98 @@ class CoinWalletService extends ChangeNotifier {
     String? winProofUrl,
     int? inEscrowChange,
   }) async {
-    if (userId.isEmpty) return;
+    final cleanUid = userId.trim();
+    if (cleanUid.isEmpty) return;
     try {
       final now = DateTime.now();
+      final String targetUuid = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+      ).hasMatch(cleanUid)
+          ? cleanUid
+          : SupabaseService.toUuid(cleanUid);
 
-      int currentCoins = (_instance._currentWallet != null &&
-              (_instance._currentWallet!.userId == userId || userId.isEmpty))
-          ? _instance._currentWallet!.coins
-          : 1000;
+      // 1. Resolve current authoritative G-Coins balance from `public.coin_wallets` first
+      int currentCoins = WalletRepository.instance.currentGCoins > 0
+          ? WalletRepository.instance.currentGCoins
+          : ((_instance._currentWallet != null &&
+                  (_instance._currentWallet!.userId == cleanUid || cleanUid.isEmpty))
+              ? _instance._currentWallet!.coins
+              : 0);
       int currentEscrow = (_instance._currentWallet != null &&
-              (_instance._currentWallet!.userId == userId || userId.isEmpty))
+              (_instance._currentWallet!.userId == cleanUid || cleanUid.isEmpty))
           ? _instance._currentWallet!.escrowCoins
           : 0;
-      int currentWinnings = 0;
-      int currentWins = 0;
+      int lifetimeEarned = (_instance._currentWallet != null &&
+              (_instance._currentWallet!.userId == cleanUid || cleanUid.isEmpty))
+          ? _instance._currentWallet!.lifetimeEarned
+          : currentCoins;
+      int lifetimeSpent = (_instance._currentWallet != null &&
+              (_instance._currentWallet!.userId == cleanUid || cleanUid.isEmpty))
+          ? _instance._currentWallet!.lifetimeSpent
+          : 0;
+      int trustScore = (_instance._currentWallet != null &&
+              (_instance._currentWallet!.userId == cleanUid || cleanUid.isEmpty))
+          ? _instance._currentWallet!.trustScore
+          : 100;
 
       try {
-        final userRow = await SupabaseService.client
-            .from('users')
-            .select('coins, g_coins, in_escrow, total_winnings, wins')
-            .or('id.eq.$userId,uid.eq.$userId')
+        Map<String, dynamic>? walletRow = await SupabaseService.client
+            .from('coin_wallets')
+            .select()
+            .eq('user_id', cleanUid)
+            .limit(1)
             .maybeSingle()
             .timeout(const Duration(seconds: 3));
 
-        if (userRow != null) {
-          currentCoins = (userRow['coins'] as num?)?.toInt() ??
-              (userRow['g_coins'] as num?)?.toInt() ??
-              currentCoins;
-          currentEscrow = (userRow['in_escrow'] as num?)?.toInt() ?? currentEscrow;
-          currentWinnings = (userRow['total_winnings'] as num?)?.toInt() ?? 0;
-          currentWins = (userRow['wins'] as num?)?.toInt() ?? 0;
+        if (walletRow == null && targetUuid != cleanUid) {
+          walletRow = await SupabaseService.client
+              .from('coin_wallets')
+              .select()
+              .eq('user_id', targetUuid)
+              .limit(1)
+              .maybeSingle()
+              .timeout(const Duration(seconds: 3));
+        }
+
+        if (walletRow != null) {
+          final parsed = CoinWallet.fromMap(walletRow, cleanUid);
+          if (parsed.coins > 0 || currentCoins == 0) {
+            // Keep whichever is higher if local repository already reconciled with ledger
+            if (WalletRepository.instance.currentGCoins > parsed.coins) {
+              currentCoins = WalletRepository.instance.currentGCoins;
+            } else {
+              currentCoins = parsed.coins;
+            }
+          }
+          currentEscrow = parsed.escrowCoins;
+          lifetimeEarned = parsed.lifetimeEarned > currentCoins
+              ? parsed.lifetimeEarned
+              : currentCoins;
+          lifetimeSpent = parsed.lifetimeSpent;
+          trustScore = parsed.trustScore;
         }
       } catch (e) {
-        debugPrint('updateCoins: fetch user error: $e');
+        debugPrint('updateCoins: fetch coin_wallets notice: $e');
       }
 
-      final newCoins = (currentCoins + amount).clamp(0, 9999999);
-      final newEscrow = (currentEscrow + (inEscrowChange ?? 0)).clamp(0, 9999999);
+      if (currentCoins <= 0) {
+        try {
+          final userRow = await SupabaseService.client
+              .from('users')
+              .select('coins')
+              .or('id.eq.$cleanUid,uid.eq.$cleanUid')
+              .limit(1)
+              .maybeSingle()
+              .timeout(const Duration(seconds: 3));
+          if (userRow != null) {
+            final uCoins = (userRow['coins'] as num?)?.toInt() ?? 0;
+            if (uCoins > 0) currentCoins = uCoins;
+          }
+        } catch (_) {}
+      }
 
-      int lifetimeEarned = (_instance._currentWallet != null &&
-              (_instance._currentWallet!.userId == userId || userId.isEmpty))
-          ? _instance._currentWallet!.lifetimeEarned
-          : currentCoins;
-      int lifetimeSpent = 0;
-      int trustScore = (_instance._currentWallet != null &&
-              (_instance._currentWallet!.userId == userId || userId.isEmpty))
-          ? _instance._currentWallet!.trustScore
-          : 100;
+      final newCoins = (currentCoins + amount).clamp(0, 999999999);
+      final newEscrow = (currentEscrow + (inEscrowChange ?? 0)).clamp(0, 999999999);
 
       if (amount > 0) {
         lifetimeEarned += amount;
@@ -247,72 +302,33 @@ class CoinWalletService extends ChangeNotifier {
         lifetimeSpent += amount.abs();
       }
 
-      // Immediately update local wallet state & notifiers so UI reflects new balance right away
-      if (_instance._currentWallet != null &&
-          (_instance._currentWallet!.userId == userId || userId.isEmpty)) {
-        _instance._currentWallet = _instance._currentWallet!.copyWith(
-          coins: newCoins,
-          escrowCoins: newEscrow,
-          lifetimeEarned: lifetimeEarned,
-          updatedAt: now,
-          lastDailyBonusClaim: type == 'daily_bonus'
-              ? now
-              : _instance._currentWallet!.lastDailyBonusClaim,
-        );
-        _instance.notifyListeners();
-        _instance._saveToLocal(_instance._currentWallet!);
-      }
+      final updatedWallet = CoinWallet(
+        userId: cleanUid,
+        coins: newCoins,
+        escrowCoins: newEscrow,
+        lifetimeEarned: lifetimeEarned,
+        lifetimeSpent: lifetimeSpent,
+        trustScore: trustScore,
+        lastDailyBonusClaim: type == 'daily_bonus'
+            ? now
+            : (_instance._currentWallet?.lastDailyBonusClaim ??
+                WalletRepository.instance.walletNotifier.value?.lastDailyBonusClaim),
+        updatedAt: now,
+      );
+
+      // Immediately update shared WalletRepository, local wallet state & notifiers so every screen updates right away
+      _instance._currentWallet = updatedWallet;
+      WalletRepository.instance.publishLiveBalance(
+        newCoins,
+        userId: cleanUid,
+        wallet: updatedWallet,
+      );
+      _instance.notifyListeners();
+      _instance._saveToLocal(updatedWallet);
 
       try {
-        final currentGamer = GamerAuthService().currentGamer;
-        if (currentGamer != null && (currentGamer.uid == userId || userId.isEmpty)) {
-          GamerAuthService().currentGamerNotifier.value =
-              currentGamer.copyWith(coins: newCoins);
-        }
         CoinRewardService().coinsNotifier.value = newCoins;
       } catch (_) {}
-
-      final Map<String, dynamic> userUpdate = {
-        'coins': newCoins,
-        'g_coins': newCoins,
-        'updated_at': now.toIso8601String(),
-      };
-      if (inEscrowChange != null && inEscrowChange != 0) {
-        userUpdate['in_escrow'] = newEscrow;
-      }
-      if (type == 'win_reward' ||
-          type == 'win_prize' ||
-          type == 'team_prize' ||
-          type == 'weekly_team_reward') {
-        if (amount > 0) {
-          userUpdate['total_winnings'] = currentWinnings + amount;
-          if (type != 'weekly_team_reward') {
-            userUpdate['wins'] = currentWins + 1;
-          }
-          userUpdate['last_reward_at'] = now.toIso8601String();
-        }
-      }
-
-      final Map<String, dynamic> walletUpdate = {
-        'id': userId,
-        'user_id': userId,
-        'coins': newCoins,
-        'g_coins': newCoins,
-        'escrow_coins': newEscrow,
-        'lifetime_earned': lifetimeEarned,
-        'lifetime_spent': lifetimeSpent,
-        'trust_score': trustScore,
-        'updated_at': now.toIso8601String(),
-      };
-      if (type == 'daily_bonus') {
-        walletUpdate['last_daily_bonus_claim'] = now.toIso8601String();
-      }
-
-      final String targetUuid = RegExp(
-        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-      ).hasMatch(userId)
-          ? userId
-          : SupabaseService.toUuid(userId);
 
       final Map<String, dynamic> txData = {
         'user_id': targetUuid,
@@ -341,30 +357,16 @@ class CoinWalletService extends ChangeNotifier {
       final String combinedDesc =
           (title != null && title.isNotEmpty) ? '$title - $description' : description;
 
-      // Update users and coin_wallets concurrently with a bounded timeout
-      await Future.wait([
-        Future<void>(() async {
-          try {
-            await SupabaseService.client
-                .from('users')
-                .update(userUpdate)
-                .or('id.eq.$userId,uid.eq.$userId')
-                .timeout(const Duration(seconds: 3));
-          } catch (e) {
-            debugPrint('updateCoins: users update error: $e');
-          }
-        }),
-        Future<void>(() async {
-          try {
-            await SupabaseService.client
-                .from('coin_wallets')
-                .upsert(walletUpdate)
-                .timeout(const Duration(seconds: 3));
-          } catch (e) {
-            debugPrint('updateCoins: coin_wallets upsert error: $e');
-          }
-        }),
-      ]);
+      // Persist to `public.coin_wallets` (`g_coins` & `coins`) and `public.users` (`coins`)
+      await WalletRepository.instance.persistWalletToSupabase(
+        userId: cleanUid,
+        gCoins: newCoins,
+        escrowCoins: newEscrow,
+        lifetimeEarned: lifetimeEarned,
+        lifetimeSpent: lifetimeSpent,
+        trustScore: trustScore,
+        lastDailyBonusClaim: type == 'daily_bonus' ? now : null,
+      );
 
       // Persist transaction ledger entries non-blockingly so UI buttons never stay in Sending... state
       Future<void>(() async {
@@ -413,7 +415,7 @@ class CoinWalletService extends ChangeNotifier {
         if (type != 'team_weekly_contribution' &&
             type != 'game_currency_redemption' &&
             type != 'weekly_team_reward') {
-          await _checkTeamEligibility(userId, newCoins);
+          await _checkTeamEligibility(cleanUid, newCoins);
         }
       });
     } catch (e) {
@@ -422,138 +424,90 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   static Future<int> recalculateCoins(String userId) async {
-    if (userId.isEmpty) return 1000;
+    final cleanUid = userId.trim();
+    if (cleanUid.isEmpty) return WalletRepository.instance.currentGCoins;
     try {
-      final rows = await SupabaseService.client
-          .from('coin_transactions')
-          .select('amount')
-          .or('user_id.eq.$userId');
-
-      int computed = 1000;
-      for (final r in rows) {
-        computed += (r['amount'] as num?)?.toInt() ?? 0;
-      }
-      if (computed < 0) computed = 0;
-
-      await SupabaseService.client.from('users').update({
-        'coins': computed,
-        'g_coins': computed,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).or('id.eq.$userId,uid.eq.$userId');
-
-      await SupabaseService.client.from('coin_wallets').upsert({
-        'id': userId,
-        'user_id': userId,
-        'coins': computed,
-        'g_coins': computed,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      _instance._syncToUserDocAndNotifiers(userId, computed);
-      _checkTeamEligibility(userId, computed);
-
-      return computed;
+      final wallet = await WalletRepository.instance.fetchOrSyncWalletFromSupabase(cleanUid);
+      _instance._currentWallet = wallet;
+      _instance._saveToLocal(wallet);
+      _instance.notifyListeners();
+      try {
+        CoinRewardService().coinsNotifier.value = wallet.coins;
+      } catch (_) {}
+      _checkTeamEligibility(cleanUid, wallet.coins);
+      return wallet.coins;
     } catch (e) {
       debugPrint('CoinWalletService recalculateCoins error: $e');
-      return 1000;
+      return WalletRepository.instance.currentGCoins;
     }
   }
 
   Future<CoinWallet> getOrCreateWallet(String userId) async {
-    if (userId.isEmpty) {
-      return const CoinWallet(userId: 'guest', coins: 1000);
+    final cleanUid = userId.trim();
+    if (cleanUid.isEmpty) {
+      return const CoinWallet(userId: 'guest', coins: 0);
     }
 
-    if (_currentWallet != null && _currentWallet!.userId == userId) {
-      return _currentWallet!;
-    }
-
-    final local = await _loadFromLocal(userId);
-    if (local != null) {
+    final local = await _loadFromLocal(cleanUid);
+    if (local != null && _currentWallet == null) {
       _currentWallet = local;
+      if (WalletRepository.instance.currentGCoins <= 0 && local.coins > 0) {
+        WalletRepository.instance.publishLiveBalance(
+          local.coins,
+          userId: cleanUid,
+          wallet: local,
+        );
+      }
       notifyListeners();
     }
 
     try {
-      final row = await SupabaseService.client
-          .from('coin_wallets')
-          .select()
-          .or('user_id.eq.$userId,id.eq.$userId')
-          .maybeSingle();
-
-      if (row != null) {
-        final w = CoinWallet.fromMap(row, userId);
-        _currentWallet = w;
-        notifyListeners();
-        _saveToLocal(w);
-        _listenToWalletChanges(userId);
-        return w;
-      }
-
-      final userRow = await SupabaseService.client
-          .from('users')
-          .select('coins, g_coins')
-          .or('id.eq.$userId,uid.eq.$userId')
-          .maybeSingle();
-
-      int initialCoins = 1000;
-      if (userRow != null) {
-        initialCoins = (userRow['coins'] as num?)?.toInt() ??
-            (userRow['g_coins'] as num?)?.toInt() ??
-            1000;
-      }
-
-      final initial = CoinWallet(
-        userId: userId,
-        coins: initialCoins,
-        escrowCoins: 0,
-        lifetimeEarned: initialCoins,
-        trustScore: 100,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-
-      await SupabaseService.client.from('coin_wallets').upsert({
-        'id': userId,
-        'user_id': userId,
-        'coins': initialCoins,
-        'g_coins': initialCoins,
-        'escrow_coins': 0,
-        'lifetime_earned': initialCoins,
-        'lifetime_spent': 0,
-        'trust_score': 100,
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      _currentWallet = initial;
+      final wallet = await WalletRepository.instance.fetchOrSyncWalletFromSupabase(cleanUid);
+      _currentWallet = wallet;
       notifyListeners();
-      _saveToLocal(initial);
-      _listenToWalletChanges(userId);
-      return initial;
+      _saveToLocal(wallet);
+      _listenToWalletChanges(cleanUid);
+      return wallet;
     } catch (e) {
       debugPrint('CoinWalletService getOrCreateWallet Supabase error: $e');
-      final fallback = local ?? CoinWallet(userId: userId, coins: 1000);
+      final fallback = _currentWallet ??
+          WalletRepository.instance.walletNotifier.value ??
+          local ??
+          CoinWallet(userId: cleanUid, coins: WalletRepository.instance.currentGCoins);
       _currentWallet = fallback;
       return fallback;
     }
   }
 
   void _listenToWalletChanges(String userId) {
-    if (userId.isEmpty) return;
+    final cleanUid = userId.trim();
+    if (cleanUid.isEmpty) return;
     _walletSub?.cancel();
+    final userUuid = SupabaseService.toUuid(cleanUid).toLowerCase();
+    final rawLower = cleanUid.toLowerCase();
     try {
       _walletSub = SupabaseService.client
           .from('coin_wallets')
-          .stream(primaryKey: ['id'])
+          .stream(primaryKey: ['user_id'])
           .listen((rows) {
-        final match = rows.where((r) =>
-            (r['user_id'] ?? r['id'])?.toString() == userId);
+        final match = rows.where((r) {
+          final rowUid = (r['user_id'] ?? r['id'] ?? '').toString().trim().toLowerCase();
+          return rowUid == rawLower || rowUid == userUuid;
+        });
         if (match.isNotEmpty) {
-          final w = CoinWallet.fromMap(match.first, userId);
-          _currentWallet = w;
-          notifyListeners();
-          _saveToLocal(w);
+          final w = CoinWallet.fromMap(match.first, cleanUid);
+          // Only accept if non-zero or if we haven't loaded a higher ledger-reconciled balance
+          final currentLive = WalletRepository.instance.currentGCoins;
+          if (w.coins > 0 && (currentLive <= 0 || w.coins >= currentLive)) {
+            _currentWallet = w;
+            WalletRepository.instance.publishLiveBalance(
+              w.coins,
+              userId: cleanUid,
+              wallet: w,
+            );
+            notifyListeners();
+            _saveToLocal(w);
+          }
         }
       }, onError: (err) {
         debugPrint('CoinWalletService wallet stream notice: $err');
@@ -562,39 +516,98 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   Stream<CoinWallet> walletStream(String userId) {
-    final fallbackCoins = _currentWallet?.coins ??
-        GamerAuthService().currentGamer?.coins ??
-        CoinRewardService().coinsNotifier.value;
-    final initialFallback = _currentWallet ??
-        CoinWallet(
-          userId: userId.isEmpty ? 'guest' : userId,
-          coins: fallbackCoins > 0 ? fallbackCoins : 1000,
-        );
+    final cleanUid = userId.trim();
+    final int fallbackCoins = WalletRepository.instance.currentGCoins > 0
+        ? WalletRepository.instance.currentGCoins
+        : (_currentWallet?.coins ??
+            GamerAuthService().currentGamer?.coins ??
+            CoinRewardService().coinsNotifier.value);
+    final CoinWallet initialFallback =
+        WalletRepository.instance.walletNotifier.value ??
+            _currentWallet ??
+            CoinWallet(
+              userId: cleanUid.isEmpty ? 'guest' : cleanUid,
+              coins: fallbackCoins > 0 ? fallbackCoins : 0,
+            );
 
-    if (userId.isEmpty) {
+    if (cleanUid.isEmpty) {
       return Stream.value(initialFallback).asBroadcastStream();
     }
-    try {
-      final userUuid = SupabaseService.toUuid(userId).toLowerCase();
-      final rawLower = userId.toLowerCase();
-      return SupabaseService.client
-          .from('coin_wallets')
-          .stream(primaryKey: ['id'])
-          .map((rows) {
-        final match = rows.where((r) {
-          final rowUid = (r['user_id'] ?? r['id'])?.toString().toLowerCase() ?? '';
-          return rowUid == rawLower || rowUid == userUuid;
-        });
-        if (match.isNotEmpty) {
-          final w = CoinWallet.fromMap(match.first, userId);
-          _currentWallet = w;
-          return w;
-        }
-        return _currentWallet ?? initialFallback;
-      }).asBroadcastStream();
-    } catch (_) {
-      return Stream.value(_currentWallet ?? initialFallback).asBroadcastStream();
+
+    late StreamController<CoinWallet> controller;
+    StreamSubscription? supaSub;
+    VoidCallback? repoListener;
+
+    void emitWallet(CoinWallet w) {
+      _currentWallet = w;
+      if (!controller.isClosed) {
+        controller.add(w);
+      }
     }
+
+    controller = StreamController<CoinWallet>.broadcast(
+      onListen: () {
+        final currentRepoWallet = WalletRepository.instance.walletNotifier.value;
+        if (currentRepoWallet != null && currentRepoWallet.coins > 0) {
+          emitWallet(currentRepoWallet);
+        } else {
+          emitWallet(initialFallback);
+        }
+
+        // Listen to local shared WalletRepository changes immediately
+        repoListener = () {
+          final latestW = WalletRepository.instance.walletNotifier.value;
+          final latestCoins = WalletRepository.instance.currentGCoins;
+          if (latestW != null) {
+            emitWallet(latestW.copyWith(coins: latestCoins));
+          } else if (_currentWallet != null) {
+            emitWallet(_currentWallet!.copyWith(coins: latestCoins));
+          } else {
+            emitWallet(CoinWallet(userId: cleanUid, coins: latestCoins));
+          }
+        };
+        WalletRepository.instance.gCoinsBalance.addListener(repoListener!);
+
+        // Trigger background authoritative fetch & sync from `public.coin_wallets`
+        WalletRepository.instance.refreshForCurrentUser(userId: cleanUid);
+
+        // Also subscribe to Supabase realtime changes on `public.coin_wallets`
+        try {
+          final userUuid = SupabaseService.toUuid(cleanUid).toLowerCase();
+          final rawLower = cleanUid.toLowerCase();
+          supaSub = SupabaseService.client
+              .from('coin_wallets')
+              .stream(primaryKey: ['user_id'])
+              .listen((rows) {
+            final match = rows.where((r) {
+              final rowUid = (r['user_id'] ?? r['id'] ?? '').toString().trim().toLowerCase();
+              return rowUid == rawLower || rowUid == userUuid;
+            });
+            if (match.isNotEmpty) {
+              final parsed = CoinWallet.fromMap(match.first, cleanUid);
+              final liveCoins = WalletRepository.instance.currentGCoins;
+              final resolvedCoins =
+                  (liveCoins > parsed.coins && liveCoins > 0) ? liveCoins : parsed.coins;
+              final synced = parsed.copyWith(coins: resolvedCoins);
+              WalletRepository.instance.publishLiveBalance(
+                resolvedCoins,
+                userId: cleanUid,
+                wallet: synced,
+              );
+              emitWallet(synced);
+            }
+          }, onError: (_) {});
+        } catch (_) {}
+      },
+      onCancel: () {
+        if (repoListener != null) {
+          WalletRepository.instance.gCoinsBalance.removeListener(repoListener!);
+        }
+        supaSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   Future<bool> claimDailyBonus(String userId) async {
@@ -602,21 +615,6 @@ class CoinWalletService extends ChangeNotifier {
     if (!wallet.canClaimDailyBonus) {
       return false;
     }
-
-    final now = DateTime.now();
-    final newCoins = wallet.coins + 50;
-    final newLifetime = wallet.lifetimeEarned + 50;
-
-    final updated = wallet.copyWith(
-      coins: newCoins,
-      lifetimeEarned: newLifetime,
-      lastDailyBonusClaim: now,
-      updatedAt: now,
-    );
-
-    _currentWallet = updated;
-    notifyListeners();
-    _saveToLocal(updated);
 
     try {
       await updateCoins(
@@ -642,21 +640,7 @@ class CoinWalletService extends ChangeNotifier {
   }
 
   Future<void> rewardAdCoins(String userId) async {
-    final wallet = await getOrCreateWallet(userId);
-    final newCoins = wallet.coins + 25;
-    final newLifetime = wallet.lifetimeEarned + 25;
-    final now = DateTime.now();
-
-    final updated = wallet.copyWith(
-      coins: newCoins,
-      lifetimeEarned: newLifetime,
-      updatedAt: now,
-    );
-
-    _currentWallet = updated;
-    notifyListeners();
-    _saveToLocal(updated);
-
+    await getOrCreateWallet(userId);
     try {
       await updateCoins(
         userId: userId,
@@ -681,21 +665,7 @@ class CoinWalletService extends ChangeNotifier {
   Future<void> rewardReferralCoins(String userId,
       {String? inviteeName}) async {
     final name = inviteeName ?? 'wallet_friend'.tr();
-    final wallet = await getOrCreateWallet(userId);
-    final newCoins = wallet.coins + 100;
-    final newLifetime = wallet.lifetimeEarned + 100;
-    final now = DateTime.now();
-
-    final updated = wallet.copyWith(
-      coins: newCoins,
-      lifetimeEarned: newLifetime,
-      updatedAt: now,
-    );
-
-    _currentWallet = updated;
-    notifyListeners();
-    _saveToLocal(updated);
-
+    await getOrCreateWallet(userId);
     try {
       await updateCoins(
         userId: userId,

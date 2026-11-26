@@ -1,10 +1,13 @@
-// 100% Supabase Coin Wallet Model
+// 100% Supabase Coin Wallet Model — Single Source of Truth via `g_coins` (synced with `coins`)
+
+import 'dart:math';
 
 class CoinWallet {
   final String userId;
   final int coins;
   final int escrowCoins;
   final int lifetimeEarned;
+  final int lifetimeSpent;
   final int trustScore; // Default 100
   final DateTime? lastDailyBonusClaim;
   final DateTime? createdAt;
@@ -12,15 +15,17 @@ class CoinWallet {
 
   const CoinWallet({
     required this.userId,
-    this.coins = 1000,
+    this.coins = 0,
     this.escrowCoins = 0,
-    this.lifetimeEarned = 1000,
+    this.lifetimeEarned = 0,
+    this.lifetimeSpent = 0,
     this.trustScore = 100,
     this.lastDailyBonusClaim,
     this.createdAt,
     this.updatedAt,
   });
 
+  int get gCoins => coins;
   int get balance => coins;
   int get currentBalance => coins;
   int get totalNetWorth => coins + escrowCoins;
@@ -39,12 +44,13 @@ class CoinWallet {
   }
 
   // Empty fallback wallet instance for initial UI rendering
-  factory CoinWallet.empty(String userId) {
+  factory CoinWallet.empty(String userId, {int initialCoins = 0}) {
     return CoinWallet(
       userId: userId,
-      coins: 1000,
+      coins: initialCoins,
       escrowCoins: 0,
-      lifetimeEarned: 1000,
+      lifetimeEarned: initialCoins,
+      lifetimeSpent: 0,
       trustScore: 100,
     );
   }
@@ -74,13 +80,38 @@ class CoinWallet {
       return null;
     }
 
+    int? parseInt(dynamic val) {
+      if (val == null) return null;
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val.trim());
+      return null;
+    }
+
+    // Single source of truth: coin_wallets.g_coins (synced with coins)
+    final int? rawGCoins = parseInt(data['g_coins']) ?? parseInt(data['gCoins']);
+    final int? rawCoins = parseInt(data['coins']);
+    final int resolvedBalance;
+    if (rawGCoins != null && rawCoins != null) {
+      // If one column was updated while the other lagged, prefer the non-zero / larger synced balance
+      resolvedBalance = rawGCoins == rawCoins ? rawGCoins : max(rawGCoins, rawCoins);
+    } else {
+      resolvedBalance = rawGCoins ?? rawCoins ?? 0;
+    }
+
+    final int parsedEarned =
+        parseInt(data['lifetime_earned']) ?? parseInt(data['lifetimeEarned']) ?? resolvedBalance;
+    final int parsedSpent =
+        parseInt(data['lifetime_spent']) ?? parseInt(data['lifetimeSpent']) ?? 0;
+
     return CoinWallet(
-      userId: data['userId'] ?? data['user_id'] ?? id ?? '',
-      coins: (data['coins'] as num?)?.toInt() ?? 1000,
-      escrowCoins: (data['escrowCoins'] ?? data['escrow_coins'] as num?)?.toInt() ?? 0,
-      lifetimeEarned: (data['lifetimeEarned'] ?? data['lifetime_earned'] as num?)?.toInt() ?? 1000,
-      trustScore: (data['trustScore'] ?? data['trust_score'] as num?)?.toInt() ?? 100,
-      lastDailyBonusClaim: parseDate(data['lastDailyBonusClaim'] ?? data['last_daily_bonus_claim']),
+      userId: (data['user_id'] ?? data['userId'] ?? id ?? '').toString(),
+      coins: resolvedBalance,
+      escrowCoins: parseInt(data['escrow_coins']) ?? parseInt(data['escrowCoins']) ?? 0,
+      lifetimeEarned: parsedEarned,
+      lifetimeSpent: parsedSpent,
+      trustScore: parseInt(data['trust_score']) ?? parseInt(data['trustScore']) ?? 100,
+      lastDailyBonusClaim:
+          parseDate(data['lastDailyBonusClaim'] ?? data['last_daily_bonus_claim']),
       createdAt: parseDate(data['createdAt'] ?? data['created_at']),
       updatedAt: parseDate(data['updatedAt'] ?? data['updated_at']),
     );
@@ -92,10 +123,13 @@ class CoinWallet {
       'userId': userId,
       'user_id': userId,
       'coins': coins,
+      'g_coins': coins,
       'escrowCoins': escrowCoins,
       'escrow_coins': escrowCoins,
       'lifetimeEarned': lifetimeEarned,
       'lifetime_earned': lifetimeEarned,
+      'lifetimeSpent': lifetimeSpent,
+      'lifetime_spent': lifetimeSpent,
       'trustScore': trustScore,
       'trust_score': trustScore,
       'lastDailyBonusClaim': lastDailyBonusClaim?.toIso8601String(),
@@ -110,9 +144,12 @@ class CoinWallet {
   Map<String, dynamic> toJson() {
     return {
       'userId': userId,
+      'user_id': userId,
       'coins': coins,
+      'g_coins': coins,
       'escrowCoins': escrowCoins,
       'lifetimeEarned': lifetimeEarned,
+      'lifetimeSpent': lifetimeSpent,
       'trustScore': trustScore,
       'lastDailyBonusClaim': lastDailyBonusClaim?.toIso8601String(),
       'createdAt': createdAt?.toIso8601String(),
@@ -125,6 +162,7 @@ class CoinWallet {
     int? coins,
     int? escrowCoins,
     int? lifetimeEarned,
+    int? lifetimeSpent,
     int? trustScore,
     DateTime? lastDailyBonusClaim,
     DateTime? createdAt,
@@ -135,6 +173,7 @@ class CoinWallet {
       coins: coins ?? this.coins,
       escrowCoins: escrowCoins ?? this.escrowCoins,
       lifetimeEarned: lifetimeEarned ?? this.lifetimeEarned,
+      lifetimeSpent: lifetimeSpent ?? this.lifetimeSpent,
       trustScore: trustScore ?? this.trustScore,
       lastDailyBonusClaim: lastDailyBonusClaim ?? this.lastDailyBonusClaim,
       createdAt: createdAt ?? this.createdAt,

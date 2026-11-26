@@ -1587,28 +1587,65 @@ class SupabaseService {
     String? adminEmail,
   }) async {
     try {
-      final users = await query('users', select: 'coins', filters: {'id': 'eq.$userId'}, limit: 1);
       int currentCoins = 0;
-      if (users.isNotEmpty) {
-        currentCoins = (users.first['coins'] as num?)?.toInt() ?? 0;
+      int currentLifetimeEarned = 0;
+      try {
+        final walletRow = await client
+            .from('coin_wallets')
+            .select('g_coins, coins, lifetime_earned')
+            .eq('user_id', userId)
+            .maybeSingle();
+        if (walletRow != null) {
+          final int gVal = (walletRow['g_coins'] as num?)?.toInt() ?? 0;
+          final int cVal = (walletRow['coins'] as num?)?.toInt() ?? 0;
+          currentCoins = gVal > 0 ? gVal : cVal;
+          currentLifetimeEarned = (walletRow['lifetime_earned'] as num?)?.toInt() ?? 0;
+        }
+      } catch (_) {}
+
+      if (currentCoins == 0) {
+        final users = await query('users', select: 'coins', filters: {'id': 'eq.$userId'}, limit: 1);
+        if (users.isNotEmpty) {
+          currentCoins = (users.first['coins'] as num?)?.toInt() ?? 0;
+        }
       }
-      final newTotal = currentCoins + amount;
+
+      final int newTotal = (currentCoins + amount).clamp(0, 9999999);
+      final int newLifetimeEarned = amount > 0
+          ? currentLifetimeEarned + amount
+          : currentLifetimeEarned;
+
+      try {
+        await client.from('coin_wallets').upsert({
+          'user_id': userId,
+          'g_coins': newTotal,
+          'coins': newTotal,
+          'lifetime_earned': newLifetimeEarned,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'user_id');
+      } catch (_) {
+        try {
+          await client.from('coin_wallets').update({
+            'g_coins': newTotal,
+            'coins': newTotal,
+            'lifetime_earned': newLifetimeEarned,
+          }).eq('user_id', userId);
+        } catch (_) {}
+      }
 
       final ok = await update('users', {
         'coins': newTotal,
         'updated_at': DateTime.now().toIso8601String(),
       }, 'id', userId);
 
-      if (ok) {
-        await recordCoinTransaction(
-          userId: userId,
-          amount: amount,
-          type: 'admin_grant',
-          description: 'admin_awarded_coins_desc'.tr(args: ['$amount']),
-          balanceAfter: newTotal,
-        );
-      }
-      return ok;
+      await recordCoinTransaction(
+        userId: userId,
+        amount: amount,
+        type: 'admin_grant',
+        description: 'admin_awarded_coins_desc'.tr(args: ['$amount']),
+        balanceAfter: newTotal,
+      );
+      return ok || newTotal >= 0;
     } catch (e) {
       return false;
     }

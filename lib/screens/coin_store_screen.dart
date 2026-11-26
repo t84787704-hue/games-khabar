@@ -18,6 +18,7 @@ import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
 import '../services/app_share_service.dart';
 import '../services/team_service.dart';
+import '../services/wallet_repository.dart';
 import '../models/team_model.dart';
 import 'coin_wallet_screen.dart';
 import 'teams_screen.dart';
@@ -109,6 +110,8 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
     _walletService.addListener(_onExternalBalanceChanged);
     _authService.currentGamerNotifier.addListener(_onExternalBalanceChanged);
     CoinRewardService().coinsNotifier.addListener(_onExternalBalanceChanged);
+    WalletRepository.instance.gCoinsBalance.addListener(_onExternalBalanceChanged);
+    WalletRepository.instance.walletNotifier.addListener(_onExternalBalanceChanged);
 
     _recalculateCountdown();
     _initStoreData();
@@ -282,14 +285,18 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
   }
 
   int get _effectiveCoinBalance {
-    if (_wallet != null && _wallet!.coins > 0) return _wallet!.coins;
-    final cw = _walletService.currentWallet;
-    if (cw != null && cw.coins > 0) return cw.coins;
+    final repoCoins = WalletRepository.instance.currentGCoins;
+    final walletCoins = _wallet?.gCoins ?? 0;
+    final cwCoins = _walletService.currentWallet?.gCoins ?? 0;
     final gamerCoins = _authService.currentGamer?.coins ?? 0;
-    if (gamerCoins > 0) return gamerCoins;
     final rewardCoins = CoinRewardService().coinsNotifier.value;
+
+    if (repoCoins > 0) return repoCoins;
+    if (walletCoins > 0) return walletCoins;
+    if (cwCoins > 0) return cwCoins;
+    if (gamerCoins > 0) return gamerCoins;
     if (rewardCoins > 0) return rewardCoins;
-    return _wallet?.coins ?? cw?.coins ?? 0;
+    return _wallet?.gCoins ?? _walletService.currentWallet?.gCoins ?? 0;
   }
 
   @override
@@ -301,6 +308,8 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
     _walletService.removeListener(_onExternalBalanceChanged);
     _authService.currentGamerNotifier.removeListener(_onExternalBalanceChanged);
     CoinRewardService().coinsNotifier.removeListener(_onExternalBalanceChanged);
+    WalletRepository.instance.gCoinsBalance.removeListener(_onExternalBalanceChanged);
+    WalletRepository.instance.walletNotifier.removeListener(_onExternalBalanceChanged);
     _timeUntilNextClaimNotifier.dispose();
     super.dispose();
   }
@@ -786,7 +795,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                   Icon(Icons.play_circle_fill_rounded, color: Colors.black, size: 16),
                   SizedBox(width: 6),
                   Text(
-                    'Earn +25 Coins',
+                    'Earn +25 G-Coins',
                     style: TextStyle(
                       color: Colors.black,
                       fontWeight: FontWeight.w900,
@@ -820,7 +829,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
               return _buildEarnActionCard(
                 icon: Icons.calendar_today_rounded,
                 iconColor: GamerTheme.neonGreen,
-                badge: _trSafe('badge_plus_50_coins', '+50 Coins'),
+                badge: '+50 G-Coins',
                 badgeColor: GamerTheme.neonGreen,
                 title: _trSafe('daily_checkin_reward_title', 'Daily Check-in Reward'),
                 subtitle: canClaimDaily
@@ -836,7 +845,7 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
                 buttonText: _isClaimingDaily
                     ? _trSafe('btn_watching', 'Watching...')
                     : (canClaimDaily
-                        ? _trSafe('btn_claim_50_coins', 'Claim +50 Coins')
+                        ? 'Claim +50 G-Coins'
                         : formattedCountdown),
                 buttonColor:
                     canClaimDaily ? GamerTheme.neonGreen : ThemeService.cardSecondary,
@@ -849,12 +858,12 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
           _buildEarnActionCard(
             icon: Icons.play_circle_filled_rounded,
             iconColor: GamerTheme.accentOrange,
-            badge: '+25 Coins',
+            badge: '+25 G-Coins',
             badgeColor: GamerTheme.accentOrange,
             title: _trSafe('watch_sponsored_ads_title', 'Watch Sponsored Ads'),
             subtitle: _trSafe(
               'watch_sponsored_ads_sub',
-              'Watch a short ad to earn free coins instantly.',
+              'Watch a short ad to earn free G-Coins instantly.',
             ),
             buttonText: _isWatchingAd
                 ? _trSafe('btn_streaming_ad', 'Streaming Ad...')
@@ -867,11 +876,11 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
           _buildEarnActionCard(
             icon: Icons.people_alt_rounded,
             iconColor: GamerTheme.accentBlue,
-            badge: _trSafe('badge_plus_200_coins', '+100 Coins'),
+            badge: '+200 G-Coins',
             badgeColor: GamerTheme.accentBlue,
             title: _trSafe('squad_referral_bonus_title', 'Squad Referral Bonus'),
             subtitle:
-                '${_trSafe('squad_referral_bonus_sub', 'Invite your friends using your code and earn bonus coins.')} ($inviteCode)',
+                '${_trSafe('squad_referral_bonus_sub', 'Invite your friends using your code and earn bonus G-Coins.')} ($inviteCode)',
             buttonText: '${_trSafe('btn_share_code', 'Share Invite Code')} ($inviteCode)',
             buttonColor: GamerTheme.accentBlue,
             textColor: Colors.white,

@@ -18,6 +18,7 @@ import '../services/ad_free_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
+import '../services/wallet_repository.dart';
 import '../screens/coin_store_screen.dart';
 import '../screens/earn_coins_screen.dart';
 
@@ -81,13 +82,16 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
         ? widget.userId.trim()
         : (GamerAuthService().currentUid?.trim() ?? '');
 
-    // Seed initial balance from in-memory wallet / auth / reward notifiers
-    final int walletCoins = _walletService.currentWallet?.coins ?? 0;
+    // Seed initial balance from shared WalletRepository / in-memory wallet / auth / reward notifiers
+    final int repoCoins = WalletRepository.instance.currentGCoins;
+    final int walletCoins = _walletService.currentWallet?.gCoins ?? 0;
     final int gamerCoins = GamerAuthService().currentGamer?.coins ?? 0;
     final int notifierCoins = CoinRewardService().coinsNotifier.value;
-    final int initialSeedBalance = walletCoins > 0
-        ? walletCoins
-        : (gamerCoins > 0 ? gamerCoins : (notifierCoins > 0 ? notifierCoins : 0));
+    final int initialSeedBalance = repoCoins > 0
+        ? repoCoins
+        : (walletCoins > 0
+            ? walletCoins
+            : (gamerCoins > 0 ? gamerCoins : (notifierCoins > 0 ? notifierCoins : 0)));
     if (initialSeedBalance > 0) {
       _cachedValidBalance = initialSeedBalance;
     }
@@ -127,7 +131,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
     }
   }
 
-  /// Background Safe Auto-Sync
+  /// Background Safe Auto-Sync to shared WalletRepository & Supabase coin_wallets.g_coins
   Future<void> _safeBackgroundSync(int targetCoins) async {
     if (targetCoins <= 0 || _isBackgroundSyncing) return;
     _isBackgroundSyncing = true;
@@ -135,30 +139,21 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
       final currentUserId = _effectiveUserId;
       if (currentUserId.isEmpty) return;
 
-      // 1. Update coins in Supabase users table
-      await SupabaseService.client.from('users').update({
-        'coins': targetCoins,
-        'g_coins': targetCoins,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).or('id.eq.$currentUserId,uid.eq.$currentUserId');
+      // Immediately publish to shared WalletRepository so Coin Store, Earn G-Coins,
+      // Settings & Preferences, and Profile all reflect the exact same live balance!
+      WalletRepository.instance.publishLiveBalance(
+        targetCoins,
+        userId: currentUserId,
+        lifetimeEarned: _cachedTotalCredited > 0 ? _cachedTotalCredited : null,
+        lifetimeSpent: _cachedTotalSpent > 0 ? _cachedTotalSpent : null,
+      );
 
-      // 2. Update coin_wallets table
-      try {
-        await SupabaseService.client.from('coin_wallets').upsert({
-          'id': currentUserId,
-          'user_id': currentUserId,
-          'coins': targetCoins,
-          'g_coins': targetCoins,
-          'updated_at': DateTime.now().toIso8601String(),
-        });
-      } catch (_) {}
-
-      // 3. Update in-memory state
-      final currentGamer = GamerAuthService().currentGamer;
-      if (currentGamer != null && (currentGamer.uid == currentUserId || currentUserId.isEmpty)) {
-        GamerAuthService().currentGamerNotifier.value = currentGamer.copyWith(coins: targetCoins);
-        CoinRewardService().coinsNotifier.value = targetCoins;
-      }
+      await WalletRepository.instance.persistWalletToSupabase(
+        userId: currentUserId,
+        gCoins: targetCoins,
+        lifetimeEarned: _cachedTotalCredited > 0 ? _cachedTotalCredited : null,
+        lifetimeSpent: _cachedTotalSpent > 0 ? _cachedTotalSpent : null,
+      );
 
       debugPrint('AUTO-SYNCED: Balance safely locked at $targetCoins G-Coins');
     } catch (e) {
@@ -230,9 +225,21 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                           ? _cachedValidBalance
                           : liveWalletCoins);
 
+                  if (displayCoins > 0 &&
+                      WalletRepository.instance.currentGCoins != displayCoins) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      WalletRepository.instance.publishLiveBalance(
+                        displayCoins,
+                        userId: _effectiveUserId,
+                        lifetimeEarned: totalAdded > 0 ? totalAdded : null,
+                        lifetimeSpent: totalDeducted > 0 ? totalDeducted : null,
+                      );
+                    });
+                  }
+
                   if (expectedBalance > 0 &&
-                      liveWalletCoins != expectedBalance &&
-                      _lastSyncedBalance != expectedBalance) {
+                      (liveWalletCoins != expectedBalance ||
+                          _lastSyncedBalance != expectedBalance)) {
                     _lastSyncedBalance = expectedBalance;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       _safeBackgroundSync(expectedBalance);
@@ -341,11 +348,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                                           const Text('🪙', style: TextStyle(fontSize: 18)),
                                           const SizedBox(width: 6),
                                           Text(
-                                            'coins_amount_format'.tr(
-                                              args: [
-                                                NumberFormat("#,###").format(displayCoins),
-                                              ],
-                                            ),
+                                            '${NumberFormat("#,###").format(displayCoins)} G-Coins',
                                             style: TextStyle(
                                               color: goldTextColor,
                                               fontSize: 20,
@@ -1531,7 +1534,7 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                         subtitle: canDaily
                             ? 'Claim +50 G-Coins for checking in today!'
                             : 'Already claimed today • Next in ${formatDuration(nextBonusDuration)}',
-                        coinsBadge: '+50 Coins',
+                        coinsBadge: '+50 G-Coins',
                         actionWidget: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: canDaily
@@ -1577,8 +1580,8 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                         icon: Icons.play_circle_filled_rounded,
                         iconColor: const Color(0xFF00FF88),
                         title: 'Sponsored Video Ad',
-                        subtitle: 'Watch a short 5-second video to earn instant coins',
-                        coinsBadge: '+25 Coins',
+                        subtitle: 'Watch a short 5-second video to earn instant G-Coins',
+                        coinsBadge: '+25 G-Coins',
                         actionWidget: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00FF88),
@@ -1624,9 +1627,9 @@ class _CoinHistorySheetState extends State<CoinHistorySheet> {
                         iconColor: const Color(0xFFFF9900),
                         title: 'Lucky Mystery Box',
                         subtitle: isMysteryAvailable
-                            ? 'Tap to unbox a surprise coin gift (+25 to +75 Coins)!'
+                            ? 'Tap to unbox a surprise coin gift (+25 to +75 G-Coins)!'
                             : 'Opened recently • Next box in 12 hours',
-                        coinsBadge: '+25~75 Coins',
+                        coinsBadge: '+25~75 G-Coins',
                         actionWidget: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: isMysteryAvailable

@@ -705,7 +705,10 @@ class GamerUser {
           ),
       age: resolvedAge,
       dateOfBirth: parsedDob,
-      coins: (data['coins'] as num?)?.toInt() ?? 100,
+      coins: (data['g_coins'] as num?)?.toInt() ??
+          (data['gCoins'] as num?)?.toInt() ??
+          (data['coins'] as num?)?.toInt() ??
+          0,
       level: userLevel,
       games: parsedGames,
       verificationProgress: data['verificationProgress'] is Map

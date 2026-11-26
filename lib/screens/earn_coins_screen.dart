@@ -17,6 +17,7 @@ import '../services/ad_free_service.dart';
 import '../services/theme_service.dart';
 import '../services/app_share_service.dart';
 import '../services/team_service.dart';
+import '../services/wallet_repository.dart';
 import '../models/team_model.dart';
 import 'teams_screen.dart';
 
@@ -63,7 +64,7 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
     try {
       await AdFreeService().showRewardedAdForAction(
         context: context,
-        actionTitle: 'Watch Ad (+25 Coins)',
+        actionTitle: 'Watch Ad (+25 G-Coins)',
         onRewardEarned: () async {
           await _walletService.rewardAdCoins(_userId);
           if (mounted) {
@@ -251,7 +252,15 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildBalanceBanner(wallet.coins, isDark),
+                    ValueListenableBuilder<int>(
+                      valueListenable: WalletRepository.instance.gCoinsBalance,
+                      builder: (context, repoBalance, _) {
+                        final int effectiveCoins = repoBalance > 0
+                            ? repoBalance
+                            : wallet.gCoins;
+                        return _buildBalanceBanner(effectiveCoins, isDark);
+                      },
+                    ),
                     const SizedBox(height: 14),
                     StreamBuilder<List<TeamModel>>(
                       stream: _userTeamsStream ?? TeamService().getUserTeamsStream(_userId),
@@ -354,11 +363,11 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // 1. WATCH AD (+25 COINS, UNLIMITED)
+                    // 1. WATCH AD (+25 G-COINS, UNLIMITED)
                     _buildActionCard(
                       icon: Icons.play_circle_fill_rounded,
                       iconColor: GamerTheme.neonGreen,
-                      badgeText: '+25 Coins',
+                      badgeText: '+25 G-Coins',
                       title: 'watch_sponsored_ad_title'.tr(),
                       subtitle: 'watch_sponsored_ad_sub'.tr(),
                       buttonText: _isWatchingAd ? 'btn_loading'.tr() : 'Watch Ad (+25)',
@@ -367,18 +376,18 @@ class _EarnCoinsScreenState extends State<EarnCoinsScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // 2. DAILY LOGIN BONUS (+50 COINS, 24H COOLDOWN)
+                    // 2. DAILY LOGIN BONUS (+50 G-COINS, 24H COOLDOWN)
                     _buildActionCard(
                       icon: Icons.calendar_today_rounded,
                       iconColor: GamerTheme.accentOrange,
-                      badgeText: 'badge_plus_50_coins'.tr(),
+                      badgeText: '+50 G-Coins',
                       title: 'daily_login_bonus_gift_title'.tr(),
                       subtitle: wallet.canClaimDailyBonus
                           ? 'daily_bonus_available_now'.tr()
                           : 'daily_bonus_next_in'.tr(args: [_formatDuration(wallet.nextDailyBonusDuration)]),
                       buttonText: _isClaimingDaily
                           ? 'btn_claiming'.tr()
-                          : (wallet.canClaimDailyBonus ? 'btn_claim_50'.tr() : 'btn_locked_wait'.tr()),
+                          : (wallet.canClaimDailyBonus ? 'Claim +50 G-Coins' : 'btn_locked_wait'.tr()),
                       isLoading: _isClaimingDaily,
                       onTap: wallet.canClaimDailyBonus && !_isClaimingDaily
                           ? () => _claimDailyBonus(wallet)
