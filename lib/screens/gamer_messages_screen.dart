@@ -552,14 +552,6 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen>
     final displayTitle = u.displayName.trim().isNotEmpty
         ? u.displayName.trim()
         : (u.username.trim().isNotEmpty ? u.username.trim() : 'Gamer');
-    final shortId = _formatShortId(u);
-    final subtitleParts = <String>[
-      if (u.username.trim().isNotEmpty) '@${u.username.trim()}',
-      if (shortId.isNotEmpty) 'ID: $shortId',
-    ];
-    final subtitleText = subtitleParts.isNotEmpty
-        ? subtitleParts.join(' • ')
-        : 'Tap to start chat';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -600,56 +592,41 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen>
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              displayTitle,
-                              style: TextStyle(
-                                color: ThemeService.textPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                      Flexible(
+                        child: Text(
+                          displayTitle,
+                          style: TextStyle(
+                            color: ThemeService.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
                           ),
-                          if (u.isVerified) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.verified, color: neonCyan, size: 14),
-                          ],
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: gameColor.withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              gameTag,
-                              style: TextStyle(
-                                color: gameColor,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                        ],
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitleText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: ThemeService.textSecondary,
-                          fontSize: 12.5,
+                      if (u.isVerified) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.verified, color: neonCyan, size: 14),
+                      ],
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: gameColor.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          gameTag,
+                          style: TextStyle(
+                            color: gameColor,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -1190,10 +1167,16 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                         itemCount: _results.length,
                         itemBuilder: (context, i) {
                           final u = _results[i];
-                          final idTag = u.gameId.trim().isNotEmpty
-                              ? u.gameId.trim()
-                              : (u.uid.length > 8 ? u.uid.substring(0, 8) : u.uid);
+                          final displayName = u.displayName.trim().isNotEmpty
+                              ? u.displayName.trim()
+                              : (u.username.trim().isNotEmpty
+                                  ? u.username.trim()
+                                  : 'Gamer');
                           return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
                             onTap: () => Navigator.pop(context, u),
                             leading: Container(
                               width: 44,
@@ -1209,9 +1192,7 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                               child: ClipOval(
                                 child: _renderUserAvatarWidget(
                                   rawPhotoUrl: u.photoUrl,
-                                  name: u.displayName.isNotEmpty
-                                      ? u.displayName
-                                      : u.username,
+                                  name: displayName,
                                   size: 44,
                                 ),
                               ),
@@ -1220,12 +1201,10 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                               children: [
                                 Flexible(
                                   child: Text(
-                                    u.displayName.isNotEmpty
-                                        ? u.displayName
-                                        : u.username,
+                                    displayName,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                      fontSize: 15,
                                       color: ThemeService.textPrimary,
                                     ),
                                     overflow: TextOverflow.ellipsis,
@@ -1236,15 +1215,6 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                                   const Icon(Icons.verified, color: neonCyan, size: 14),
                                 ],
                               ],
-                            ),
-                            subtitle: Text(
-                              idTag.isNotEmpty
-                                  ? '@${u.username} • ID: $idTag'
-                                  : '@${u.username}',
-                              style: TextStyle(
-                                color: ThemeService.textSecondary,
-                                fontSize: 12,
-                              ),
                             ),
                           );
                         },

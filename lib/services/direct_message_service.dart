@@ -4,6 +4,7 @@
 // ===============================================================================
 
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/chat_model.dart';
 import '../models/gamer_user_model.dart';
@@ -648,15 +649,66 @@ class DirectMessageService {
     return aliases;
   }
 
-  /// Send a message and update the sender's `last_seen` presence timestamp in UTC.
-  Future<bool> sendMessage({
+  /// Uploads a chat image file to Supabase Storage and returns its public URL.
+  Future<String?> uploadChatImage({
+    required File file,
+    required String senderId,
+  }) async {
+    try {
+      if (!await file.exists()) return null;
+      final cleanSender = senderId.trim().replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '');
+      final folder = cleanSender.isNotEmpty ? 'chat_images/$cleanSender' : 'chat_images';
+
+      // 1. Primary upload to `posts` bucket (public media bucket)
+      final url = await SupabaseService.uploadFile(
+        file: file,
+        folder: folder,
+        bucket: SupabaseService.bucketPosts,
+      );
+      if (url != null && url.trim().isNotEmpty) {
+        return url.trim();
+      }
+
+      // 2. Fallback upload to `avatars` bucket
+      final fallbackAvatarUrl = await SupabaseService.uploadFile(
+        file: file,
+        folder: folder,
+        bucket: SupabaseService.bucketAvatars,
+      );
+      if (fallbackAvatarUrl != null && fallbackAvatarUrl.trim().isNotEmpty) {
+        return fallbackAvatarUrl.trim();
+      }
+
+      // 3. Fallback upload to `screenshots` bucket
+      final fallbackScreenUrl = await SupabaseService.uploadFile(
+        file: file,
+        folder: folder,
+        bucket: SupabaseService.bucketScreenshots,
+      );
+      if (fallbackScreenUrl != null && fallbackScreenUrl.trim().isNotEmpty) {
+        return fallbackScreenUrl.trim();
+      }
+    } catch (e) {
+      debugPrint('[DMS] uploadChatImage error: $e');
+    }
+    return null;
+  }
+
+  /// Send a message, persist it to Supabase, and return the persisted ChatMessage (or null on failure).
+  Future<ChatMessage?> sendMessageReturningRecord({
     required String senderId,
     required String receiverId,
     required String message,
     String messageType = 'text',
+    String? imageUrl,
+    DateTime? clientCreatedAt,
   }) async {
-    if (senderId.isEmpty || receiverId.isEmpty || message.trim().isEmpty) {
-      return false;
+    final cleanImageUrl = (imageUrl ?? '').trim();
+    final cleanMessage = message.trim();
+    if (senderId.isEmpty ||
+        receiverId.isEmpty ||
+        (cleanMessage.isEmpty && cleanImageUrl.isEmpty)) {
+      return null;
     }
     try {
       final senderUuid = await resolveToTableId(senderId);
@@ -664,33 +716,113 @@ class DirectMessageService {
 
       if (senderUuid.isEmpty || receiverUuid.isEmpty) {
         debugPrint('[DMS] senderUuid or receiverUuid is empty');
-        return false;
+        return null;
       }
 
       // Prevent chatting with self
       if (senderUuid.toLowerCase() == receiverUuid.toLowerCase()) {
         debugPrint('[DMS] Cannot send message to self');
-        return false;
+        return null;
       }
 
-      final nowUtcIso = DateTime.now().toUtc().toIso8601String();
+      final createdUtc = (clientCreatedAt ?? DateTime.now()).toUtc();
+      final nowUtcIso = createdUtc.toIso8601String();
+      final effectiveType = cleanImageUrl.isNotEmpty ? 'image' : messageType;
+      final storedMessageText =
+          cleanMessage.isNotEmpty ? cleanMessage : cleanImageUrl;
 
-      await _client.from('direct_messages').insert({
+      final basePayload = <String, dynamic>{
         'sender_id': senderUuid,
         'receiver_id': receiverUuid,
-        'message': message.trim(),
-        'message_type': messageType,
+        'message': storedMessageText,
+        'message_type': effectiveType,
         'is_read': false,
         'created_at': nowUtcIso,
-      });
+      };
+
+      Map<String, dynamic>? insertedRow;
+      bool inserted = false;
+
+      // If sending an image, first try including `image_url` if the schema supports it
+      if (cleanImageUrl.isNotEmpty) {
+        final payloadWithImageCol = <String, dynamic>{
+          ...basePayload,
+          'image_url': cleanImageUrl,
+        };
+        try {
+          final res = await _client
+              .from('direct_messages')
+              .insert(payloadWithImageCol)
+              .select()
+              .maybeSingle();
+          if (res != null) {
+            insertedRow = Map<String, dynamic>.from(res);
+          }
+          inserted = true;
+        } catch (_) {
+          // Schema may not have `image_url` column; fall through to standard basePayload
+        }
+      }
+
+      if (!inserted) {
+        try {
+          final res = await _client
+              .from('direct_messages')
+              .insert(basePayload)
+              .select()
+              .maybeSingle();
+          if (res != null) {
+            insertedRow = Map<String, dynamic>.from(res);
+          }
+          inserted = true;
+        } catch (_) {
+          // Fallback if `.select()` is restricted by RLS policy on return
+          await _client.from('direct_messages').insert(basePayload);
+          inserted = true;
+        }
+      }
 
       // Immediately update sender's presence timestamp in UTC
       unawaited(updateUserPresence(userId: senderUuid, force: true));
-      return true;
+
+      if (insertedRow != null) {
+        final parsed = ChatMessage.fromMap(insertedRow);
+        if (cleanImageUrl.isNotEmpty && !parsed.hasImage) {
+          return parsed.copyWith(imageUrl: cleanImageUrl);
+        }
+        return parsed;
+      }
+      return ChatMessage(
+        id: '',
+        senderId: senderUuid,
+        receiverId: receiverUuid,
+        message: storedMessageText,
+        imageUrl: cleanImageUrl.isNotEmpty ? cleanImageUrl : null,
+        createdAt: createdUtc.toLocal(),
+        isRead: false,
+      );
     } catch (e) {
-      debugPrint('[DMS] sendMessage error: $e');
-      return false;
+      debugPrint('[DMS] sendMessageReturningRecord error: $e');
+      return null;
     }
+  }
+
+  /// Send a message and update the sender's `last_seen` presence timestamp in UTC.
+  Future<bool> sendMessage({
+    required String senderId,
+    required String receiverId,
+    required String message,
+    String messageType = 'text',
+    String? imageUrl,
+  }) async {
+    final record = await sendMessageReturningRecord(
+      senderId: senderId,
+      receiverId: receiverId,
+      message: message,
+      messageType: messageType,
+      imageUrl: imageUrl,
+    );
+    return record != null;
   }
 
   /// Stream messages between two users (real-time)
@@ -1086,6 +1218,10 @@ class DirectMessageService {
             return null;
           }
 
+          final isImageLast = lastType == 'image' ||
+              (lastMsg['image_url']?.toString().trim().isNotEmpty ?? false) ||
+              ChatMessage.fromMap(lastMsg).hasImage;
+
           return ChatConversation(
             otherUserId: canonicalOtherId,
             otherUserName: name,
@@ -1093,8 +1229,8 @@ class DirectMessageService {
             otherUserPhoto: photo,
             otherUserGame: gameTag,
             otherUserGameId: gameId,
-            lastMessage: lastType == 'image' ? '📷 Photo' : lastText,
-            lastMessageType: lastType,
+            lastMessage: isImageLast ? '📷 Photo' : lastText,
+            lastMessageType: isImageLast ? 'image' : lastType,
             lastMessageTime: lastTime,
             unreadCount: unread,
             isVerified: verified,

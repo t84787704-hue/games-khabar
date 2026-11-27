@@ -5,9 +5,11 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import '../models/chat_model.dart';
@@ -41,8 +43,8 @@ class _GamerChatScreenState extends State<GamerChatScreen>
   final _authService = GamerAuthService();
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  final _imagePicker = ImagePicker();
 
-  bool _isSending = false;
   bool _initialLoad = true;
   bool _isOtherUserOnline = false;
   DateTime? _latestPartnerMessageUtc;
@@ -52,6 +54,11 @@ class _GamerChatScreenState extends State<GamerChatScreen>
   String _otherUserPhoto = '';
   Stream<List<ChatMessage>>? _chatStream;
   Timer? _presencePollTimer;
+
+  // Optimistic messages and locally deleted message IDs for instant UI feedback
+  final List<_OptimisticMessage> _optimisticMessages = [];
+  final Set<String> _deletedMessageIds = {};
+  int _tempIdCounter = 0;
 
   static const Color neonBlue = Color(0xFF1877F2);
   static const Color neonCyan = Color(0xFF00E5FF);
@@ -209,9 +216,113 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     });
   }
 
+  bool _isMessageFromMe(String senderId, String myUid) {
+    final sLower = senderId.toLowerCase();
+    return _myAliases.any((a) => a.toLowerCase() == sLower) ||
+        sLower == _effectiveMyId.toLowerCase() ||
+        sLower == myUid.toLowerCase() ||
+        sLower == SupabaseService.toUuid(myUid).toLowerCase();
+  }
+
+  /// Combines server stream messages with pending/confirmed/failed optimistic messages,
+  /// deduplicating any optimistic item that has already arrived in the server snapshot.
+  List<ChatMessage> _mergeMessagesWithOptimistic(
+    List<ChatMessage> serverMessages,
+    String myUid,
+  ) {
+    final filteredServer = serverMessages
+        .where((m) => m.id.isEmpty || !_deletedMessageIds.contains(m.id))
+        .toList();
+
+    if (_optimisticMessages.isEmpty) {
+      return filteredServer;
+    }
+
+    final serverIds = <String>{};
+    for (final m in filteredServer) {
+      if (m.id.isNotEmpty) {
+        serverIds.add(m.id.toLowerCase());
+      }
+    }
+
+    // Track which server messages have already matched an optimistic message without a serverId
+    final matchedServerIndices = <int>{};
+    final remainingOptimistic = <ChatMessage>[];
+
+    for (final opt in List<_OptimisticMessage>.from(_optimisticMessages)) {
+      if (_deletedMessageIds.contains(opt.tempId) ||
+          (opt.serverId != null && _deletedMessageIds.contains(opt.serverId))) {
+        _optimisticMessages.removeWhere((item) => item.tempId == opt.tempId);
+        continue;
+      }
+
+      // 1. Direct match by confirmed Supabase row ID
+      if (opt.serverId != null &&
+          opt.serverId!.isNotEmpty &&
+          serverIds.contains(opt.serverId!.toLowerCase())) {
+        _optimisticMessages.removeWhere((item) => item.tempId == opt.tempId);
+        continue;
+      }
+
+      // 2. Heuristic match when server poll arrives before or without select() ID
+      if (!opt.hasFailed) {
+        int matchedIndex = -1;
+        final optImgUrl = opt.message.resolvedImageUrl;
+        for (int i = filteredServer.length - 1; i >= 0; i--) {
+          if (matchedServerIndices.contains(i)) continue;
+          final srv = filteredServer[i];
+          if (!_isMessageFromMe(srv.senderId, myUid)) continue;
+          final srvImgUrl = srv.resolvedImageUrl;
+          final isSameText = srv.message.trim().isNotEmpty &&
+              srv.message.trim() == opt.message.message.trim();
+          final isSameImage = optImgUrl.isNotEmpty &&
+              srvImgUrl.isNotEmpty &&
+              srvImgUrl == optImgUrl;
+          if (!isSameText && !isSameImage) continue;
+          final diffSeconds =
+              srv.createdAt.difference(opt.message.createdAt).inSeconds.abs();
+          if (diffSeconds <= 25) {
+            matchedIndex = i;
+            break;
+          }
+        }
+        if (matchedIndex != -1) {
+          matchedServerIndices.add(matchedIndex);
+          _optimisticMessages.removeWhere((item) => item.tempId == opt.tempId);
+          continue;
+        }
+      }
+
+      remainingOptimistic.add(opt.displayMessage);
+    }
+
+    if (remainingOptimistic.isEmpty) {
+      return filteredServer;
+    }
+
+    final combined = <ChatMessage>[
+      ...filteredServer,
+      ...remainingOptimistic,
+    ];
+    combined.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return combined;
+  }
+
+  _OptimisticMessage? _findOptimisticForMessage(ChatMessage m) {
+    for (final opt in _optimisticMessages) {
+      if (opt.tempId == m.id ||
+          (opt.serverId != null &&
+              opt.serverId!.isNotEmpty &&
+              opt.serverId == m.id)) {
+        return opt;
+      }
+    }
+    return null;
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty || _isSending) return;
+    if (text.isEmpty) return;
 
     final myAuthUid = _authService.currentUid ?? '';
     final myGamerUid = _authService.currentGamer?.uid ?? '';
@@ -233,29 +344,230 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       return;
     }
 
-    setState(() => _isSending = true);
-    _messageController.clear();
-
-    final ok = await _dmService.sendMessage(
+    final nowLocal = DateTime.now();
+    final tempId =
+        'temp_${nowLocal.microsecondsSinceEpoch}_${++_tempIdCounter}';
+    final optimisticMsg = ChatMessage(
+      id: tempId,
       senderId: myUid,
       receiverId: targetOtherId,
       message: text,
+      createdAt: nowLocal,
+      isRead: false,
     );
 
-    if (!mounted) return;
-    setState(() => _isSending = false);
+    final entry = _OptimisticMessage(
+      tempId: tempId,
+      message: optimisticMsg,
+    );
 
-    if (ok) {
-      _scrollToBottom();
-      _fetchOtherUserStatus();
-    } else {
+    // 1. Immediately clear input, append optimistic bubble, and scroll to bottom
+    _messageController.clear();
+    setState(() {
+      _optimisticMessages.add(entry);
+    });
+    _scrollToBottom();
+
+    // 2. Persist to Supabase in the background
+    await _persistOptimisticMessage(entry, myUid, targetOtherId);
+  }
+
+  Future<void> _pickAndSendImage() async {
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final sourceUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : sourceUid;
+    if (myUid.isEmpty) return;
+
+    final targetOtherId =
+        _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId;
+
+    if (_myAliases.any((a) => a.toLowerCase() == targetOtherId.toLowerCase()) ||
+        myUid.toLowerCase() == targetOtherId.toLowerCase()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('message_send_failed'.tr()),
+          content: Text('cannot_message_self'.tr()),
           backgroundColor: const Color(0xFFFF4655),
         ),
       );
+      return;
     }
+
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 82,
+        maxWidth: 1600,
+      );
+      if (picked == null) return;
+
+      final imageFile = File(picked.path);
+      if (!await imageFile.exists()) return;
+
+      final captionText = _messageController.text.trim();
+      if (captionText.isNotEmpty) {
+        _messageController.clear();
+      }
+
+      final nowLocal = DateTime.now();
+      final tempId =
+          'temp_img_${nowLocal.microsecondsSinceEpoch}_${++_tempIdCounter}';
+      final optimisticMsg = ChatMessage(
+        id: tempId,
+        senderId: myUid,
+        receiverId: targetOtherId,
+        message: captionText,
+        createdAt: nowLocal,
+        isRead: false,
+      );
+
+      final entry = _OptimisticMessage(
+        tempId: tempId,
+        message: optimisticMsg,
+        localImageFile: imageFile,
+        isSending: true,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _optimisticMessages.add(entry);
+      });
+      _scrollToBottom();
+
+      await _persistOptimisticMessage(entry, myUid, targetOtherId);
+    } catch (e) {
+      debugPrint('[GamerChatScreen] Image picker error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not select image.'),
+            backgroundColor: Color(0xFFFF4655),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _persistOptimisticMessage(
+    _OptimisticMessage entry,
+    String myUid,
+    String targetOtherId,
+  ) async {
+    String? uploadedImageUrl = entry.uploadedImageUrl;
+
+    // Upload local image file to Supabase Storage first if this is an image message
+    if (entry.localImageFile != null &&
+        (uploadedImageUrl == null || uploadedImageUrl.isEmpty)) {
+      uploadedImageUrl = await _dmService.uploadChatImage(
+        file: entry.localImageFile!,
+        senderId: myUid,
+      );
+      if (!mounted) return;
+      if (uploadedImageUrl == null || uploadedImageUrl.isEmpty) {
+        setState(() {
+          entry.isSending = false;
+          entry.hasFailed = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Failed to upload image. Tap the image to retry.',
+            ),
+            backgroundColor: const Color(0xFFFF4655),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _retryFailedMessage(entry),
+            ),
+          ),
+        );
+        return;
+      }
+      entry.uploadedImageUrl = uploadedImageUrl;
+      entry.message = entry.message.copyWith(
+        imageUrl: uploadedImageUrl,
+        message: entry.message.message.trim().isNotEmpty
+            ? entry.message.message.trim()
+            : uploadedImageUrl,
+      );
+    }
+
+    final persisted = await _dmService.sendMessageReturningRecord(
+      senderId: myUid,
+      receiverId: targetOtherId,
+      message: entry.message.message,
+      messageType: (uploadedImageUrl != null && uploadedImageUrl.isNotEmpty)
+          ? 'image'
+          : 'text',
+      imageUrl: uploadedImageUrl,
+      clientCreatedAt: entry.message.createdAt,
+    );
+
+    if (!mounted) return;
+
+    if (persisted != null) {
+      setState(() {
+        entry.isSending = false;
+        entry.hasFailed = false;
+        final resolvedImg = persisted.resolvedImageUrl.isNotEmpty
+            ? persisted.resolvedImageUrl
+            : uploadedImageUrl;
+        if (persisted.id.isNotEmpty) {
+          entry.serverId = persisted.id;
+          entry.message = entry.message.copyWith(
+            id: persisted.id,
+            senderId: persisted.senderId.isNotEmpty
+                ? persisted.senderId
+                : entry.message.senderId,
+            receiverId: persisted.receiverId.isNotEmpty
+                ? persisted.receiverId
+                : entry.message.receiverId,
+            imageUrl: resolvedImg,
+            createdAt: persisted.createdAt,
+          );
+        } else if (resolvedImg != null && resolvedImg.isNotEmpty) {
+          entry.message = entry.message.copyWith(imageUrl: resolvedImg);
+        }
+      });
+      _fetchOtherUserStatus();
+    } else {
+      setState(() {
+        entry.isSending = false;
+        entry.hasFailed = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            entry.isImageMessage
+                ? 'Failed to send image. Tap the image to retry.'
+                : 'Failed to send message. Tap the message to retry.',
+          ),
+          backgroundColor: const Color(0xFFFF4655),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: () => _retryFailedMessage(entry),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _retryFailedMessage(_OptimisticMessage entry) async {
+    if (entry.isSending) return;
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final sourceUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : sourceUid;
+    final targetOtherId =
+        _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId;
+
+    setState(() {
+      entry.isSending = true;
+      entry.hasFailed = false;
+    });
+
+    await _persistOptimisticMessage(entry, myUid, targetOtherId);
   }
 
   Future<void> _deleteMessage(ChatMessage message) async {
@@ -303,24 +615,44 @@ class _GamerChatScreenState extends State<GamerChatScreen>
 
     try {
       final msgId = message.id;
-      bool deleted = false;
+      final opt = _findOptimisticForMessage(message);
 
-      try {
-        await SupabaseService.client
-            .from('direct_messages')
-            .delete()
-            .eq('id', msgId);
-        deleted = true;
-      } catch (_) {}
+      setState(() {
+        if (msgId.isNotEmpty) {
+          _deletedMessageIds.add(msgId);
+        }
+        if (opt != null) {
+          _deletedMessageIds.add(opt.tempId);
+          if (opt.serverId != null && opt.serverId!.isNotEmpty) {
+            _deletedMessageIds.add(opt.serverId!);
+          }
+          _optimisticMessages.removeWhere((item) => item.tempId == opt.tempId);
+        }
+      });
 
-      if (!deleted) {
+      final serverTargetId = (opt?.serverId != null && opt!.serverId!.isNotEmpty)
+          ? opt.serverId!
+          : (!msgId.startsWith('temp_') ? msgId : '');
+
+      if (serverTargetId.isNotEmpty) {
+        bool deleted = false;
         try {
           await SupabaseService.client
-              .from('messages')
+              .from('direct_messages')
               .delete()
-              .eq('id', msgId);
+              .eq('id', serverTargetId);
           deleted = true;
         } catch (_) {}
+
+        if (!deleted) {
+          try {
+            await SupabaseService.client
+                .from('messages')
+                .delete()
+                .eq('id', serverTargetId);
+            deleted = true;
+          } catch (_) {}
+        }
       }
 
       if (mounted) {
@@ -343,6 +675,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
   }
 
   void _showMessageOptions(ChatMessage m, bool isMyMsg) {
+    final opt = _findOptimisticForMessage(m);
     showModalBottomSheet(
       context: context,
       backgroundColor: ThemeService.card,
@@ -364,6 +697,21 @@ class _GamerChatScreenState extends State<GamerChatScreen>
                 ),
               ),
             ),
+            if (opt != null && opt.hasFailed)
+              ListTile(
+                leading: const Icon(Icons.refresh_rounded, color: neonCyan),
+                title: Text(
+                  'Retry Sending',
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _retryFailedMessage(opt);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.copy_rounded, color: neonCyan),
               title: Text(
@@ -617,16 +965,25 @@ class _GamerChatScreenState extends State<GamerChatScreen>
                   stream: _chatStream,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting &&
-                        _initialLoad) {
+                        _initialLoad &&
+                        _optimisticMessages.isEmpty) {
                       return const Center(
                         child: CircularProgressIndicator(color: neonCyan),
                       );
                     }
 
-                    final messages = snapshot.data ?? [];
-                    _checkRecentPartnerActivityFromMessages(messages, myUid);
+                    final serverMessages = snapshot.data ?? [];
+                    _checkRecentPartnerActivityFromMessages(
+                      serverMessages,
+                      myUid,
+                    );
+                    final messages = _mergeMessagesWithOptimistic(
+                      serverMessages,
+                      myUid,
+                    );
 
-                    if (_initialLoad) {
+                    if (_initialLoad &&
+                        (snapshot.hasData || _optimisticMessages.isNotEmpty)) {
                       _initialLoad = false;
                       _scrollToBottom(animate: false);
                     }
@@ -644,13 +1001,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
                       itemCount: messages.length,
                       itemBuilder: (context, i) {
                         final m = messages[i];
-                        final sLower = m.senderId.toLowerCase();
-                        final isMyMsg =
-                            _myAliases.any((a) => a.toLowerCase() == sLower) ||
-                                sLower == _effectiveMyId.toLowerCase() ||
-                                sLower == myUid.toLowerCase() ||
-                                sLower ==
-                                    SupabaseService.toUuid(myUid).toLowerCase();
+                        final isMyMsg = _isMessageFromMe(m.senderId, myUid);
 
                         bool showDate = false;
                         if (i == 0) {
@@ -737,35 +1088,255 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     );
   }
 
+  void _openFullScreenImageViewer({
+    String? imageUrl,
+    File? localFile,
+  }) {
+    final cleanUrl = (imageUrl ?? '').trim();
+    if (cleanUrl.isEmpty && localFile == null) return;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.92),
+      builder: (dialogCtx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4.5,
+                child: Center(
+                  child: localFile != null
+                      ? Image.file(
+                          localFile,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.broken_image_rounded,
+                            color: Colors.white54,
+                            size: 56,
+                          ),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: cleanUrl,
+                          fit: BoxFit.contain,
+                          placeholder: (_, __) => const Center(
+                            child: CircularProgressIndicator(color: neonCyan),
+                          ),
+                          errorWidget: (_, __, ___) => const Icon(
+                            Icons.broken_image_rounded,
+                            color: Colors.white54,
+                            size: 56,
+                          ),
+                        ),
+                ),
+              ),
+              Positioned(
+                top: MediaQuery.of(dialogCtx).padding.top + 12,
+                right: 16,
+                child: Material(
+                  color: Colors.black54,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    onPressed: () => Navigator.pop(dialogCtx),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildChatImageContent({
+    required String imageUrl,
+    required File? localFile,
+    required bool isUploading,
+    required bool hasFailed,
+  }) {
+    final maxWidth = MediaQuery.of(context).size.width * 0.68;
+
+    Widget imageChild;
+    if (localFile != null) {
+      imageChild = Image.file(
+        localFile,
+        width: maxWidth,
+        height: 215,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildImageErrorPlaceholder(maxWidth),
+      );
+    } else {
+      imageChild = CachedNetworkImage(
+        imageUrl: imageUrl,
+        width: maxWidth,
+        height: 215,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => Container(
+          width: maxWidth,
+          height: 215,
+          color: ThemeService.cardSecondary,
+          child: const Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                color: neonCyan,
+              ),
+            ),
+          ),
+        ),
+        errorWidget: (_, __, ___) => _buildImageErrorPlaceholder(maxWidth),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          imageChild,
+          if (isUploading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black45,
+                child: const Center(
+                  child: SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (hasFailed)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black54,
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.refresh_rounded,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Tap to retry upload',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageErrorPlaceholder(double width) {
+    return Container(
+      width: width,
+      height: 160,
+      color: ThemeService.cardSecondary,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported_outlined,
+            color: ThemeService.textSecondary,
+            size: 30,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Unable to load image',
+            style: TextStyle(
+              color: ThemeService.textSecondary,
+              fontSize: 11.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(ChatMessage m, bool isMyMsg) {
+    final opt = isMyMsg ? _findOptimisticForMessage(m) : null;
+    final hasFailed = opt != null && opt.hasFailed;
+    final isUploadingImage =
+        opt != null && opt.isSending && opt.isImageMessage;
+    final localFile = opt?.localImageFile;
+    final imageUrl = m.resolvedImageUrl.isNotEmpty
+        ? m.resolvedImageUrl
+        : (opt?.uploadedImageUrl ?? '');
+    final hasImage = localFile != null || imageUrl.isNotEmpty;
+
+    final rawText = m.message.trim();
+    final hasCaption = rawText.isNotEmpty &&
+        rawText != imageUrl &&
+        !(hasImage &&
+            (rawText.startsWith('http://') || rawText.startsWith('https://')));
+
     return Align(
       alignment: isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
+        onTap: hasFailed
+            ? () => _retryFailedMessage(opt!)
+            : (hasImage
+                ? () => _openFullScreenImageViewer(
+                      imageUrl: imageUrl,
+                      localFile: localFile,
+                    )
+                : null),
         onLongPress: () => _showMessageOptions(m, isMyMsg),
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 5),
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.75,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: hasImage
+              ? const EdgeInsets.fromLTRB(6, 6, 6, 8)
+              : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: isMyMsg ? null : ThemeService.card,
             gradient: isMyMsg
-                ? const LinearGradient(
-                    colors: [Color(0xFF1877F2), Color(0xFF00A3FF)],
+                ? LinearGradient(
+                    colors: hasFailed
+                        ? const [Color(0xFFB91C1C), Color(0xFFEF4444)]
+                        : const [Color(0xFF1877F2), Color(0xFF00A3FF)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   )
                 : null,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isMyMsg ? neonCyan.withOpacity(0.5) : ThemeService.border,
+              color: hasFailed
+                  ? const Color(0xFFFF4655)
+                  : (isMyMsg ? neonCyan.withOpacity(0.5) : ThemeService.border),
               width: 1,
             ),
             boxShadow: [
               BoxShadow(
                 color: isMyMsg
-                    ? neonCyan.withOpacity(0.18)
+                    ? (hasFailed
+                        ? const Color(0xFFFF4655).withOpacity(0.22)
+                        : neonCyan.withOpacity(0.18))
                     : Colors.black
                         .withOpacity(ThemeService.isDarkMode ? 0.2 : 0.04),
                 blurRadius: 6,
@@ -776,25 +1347,64 @@ class _GamerChatScreenState extends State<GamerChatScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                m.message,
-                style: TextStyle(
-                  color: isMyMsg ? Colors.white : ThemeService.textPrimary,
-                  fontSize: 13.5,
-                  height: 1.3,
+              if (hasImage)
+                _buildChatImageContent(
+                  imageUrl: imageUrl,
+                  localFile: localFile,
+                  isUploading: isUploadingImage,
+                  hasFailed: hasFailed,
                 ),
-              ),
+              if (hasCaption)
+                Padding(
+                  padding: hasImage
+                      ? const EdgeInsets.fromLTRB(8, 8, 8, 2)
+                      : EdgeInsets.zero,
+                  child: Text(
+                    m.message,
+                    style: TextStyle(
+                      color: isMyMsg ? Colors.white : ThemeService.textPrimary,
+                      fontSize: 13.5,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 3),
-              Align(
-                alignment:
-                    isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
-                child: Text(
-                  _formatTime(m.createdAt),
-                  style: TextStyle(
-                    color: isMyMsg
-                        ? Colors.white70
-                        : ThemeService.textSecondary.withOpacity(0.8),
-                    fontSize: 10,
+              Padding(
+                padding: hasImage
+                    ? const EdgeInsets.symmetric(horizontal: 6)
+                    : EdgeInsets.zero,
+                child: Align(
+                  alignment:
+                      isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (hasFailed) ...[
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Failed • Tap to retry',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ] else
+                        Text(
+                          _formatTime(m.createdAt),
+                          style: TextStyle(
+                            color: isMyMsg
+                                ? Colors.white70
+                                : ThemeService.textSecondary.withOpacity(0.8),
+                            fontSize: 10,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -819,6 +1429,26 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       ),
       child: Row(
         children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: ThemeService.card,
+              shape: BoxShape.circle,
+              border: Border.all(color: ThemeService.border),
+            ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              tooltip: 'Send Image',
+              icon: const Icon(
+                Icons.image_outlined,
+                color: neonCyan,
+                size: 21,
+              ),
+              onPressed: _pickAndSendImage,
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Container(
               height: 44,
@@ -866,17 +1496,8 @@ class _GamerChatScreenState extends State<GamerChatScreen>
               ],
             ),
             child: IconButton(
-              icon: _isSending
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-              onPressed: _isSending ? null : _sendMessage,
+              icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+              onPressed: _sendMessage,
             ),
           ),
         ],
@@ -997,4 +1618,34 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       ),
     );
   }
+}
+
+class _OptimisticMessage {
+  final String tempId;
+  ChatMessage message;
+  final File? localImageFile;
+  String? uploadedImageUrl;
+  String? serverId;
+  bool isSending;
+  bool hasFailed;
+
+  _OptimisticMessage({
+    required this.tempId,
+    required this.message,
+    this.localImageFile,
+    this.uploadedImageUrl,
+    this.serverId,
+    this.isSending = true,
+    this.hasFailed = false,
+  });
+
+  bool get isImageMessage =>
+      localImageFile != null ||
+      (uploadedImageUrl != null && uploadedImageUrl!.isNotEmpty) ||
+      message.hasImage;
+
+  ChatMessage get displayMessage =>
+      (serverId != null && serverId!.isNotEmpty)
+          ? message.copyWith(id: serverId)
+          : message;
 }

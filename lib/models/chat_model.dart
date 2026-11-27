@@ -32,7 +32,61 @@ class ChatMessage {
   DateTime get timestamp => createdAt;
   DateTime get time => createdAt;
 
+  /// Resolves the image URL for an image message whether stored in `image_url`, `media_url`,
+  /// or directly in `message` when `message_type == 'image'`.
+  String get resolvedImageUrl {
+    final img = (imageUrl ?? '').trim();
+    if (img.isNotEmpty && img.toLowerCase() != 'null') return img;
+    final media = (mediaUrl ?? '').trim();
+    if (media.isNotEmpty && media.toLowerCase() != 'null') return media;
+    final msg = message.trim();
+    if (_looksLikeImageUrl(msg)) return msg;
+    return '';
+  }
+
+  bool get hasImage => resolvedImageUrl.isNotEmpty;
+
+  static bool _looksLikeImageUrl(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+    final lower = trimmed.toLowerCase();
+    if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+      return false;
+    }
+    if (lower.contains('/storage/v1/object/public/') ||
+        lower.contains('/chat_images/') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.gif') ||
+        RegExp(r'\.(jpg|jpeg|png|webp|gif)(\?.*)?$', caseSensitive: false)
+            .hasMatch(lower)) {
+      return true;
+    }
+    return false;
+  }
+
   factory ChatMessage.fromMap(Map<String, dynamic> map) {
+    final rawMsg = map['message']?.toString() ??
+        map['text']?.toString() ??
+        map['content']?.toString() ??
+        '';
+    final msgType =
+        (map['message_type'] ?? map['messageType'] ?? 'text').toString().trim().toLowerCase();
+    String? imgUrl = map['image_url']?.toString() ?? map['imageUrl']?.toString();
+    String? medUrl = map['media_url']?.toString() ?? map['mediaUrl']?.toString();
+
+    if ((imgUrl == null || imgUrl.trim().isEmpty || imgUrl == 'null') &&
+        (medUrl == null || medUrl.trim().isEmpty || medUrl == 'null')) {
+      if ((msgType == 'image' &&
+              (rawMsg.trim().startsWith('http://') ||
+                  rawMsg.trim().startsWith('https://'))) ||
+          _looksLikeImageUrl(rawMsg)) {
+        imgUrl = rawMsg.trim();
+      }
+    }
+
     return ChatMessage(
       id: map['id']?.toString() ?? '',
       senderId: map['sender_id']?.toString() ??
@@ -44,16 +98,13 @@ class ChatMessage {
       conversationId: map['conversation_id']?.toString() ??
           map['conversationId']?.toString() ??
           '',
-      message: map['message']?.toString() ??
-          map['text']?.toString() ??
-          map['content']?.toString() ??
-          '',
+      message: rawMsg,
       createdAt: _parseDate(
         map['created_at'] ?? map['createdAt'] ?? map['timestamp'],
       ),
       isRead: map['is_read'] == true || map['isRead'] == true,
-      imageUrl: map['image_url']?.toString() ?? map['imageUrl']?.toString(),
-      mediaUrl: map['media_url']?.toString() ?? map['mediaUrl']?.toString(),
+      imageUrl: imgUrl,
+      mediaUrl: medUrl,
     );
   }
 
