@@ -4,6 +4,7 @@
 // ===============================================================================
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -48,6 +49,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
   Set<String> _myAliases = {};
   String _effectiveMyId = '';
   String _effectiveOtherId = '';
+  String _otherUserPhoto = '';
   Stream<List<ChatMessage>>? _chatStream;
   Timer? _presencePollTimer;
 
@@ -63,6 +65,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     final myGamerUid = _authService.currentGamer?.uid ?? '';
     _effectiveMyId = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
     _effectiveOtherId = widget.otherUserId;
+    _otherUserPhoto = DirectMessageService.normalizeAvatarUrl(widget.otherUserPhoto);
     _chatStream = _dmService.getMessagesStream(
       userId1: _effectiveMyId,
       userId2: _effectiveOtherId,
@@ -121,9 +124,17 @@ class _GamerChatScreenState extends State<GamerChatScreen>
             DirectMessageService.isTimestampRecentlyActive(
               _latestPartnerMessageUtc,
             );
-        if (_isOtherUserOnline != online) {
+        final fetchedPhoto = DirectMessageService.normalizeAvatarUrl(
+          status['photo']?.toString(),
+        );
+        final shouldUpdatePhoto =
+            fetchedPhoto.isNotEmpty && fetchedPhoto != _otherUserPhoto;
+        if (_isOtherUserOnline != online || shouldUpdatePhoto) {
           setState(() {
             _isOtherUserOnline = online;
+            if (shouldUpdatePhoto) {
+              _otherUserPhoto = fetchedPhoto;
+            }
           });
         }
       }
@@ -517,24 +528,13 @@ class _GamerChatScreenState extends State<GamerChatScreen>
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: widget.otherUserPhoto.isNotEmpty
-                                ? CachedNetworkImage(
-                                    imageUrl: widget.otherUserPhoto,
-                                    fit: BoxFit.cover,
-                                    placeholder: (_, __) => const Center(
-                                      child: SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: neonCyan,
-                                        ),
-                                      ),
-                                    ),
-                                    errorWidget: (_, __, ___) =>
-                                        _buildInitials(widget.otherUserName, 40),
-                                  )
-                                : _buildInitials(widget.otherUserName, 40),
+                            child: _buildPartnerAvatar(
+                              _otherUserPhoto.isNotEmpty
+                                  ? _otherUserPhoto
+                                  : widget.otherUserPhoto,
+                              widget.otherUserName,
+                              40,
+                            ),
                           ),
                         ),
                         if (_isOtherUserOnline)
@@ -884,8 +884,103 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     );
   }
 
+  Widget _buildPartnerAvatar(String rawPhotoUrl, String name, double size) {
+    final normalized = DirectMessageService.normalizeAvatarUrl(rawPhotoUrl);
+    if (normalized.isEmpty) {
+      return _buildInitials(name, size);
+    }
+
+    if (normalized.startsWith('preset:')) {
+      final presetId =
+          normalized.replaceFirst('preset:', '').trim().toLowerCase();
+      IconData iconData = Icons.sports_esports_rounded;
+      List<Color> gradientColors = const [Color(0xFF1E3A8A), Color(0xFF00E5FF)];
+
+      switch (presetId) {
+        case 'helmet':
+          iconData = Icons.sports_motorsports_rounded;
+          gradientColors = const [Color(0xFF1877F2), Color(0xFF00E5FF)];
+          break;
+        case 'controller':
+        case 'skull':
+          iconData = Icons.gamepad_rounded;
+          gradientColors = const [Color(0xFF6D28D9), Color(0xFFEC4899)];
+          break;
+        case 'ninja':
+        case 'shield':
+          iconData = Icons.shield_rounded;
+          gradientColors = const [Color(0xFF047857), Color(0xFF10B981)];
+          break;
+        case 'crown':
+        case 'trophy':
+          iconData = Icons.emoji_events_rounded;
+          gradientColors = const [Color(0xFFB45309), Color(0xFFFBBF24)];
+          break;
+        case 'crosshair':
+          iconData = Icons.gps_fixed_rounded;
+          gradientColors = const [Color(0xFFBE123C), Color(0xFFFB7185)];
+          break;
+        default:
+          iconData = Icons.sports_esports_rounded;
+          gradientColors = const [Color(0xFF1E3A8A), Color(0xFF00E5FF)];
+      }
+
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Center(
+          child: Icon(
+            iconData,
+            color: Colors.white,
+            size: size * 0.52,
+          ),
+        ),
+      );
+    }
+
+    if (normalized.startsWith('data:image')) {
+      try {
+        final commaIdx = normalized.indexOf(',');
+        if (commaIdx != -1) {
+          final b64 = normalized.substring(commaIdx + 1).trim();
+          final bytes = base64Decode(b64);
+          return Image.memory(
+            bytes,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildInitials(name, size),
+          );
+        }
+      } catch (_) {
+        return _buildInitials(name, size);
+      }
+    }
+
+    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+      return CachedNetworkImage(
+        imageUrl: normalized,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => _buildInitials(name, size),
+        errorWidget: (_, __, ___) => _buildInitials(name, size),
+      );
+    }
+
+    return _buildInitials(name, size);
+  }
+
   Widget _buildInitials(String name, double size) {
-    final initials = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final trimmed = name.trim();
+    final initials = trimmed.isNotEmpty ? trimmed[0].toUpperCase() : '?';
     return Container(
       width: size,
       height: size,

@@ -611,10 +611,37 @@ class GamerUser {
               data['username'].toString().trim().isNotEmpty)
           ? data['username'].toString().trim()
           : (data['tag']?.toString().trim() ?? ''),
-      displayName:
-          data['bgmiName'] ?? data['displayName'] ?? data['display_name'] ?? '',
-      photoUrl: data['avatar'] ?? data['photoUrl'] ?? data['avatar_url'] ?? '',
-      coverUrl: data['coverUrl'] ?? data['cover_url'] ?? '',
+      displayName: [
+        data['display_name'],
+        data['displayName'],
+        data['bgmiName'],
+        data['full_name'],
+        data['name'],
+      ].map((e) => e?.toString().trim() ?? '').firstWhere(
+            (s) => s.isNotEmpty && s.toLowerCase() != 'null',
+            orElse: () => '',
+          ),
+      photoUrl: [
+        data['avatar_url'],
+        data['avatar'],
+        data['photoUrl'],
+        data['photo_url'],
+        data['user_avatar'],
+        data['profile_pic'],
+        data['profile_image'],
+        data['image_url'],
+        data['picture'],
+      ].map((e) => e?.toString().trim() ?? '').firstWhere(
+            (s) => s.isNotEmpty && s.toLowerCase() != 'null',
+            orElse: () => '',
+          ),
+      coverUrl: [
+        data['cover_url'],
+        data['coverUrl'],
+      ].map((e) => e?.toString().trim() ?? '').firstWhere(
+            (s) => s.isNotEmpty && s.toLowerCase() != 'null',
+            orElse: () => '',
+          ),
       bio: data['bio'] ?? '',
       favoriteGame: data['favoriteGame'] ??
           data['favorite_game'] ??
@@ -681,12 +708,17 @@ class GamerUser {
       squadRoomsCount: (data['squadRoomsCount'] as num?)?.toInt() ?? 0,
       verificationAppliedAt: appliedAt,
       gameId: [
+        data['game_uid'],
+        data['gameUid'],
         data['game_id'],
         data['bgmiUid'],
         data['gameId'],
         data['inGameId'],
       ].map((e) => e?.toString().trim() ?? '').firstWhere(
-            (s) => s.isNotEmpty,
+            (s) =>
+                s.isNotEmpty &&
+                s.toLowerCase() != 'not set' &&
+                s != resolvedUid,
             orElse: () => '',
           ),
       inGameName: [
@@ -766,7 +798,9 @@ class GamerUser {
       'bgmiName': displayName.trim(),
       'photoUrl': photoUrl,
       'avatar': photoUrl,
+      'avatar_url': photoUrl,
       'coverUrl': coverUrl,
+      'cover_url': coverUrl,
       'bio': bio.trim(),
       'favoriteGame': favoriteGame,
       'selectedGame': selectedGame.isNotEmpty ? selectedGame : favoriteGame,

@@ -25,6 +25,77 @@ class DirectMessageService {
   /// Window in minutes within which a user's `last_seen` UTC timestamp is considered Online.
   static const int onlineWindowMinutes = 5;
 
+  /// Normalizes any avatar URL, preset string, data URI, or relative Supabase storage path.
+  static String normalizeAvatarUrl(String? raw) {
+    final trimmed = (raw ?? '').trim();
+    if (trimmed.isEmpty) return '';
+    final lower = trimmed.toLowerCase();
+    if (lower == 'null' || lower == 'undefined' || lower == 'none') {
+      return '';
+    }
+    if (lower.startsWith('http://') ||
+        lower.startsWith('https://') ||
+        lower.startsWith('preset:') ||
+        lower.startsWith('data:image')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('//')) {
+      return 'https:$trimmed';
+    }
+    if (trimmed.startsWith('/storage/v1/object/public/')) {
+      return '${SupabaseService.supabaseUrl}$trimmed';
+    }
+    if (trimmed.startsWith('storage/v1/object/public/')) {
+      return '${SupabaseService.supabaseUrl}/$trimmed';
+    }
+    var cleanPath = trimmed.replaceFirst(RegExp(r'^/+'), '');
+    if (cleanPath.startsWith('avatars/')) {
+      cleanPath = cleanPath.substring('avatars/'.length);
+    }
+    try {
+      return SupabaseService.client.storage
+          .from(SupabaseService.bucketAvatars)
+          .getPublicUrl(cleanPath);
+    } catch (_) {
+      return trimmed;
+    }
+  }
+
+  /// Extracts the first valid non-empty avatar URL from a `users` or `profiles` row.
+  static String extractAvatarFromMap(Map<String, dynamic>? row) {
+    if (row == null) return '';
+    const avatarKeys = [
+      'avatar_url',
+      'avatar',
+      'photoUrl',
+      'photo_url',
+      'user_avatar',
+      'profile_pic',
+      'profile_image',
+      'profile_photo',
+      'image_url',
+      'picture',
+    ];
+    for (final key in avatarKeys) {
+      final normalized = normalizeAvatarUrl(row[key]?.toString());
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    for (final metaKey in ['user_metadata', 'raw_user_meta_data']) {
+      final meta = row[metaKey];
+      if (meta is Map) {
+        for (final key in avatarKeys) {
+          final normalized = normalizeAvatarUrl(meta[key]?.toString());
+          if (normalized.isNotEmpty) {
+            return normalized;
+          }
+        }
+      }
+    }
+    return '';
+  }
+
   /// Parses a timestamp from Supabase (with or without timezone suffix) into UTC.
   static DateTime? parseToUtc(dynamic raw) {
     if (raw == null) return null;
@@ -210,20 +281,28 @@ class DirectMessageService {
       if (userRow != null) break;
     }
 
-    // Fallback to profiles table if not found in users
-    if (userRow == null) {
+    String photo = extractAvatarFromMap(userRow);
+
+    // Fallback or avatar enrichment from `profiles` table
+    if (userRow == null || photo.isEmpty) {
       for (final candidate in lookupIds) {
         final isUuid = _uuidRegex.hasMatch(candidate);
         if (isUuid) {
           try {
-            userRow = await _client
+            final profRow = await _client
                 .from('profiles')
                 .select()
                 .eq('id', candidate)
                 .maybeSingle();
+            if (profRow != null) {
+              userRow ??= profRow;
+              if (photo.isEmpty) {
+                photo = extractAvatarFromMap(profRow);
+              }
+            }
           } catch (_) {}
         }
-        if (userRow != null) break;
+        if (userRow != null && photo.isNotEmpty) break;
       }
     }
 
@@ -279,6 +358,7 @@ class DirectMessageService {
       'isOnline': isOnline,
       'game': game,
       'lastSeen': lastSeenUtc,
+      'photo': photo,
     };
   }
 
@@ -332,11 +412,31 @@ class DirectMessageService {
         }
 
         final user = GamerUser.fromMap(row, canonicalId);
-        // Ensure uid is set to canonical table id when available so DM routing works cleanly
-        final normalizedUser = rowId.isNotEmpty && user.uid != rowId
+        final extractedPhoto = extractAvatarFromMap(row);
+        var normalizedUser = rowId.isNotEmpty && user.uid != rowId
             ? user.copyWith(uid: rowId)
             : user;
-        matchedById[canonicalId.toLowerCase()] = normalizedUser;
+        if (extractedPhoto.isNotEmpty && normalizedUser.photoUrl != extractedPhoto) {
+          normalizedUser = normalizedUser.copyWith(photoUrl: extractedPhoto);
+        }
+
+        final key = canonicalId.toLowerCase();
+        final existing = matchedById[key];
+        if (existing != null) {
+          matchedById[key] = existing.copyWith(
+            photoUrl: existing.photoUrl.isNotEmpty
+                ? existing.photoUrl
+                : normalizedUser.photoUrl,
+            displayName: existing.displayName.isNotEmpty
+                ? existing.displayName
+                : normalizedUser.displayName,
+            username: existing.username.isNotEmpty
+                ? existing.username
+                : normalizedUser.username,
+          );
+        } else {
+          matchedById[key] = normalizedUser;
+        }
       }
     }
 
@@ -718,131 +818,330 @@ class DirectMessageService {
             .add(Map<String, dynamic>.from(row));
       }
 
-      final List<ChatConversation> conversations = [];
-
-      for (final entry in grouped.entries) {
+      final validEntries = grouped.entries.where((entry) {
         final otherRawId = entry.key;
-        final msgs = entry.value;
+        return !myAliases.any((a) => a.toLowerCase() == otherRawId.toLowerCase());
+      }).toList();
 
-        // Ensure otherRawId is not current user
-        if (myAliases.any((a) => a.toLowerCase() == otherRawId.toLowerCase())) {
-          continue;
-        }
+      final resolvedList = await Future.wait(
+        validEntries.map((entry) async {
+          final otherRawId = entry.key;
+          final msgs = entry.value;
 
-        final lastMsg = msgs.first;
-        final lastText = (lastMsg['message'] ?? '').toString();
-        final lastType = (lastMsg['message_type'] ?? 'text').toString();
-        final lastTimeUtc = parseToUtc(lastMsg['created_at']);
-        final lastTime = (lastTimeUtc ?? DateTime.now().toUtc()).toLocal();
+          final lastMsg = msgs.first;
+          final lastText = (lastMsg['message'] ?? '').toString();
+          final lastType = (lastMsg['message_type'] ?? 'text').toString();
+          final lastTimeUtc = parseToUtc(lastMsg['created_at']);
+          final lastTime = (lastTimeUtc ?? DateTime.now().toUtc()).toLocal();
 
-        int unread = 0;
-        DateTime? latestPartnerMsgUtc;
-        for (final m in msgs) {
-          final s = (m['sender_id'] ?? '').toString();
-          final isFromPartner =
-              !myAliases.any((a) => a.toLowerCase() == s.toLowerCase());
-          if (isFromPartner) {
-            latestPartnerMsgUtc ??= parseToUtc(m['created_at']);
-            final isRead = m['is_read'] == true;
-            if (!isRead) {
-              unread++;
+          int unread = 0;
+          DateTime? latestPartnerMsgUtc;
+          for (final m in msgs) {
+            final s = (m['sender_id'] ?? '').toString();
+            final isFromPartner =
+                !myAliases.any((a) => a.toLowerCase() == s.toLowerCase());
+            if (isFromPartner) {
+              latestPartnerMsgUtc ??= parseToUtc(m['created_at']);
+              final isRead = m['is_read'] == true;
+              if (!isRead) {
+                unread++;
+              }
             }
           }
-        }
 
-        String name = 'Gamer';
-        String username = '';
-        String photo = '';
-        String gameTag = 'PUBG';
-        String gameId = '';
-        bool verified = false;
-        bool isOnline = false;
-        DateTime? lastSeenUtc;
-        String canonicalOtherId = otherRawId;
+          String name = 'Gamer';
+          String username = '';
+          String photo = '';
+          String gameTag = 'PUBG';
+          String gameId = '';
+          bool verified = false;
+          bool isOnline = false;
+          DateTime? lastSeenUtc;
+          String canonicalOtherId = otherRawId;
 
-        // Safe profile lookup without crashing on non-UUID
-        try {
-          Map<String, dynamic>? userRow;
-          final isUuid = _uuidRegex.hasMatch(otherRawId);
-          if (isUuid) {
-            try {
-              userRow = await _client
-                  .from('users')
-                  .select()
-                  .eq('id', otherRawId)
-                  .maybeSingle();
-            } catch (_) {}
-          }
-          if (userRow == null) {
-            try {
-              userRow = await _client
-                  .from('users')
-                  .select()
-                  .eq('uid', otherRawId)
-                  .maybeSingle();
-            } catch (_) {}
-          }
+          void applyProfileRow(Map<String, dynamic> row) {
+            final rowId = (row['id'] ?? '').toString().trim();
+            final rowUid = (row['uid'] ?? '').toString().trim();
+            if (rowId.isNotEmpty &&
+                (canonicalOtherId == otherRawId || !_uuidRegex.hasMatch(canonicalOtherId))) {
+              canonicalOtherId = rowId;
+            } else if (rowUid.isNotEmpty && canonicalOtherId.isEmpty) {
+              canonicalOtherId = rowUid;
+            }
 
-          if (userRow != null) {
-            username = (userRow['username'] ?? '').toString().trim();
-            final rawDisplayName =
-                (userRow['display_name'] ?? userRow['displayName'] ?? '').toString().trim();
-            name = rawDisplayName.isNotEmpty
-                ? rawDisplayName
-                : (username.isNotEmpty ? username : 'Gamer');
-            photo = (userRow['avatar_url'] ?? userRow['photoUrl'] ?? '').toString();
-            verified = userRow['is_verified'] == true;
-            canonicalOtherId =
-                (userRow['id'] ?? userRow['uid'] ?? otherRawId).toString();
-            gameId = (userRow['game_id'] ?? userRow['gameId'] ?? '').toString().trim();
+            final rowUsername = (row['username'] ?? row['tag'] ?? '').toString().trim();
+            if (username.isEmpty &&
+                rowUsername.isNotEmpty &&
+                rowUsername.toLowerCase() != 'null') {
+              username = rowUsername;
+            }
 
-            final rawGame = (userRow['primary_game'] ??
-                    userRow['selected_game'] ??
-                    userRow['favorite_game'] ??
-                    userRow['game_name'] ??
-                    userRow['game'] ??
+            final candidateNames = [
+              row['display_name'],
+              row['displayName'],
+              row['bgmiName'],
+              row['full_name'],
+              row['name'],
+              row['in_game_name'],
+              row['inGameName'],
+            ];
+            for (final candidate in candidateNames) {
+              final s = (candidate ?? '').toString().trim();
+              if (s.isNotEmpty && s.toLowerCase() != 'null' && name == 'Gamer') {
+                name = s;
+                break;
+              }
+            }
+            if (name == 'Gamer' && username.isNotEmpty) {
+              name = username;
+            }
+
+            final rowPhoto = extractAvatarFromMap(row);
+            if (photo.isEmpty && rowPhoto.isNotEmpty) {
+              photo = rowPhoto;
+            }
+
+            if (row['is_verified'] == true ||
+                row['isVerified'] == true ||
+                row['isBlueTickVerified'] == true) {
+              verified = true;
+            }
+
+            if (gameId.isEmpty) {
+              for (final gKey in ['game_uid', 'gameUid', 'game_id', 'gameId', 'gamer_id', 'bgmiUid']) {
+                final gVal = (row[gKey] ?? '').toString().trim();
+                if (gVal.isNotEmpty &&
+                    gVal.toLowerCase() != 'null' &&
+                    gVal.toLowerCase() != 'not set' &&
+                    gVal != canonicalOtherId) {
+                  gameId = gVal;
+                  break;
+                }
+              }
+            }
+
+            final rawGame = (row['primary_game'] ??
+                    row['selected_game'] ??
+                    row['selectedGame'] ??
+                    row['favorite_game'] ??
+                    row['favoriteGame'] ??
+                    row['game_name'] ??
+                    row['game'] ??
                     '')
                 .toString()
                 .trim();
-            if (rawGame.isNotEmpty) {
+            if (rawGame.isNotEmpty &&
+                rawGame.toLowerCase() != 'null' &&
+                gameTag == 'PUBG') {
               gameTag = rawGame.toUpperCase().contains('PUBG') ? 'PUBG' : rawGame;
             }
 
-            isOnline = evaluateOnlineStatus(
-              userRow,
-              latestActivityUtc: latestPartnerMsgUtc,
-            );
-            lastSeenUtc = parseToUtc(userRow['last_seen'] ?? userRow['lastSeen']) ??
-                parseToUtc(userRow['updated_at'] ?? userRow['updatedAt']) ??
-                latestPartnerMsgUtc;
-          } else {
-            isOnline = isTimestampRecentlyActive(latestPartnerMsgUtc);
-            lastSeenUtc = latestPartnerMsgUtc;
+            if (evaluateOnlineStatus(row, latestActivityUtc: latestPartnerMsgUtc)) {
+              isOnline = true;
+            }
+            final candidateSeen = parseToUtc(row['last_seen'] ?? row['lastSeen']) ??
+                parseToUtc(row['updated_at'] ?? row['updatedAt']);
+            if (candidateSeen != null &&
+                (lastSeenUtc == null || candidateSeen.isAfter(lastSeenUtc!))) {
+              lastSeenUtc = candidateSeen;
+            }
           }
-        } catch (_) {}
 
-        // Double check not adding myself
-        if (myAliases.any((a) => a.toLowerCase() == canonicalOtherId.toLowerCase())) {
-          continue;
+          try {
+            final isUuid = _uuidRegex.hasMatch(otherRawId);
+            final candidateIds = <String>{
+              otherRawId,
+              if (isUuid) otherRawId.toLowerCase(),
+              SupabaseService.toUuid(otherRawId),
+            };
+
+            // 1. Check `users` table by `id` and `uid` (fetching multiple rows in case duplicate/synced rows exist)
+            for (final candidate in candidateIds) {
+              if (_uuidRegex.hasMatch(candidate)) {
+                try {
+                  final rowsById = await _client
+                      .from('users')
+                      .select()
+                      .eq('id', candidate)
+                      .limit(5);
+                  for (final r in (rowsById as List)) {
+                    if (r is Map) applyProfileRow(Map<String, dynamic>.from(r));
+                  }
+                } catch (_) {}
+              }
+              try {
+                final rowsByUid = await _client
+                    .from('users')
+                    .select()
+                    .eq('uid', candidate)
+                    .limit(5);
+                for (final r in (rowsByUid as List)) {
+                  if (r is Map) applyProfileRow(Map<String, dynamic>.from(r));
+                }
+              } catch (_) {}
+            }
+
+            if (canonicalOtherId.isNotEmpty) {
+              candidateIds.add(canonicalOtherId);
+            }
+
+            // 2. Check `profiles` table (`public.profiles`) for `avatar_url` and profile fields
+            if (photo.isEmpty || name == 'Gamer') {
+              for (final candidate in candidateIds) {
+                if (_uuidRegex.hasMatch(candidate)) {
+                  try {
+                    final profRows = await _client
+                        .from('profiles')
+                        .select()
+                        .eq('id', candidate)
+                        .limit(5);
+                    for (final r in (profRows as List)) {
+                      if (r is Map) applyProfileRow(Map<String, dynamic>.from(r));
+                    }
+                  } catch (_) {}
+                }
+                if (photo.isNotEmpty && name != 'Gamer') break;
+              }
+            }
+
+            // 3. If photo is still empty and we know username or display_name, check `users` and `profiles` by username/display_name
+            if (photo.isEmpty && username.isNotEmpty) {
+              try {
+                final byUsernameRows = await _client
+                    .from('users')
+                    .select()
+                    .ilike('username', username)
+                    .limit(5);
+                for (final r in (byUsernameRows as List)) {
+                  if (r is Map) applyProfileRow(Map<String, dynamic>.from(r));
+                }
+              } catch (_) {}
+
+              if (photo.isEmpty) {
+                try {
+                  final profByUsername = await _client
+                      .from('profiles')
+                      .select()
+                      .ilike('username', username)
+                      .limit(5);
+                  for (final r in (profByUsername as List)) {
+                    if (r is Map) applyProfileRow(Map<String, dynamic>.from(r));
+                  }
+                } catch (_) {}
+              }
+            }
+
+            if (photo.isEmpty && name != 'Gamer') {
+              try {
+                final byDisplayRows = await _client
+                    .from('users')
+                    .select()
+                    .ilike('display_name', name)
+                    .limit(5);
+                for (final r in (byDisplayRows as List)) {
+                  if (r is Map) {
+                    final map = Map<String, dynamic>.from(r);
+                    final candidatePhoto = extractAvatarFromMap(map);
+                    if (candidatePhoto.isNotEmpty) {
+                      photo = candidatePhoto;
+                      break;
+                    }
+                  }
+                }
+              } catch (_) {}
+            }
+
+            // 4. Fallback: check `posts` table (`user_avatar`) if user has posted with an avatar
+            if (photo.isEmpty) {
+              for (final candidate in candidateIds) {
+                if (!_uuidRegex.hasMatch(candidate)) continue;
+                try {
+                  final postRows = await _client
+                      .from('posts')
+                      .select('user_avatar, display_name, username')
+                      .eq('user_id', candidate)
+                      .order('created_at', ascending: false)
+                      .limit(5);
+                  for (final r in (postRows as List)) {
+                    if (r is Map) {
+                      final pAvatar = normalizeAvatarUrl(r['user_avatar']?.toString());
+                      if (pAvatar.isNotEmpty) {
+                        photo = pAvatar;
+                        break;
+                      }
+                    }
+                  }
+                } catch (_) {}
+                if (photo.isNotEmpty) break;
+              }
+            }
+
+            if (!isOnline && isTimestampRecentlyActive(latestPartnerMsgUtc)) {
+              isOnline = true;
+            }
+            lastSeenUtc ??= latestPartnerMsgUtc;
+          } catch (_) {}
+
+          if (myAliases.any((a) => a.toLowerCase() == canonicalOtherId.toLowerCase())) {
+            return null;
+          }
+
+          return ChatConversation(
+            otherUserId: canonicalOtherId,
+            otherUserName: name,
+            otherUsername: username,
+            otherUserPhoto: photo,
+            otherUserGame: gameTag,
+            otherUserGameId: gameId,
+            lastMessage: lastType == 'image' ? '📷 Photo' : lastText,
+            lastMessageType: lastType,
+            lastMessageTime: lastTime,
+            unreadCount: unread,
+            isVerified: verified,
+            isOnline: isOnline,
+            lastSeen: lastSeenUtc,
+          );
+        }),
+      );
+
+      final Map<String, ChatConversation> deduplicated = {};
+      for (final conv in resolvedList) {
+        if (conv == null) continue;
+        final key = conv.otherUserId.toLowerCase();
+        final existing = deduplicated[key];
+        if (existing == null) {
+          deduplicated[key] = conv;
+        } else {
+          final isNewer = conv.lastMessageTime.isAfter(existing.lastMessageTime);
+          final primary = isNewer ? conv : existing;
+          final secondary = isNewer ? existing : conv;
+          deduplicated[key] = ChatConversation(
+            otherUserId: primary.otherUserId,
+            otherUserName: primary.otherUserName != 'Gamer'
+                ? primary.otherUserName
+                : secondary.otherUserName,
+            otherUsername: primary.otherUsername.isNotEmpty
+                ? primary.otherUsername
+                : secondary.otherUsername,
+            otherUserPhoto: primary.otherUserPhoto.isNotEmpty
+                ? primary.otherUserPhoto
+                : secondary.otherUserPhoto,
+            otherUserGame: primary.otherUserGame,
+            otherUserGameId: primary.otherUserGameId.isNotEmpty
+                ? primary.otherUserGameId
+                : secondary.otherUserGameId,
+            lastMessage: primary.lastMessage,
+            lastMessageType: primary.lastMessageType,
+            lastMessageTime: primary.lastMessageTime,
+            unreadCount: primary.unreadCount + secondary.unreadCount,
+            isVerified: primary.isVerified || secondary.isVerified,
+            isOnline: primary.isOnline || secondary.isOnline,
+            lastSeen: primary.lastSeen ?? secondary.lastSeen,
+          );
         }
-
-        conversations.add(ChatConversation(
-          otherUserId: canonicalOtherId,
-          otherUserName: name,
-          otherUsername: username,
-          otherUserPhoto: photo,
-          otherUserGame: gameTag,
-          otherUserGameId: gameId,
-          lastMessage: lastType == 'image' ? '📷 Photo' : lastText,
-          lastMessageType: lastType,
-          lastMessageTime: lastTime,
-          unreadCount: unread,
-          isVerified: verified,
-          isOnline: isOnline,
-          lastSeen: lastSeenUtc,
-        ));
       }
 
+      final List<ChatConversation> conversations = deduplicated.values.toList();
       conversations.sort((ChatConversation a, ChatConversation b) {
         return b.lastMessageTime.compareTo(a.lastMessageTime);
       });

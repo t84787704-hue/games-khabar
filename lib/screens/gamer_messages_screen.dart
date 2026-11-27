@@ -4,6 +4,7 @@
 // ===============================================================================
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
@@ -594,24 +595,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen>
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: u.photoUrl.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: u.photoUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => const Center(
-                              child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: neonCyan,
-                                ),
-                              ),
-                            ),
-                            errorWidget: (_, __, ___) =>
-                                _buildInitials(displayTitle, 50),
-                          )
-                        : _buildInitials(displayTitle, 50),
+                    child: _buildPartnerAvatar(u.photoUrl, displayTitle, 50),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -781,24 +765,11 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen>
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: c.otherUserPhoto.isNotEmpty
-                              ? CachedNetworkImage(
-                                  imageUrl: c.otherUserPhoto,
-                                  fit: BoxFit.cover,
-                                  placeholder: (_, __) => const Center(
-                                    child: SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: neonCyan,
-                                      ),
-                                    ),
-                                  ),
-                                  errorWidget: (_, __, ___) =>
-                                      _buildInitials(c.otherUserName, 50),
-                                )
-                              : _buildInitials(c.otherUserName, 50),
+                          child: _buildPartnerAvatar(
+                            c.otherUserPhoto,
+                            c.otherUserName,
+                            50,
+                          ),
                         ),
                       ),
                       if (c.isOnline)
@@ -930,24 +901,134 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen>
     );
   }
 
+  Widget _buildPartnerAvatar(String rawPhotoUrl, String name, double size) {
+    return _renderUserAvatarWidget(
+      rawPhotoUrl: rawPhotoUrl,
+      name: name,
+      size: size,
+    );
+  }
+
   Widget _buildInitials(String name, double size) {
-    final initials = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return _buildAvatarInitialsWidget(name, size);
+  }
+}
+
+Widget _renderUserAvatarWidget({
+  required String rawPhotoUrl,
+  required String name,
+  required double size,
+}) {
+  final normalized = DirectMessageService.normalizeAvatarUrl(rawPhotoUrl);
+  if (normalized.isEmpty) {
+    return _buildAvatarInitialsWidget(name, size);
+  }
+
+  if (normalized.startsWith('preset:')) {
+    final presetId = normalized.replaceFirst('preset:', '').trim().toLowerCase();
+    IconData iconData = Icons.sports_esports_rounded;
+    List<Color> gradientColors = const [Color(0xFF1E3A8A), Color(0xFF00E5FF)];
+
+    switch (presetId) {
+      case 'helmet':
+        iconData = Icons.sports_motorsports_rounded;
+        gradientColors = const [Color(0xFF1877F2), Color(0xFF00E5FF)];
+        break;
+      case 'controller':
+      case 'skull':
+        iconData = Icons.gamepad_rounded;
+        gradientColors = const [Color(0xFF6D28D9), Color(0xFFEC4899)];
+        break;
+      case 'ninja':
+      case 'shield':
+        iconData = Icons.shield_rounded;
+        gradientColors = const [Color(0xFF047857), Color(0xFF10B981)];
+        break;
+      case 'crown':
+      case 'trophy':
+        iconData = Icons.emoji_events_rounded;
+        gradientColors = const [Color(0xFFB45309), Color(0xFFFBBF24)];
+        break;
+      case 'crosshair':
+        iconData = Icons.gps_fixed_rounded;
+        gradientColors = const [Color(0xFFBE123C), Color(0xFFFB7185)];
+        break;
+      default:
+        iconData = Icons.sports_esports_rounded;
+        gradientColors = const [Color(0xFF1E3A8A), Color(0xFF00E5FF)];
+    }
+
     return Container(
       width: size,
       height: size,
-      color: ThemeService.cardSecondary,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
       child: Center(
-        child: Text(
-          initials,
-          style: TextStyle(
-            color: neonCyan,
-            fontSize: size * 0.4,
-            fontWeight: FontWeight.bold,
-          ),
+        child: Icon(
+          iconData,
+          color: Colors.white,
+          size: size * 0.52,
         ),
       ),
     );
   }
+
+  if (normalized.startsWith('data:image')) {
+    try {
+      final commaIdx = normalized.indexOf(',');
+      if (commaIdx != -1) {
+        final b64 = normalized.substring(commaIdx + 1).trim();
+        final bytes = base64Decode(b64);
+        return Image.memory(
+          bytes,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildAvatarInitialsWidget(name, size),
+        );
+      }
+    } catch (_) {
+      return _buildAvatarInitialsWidget(name, size);
+    }
+  }
+
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+    return CachedNetworkImage(
+      imageUrl: normalized,
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      placeholder: (_, __) => _buildAvatarInitialsWidget(name, size),
+      errorWidget: (_, __, ___) => _buildAvatarInitialsWidget(name, size),
+    );
+  }
+
+  return _buildAvatarInitialsWidget(name, size);
+}
+
+Widget _buildAvatarInitialsWidget(String name, double size) {
+  final trimmed = name.trim();
+  final initials = trimmed.isNotEmpty ? trimmed[0].toUpperCase() : '?';
+  return Container(
+    width: size,
+    height: size,
+    color: ThemeService.cardSecondary,
+    child: Center(
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: const Color(0xFF00E5FF),
+          fontSize: size * 0.4,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    ),
+  );
 }
 
 // ============================================
@@ -1114,23 +1195,26 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                               : (u.uid.length > 8 ? u.uid.substring(0, 8) : u.uid);
                           return ListTile(
                             onTap: () => Navigator.pop(context, u),
-                            leading: CircleAvatar(
-                              radius: 22,
-                              backgroundColor: ThemeService.cardSecondary,
-                              backgroundImage: u.photoUrl.isNotEmpty
-                                  ? CachedNetworkImageProvider(u.photoUrl)
-                                  : null,
-                              child: u.photoUrl.isEmpty
-                                  ? Text(
-                                      u.displayName.isNotEmpty
-                                          ? u.displayName[0].toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                        color: neonCyan,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    )
-                                  : null,
+                            leading: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: ThemeService.cardSecondary,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: ThemeService.border,
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: ClipOval(
+                                child: _renderUserAvatarWidget(
+                                  rawPhotoUrl: u.photoUrl,
+                                  name: u.displayName.isNotEmpty
+                                      ? u.displayName
+                                      : u.username,
+                                  size: 44,
+                                ),
+                              ),
                             ),
                             title: Row(
                               children: [

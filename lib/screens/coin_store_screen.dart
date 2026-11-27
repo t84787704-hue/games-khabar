@@ -779,33 +779,6 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: () => _handleWatchAd(uid),
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: GamerTheme.neonGreen,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.play_circle_fill_rounded, color: Colors.black, size: 16),
-                  SizedBox(width: 6),
-                  Text(
-                    'Earn +25 G-Coins',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -821,40 +794,6 @@ class _CoinStoreScreenState extends State<CoinStoreScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildTeamStatusCard(),
-          ValueListenableBuilder<Duration>(
-            valueListenable: _timeUntilNextClaimNotifier,
-            builder: (context, timeUntilNextClaim, _) {
-              final canClaimDaily = timeUntilNextClaim == Duration.zero;
-              final formattedCountdown = _formatDuration(timeUntilNextClaim);
-              return _buildEarnActionCard(
-                icon: Icons.calendar_today_rounded,
-                iconColor: GamerTheme.neonGreen,
-                badge: '+50 G-Coins',
-                badgeColor: GamerTheme.neonGreen,
-                title: _trSafe('daily_checkin_reward_title', 'Daily Check-in Reward'),
-                subtitle: canClaimDaily
-                    ? _trSafe(
-                        'daily_checkin_ready_sub',
-                        'Your daily reward is ready to claim!',
-                      )
-                    : _trSafe(
-                        'daily_checkin_next_in',
-                        'Next check-in in: $formattedCountdown',
-                        args: [formattedCountdown],
-                      ),
-                buttonText: _isClaimingDaily
-                    ? _trSafe('btn_watching', 'Watching...')
-                    : (canClaimDaily
-                        ? 'Claim +50 G-Coins'
-                        : formattedCountdown),
-                buttonColor:
-                    canClaimDaily ? GamerTheme.neonGreen : ThemeService.cardSecondary,
-                textColor: canClaimDaily ? Colors.black : ThemeService.textSecondary,
-                onTap: canClaimDaily ? () => _handleClaimDaily(uid) : null,
-              );
-            },
-          ),
-          const SizedBox(height: 12),
           _buildEarnActionCard(
             icon: Icons.play_circle_filled_rounded,
             iconColor: GamerTheme.accentOrange,

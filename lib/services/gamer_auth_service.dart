@@ -578,12 +578,13 @@ class GamerAuthService {
 
   /// Uploads user avatar photo directly to Supabase Storage
   Future<String> uploadProfilePhoto(File imageFile, String uid) async {
+    final fileName = 'avatar_${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
     try {
       final url = await SupabaseService.uploadFile(
         file: imageFile,
         folder: 'user_avatars',
         bucket: SupabaseService.bucketAvatars,
-        customFileName: 'avatar_${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        customFileName: fileName,
       );
       if (url != null && url.isNotEmpty) {
         return url;
@@ -591,6 +592,17 @@ class GamerAuthService {
     } catch (e) {
       debugPrint('[GamerAuthService] Supabase avatar upload error: $e');
     }
+    try {
+      final fallbackUrl = await SupabaseService.uploadFile(
+        file: imageFile,
+        folder: 'user_avatars',
+        bucket: SupabaseService.bucketPosts,
+        customFileName: fileName,
+      );
+      if (fallbackUrl != null && fallbackUrl.isNotEmpty) {
+        return fallbackUrl;
+      }
+    } catch (_) {}
     return '';
   }
 
@@ -659,11 +671,14 @@ class GamerAuthService {
 
       Map<String, dynamic>? existingRow;
       try {
-        existingRow = await _supabase
+        final rows = await _supabase
             .from('users')
             .select('id, uid')
             .or('id.eq.${user.uid},uid.eq.${user.uid}')
-            .maybeSingle();
+            .limit(5);
+        if (rows.isNotEmpty) {
+          existingRow = Map<String, dynamic>.from(rows.first);
+        }
       } catch (_) {}
 
       bool coreSaved = false;
@@ -671,7 +686,7 @@ class GamerAuthService {
         await _supabase
             .from('users')
             .update(corePayload)
-            .eq('id', existingRow['id'].toString());
+            .or('id.eq.${user.uid},uid.eq.${user.uid}');
         coreSaved = true;
       } else {
         final insertPayload = <String, dynamic>{
@@ -687,6 +702,19 @@ class GamerAuthService {
           coreSaved = true;
         }
       }
+
+      // Best-effort sync to `profiles` table if present
+      try {
+        await _supabase
+            .from('profiles')
+            .update({
+              'username': cleanUsername,
+              'display_name': cleanDisplayName,
+              'avatar_url': user.photoUrl,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', SupabaseService.toUuid(user.uid));
+      } catch (_) {}
 
       // Best-effort update for optional extended columns (ignore if any column is absent in DB)
       final extendedPayload = <String, dynamic>{
@@ -832,37 +860,71 @@ class GamerAuthService {
   }
 
   /// ✅ FIXED: Fetch any user's profile by UID from Supabase
-  /// Pehle `id` se exact match, phir `uid` se fallback
+  /// Pehle `id` se exact match, phir `uid` se fallback, plus `profiles` table avatar enrichment
   Future<GamerUser?> getUserProfile(String uid) async {
     if (uid.isEmpty) return null;
 
+    GamerUser? resolvedUser;
     try {
       // 1. Pehle `id` se exact match karo
-      final userById = await _supabase
+      final rowsById = await _supabase
           .from('users')
           .select()
           .eq('id', uid)
-          .maybeSingle();
+          .limit(5);
 
-      if (userById != null) {
-        return GamerUser.fromMap(userById, uid);
+      if (rowsById.isNotEmpty) {
+        resolvedUser = GamerUser.fromMap(Map<String, dynamic>.from(rowsById.first), uid);
+        for (final r in rowsById) {
+          final candidate = GamerUser.fromMap(Map<String, dynamic>.from(r), uid);
+          if (resolvedUser!.photoUrl.isEmpty && candidate.photoUrl.isNotEmpty) {
+            resolvedUser = resolvedUser.copyWith(photoUrl: candidate.photoUrl);
+          }
+        }
       }
 
-      // 2. Agar `id` se nahi mila, to `uid` se try karo
-      final userByUid = await _supabase
-          .from('users')
-          .select()
-          .eq('uid', uid)
-          .maybeSingle();
+      // 2. Agar `id` se nahi mila ya photoUrl empty hai, to `uid` se try karo
+      if (resolvedUser == null || resolvedUser.photoUrl.isEmpty) {
+        final rowsByUid = await _supabase
+            .from('users')
+            .select()
+            .eq('uid', uid)
+            .limit(5);
 
-      if (userByUid != null) {
-        final actualId = (userByUid['id'] ?? uid).toString();
-        return GamerUser.fromMap(userByUid, actualId);
+        if (rowsByUid.isNotEmpty) {
+          final firstMap = Map<String, dynamic>.from(rowsByUid.first);
+          final actualId = (firstMap['id'] ?? uid).toString();
+          final byUidUser = GamerUser.fromMap(firstMap, actualId);
+          if (resolvedUser == null) {
+            resolvedUser = byUidUser;
+          } else if (resolvedUser.photoUrl.isEmpty && byUidUser.photoUrl.isNotEmpty) {
+            resolvedUser = resolvedUser.copyWith(photoUrl: byUidUser.photoUrl);
+          }
+        }
+      }
+
+      // 3. Fallback / enrichment from `profiles` table if photoUrl is still empty
+      if (resolvedUser == null || resolvedUser.photoUrl.isEmpty) {
+        try {
+          final profRow = await _supabase
+              .from('profiles')
+              .select()
+              .eq('id', SupabaseService.toUuid(uid))
+              .maybeSingle();
+          if (profRow != null) {
+            final profUser = GamerUser.fromMap(Map<String, dynamic>.from(profRow), uid);
+            if (resolvedUser == null) {
+              resolvedUser = profUser;
+            } else if (resolvedUser.photoUrl.isEmpty && profUser.photoUrl.isNotEmpty) {
+              resolvedUser = resolvedUser.copyWith(photoUrl: profUser.photoUrl);
+            }
+          }
+        } catch (_) {}
       }
     } catch (e) {
       debugPrint('[GamerAuthService] Supabase get user profile error: $e');
     }
-    return null;
+    return resolvedUser;
   }
 
   Future<GamerUser?> fetchUserProfile(String uid) => getUserProfile(uid);
@@ -896,6 +958,17 @@ class GamerAuthService {
             .from('users')
             .update(updates)
             .or('id.eq.$uid,uid.eq.$uid');
+        if (photoUrl != null || displayName != null) {
+          try {
+            await _supabase
+                .from('profiles')
+                .update({
+                  if (photoUrl != null) 'avatar_url': photoUrl,
+                  if (displayName != null) 'display_name': displayName,
+                })
+                .eq('id', SupabaseService.toUuid(uid));
+          } catch (_) {}
+        }
         await refreshCurrentGamer();
       } catch (e) {
         debugPrint('[GamerAuthService] Error updating profile: $e');

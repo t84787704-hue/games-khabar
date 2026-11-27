@@ -552,7 +552,27 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
     required String feedbackMessage,
     Color backgroundColor = const Color(0xFF00FF88),
   }) {
-    Clipboard.setData(ClipboardData(text: value));
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed.toLowerCase() == 'not set') {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Game UID not set',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: Color(0xFFFF8A00),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: trimmed));
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1037,10 +1057,12 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
             final joinedDate = user.createdAt != null
                 ? DateFormat('dd MMM yyyy').format(user.createdAt!)
                 : 'Recent Member';
-            final gameUidDisplay =
-                user.gameId.trim().isNotEmpty ? user.gameId.trim() : 'Not set';
-            final gameUidCopyValue =
-                user.gameId.trim().isNotEmpty ? user.gameId.trim() : user.uid;
+            final rawGameUid = user.gameId.trim();
+            final hasValidGameUid = rawGameUid.isNotEmpty &&
+                rawGameUid.toLowerCase() != 'not set' &&
+                rawGameUid != user.uid;
+            final gameUidDisplay = hasValidGameUid ? rawGameUid : 'Not set';
+            final gameUidCopyValue = hasValidGameUid ? rawGameUid : '';
 
             return Scaffold(
               backgroundColor: ThemeService.bg,
@@ -1632,9 +1654,16 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                               );
                             },
                             trailing: IconButton(
-                              icon: const Icon(Icons.copy_rounded, size: 18),
-                              color: const Color(0xFF00FF88),
-                              tooltip: 'Copy Game UID',
+                              icon: Icon(
+                                Icons.copy_rounded,
+                                size: 18,
+                                color: hasValidGameUid
+                                    ? const Color(0xFF00FF88)
+                                    : ThemeService.textSecondary,
+                              ),
+                              tooltip: hasValidGameUid
+                                  ? 'Copy Game UID'
+                                  : 'Game UID not set',
                               onPressed: () {
                                 _copyToClipboard(
                                   value: gameUidCopyValue,
