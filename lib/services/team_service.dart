@@ -4,6 +4,7 @@ import "package:flutter/foundation.dart";
 import "package:shared_preferences/shared_preferences.dart";
 import "../models/team_model.dart";
 import "supabase_service.dart";
+import "gamer_auth_service.dart";
 import "coin_wallet_service.dart";
 import "notification_service.dart";
 
@@ -609,16 +610,32 @@ class TeamService {
     try {
       final cleanUid = userId.trim();
       final userUuid = SupabaseService.toUuid(cleanUid);
-      final memberRows = await SupabaseService.client
-          .from("team_members")
-          .select("team_id")
-          .or("user_id.eq.$userUuid,user_id.eq.$cleanUid");
-
       final teamIds = <String>{};
-      for (final r in memberRows) {
-        final tid = r["team_id"]?.toString();
-        if (tid != null && tid.isNotEmpty) teamIds.add(tid);
+
+      try {
+        final memberRows = await SupabaseService.client
+            .from("team_members")
+            .select("team_id")
+            .or("user_id.eq.$userUuid,user_id.eq.$cleanUid");
+        for (final r in memberRows) {
+          final tid = r["team_id"]?.toString().trim();
+          if (tid != null && tid.isNotEmpty) teamIds.add(tid);
+        }
+      } catch (e) {
+        debugPrint("[TeamService] getUserTeams team_members notice: $e");
       }
+
+      try {
+        final squadRows = await SupabaseService.client
+            .from("squad_members")
+            .select()
+            .or("user_id.eq.$userUuid,user_id.eq.$cleanUid");
+        for (final r in squadRows) {
+          final tid =
+              (r["team_id"] ?? r["squad_id"])?.toString().trim();
+          if (tid != null && tid.isNotEmpty) teamIds.add(tid);
+        }
+      } catch (_) {}
 
       final res = await SupabaseService.client
           .from("teams")
@@ -638,8 +655,16 @@ class TeamService {
         final tidLower = tid.toLowerCase();
         final tidUuidLower = SupabaseService.toUuid(tid).toLowerCase();
         if (!seenIds.contains(tidLower) && !seenIds.contains(tidUuidLower)) {
-          final t = await getTeam(tid);
+          var t = await getTeam(tid);
           if (t != null) {
+            if (!t.isMember(cleanUid)) {
+              final nextMembers = <String>[...t.members];
+              if (!nextMembers.contains(cleanUid) &&
+                  nextMembers.length < maxTeamMembers) {
+                nextMembers.add(cleanUid);
+              }
+              t = t.copyWith(members: nextMembers);
+            }
             seenIds.add(t.id.toLowerCase());
             seenIds.add(SupabaseService.toUuid(t.id).toLowerCase());
             rawResult.add(t);
@@ -720,11 +745,108 @@ class TeamService {
     String? gameFilter,
     String? searchQuery,
   }) async {
-    final allRows = await SupabaseService.client
-        .from("teams")
-        .select()
-        .order("points", ascending: false)
-        .limit(50);
+    final String currentUid = (GamerAuthService().currentUid ??
+            SupabaseService.client.auth.currentUser?.id ??
+            "")
+        .trim();
+    final String currentUuid =
+        currentUid.isNotEmpty ? SupabaseService.toUuid(currentUid) : "";
+
+    final List<Map<String, dynamic>> allRows = [];
+    final Set<String> seenRowKeys = {};
+
+    void addRawTeamRow(Map<String, dynamic> row) {
+      final rawId = (row["id"] ?? "").toString().trim();
+      if (rawId.isEmpty) return;
+      final lower = rawId.toLowerCase();
+      final uuidLower = SupabaseService.toUuid(rawId).toLowerCase();
+      if (seenRowKeys.contains(lower) || seenRowKeys.contains(uuidLower)) {
+        return;
+      }
+      seenRowKeys.add(lower);
+      seenRowKeys.add(uuidLower);
+      allRows.add(row);
+    }
+
+    // Track all team IDs that the current logged-in user belongs to (leader, team_members, squad_members)
+    final Set<String> myJoinedTeamKeys = {};
+    final Set<String> myLookupTeamIds = {};
+
+    if (currentUid.isNotEmpty) {
+      try {
+        final myMemRows = await SupabaseService.client
+            .from("team_members")
+            .select("team_id")
+            .or("user_id.eq.$currentUuid,user_id.eq.$currentUid");
+        for (final r in myMemRows) {
+          final tid = (r["team_id"] ?? "").toString().trim();
+          if (tid.isNotEmpty) {
+            myLookupTeamIds.add(tid);
+            myLookupTeamIds.add(SupabaseService.toUuid(tid));
+            myJoinedTeamKeys.add(tid.toLowerCase());
+            myJoinedTeamKeys.add(SupabaseService.toUuid(tid).toLowerCase());
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final mySquadRows = await SupabaseService.client
+            .from("squad_members")
+            .select()
+            .or("user_id.eq.$currentUuid,user_id.eq.$currentUid");
+        for (final r in mySquadRows) {
+          final tid =
+              (r["team_id"] ?? r["squad_id"] ?? "").toString().trim();
+          if (tid.isNotEmpty) {
+            myLookupTeamIds.add(tid);
+            myLookupTeamIds.add(SupabaseService.toUuid(tid));
+            myJoinedTeamKeys.add(tid.toLowerCase());
+            myJoinedTeamKeys.add(SupabaseService.toUuid(tid).toLowerCase());
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final myLeaderRows = await SupabaseService.client
+            .from("teams")
+            .select()
+            .or("leader_id.eq.$currentUid,leader_id.eq.$currentUuid");
+        for (final r in myLeaderRows) {
+          final mapRow = Map<String, dynamic>.from(r);
+          final tid = (mapRow["id"] ?? "").toString().trim();
+          if (tid.isNotEmpty) {
+            myJoinedTeamKeys.add(tid.toLowerCase());
+            myJoinedTeamKeys.add(SupabaseService.toUuid(tid).toLowerCase());
+            addRawTeamRow(mapRow);
+          }
+        }
+      } catch (_) {}
+
+      if (myLookupTeamIds.isNotEmpty) {
+        try {
+          final joinedTeamRows = await SupabaseService.client
+              .from("teams")
+              .select()
+              .inFilter("id", myLookupTeamIds.toList());
+          for (final r in joinedTeamRows) {
+            addRawTeamRow(Map<String, dynamic>.from(r));
+          }
+        } catch (_) {}
+      }
+    }
+
+    try {
+      final topRows = await SupabaseService.client
+          .from("teams")
+          .select()
+          .order("points", ascending: false)
+          .limit(50);
+      for (final r in topRows) {
+        addRawTeamRow(Map<String, dynamic>.from(r));
+      }
+    } catch (e) {
+      debugPrint("[TeamService] _fetchAllTeamsEnriched topRows error: $e");
+    }
 
     if (allRows.isEmpty) return <TeamModel>[];
 
@@ -769,7 +891,11 @@ class TeamService {
           final tid = (m["team_id"] ?? "").toString().trim();
           final uid = (m["user_id"] ?? "").toString().trim();
           if (tid.isEmpty || uid.isEmpty) continue;
-          for (final key in {tid, tid.toLowerCase(), SupabaseService.toUuid(tid).toLowerCase()}) {
+          for (final key in {
+            tid,
+            tid.toLowerCase(),
+            SupabaseService.toUuid(tid).toLowerCase()
+          }) {
             final list = membersByTeam.putIfAbsent(key, () => []);
             if (!list.contains(uid)) list.add(uid);
           }
@@ -788,7 +914,11 @@ class TeamService {
           final uid = (r["user_id"] ?? "").toString().trim();
           final status = (r["status"] ?? "pending").toString().toLowerCase();
           if (tid.isEmpty || uid.isEmpty || status != "pending") continue;
-          for (final key in {tid, tid.toLowerCase(), SupabaseService.toUuid(tid).toLowerCase()}) {
+          for (final key in {
+            tid,
+            tid.toLowerCase(),
+            SupabaseService.toUuid(tid).toLowerCase()
+          }) {
             final list = pendingByTeam.putIfAbsent(key, () => []);
             if (!list.contains(uid)) list.add(uid);
           }
@@ -826,7 +956,9 @@ class TeamService {
               ? un
               : ((gid.isNotEmpty && gid.toLowerCase() != "null")
                   ? gid
-                  : ((d.isNotEmpty && d.toLowerCase() != "null") ? d : "Leader"));
+                  : ((d.isNotEmpty && d.toLowerCase() != "null")
+                      ? d
+                      : "Leader"));
           final name = sanitizePublicHandle(rawHandle, fallback: "Leader");
           final avatar = (u["avatar_url"] ?? "").toString();
           if (id.isNotEmpty) {
@@ -849,12 +981,14 @@ class TeamService {
 
     final enriched = rows.map((rawRow) {
       final tid = (rawRow["id"] ?? "").toString().trim();
+      final tidLower = tid.toLowerCase();
       final tidUuidLower = SupabaseService.toUuid(tid).toLowerCase();
-      final leaderId = (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
+      final leaderId =
+          (rawRow["leader_id"] ?? rawRow["leaderId"] ?? "").toString().trim();
 
       final rawMembers = <String>[
         ...(membersByTeam[tid] ?? const <String>[]),
-        ...(membersByTeam[tid.toLowerCase()] ?? const <String>[]),
+        ...(membersByTeam[tidLower] ?? const <String>[]),
         ...(membersByTeam[tidUuidLower] ?? const <String>[]),
       ];
       if (rawRow["members"] is List) {
@@ -868,9 +1002,12 @@ class TeamService {
       final seenMemberUuids = <String>{};
       void addMemberUnique(String uid) {
         final clean = uid.trim();
-        if (clean.isEmpty || members.length >= maxTeamMembers) return;
+        if (clean.isEmpty) return;
         final uuidKey = SupabaseService.toUuid(clean).toLowerCase();
-        if (seenMemberUuids.contains(uuidKey) || members.contains(clean)) return;
+        if (seenMemberUuids.contains(uuidKey) || members.contains(clean)) {
+          return;
+        }
+        if (members.length >= maxTeamMembers) return;
         seenMemberUuids.add(uuidKey);
         members.add(clean);
       }
@@ -878,20 +1015,28 @@ class TeamService {
       if (leaderId.isNotEmpty) {
         addMemberUnique(leaderId);
       }
+      // Guarantee current user is in members if they belong to this team via team_members / squad_members
+      if (currentUid.isNotEmpty &&
+          (myJoinedTeamKeys.contains(tidLower) ||
+              myJoinedTeamKeys.contains(tidUuidLower))) {
+        addMemberUnique(currentUid);
+      }
       for (final m in rawMembers) {
         addMemberUnique(m);
       }
 
       final pending = List<String>.from(
         pendingByTeam[tid] ??
-            pendingByTeam[tid.toLowerCase()] ??
+            pendingByTeam[tidLower] ??
             pendingByTeam[tidUuidLower] ??
             <String>[],
       );
       if (rawRow["pending_join_requests"] is List) {
         for (final p in (rawRow["pending_join_requests"] as List)) {
           final pStr = p.toString().trim();
-          if (pStr.isNotEmpty && !pending.contains(pStr) && !members.contains(pStr)) {
+          if (pStr.isNotEmpty &&
+              !pending.contains(pStr) &&
+              !members.contains(pStr)) {
             pending.add(pStr);
           }
         }
@@ -931,6 +1076,30 @@ class TeamService {
       _storeTeamCache(t);
       return t;
     }).toList();
+
+    // Sort so any team where currentUid is leader or member appears at the very top
+    if (currentUid.isNotEmpty) {
+      enriched.sort((a, b) {
+        final bool aIsLeader = a.isLeader(currentUid);
+        final bool bIsLeader = b.isLeader(currentUid);
+        final bool aIsMyTeam = aIsLeader ||
+            a.isMember(currentUid) ||
+            myJoinedTeamKeys.contains(a.id.trim().toLowerCase()) ||
+            myJoinedTeamKeys
+                .contains(SupabaseService.toUuid(a.id.trim()).toLowerCase());
+        final bool bIsMyTeam = bIsLeader ||
+            b.isMember(currentUid) ||
+            myJoinedTeamKeys.contains(b.id.trim().toLowerCase()) ||
+            myJoinedTeamKeys
+                .contains(SupabaseService.toUuid(b.id.trim()).toLowerCase());
+
+        if (aIsMyTeam && !bIsMyTeam) return -1;
+        if (!aIsMyTeam && bIsMyTeam) return 1;
+        if (aIsLeader && !bIsLeader) return -1;
+        if (!aIsLeader && bIsLeader) return 1;
+        return b.points.compareTo(a.points);
+      });
+    }
 
     return enriched;
   }

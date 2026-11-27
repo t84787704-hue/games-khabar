@@ -5,9 +5,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/gamer_data_export_service.dart';
+import '../services/theme_service.dart';
 
 /// GDPR / DPDP Act compliant Download Data Screen.
-/// 
+///
 /// User can download all their data as a JSON file.
 class GamerDownloadDataScreen extends StatefulWidget {
   const GamerDownloadDataScreen({super.key});
@@ -19,6 +20,16 @@ class GamerDownloadDataScreen extends StatefulWidget {
 
 class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
   bool _isExporting = false;
+
+  static const Color _bgDark = Color(0xFF0A0E17);
+  static const Color _appBarDark = Color(0xFF121824);
+  static const Color _cardDark = Color(0xFF121824);
+  static const Color _cardElevatedDark = Color(0xFF182234);
+  static const Color _borderDark = Color(0xFF1F2E45);
+  static const Color _textPrimaryDark = Color(0xFFF8FAFC);
+  static const Color _textSecondaryDark = Color(0xFF94A3B8);
+  static const Color _accentBlue = Color(0xFF1877F2);
+  static const Color _accentCyan = Color(0xFF38BDF8);
 
   Future<void> _handleDownload() async {
     final authService = GamerAuthService();
@@ -58,7 +69,10 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
       debugPrint('[DownloadData] Error: $e');
       if (mounted) {
         setState(() => _isExporting = false);
-        _showSnackBar('err_failed_to_export_data'.tr(args: [e.toString()]), isError: true);
+        _showSnackBar(
+          'err_failed_to_export_data'.tr(args: [e.toString()]),
+          isError: true,
+        );
       }
     }
   }
@@ -77,212 +91,250 @@ class _GamerDownloadDataScreenState extends State<GamerDownloadDataScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: Text(
-          'title_download_my_data'.tr(),
-          style: const TextStyle(
-            color: Color(0xFF1877F2),
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.themeModeNotifier,
+      builder: (context, _, __) {
+        return Scaffold(
+          backgroundColor: _bgDark,
+          appBar: AppBar(
+            backgroundColor: _appBarDark,
+            foregroundColor: _textPrimaryDark,
+            elevation: 0,
+            iconTheme: const IconThemeData(color: _textPrimaryDark),
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_rounded,
+                color: _textPrimaryDark,
+              ),
+              tooltip: 'Back',
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(height: 1, color: _borderDark),
+            ),
+            title: Text(
+              'title_download_my_data'.tr(),
+              style: const TextStyle(
+                color: _textPrimaryDark,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
           ),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Info Banner
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE7F3FF),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: const Color(0xFF1877F2),
-                    width: 1.2,
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Info Banner
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _accentBlue.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _accentBlue.withOpacity(0.55),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          color: _accentCyan,
+                          size: 28,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'download_data_banner_text'.tr(),
+                            style: const TextStyle(
+                              color: _textPrimaryDark,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline_rounded,
-                        color: Color(0xFF1877F2), size: 28),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'download_data_banner_text'.tr(),
+                  const SizedBox(height: 20),
+
+                  // What's included
+                  Text(
+                    'download_data_included_title'.tr(),
+                    style: const TextStyle(
+                      color: _textPrimaryDark,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildBulletPoint('download_bullet_profile'.tr()),
+                  _buildBulletPoint('download_bullet_posts'.tr()),
+                  _buildBulletPoint('download_bullet_comments'.tr()),
+                  _buildBulletPoint('download_bullet_followers'.tr()),
+                  _buildBulletPoint('download_bullet_teams'.tr()),
+                  _buildBulletPoint('download_bullet_challenges'.tr()),
+                  _buildBulletPoint('download_bullet_coins'.tr()),
+                  _buildBulletPoint('download_bullet_notifications'.tr()),
+
+                  const SizedBox(height: 24),
+
+                  // Format Info Card
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _cardDark,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _borderDark),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _accentBlue.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.file_present_rounded,
+                            color: _accentCyan,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'format_info_title'.tr(),
+                                style: const TextStyle(
+                                  color: _textPrimaryDark,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'format_info_desc'.tr(),
+                                style: const TextStyle(
+                                  color: _textSecondaryDark,
+                                  fontSize: 12.5,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Download Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: _isExporting ? null : _handleDownload,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _accentBlue,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: _cardElevatedDark,
+                        disabledForegroundColor: _textSecondaryDark,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      icon: _isExporting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.download_rounded, size: 20),
+                      label: Text(
+                        _isExporting
+                            ? 'btn_preparing_data'.tr()
+                            : 'btn_download_my_data'.tr(),
                         style: const TextStyle(
-                          color: Color(0xFF050505),
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                          fontSize: 15,
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
+                  ),
 
-              // What's included
-              Text(
-                'download_data_included_title'.tr(),
-                style: const TextStyle(
-                  color: Color(0xFF050505),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildBulletPoint('download_bullet_profile'.tr()),
-              _buildBulletPoint('download_bullet_posts'.tr()),
-              _buildBulletPoint('download_bullet_comments'.tr()),
-              _buildBulletPoint('download_bullet_followers'.tr()),
-              _buildBulletPoint('download_bullet_teams'.tr()),
-              _buildBulletPoint('download_bullet_challenges'.tr()),
-              _buildBulletPoint('download_bullet_coins'.tr()),
-              _buildBulletPoint('download_bullet_notifications'.tr()),
+                  const SizedBox(height: 16),
 
-              const SizedBox(height: 24),
-
-              // Format Info
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFCED0D4)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.file_present_rounded,
-                        color: Color(0xFF1877F2), size: 22),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'format_info_title'.tr(),
-                            style: const TextStyle(
-                              color: Color(0xFF050505),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'format_info_desc'.tr(),
-                            style: const TextStyle(
-                              color: Color(0xFF65676B),
-                              fontSize: 12,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
+                  // Cancel Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed:
+                          _isExporting ? null : () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: _cardDark,
+                        foregroundColor: _textPrimaryDark,
+                        side: const BorderSide(color: _borderDark, width: 1.2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'cancel'.tr(),
+                        style: const TextStyle(
+                          color: _textPrimaryDark,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+
+                  const SizedBox(height: 24),
+                ],
               ),
-
-              const SizedBox(height: 24),
-
-              // Download Button
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _isExporting ? null : _handleDownload,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1877F2),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFFE4E6EB),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  icon: _isExporting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.download_rounded, size: 20),
-                  label: Text(
-                    _isExporting
-                        ? 'btn_preparing_data'.tr()
-                        : 'btn_download_my_data'.tr(),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Cancel Button
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton(
-                  onPressed: _isExporting ? null : () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF050505),
-                    side: const BorderSide(color: Color(0xFFCED0D4)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    'cancel'.tr(),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   Widget _buildBulletPoint(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsetsDirectional.only(top: 6, end: 10),
+            padding: EdgeInsetsDirectional.only(top: 3, end: 10),
             child: Icon(
-              Icons.check_circle,
-              size: 14,
-              color: Color(0xFF1877F2),
+              Icons.check_circle_rounded,
+              size: 16,
+              color: _accentCyan,
             ),
           ),
           Expanded(
             child: Text(
               text,
               style: const TextStyle(
-                color: Color(0xFF65676B),
-                fontSize: 13.5,
+                color: _textSecondaryDark,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
                 height: 1.4,
               ),
             ),

@@ -23,6 +23,8 @@ class TeamCard extends StatefulWidget {
   final String myTeamId;
   final String myTeamName;
   final bool isMyTeamFrozen;
+  final bool isUserTeam;
+  final bool isHighlightedTarget;
   final Map<String, dynamic>? pendingChallenge;
   final Future<void> Function(String challengeId)? onCancelChallenge;
 
@@ -32,6 +34,8 @@ class TeamCard extends StatefulWidget {
     this.myTeamId = '',
     this.myTeamName = '',
     this.isMyTeamFrozen = false,
+    this.isUserTeam = false,
+    this.isHighlightedTarget = false,
     this.pendingChallenge,
     this.onCancelChallenge,
   });
@@ -41,6 +45,9 @@ class TeamCard extends StatefulWidget {
 }
 
 class _TeamCardState extends State<TeamCard> {
+  static const Color kAccentOrange = Color(0xFFFF8A00);
+  static const Color kAccentDeepOrange = Color(0xFFFF6B00);
+
   final TeamService _teamService = TeamService();
   bool _isRequesting = false;
   bool _isCancelling = false;
@@ -58,21 +65,71 @@ class _TeamCardState extends State<TeamCard> {
     _checkMembership();
   }
 
+  @override
+  void didUpdateWidget(covariant TeamCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.team.id != widget.team.id ||
+        oldWidget.isUserTeam != widget.isUserTeam) {
+      _checkMembership();
+    }
+  }
+
   Future<void> _checkMembership() async {
-    final currentUid = GamerAuthService().currentUid ??
-        (SupabaseService.client.auth.currentUser?.id ?? '');
+    final currentUid = (GamerAuthService().currentUid ??
+            SupabaseService.client.auth.currentUser?.id ??
+            '')
+        .trim();
     if (currentUid.isEmpty) return;
+
+    final rawTeamId = widget.team.id.trim();
+    if (rawTeamId.isEmpty) return;
 
     try {
       final uuid = SupabaseService.toUuid(currentUid);
-      final teamUuid = SupabaseService.toUuid(widget.team.id);
+      final teamUuid = SupabaseService.toUuid(rawTeamId);
 
-      final res = await SupabaseService.client
-          .from('team_members')
-          .select('role')
-          .eq('user_id', uuid)
-          .eq('team_id', teamUuid)
-          .maybeSingle();
+      Map<String, dynamic>? res;
+      try {
+        res = await SupabaseService.client
+            .from('team_members')
+            .select('role')
+            .or('user_id.eq.$uuid,user_id.eq.$currentUid')
+            .or('team_id.eq.$teamUuid,team_id.eq.$rawTeamId')
+            .limit(1)
+            .maybeSingle();
+      } catch (_) {
+        try {
+          res = await SupabaseService.client
+              .from('team_members')
+              .select('role')
+              .eq('user_id', uuid)
+              .eq('team_id', teamUuid)
+              .maybeSingle();
+        } catch (_) {}
+      }
+
+      if (res == null) {
+        try {
+          final squadRes = await SupabaseService.client
+              .from('squad_members')
+              .select()
+              .or('user_id.eq.$uuid,user_id.eq.$currentUid')
+              .limit(10);
+          for (final row in squadRes) {
+            final sTid =
+                (row['team_id'] ?? row['squad_id'] ?? '').toString().trim();
+            if (sTid.isEmpty) continue;
+            final sTidLower = sTid.toLowerCase();
+            final sTidUuidLower = SupabaseService.toUuid(sTid).toLowerCase();
+            if (sTidLower == rawTeamId.toLowerCase() ||
+                sTidLower == teamUuid.toLowerCase() ||
+                sTidUuidLower == teamUuid.toLowerCase()) {
+              res = Map<String, dynamic>.from(row);
+              break;
+            }
+          }
+        } catch (_) {}
+      }
 
       if (!mounted) return;
       setState(() {
@@ -362,16 +419,25 @@ class _TeamCardState extends State<TeamCard> {
   @override
   Widget build(BuildContext context) {
     final team = widget.team;
-    final currentUid = GamerAuthService().currentUid ??
-        (SupabaseService.client.auth.currentUser?.id ?? '');
+    final currentUid = (GamerAuthService().currentUid ??
+            SupabaseService.client.auth.currentUser?.id ??
+            '')
+        .trim();
     final isLeader = team.isLeader(currentUid);
     final isMember = team.isMember(currentUid);
     final rawHasRequested = team.hasRequestedJoin(currentUid);
 
     final hasRequested = !_localCancelled && (rawHasRequested || _localRequested);
 
-    final bool isOwnerFinal = isLeader || _isOwnerFromDb;
-    final bool isMemberFinal = isMember || _isMemberFromDb || isOwnerFinal;
+    final bool myTeamIdMatches = widget.myTeamId.trim().isNotEmpty &&
+        (team.id.trim().toLowerCase() == widget.myTeamId.trim().toLowerCase() ||
+            SupabaseService.toUuid(team.id.trim()).toLowerCase() ==
+                SupabaseService.toUuid(widget.myTeamId.trim()).toLowerCase());
+
+    final bool isOwnerFinal = isLeader || _isOwnerFromDb || myTeamIdMatches;
+    final bool isMemberFinal =
+        isMember || _isMemberFromDb || isOwnerFinal || widget.isUserTeam;
+    final bool isHighlighted = isMemberFinal || widget.isHighlightedTarget;
 
     final bool hasActiveChallenge = _localSentChallenge || (widget.pendingChallenge != null);
     final String activeChallengeId = widget.pendingChallenge?['id']?.toString() ??
@@ -387,30 +453,179 @@ class _TeamCardState extends State<TeamCard> {
         final isDark = ThemeService.isDarkMode;
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 6),
+          margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
-            color: ThemeService.card,
-            borderRadius: BorderRadius.circular(12),
+            color: isHighlighted
+                ? (isDark ? const Color(0xFF1A1714) : const Color(0xFFFFF8F0))
+                : ThemeService.card,
+            gradient: isHighlighted
+                ? LinearGradient(
+                    colors: isDark
+                        ? [
+                            kAccentOrange.withOpacity(0.18),
+                            const Color(0xFF151C2C),
+                          ]
+                        : [
+                            kAccentOrange.withOpacity(0.14),
+                            ThemeService.card,
+                          ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(13),
             border: Border.all(
-              color: isOwnerFinal
-                  ? const Color(0xFFFFD700).withOpacity(0.6)
+              color: isHighlighted
+                  ? kAccentOrange
                   : ThemeService.border,
-              width: isOwnerFinal ? 1.4 : 0.8,
+              width: isHighlighted ? 1.6 : 0.8,
             ),
             boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
-                blurRadius: 4,
-                offset: const Offset(0, 1.5),
-              ),
+              if (isHighlighted)
+                BoxShadow(
+                  color: kAccentOrange.withOpacity(isDark ? 0.22 : 0.14),
+                  blurRadius: 10,
+                  spreadRadius: 0.5,
+                  offset: const Offset(0, 2),
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1.5),
+                ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (isHighlighted) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (isMemberFinal)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [kAccentOrange, kAccentDeepOrange],
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: kAccentOrange.withOpacity(0.35),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.shield_rounded,
+                                  color: Colors.white,
+                                  size: 11,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'YOUR TEAM',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 9.5,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (isMemberFinal)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: kAccentOrange.withOpacity(0.16),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: kAccentOrange.withOpacity(0.65),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isOwnerFinal
+                                      ? Icons.workspace_premium_rounded
+                                      : Icons.verified_user_rounded,
+                                  color: kAccentOrange,
+                                  size: 11,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  isOwnerFinal ? 'LEADER' : 'MEMBER',
+                                  style: const TextStyle(
+                                    color: kAccentOrange,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 9.5,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (widget.isHighlightedTarget && !isMemberFinal)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: kAccentOrange.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: kAccentOrange,
+                                width: 1,
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.notifications_active_rounded,
+                                  color: kAccentOrange,
+                                  size: 11,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'SELECTED TEAM',
+                                  style: TextStyle(
+                                    color: kAccentOrange,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 9.5,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
                 InkWell(
                   borderRadius: BorderRadius.circular(8),
                   onTap: () => _openTeamProfile(team),
@@ -418,12 +633,17 @@ class _TeamCardState extends State<TeamCard> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Container(
-                        width: 40,
-                        height: 40,
+                        width: 42,
+                        height: 42,
                         decoration: BoxDecoration(
                           color: ThemeService.cardSecondary,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: gameColor.withOpacity(0.35), width: 1),
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(
+                            color: isHighlighted
+                                ? kAccentOrange
+                                : gameColor.withOpacity(0.35),
+                            width: isHighlighted ? 1.4 : 1.0,
+                          ),
                           image: team.logo.isNotEmpty
                               ? DecorationImage(
                                   image: NetworkImage(team.logo),
@@ -433,7 +653,11 @@ class _TeamCardState extends State<TeamCard> {
                         ),
                         child: team.logo.isEmpty
                             ? Center(
-                                child: Icon(Icons.shield_rounded, color: gameColor, size: 22),
+                                child: Icon(
+                                  Icons.shield_rounded,
+                                  color: isHighlighted ? kAccentOrange : gameColor,
+                                  size: 22,
+                                ),
                               )
                             : null,
                       ),
@@ -449,12 +673,25 @@ class _TeamCardState extends State<TeamCard> {
                                     team.name,
                                     style: TextStyle(
                                       color: ThemeService.textPrimary,
-                                      fontWeight: FontWeight.bold,
+                                      fontWeight: FontWeight.w900,
                                       fontSize: 13.5,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                if (team.tag.trim().isNotEmpty) ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '[${team.tag.trim()}]',
+                                    style: TextStyle(
+                                      color: isHighlighted
+                                          ? kAccentOrange
+                                          : ThemeService.textSecondary,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(width: 5),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
@@ -485,7 +722,13 @@ class _TeamCardState extends State<TeamCard> {
                             const SizedBox(height: 2.5),
                             Row(
                               children: [
-                                const Icon(Icons.group_rounded, color: Color(0xFF1877F2), size: 12),
+                                Icon(
+                                  Icons.group_rounded,
+                                  color: isHighlighted
+                                      ? kAccentOrange
+                                      : const Color(0xFF1877F2),
+                                  size: 12,
+                                ),
                                 const SizedBox(width: 3),
                                 Text(
                                   "${team.memberCount}/${TeamModel.maxMembers} Members",
@@ -523,7 +766,12 @@ class _TeamCardState extends State<TeamCard> {
                         child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: ThemeService.textPrimary,
-                            side: BorderSide(color: ThemeService.border, width: 0.8),
+                            side: BorderSide(
+                              color: isHighlighted
+                                  ? kAccentOrange.withOpacity(0.55)
+                                  : ThemeService.border,
+                              width: 0.9,
+                            ),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             backgroundColor: ThemeService.cardSecondary,
                             padding: EdgeInsets.zero,
@@ -547,7 +795,7 @@ class _TeamCardState extends State<TeamCard> {
                         child: isOwnerFinal || isMemberFinal
                             ? ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF00C853),
+                                  backgroundColor: kAccentOrange,
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                   elevation: 0,

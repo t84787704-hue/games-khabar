@@ -13,6 +13,7 @@ import "package:intl/intl.dart";
 import "package:shared_preferences/shared_preferences.dart";
 import "package:cached_network_image/cached_network_image.dart";
 import "../services/supabase_service.dart";
+import "../services/gamer_auth_service.dart";
 import "../models/team_model.dart";
 import "../models/coin_wallet_model.dart";
 import "../services/team_service.dart";
@@ -32,7 +33,12 @@ import "../services/theme_service.dart";
 import "../constants/gamer_theme.dart";
 
 class TeamsScreen extends StatefulWidget {
-  const TeamsScreen({super.key});
+  final String? highlightTeamId;
+
+  const TeamsScreen({
+    super.key,
+    this.highlightTeamId,
+  });
 
   @override
   State<TeamsScreen> createState() => _TeamsScreenState();
@@ -46,30 +52,155 @@ class _TeamsScreenState extends State<TeamsScreen>
 
   String _selectedGameFilter = "All";
   String _searchQuery = "";
-  final List<String> _gameFilterOptions = ["All", "Free Fire", "PUBG Mobile", "COD Mobile", "Valorant"];
+  final List<String> _gameFilterOptions = [
+    "All",
+    "Free Fire",
+    "PUBG Mobile",
+    "COD Mobile",
+    "Valorant",
+  ];
 
   final Set<String> _cancelledChallengeIds = {};
   final Set<String> _acceptingChallengeIds = {};
   final Set<String> _acceptedChallengeIds = {};
   final Set<String> _completedMatchIds = {};
+  final Set<String> _myExtraMembershipTeamKeys = {};
   Map<String, String> _lastReadMatchTimes = {};
   int _teamsRetryKey = 0;
   List<TeamModel>? _cachedTeams;
+  TeamModel? _highlightedTargetTeam;
 
   static const Color neonBlue = Color(0xFF00E5FF);
   static const Color neonCyan = Color(0xFF1877F2);
+
+  String get _currentUid =>
+      (GamerAuthService().currentUid ??
+              SupabaseService.client.auth.currentUser?.id ??
+              "")
+          .trim();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadLastReadTimes();
+    _loadMyMembershipsAndTargetTeam();
+  }
+
+  @override
+  void didUpdateWidget(covariant TeamsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.highlightTeamId != widget.highlightTeamId) {
+      _loadMyMembershipsAndTargetTeam();
+    }
+  }
+
+  Future<void> _loadMyMembershipsAndTargetTeam() async {
+    final uid = _currentUid;
+    if (uid.isNotEmpty) {
+      final userUuid = SupabaseService.toUuid(uid);
+      final foundKeys = <String>{};
+      try {
+        final memRows = await SupabaseService.client
+            .from("team_members")
+            .select("team_id")
+            .or("user_id.eq.$userUuid,user_id.eq.$uid");
+        for (final r in memRows) {
+          final tid = (r["team_id"] ?? "").toString().trim();
+          if (tid.isNotEmpty) {
+            foundKeys.add(tid.toLowerCase());
+            foundKeys.add(SupabaseService.toUuid(tid).toLowerCase());
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final squadRows = await SupabaseService.client
+            .from("squad_members")
+            .select()
+            .or("user_id.eq.$userUuid,user_id.eq.$uid");
+        for (final r in squadRows) {
+          final tid = (r["team_id"] ?? r["squad_id"] ?? "").toString().trim();
+          if (tid.isNotEmpty) {
+            foundKeys.add(tid.toLowerCase());
+            foundKeys.add(SupabaseService.toUuid(tid).toLowerCase());
+          }
+        }
+      } catch (_) {}
+
+      if (mounted && foundKeys.isNotEmpty) {
+        setState(() {
+          _myExtraMembershipTeamKeys.addAll(foundKeys);
+        });
+      }
+    }
+
+    final targetId = (widget.highlightTeamId ?? "").trim();
+    if (targetId.isNotEmpty) {
+      try {
+        final t = await _teamService.getTeam(targetId);
+        if (mounted && t != null) {
+          setState(() {
+            _highlightedTargetTeam = t;
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
+  bool _matchesActiveFilterAndSearch(TeamModel team) {
+    if (_selectedGameFilter.isNotEmpty && _selectedGameFilter != "All") {
+      if (!TeamService.matchesGameName(team.game, _selectedGameFilter)) {
+        return false;
+      }
+    }
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      final name = team.name.toLowerCase();
+      final tag = team.tag.toLowerCase();
+      if (!name.contains(q) && !tag.contains(q)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _isSameTeamId(String a, String b) {
+    final cleanA = a.trim().toLowerCase();
+    final cleanB = b.trim().toLowerCase();
+    if (cleanA.isEmpty || cleanB.isEmpty) return false;
+    if (cleanA == cleanB) return true;
+    try {
+      return SupabaseService.toUuid(cleanA).toLowerCase() ==
+          SupabaseService.toUuid(cleanB).toLowerCase();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _isUserInTeam(
+    TeamModel team,
+    String currentUserId,
+    Set<String> userTeamKeys,
+  ) {
+    if (currentUserId.isEmpty) return false;
+    if (team.isLeader(currentUserId) || team.isMember(currentUserId)) {
+      return true;
+    }
+    final tidLower = team.id.trim().toLowerCase();
+    if (tidLower.isEmpty) return false;
+    final tidUuidLower = SupabaseService.toUuid(tidLower).toLowerCase();
+    return userTeamKeys.contains(tidLower) ||
+        userTeamKeys.contains(tidUuidLower) ||
+        _myExtraMembershipTeamKeys.contains(tidLower) ||
+        _myExtraMembershipTeamKeys.contains(tidUuidLower);
   }
 
   Future<void> _loadLastReadTimes() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final keys = prefs.getKeys().where((k) => k.startsWith("last_read_match_"));
+      final keys =
+          prefs.getKeys().where((k) => k.startsWith("last_read_match_"));
       final map = <String, String>{};
       for (final k in keys) {
         final mId = k.replaceFirst("last_read_match_", "");
@@ -88,6 +219,7 @@ class _TeamsScreenState extends State<TeamsScreen>
   }
 
   void _handleTeamsRefresh() {
+    _loadMyMembershipsAndTargetTeam();
     if (mounted) {
       setState(() {
         _teamsRetryKey++;
@@ -96,7 +228,10 @@ class _TeamsScreenState extends State<TeamsScreen>
     }
   }
 
-  void _showCoinRequirementDialog({required String title, required String message}) {
+  void _showCoinRequirementDialog({
+    required String title,
+    required String message,
+  }) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -107,24 +242,39 @@ class _TeamsScreenState extends State<TeamsScreen>
         ),
         title: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFB800), size: 26),
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFFFB800),
+              size: 26,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
-                style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ),
           ],
         ),
         content: Text(
           message,
-          style: TextStyle(color: ThemeService.textSecondary, fontSize: 13.5, height: 1.4),
+          style: TextStyle(
+            color: ThemeService.textSecondary,
+            fontSize: 13.5,
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK', style: TextStyle(color: neonCyan, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'OK',
+              style: TextStyle(color: neonCyan, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -146,7 +296,10 @@ class _TeamsScreenState extends State<TeamsScreen>
             ListTile(
               title: Text(
                 'match_proof_title'.tr(),
-                style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               trailing: IconButton(
                 icon: Icon(Icons.close, color: ThemeService.textSecondary),
@@ -155,17 +308,26 @@ class _TeamsScreenState extends State<TeamsScreen>
             ),
             InteractiveViewer(
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(16),
+                ),
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
                   placeholder: (_, __) => const SizedBox(
                     height: 180,
-                    child: Center(child: CircularProgressIndicator(color: neonBlue)),
+                    child: Center(
+                      child: CircularProgressIndicator(color: neonBlue),
+                    ),
                   ),
                   errorWidget: (_, __, ___) => SizedBox(
                     height: 180,
-                    child: Center(child: Icon(Icons.broken_image, color: ThemeService.textSecondary)),
+                    child: Center(
+                      child: Icon(
+                        Icons.broken_image,
+                        color: ThemeService.textSecondary,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -199,14 +361,20 @@ class _TeamsScreenState extends State<TeamsScreen>
       final targetChallengeId = challengeData?["id"]?.toString() ?? cId;
       bool rpcSuccess = false;
       try {
-        await SupabaseService.client.rpc("accept_challenge_safe", params: {"p_challenge_id": targetChallengeId});
+        await SupabaseService.client.rpc(
+          "accept_challenge_safe",
+          params: {"p_challenge_id": targetChallengeId},
+        );
         rpcSuccess = true;
       } catch (rpcErr) {
         debugPrint("[TeamsScreen] accept_challenge_safe RPC notice: $rpcErr");
       }
 
       if (!rpcSuccess) {
-        await SupabaseService.client.from("challenges").update({"status": "accepted"}).eq("id", targetChallengeId);
+        await SupabaseService.client
+            .from("challenges")
+            .update({"status": "accepted"})
+            .eq("id", targetChallengeId);
 
         final t1 = (challengeData?["from_team_id"] ?? fromTeamId).toString();
         final t2 = (challengeData?["to_team_id"] ?? toTeamId).toString();
@@ -230,12 +398,23 @@ class _TeamsScreenState extends State<TeamsScreen>
       if (mounted) {
         setState(() => _acceptedChallengeIds.add(cId));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Match started live! ⚡'), backgroundColor: Color(0xFF2E7D32), duration: Duration(seconds: 3)),
+          const SnackBar(
+            content: Text('Match started live! ⚡'),
+            backgroundColor: Color(0xFF2E7D32),
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     } catch (e) {
       debugPrint("[TeamsScreen] Error accepting challenge: $e");
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: const Color(0xFFFF4655)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error: $e"),
+            backgroundColor: const Color(0xFFFF4655),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _acceptingChallengeIds.remove(cId));
     }
@@ -245,8 +424,15 @@ class _TeamsScreenState extends State<TeamsScreen>
     final cId = challengeId.trim();
     setState(() => _acceptedChallengeIds.add(cId));
     try {
-      await SupabaseService.client.from("challenges").update({"status": "rejected"}).eq("id", cId);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Challenge rejected')));
+      await SupabaseService.client
+          .from("challenges")
+          .update({"status": "rejected"})
+          .eq("id", cId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Challenge rejected')),
+        );
+      }
     } catch (e) {
       debugPrint("[TeamsScreen] Error rejecting challenge: $e");
     }
@@ -255,7 +441,10 @@ class _TeamsScreenState extends State<TeamsScreen>
   Future<void> _handleCancelChallenge(String challengeId) async {
     setState(() => _cancelledChallengeIds.add(challengeId));
     try {
-      await SupabaseService.client.from("challenges").delete().eq("id", challengeId);
+      await SupabaseService.client
+          .from("challenges")
+          .delete()
+          .eq("id", challengeId);
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) setState(() {});
     } catch (e) {
@@ -264,13 +453,15 @@ class _TeamsScreenState extends State<TeamsScreen>
   }
 
   void _openCreateTeamDialog() async {
-    final currentUid = SupabaseService.client.auth.currentUser?.id ?? "";
+    final currentUid = _currentUid;
     if (currentUid.isNotEmpty) {
       final wallet = await CoinWalletService().getOrCreateWallet(currentUid);
       if (wallet.coins < 1000) {
         _showCoinRequirementDialog(
           title: 'dialog_insufficient_balance_title'.tr(),
-          message: 'dialog_team_create_balance_msg'.tr(namedArgs: {'coins': '${wallet.coins}'}),
+          message: 'dialog_team_create_balance_msg'.tr(
+            namedArgs: {'coins': '${wallet.coins}'},
+          ),
         );
         return;
       }
@@ -287,10 +478,16 @@ class _TeamsScreenState extends State<TeamsScreen>
   }
 
   List<Map<String, dynamic>> _filterMyActiveMatches(
-      List<Map<String, dynamic>> rawList, String myTeamId, String myTeamUuid) {
+    List<Map<String, dynamic>> rawList,
+    String myTeamId,
+    String myTeamUuid,
+  ) {
     final sortedList = List<Map<String, dynamic>>.from(rawList);
-    sortedList.sort((a, b) =>
-        (b["created_at"] ?? "").toString().compareTo((a["created_at"] ?? "").toString()));
+    sortedList.sort(
+      (a, b) => (b["created_at"] ?? "")
+          .toString()
+          .compareTo((a["created_at"] ?? "").toString()),
+    );
 
     final Map<String, Map<String, dynamic>> dedupMap = {};
     for (final m in sortedList) {
@@ -300,7 +497,11 @@ class _TeamsScreenState extends State<TeamsScreen>
 
     return dedupMap.values.where((m) {
       final status = (m["status"] ?? "").toString().toLowerCase();
-      if (status != "active" && status != "under_review" && status != "rejected") return false;
+      if (status != "active" &&
+          status != "under_review" &&
+          status != "rejected") {
+        return false;
+      }
       if (_completedMatchIds.contains(m["id"]?.toString())) return false;
 
       final List<String> pList = [];
@@ -315,46 +516,65 @@ class _TeamsScreenState extends State<TeamsScreen>
 
       final myIdLower = myTeamId.toLowerCase();
       final myUuidLower = myTeamUuid.toLowerCase();
-      return pList.any((p) =>
-          (myIdLower.isNotEmpty && (p == myIdLower || p.contains(myIdLower))) ||
-          (myUuidLower.isNotEmpty && (p == myUuidLower || p.contains(myUuidLower))));
+      return pList.any(
+        (p) =>
+            (myIdLower.isNotEmpty &&
+                (p == myIdLower || p.contains(myIdLower))) ||
+            (myUuidLower.isNotEmpty &&
+                (p == myUuidLower || p.contains(myUuidLower))),
+      );
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = SupabaseService.client.auth.currentUser?.id ?? "";
+    final currentUid = _currentUid;
 
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, _, __) {
         return StreamBuilder<List<TeamModel>>(
-          stream: currentUid.isNotEmpty ? _teamService.getUserTeamsStream(currentUid) : Stream.value([]),
+          stream: currentUid.isNotEmpty
+              ? _teamService.getUserTeamsStream(currentUid)
+              : Stream.value([]),
           builder: (context, userTeamsSnap) {
             final userTeams = userTeamsSnap.data ?? [];
-            final myLeaderTeams = userTeams.where((t) => t.isLeader(currentUid)).toList();
-            final myTeam = myLeaderTeams.isNotEmpty ? myLeaderTeams.first : null;
+            final myLeaderTeams =
+                userTeams.where((t) => t.isLeader(currentUid)).toList();
+            final myTeam = myLeaderTeams.isNotEmpty
+                ? myLeaderTeams.first
+                : (userTeams.isNotEmpty ? userTeams.first : null);
             final String myTeamId = myTeam?.id ?? "";
             final String myTeamName = myTeam?.name ?? "";
-            final String myTeamUuid = SupabaseService.toUuid(myTeamId);
+            final String myTeamUuid =
+                myTeamId.isNotEmpty ? SupabaseService.toUuid(myTeamId) : "";
 
             return StreamBuilder<CoinWallet>(
               stream: currentUid.isNotEmpty
                   ? CoinWalletService().walletStream(currentUid)
-                  : Stream.value(const CoinWallet(userId: 'guest', coins: 1000)),
+                  : Stream.value(
+                      const CoinWallet(userId: 'guest', coins: 1000),
+                    ),
               builder: (context, walletSnap) {
                 final myCoins = walletSnap.data?.coins ??
                     CoinWalletService().currentWallet?.coins ??
                     1000;
-                final bool isMyTeamFrozen = myTeam != null && myCoins < 1000;
+                final bool isMyTeamFrozen =
+                    myLeaderTeams.isNotEmpty && myCoins < 1000;
 
                 return StreamBuilder<List<Map<String, dynamic>>>(
                   stream: myTeamId.isNotEmpty
-                      ? SupabaseService.client.from("active_matches").stream(primaryKey: ["id"])
+                      ? SupabaseService.client
+                          .from("active_matches")
+                          .stream(primaryKey: ["id"])
                       : Stream.value([]),
                   builder: (context, matchSnap) {
                     final rawMatches = matchSnap.data ?? [];
-                    final myActiveMatches = _filterMyActiveMatches(rawMatches, myTeamId, myTeamUuid);
+                    final myActiveMatches = _filterMyActiveMatches(
+                      rawMatches,
+                      myTeamId,
+                      myTeamUuid,
+                    );
                     final liveCount = myActiveMatches.length;
 
                     return Scaffold(
@@ -362,6 +582,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                       appBar: AppBar(
                         backgroundColor: ThemeService.appBarBg,
                         elevation: 0,
+                        iconTheme: IconThemeData(color: ThemeService.textPrimary),
                         title: Text(
                           'nav_teams'.tr(),
                           style: TextStyle(
@@ -374,10 +595,16 @@ class _TeamsScreenState extends State<TeamsScreen>
                         actions: [
                           IconButton(
                             tooltip: "Leaderboard",
-                            icon: const Icon(Icons.emoji_events_rounded, color: neonCyan, size: 26),
+                            icon: const Icon(
+                              Icons.emoji_events_rounded,
+                              color: neonCyan,
+                              size: 26,
+                            ),
                             onPressed: () => Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                              MaterialPageRoute(
+                                builder: (_) => const LeaderboardScreen(),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -394,12 +621,17 @@ class _TeamsScreenState extends State<TeamsScreen>
                               indicatorWeight: 3,
                               labelColor: neonCyan,
                               unselectedLabelColor: ThemeService.textSecondary,
-                              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              labelStyle: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
                               tabs: [
                                 Tab(text: 'tab_teams'.tr()),
                                 Tab(
                                   text: liveCount > 0
-                                      ? 'tab_live_active'.tr(namedArgs: {'count': '$liveCount'})
+                                      ? 'tab_live_active'.tr(
+                                          namedArgs: {'count': '$liveCount'},
+                                        )
                                       : 'tab_live'.tr(),
                                 ),
                               ],
@@ -411,6 +643,7 @@ class _TeamsScreenState extends State<TeamsScreen>
                         controller: _tabController,
                         children: [
                           _buildTeamsTab(
+                            userTeams: userTeams,
                             myTeamId: myTeamId,
                             myTeamUuid: myTeamUuid,
                             myTeamName: myTeamName,
@@ -436,12 +669,29 @@ class _TeamsScreenState extends State<TeamsScreen>
   }
 
   Widget _buildTeamsTab({
+    required List<TeamModel> userTeams,
     required String myTeamId,
     required String myTeamUuid,
     required String myTeamName,
     required bool isMyTeamFrozen,
   }) {
-    final currentUserId = SupabaseService.client.auth.currentUser?.id ?? '';
+    final currentUserId = _currentUid;
+    final targetHighlightId = (widget.highlightTeamId ?? "").trim();
+
+    final Set<String> userTeamKeys = {..._myExtraMembershipTeamKeys};
+    for (final ut in userTeams) {
+      final tid = ut.id.trim();
+      if (tid.isNotEmpty) {
+        userTeamKeys.add(tid.toLowerCase());
+        userTeamKeys.add(SupabaseService.toUuid(tid).toLowerCase());
+      }
+    }
+    if (myTeamId.isNotEmpty) {
+      userTeamKeys.add(myTeamId.toLowerCase());
+      if (myTeamUuid.isNotEmpty) {
+        userTeamKeys.add(myTeamUuid.toLowerCase());
+      }
+    }
 
     return Column(
       children: [
@@ -458,7 +708,11 @@ class _TeamsScreenState extends State<TeamsScreen>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.lock_clock_rounded, color: Color(0xFFD32F2F), size: 22),
+                const Icon(
+                  Icons.lock_clock_rounded,
+                  color: Color(0xFFD32F2F),
+                  size: 22,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -507,14 +761,28 @@ class _TeamsScreenState extends State<TeamsScreen>
                       ),
                       child: TextField(
                         controller: _searchController,
-                        style: TextStyle(color: ThemeService.textPrimary, fontSize: 13),
+                        style: TextStyle(
+                          color: ThemeService.textPrimary,
+                          fontSize: 13,
+                        ),
                         decoration: InputDecoration(
                           hintText: 'search_teams_hint'.tr(),
-                          hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.7), fontSize: 12),
-                          prefixIcon: Icon(Icons.search, size: 18, color: ThemeService.textSecondary),
+                          hintStyle: TextStyle(
+                            color: ThemeService.textSecondary.withOpacity(0.7),
+                            fontSize: 12,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            size: 18,
+                            color: ThemeService.textSecondary,
+                          ),
                           suffixIcon: _searchQuery.isNotEmpty
                               ? IconButton(
-                                  icon: Icon(Icons.clear, size: 16, color: ThemeService.textSecondary),
+                                  icon: Icon(
+                                    Icons.clear,
+                                    size: 16,
+                                    color: ThemeService.textSecondary,
+                                  ),
                                   onPressed: () {
                                     _searchController.clear();
                                     setState(() => _searchQuery = "");
@@ -522,9 +790,11 @@ class _TeamsScreenState extends State<TeamsScreen>
                                 )
                               : null,
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 10),
                         ),
-                        onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                        onChanged: (val) =>
+                            setState(() => _searchQuery = val.trim()),
                       ),
                     ),
                   ),
@@ -534,13 +804,24 @@ class _TeamsScreenState extends State<TeamsScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: neonCyan,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       minimumSize: const Size(0, 40),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                       elevation: 2,
                     ),
                     icon: const Icon(Icons.add_rounded, size: 16),
-                    label: Text('btn_create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    label: Text(
+                      'btn_create_team'.tr(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -557,19 +838,29 @@ class _TeamsScreenState extends State<TeamsScreen>
                       child: ChoiceChip(
                         visualDensity: VisualDensity.compact,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         label: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             if (isSel) ...[
-                              const Icon(Icons.check, size: 13, color: Colors.white),
+                              const Icon(
+                                Icons.check,
+                                size: 13,
+                                color: Colors.white,
+                              ),
                               const SizedBox(width: 3),
                             ],
                             Text(
                               game,
                               style: TextStyle(
-                                color: isSel ? Colors.white : ThemeService.textSecondary,
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                                color: isSel
+                                    ? Colors.white
+                                    : ThemeService.textSecondary,
+                                fontWeight:
+                                    isSel ? FontWeight.bold : FontWeight.w600,
                                 fontSize: 11.5,
                               ),
                             ),
@@ -578,8 +869,12 @@ class _TeamsScreenState extends State<TeamsScreen>
                         selected: isSel,
                         selectedColor: neonCyan,
                         backgroundColor: ThemeService.card,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        side: BorderSide(color: isSel ? neonCyan : ThemeService.border),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        side: BorderSide(
+                          color: isSel ? neonCyan : ThemeService.border,
+                        ),
                         onSelected: (val) {
                           if (val) setState(() => _selectedGameFilter = game);
                         },
@@ -596,13 +891,17 @@ class _TeamsScreenState extends State<TeamsScreen>
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: myTeamId.isNotEmpty
-                ? SupabaseService.client.from("challenges").stream(primaryKey: ["id"])
+                ? SupabaseService.client
+                    .from("challenges")
+                    .stream(primaryKey: ["id"])
                 : Stream.value([]),
             builder: (context, challengesSnap) {
               final allChallenges = challengesSnap.data ?? [];
 
               return StreamBuilder<List<TeamModel>>(
-                key: ValueKey("teams_stream_${_selectedGameFilter}_${_searchQuery}_$_teamsRetryKey"),
+                key: ValueKey(
+                  "teams_stream_${_selectedGameFilter}_${_searchQuery}_$_teamsRetryKey",
+                ),
                 stream: _teamService.getTeamsStream(
                   gameFilter: _selectedGameFilter,
                   searchQuery: _searchQuery,
@@ -614,26 +913,71 @@ class _TeamsScreenState extends State<TeamsScreen>
 
                   final teams = snapshot.data ?? _cachedTeams;
 
-                  if (teams == null && (snapshot.connectionState == ConnectionState.waiting || (!snapshot.hasData && !snapshot.hasError))) {
-                    return const Center(child: CircularProgressIndicator(color: neonCyan));
+                  if (teams == null &&
+                      userTeams.isEmpty &&
+                      (snapshot.connectionState == ConnectionState.waiting ||
+                          (!snapshot.hasData && !snapshot.hasError))) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: neonCyan),
+                    );
                   }
 
-                  final displayTeams = teams ?? [];
-                  if (displayTeams.isEmpty) {
+                  // Merge user's own teams + notification target team + stream teams without duplicates
+                  final List<TeamModel> mergedTeams = [];
+                  final Set<String> seenTeamIds = {};
+
+                  void addUniqueTeam(TeamModel t) {
+                    final rawId = t.id.trim();
+                    if (rawId.isEmpty) return;
+                    if (!_matchesActiveFilterAndSearch(t)) return;
+                    final lower = rawId.toLowerCase();
+                    final uuidLower =
+                        SupabaseService.toUuid(rawId).toLowerCase();
+                    if (seenTeamIds.contains(lower) ||
+                        seenTeamIds.contains(uuidLower)) {
+                      return;
+                    }
+                    seenTeamIds.add(lower);
+                    seenTeamIds.add(uuidLower);
+                    mergedTeams.add(t);
+                  }
+
+                  for (final ut in userTeams) {
+                    addUniqueTeam(ut);
+                  }
+                  if (_highlightedTargetTeam != null) {
+                    addUniqueTeam(_highlightedTargetTeam!);
+                  }
+                  for (final st in (teams ?? const <TeamModel>[])) {
+                    addUniqueTeam(st);
+                  }
+
+                  if (mergedTeams.isEmpty) {
                     return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.shield_rounded, size: 44, color: ThemeService.textSecondary.withOpacity(0.4)),
+                          Icon(
+                            Icons.shield_rounded,
+                            size: 44,
+                            color: ThemeService.textSecondary.withOpacity(0.4),
+                          ),
                           const SizedBox(height: 10),
                           Text(
                             'no_teams_found_title'.tr(),
-                            style: TextStyle(color: ThemeService.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: ThemeService.textPrimary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'no_teams_found_desc'.tr(),
-                            style: TextStyle(color: ThemeService.textSecondary, fontSize: 12),
+                            style: TextStyle(
+                              color: ThemeService.textSecondary,
+                              fontSize: 12,
+                            ),
                           ),
                           const SizedBox(height: 14),
                           ElevatedButton.icon(
@@ -641,26 +985,66 @@ class _TeamsScreenState extends State<TeamsScreen>
                             style: ElevatedButton.styleFrom(
                               backgroundColor: neonCyan,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
-                            icon: const Icon(Icons.add, color: Colors.white, size: 16),
-                            label: Text('btn_create_team'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            icon: const Icon(
+                              Icons.add,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                            label: Text(
+                              'btn_create_team'.tr(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     );
                   }
 
-                  // Priority Sorting: Current user's own/joined teams are prioritized at index 0+
-                  final sortedTeams = List<TeamModel>.from(displayTeams)..sort((a, b) {
-                    final bool aIsMyTeam = currentUserId.isNotEmpty && (a.isLeader(currentUserId) || a.isMember(currentUserId));
-                    final bool bIsMyTeam = currentUserId.isNotEmpty && (b.isLeader(currentUserId) || b.isMember(currentUserId));
+                  // Priority Sorting:
+                  // 1. Teams where the logged-in user is a member or leader appear at the very top
+                  //    (with any notification target team first, then leader teams, then member teams).
+                  // 2. If entering from a notification for another team (targetHighlightId), place it right after user's teams.
+                  // 3. Remaining teams keep their order.
+                  final sortedTeams = List<TeamModel>.from(mergedTeams)
+                    ..sort((a, b) {
+                      final bool aIsMyTeam =
+                          _isUserInTeam(a, currentUserId, userTeamKeys);
+                      final bool bIsMyTeam =
+                          _isUserInTeam(b, currentUserId, userTeamKeys);
+                      final bool aIsTarget = targetHighlightId.isNotEmpty &&
+                          _isSameTeamId(a.id, targetHighlightId);
+                      final bool bIsTarget = targetHighlightId.isNotEmpty &&
+                          _isSameTeamId(b.id, targetHighlightId);
 
-                    if (aIsMyTeam && !bIsMyTeam) return -1;
-                    if (!aIsMyTeam && bIsMyTeam) return 1;
-                    return 0;
-                  });
+                      if (aIsMyTeam && !bIsMyTeam) return -1;
+                      if (!aIsMyTeam && bIsMyTeam) return 1;
+
+                      if (aIsMyTeam && bIsMyTeam) {
+                        if (aIsTarget && !bIsTarget) return -1;
+                        if (!aIsTarget && bIsTarget) return 1;
+                        final bool aIsLeader = currentUserId.isNotEmpty &&
+                            a.isLeader(currentUserId);
+                        final bool bIsLeader = currentUserId.isNotEmpty &&
+                            b.isLeader(currentUserId);
+                        if (aIsLeader && !bIsLeader) return -1;
+                        if (!aIsLeader && bIsLeader) return 1;
+                      }
+
+                      if (aIsTarget && !bIsTarget) return -1;
+                      if (!aIsTarget && bIsTarget) return 1;
+                      return 0;
+                    });
 
                   return RefreshIndicator(
                     onRefresh: () async => _handleTeamsRefresh(),
@@ -668,35 +1052,53 @@ class _TeamsScreenState extends State<TeamsScreen>
                     backgroundColor: ThemeService.card,
                     child: ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 4,
+                      ),
                       itemCount: sortedTeams.length,
                       itemBuilder: (context, index) {
                         final team = sortedTeams[index];
+                        final bool isUserTeam =
+                            _isUserInTeam(team, currentUserId, userTeamKeys);
+                        final bool isTargetTeam = targetHighlightId.isNotEmpty &&
+                            _isSameTeamId(team.id, targetHighlightId);
 
                         Map<String, dynamic>? pendingChallenge;
                         if (myTeamId.isNotEmpty && allChallenges.isNotEmpty) {
                           final myIdLower = myTeamId.toLowerCase();
                           final myUuidLower = myTeamUuid.toLowerCase();
                           final oppIdLower = team.id.toLowerCase();
-                          final oppUuidLower = SupabaseService.toUuid(team.id).toLowerCase();
+                          final oppUuidLower =
+                              SupabaseService.toUuid(team.id).toLowerCase();
 
                           for (final c in allChallenges) {
                             final cId = c["id"]?.toString() ?? "";
                             if (_cancelledChallengeIds.contains(cId)) continue;
 
-                            final status = (c["status"] ?? "").toString().toLowerCase();
+                            final status =
+                                (c["status"] ?? "").toString().toLowerCase();
                             if (status != "pending") continue;
 
-                            final fromId = (c["from_team_id"] ?? "").toString().toLowerCase();
-                            final toId = (c["to_team_id"] ?? "").toString().toLowerCase();
+                            final fromId = (c["from_team_id"] ?? "")
+                                .toString()
+                                .toLowerCase();
+                            final toId = (c["to_team_id"] ?? "")
+                                .toString()
+                                .toLowerCase();
 
-                            final isFromMe = fromId == myIdLower || fromId == myUuidLower;
-                            final isToOpp = toId == oppIdLower || toId == oppUuidLower;
+                            final isFromMe =
+                                fromId == myIdLower || fromId == myUuidLower;
+                            final isToOpp =
+                                toId == oppIdLower || toId == oppUuidLower;
 
-                            final isFromOpp = fromId == oppIdLower || fromId == oppUuidLower;
-                            final isToMe = toId == myIdLower || toId == myUuidLower;
+                            final isFromOpp =
+                                fromId == oppIdLower || fromId == oppUuidLower;
+                            final isToMe =
+                                toId == myIdLower || toId == myUuidLower;
 
-                            if ((isFromMe && isToOpp) || (isFromOpp && isToMe)) {
+                            if ((isFromMe && isToOpp) ||
+                                (isFromOpp && isToMe)) {
                               pendingChallenge = c;
                               break;
                             }
@@ -704,10 +1106,15 @@ class _TeamsScreenState extends State<TeamsScreen>
                         }
 
                         return TeamCard(
+                          key: ValueKey(
+                            "team_card_${team.id}_${isUserTeam}_$isTargetTeam",
+                          ),
                           team: team,
                           myTeamId: myTeamId,
                           myTeamName: myTeamName,
                           isMyTeamFrozen: isMyTeamFrozen,
+                          isUserTeam: isUserTeam,
+                          isHighlightedTarget: isTargetTeam,
                           pendingChallenge: pendingChallenge,
                           onCancelChallenge: _handleCancelChallenge,
                         );
@@ -762,7 +1169,11 @@ class _TeamsScreenState extends State<TeamsScreen>
               Text(
                 "no_live_matches_desc".tr(),
                 textAlign: TextAlign.center,
-                style: TextStyle(color: ThemeService.textSecondary, fontSize: 12, height: 1.4),
+                style: TextStyle(
+                  color: ThemeService.textSecondary,
+                  fontSize: 12,
+                  height: 1.4,
+                ),
               ),
             ],
           ),
@@ -881,7 +1292,9 @@ class _ActiveMatchBothTeamsBannerState
         : t1;
 
     final myTeamDisplay = _myTeam?.name ?? widget.myTeamName;
-    final oppTeamDisplay = _oppTeam?.name ?? match["opponent_name"]?.toString() ?? 'team_default_name'.tr();
+    final oppTeamDisplay = _oppTeam?.name ??
+        match["opponent_name"]?.toString() ??
+        'team_default_name'.tr();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -893,7 +1306,11 @@ class _ActiveMatchBothTeamsBannerState
       ),
       child: Row(
         children: [
-          const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF4655), size: 18),
+          const Icon(
+            Icons.local_fire_department_rounded,
+            color: Color(0xFFFF4655),
+            size: 18,
+          ),
           const SizedBox(width: 6),
           Text(
             "live_battle_badge".tr(),
@@ -924,11 +1341,19 @@ class _ActiveMatchBothTeamsBannerState
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               minimumSize: const Size(0, 28),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
               elevation: 0,
             ),
             icon: const Icon(Icons.forum_rounded, size: 13),
-            label: Text('btn_match_room'.tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5)),
+            label: Text(
+              'btn_match_room'.tr(),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 10.5,
+              ),
+            ),
           ),
         ],
       ),

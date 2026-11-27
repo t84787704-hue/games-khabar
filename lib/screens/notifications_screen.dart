@@ -16,6 +16,7 @@ import '../services/theme_service.dart';
 import '../widgets/gamer_avatar.dart';
 import 'gamer_profile_screen.dart';
 import 'team_match_room_screen.dart';
+import 'teams_screen.dart';
 import 'coin_wallet_screen.dart';
 import 'coin_store_screen.dart';
 import 'gamer_rooms_screen.dart';
@@ -94,6 +95,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final data = notif.data ?? {};
     final matchId = data['match_id'] ?? data['matchId'];
     final tournamentId = data['tournament_id'] ?? data['tournamentId'];
+    final teamId = (data['team_id'] ?? data['teamId'])?.toString().trim();
     final senderId = notif.senderId;
 
     if (!mounted) return;
@@ -113,6 +115,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (notif.type.contains('tournament') || tournamentId != null) {
       _navigateToTournament(notif);
+      return;
+    }
+
+    if (notif.type.contains('team') || (teamId != null && teamId.isNotEmpty)) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TeamsScreen(
+            highlightTeamId: (teamId != null && teamId.isNotEmpty) ? teamId : null,
+          ),
+        ),
+      );
       return;
     }
 
@@ -657,6 +671,42 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (notif.type.contains('tournament') || tournamentId != null) {
       return _buildTournamentAction(notif);
+    }
+
+    final teamId = (data['team_id'] ?? data['teamId'])?.toString().trim();
+    if (notif.type.contains('team') || (teamId != null && teamId.isNotEmpty)) {
+      return Padding(
+        padding: const EdgeInsetsDirectional.only(top: 8, start: 52),
+        child: OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Color(0xFFFF8A00)),
+            foregroundColor: const Color(0xFFFF8A00),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            minimumSize: Size.zero,
+          ),
+          icon: const Icon(Icons.shield_rounded, size: 12),
+          label: const Text(
+            'View Team',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+          onPressed: () {
+            setState(() {
+              _locallyReadIds.add(notif.id);
+            });
+            _notificationService.markAsRead(notif.id);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TeamsScreen(
+                  highlightTeamId:
+                      (teamId != null && teamId.isNotEmpty) ? teamId : null,
+                ),
+              ),
+            );
+          },
+        ),
+      );
     }
 
     if (notif.type.contains('dispute') ||

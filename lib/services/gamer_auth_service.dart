@@ -85,6 +85,7 @@ class GamerAuthService {
       await prefs.remove('user_dob_$uid');
       await prefs.remove('user_ign_$uid');
       await prefs.remove('user_role_$uid');
+      await prefs.remove('user_gender_$uid');
     } catch (_) {}
   }
 
@@ -105,6 +106,7 @@ class GamerAuthService {
       int? resolvedAge = gamer.age;
       String resolvedIgn = gamer.inGameName;
       String resolvedRole = gamer.preferredRole;
+      String resolvedGender = gamer.gender;
 
       if (resolvedDob == null) {
         final rawDob = prefs.getString('user_dob_${gamer.uid}');
@@ -128,16 +130,24 @@ class GamerAuthService {
       if (localRole != null && localRole.trim().isNotEmpty) {
         resolvedRole = localRole.trim();
       }
+      if (resolvedGender.isEmpty) {
+        final localGender = prefs.getString('user_gender_${gamer.uid}');
+        if (localGender != null && localGender.trim().isNotEmpty) {
+          resolvedGender = localGender.trim();
+        }
+      }
 
       if (resolvedAge != gamer.age ||
           resolvedDob != gamer.dateOfBirth ||
           resolvedIgn != gamer.inGameName ||
-          resolvedRole != gamer.preferredRole) {
+          resolvedRole != gamer.preferredRole ||
+          resolvedGender != gamer.gender) {
         return gamer.copyWith(
           age: resolvedAge,
           dateOfBirth: resolvedDob,
           inGameName: resolvedIgn,
           preferredRole: resolvedRole,
+          gender: resolvedGender,
         );
       }
     } catch (_) {}
@@ -688,6 +698,7 @@ class GamerAuthService {
         'rank_status': user.rankStatus.isNotEmpty ? user.rankStatus : 'none',
         'in_game_name': user.inGameName.trim(),
         'preferred_role': user.preferredRole,
+        if (user.gender.trim().isNotEmpty) 'gender': user.gender.trim(),
         if (user.age != null) 'age': user.age,
         if (user.dateOfBirth != null)
           'date_of_birth': user.dateOfBirth!.toIso8601String().split('T').first,
@@ -700,6 +711,15 @@ class GamerAuthService {
             .or('id.eq.${user.uid},uid.eq.${user.uid}');
       } catch (extError) {
         debugPrint('[GamerAuthService] optional extended update note: $extError');
+      }
+
+      if (user.gender.trim().isNotEmpty) {
+        try {
+          await _supabase
+              .from('users')
+              .update({'gender': user.gender.trim()})
+              .or('id.eq.${user.uid},uid.eq.${user.uid}');
+        } catch (_) {}
       }
 
       if (coreSaved) {
@@ -726,6 +746,9 @@ class GamerAuthService {
           if (user.preferredRole.trim().isNotEmpty) {
             await prefs.setString('user_role_${user.uid}', user.preferredRole.trim());
           }
+          if (user.gender.trim().isNotEmpty) {
+            await prefs.setString('user_gender_${user.uid}', user.gender.trim());
+          }
         } catch (_) {}
         final savedUser = user.copyWith(
           username: cleanUsername,
@@ -733,6 +756,7 @@ class GamerAuthService {
           gameId: cleanGameId,
           inGameName: user.inGameName.trim(),
           preferredRole: user.preferredRole,
+          gender: user.gender.trim(),
         );
         currentGamerNotifier.value = savedUser;
         profileLoadErrorNotifier.value = false;

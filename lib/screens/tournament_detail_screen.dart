@@ -366,20 +366,55 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         debugPrint('[TournamentDetail] Error loading registrations: $e');
       }
 
-      // Check if current user or user's team is registered
+      // Check if current user or user's team is registered, and sync any team-level proof submission
       final uid = currentUid;
-      if (uid.isNotEmpty && _registrations.isNotEmpty) {
-        final foundReg = _registrations.any((r) {
+      if (_registrations.isNotEmpty) {
+        for (final r in _registrations) {
           final rLeader = (r['leader_id'] ?? r['user_id'] ?? '').toString();
           final rTeam = (r['team_id'] ?? '').toString();
-          if (rLeader == uid) return true;
-          if (_myTeamId != null && _myTeamId!.isNotEmpty && rTeam == _myTeamId) {
-            return true;
+          final bool isMyReg = (uid.isNotEmpty && rLeader == uid) ||
+              (_myTeamId != null &&
+                  _myTeamId!.isNotEmpty &&
+                  rTeam == _myTeamId);
+          if (isMyReg) {
+            _isUserRegistered = true;
+            if ((_myTeamId == null || _myTeamId!.isEmpty) && rTeam.isNotEmpty) {
+              _myTeamId = rTeam;
+            }
+            final tMap = r['teams'] as Map?;
+            if ((_myTeamName == null || _myTeamName!.isEmpty) &&
+                tMap != null &&
+                tMap['name'] != null) {
+              _myTeamName = tMap['name'].toString();
+            }
           }
-          return false;
-        });
-        if (foundReg) {
-          _isUserRegistered = true;
+
+          // Sync existing proof from tournament_registrations if tournament proof_url is empty
+          final regProofUrl = (r['proof_url'] ?? '').toString().trim();
+          final regProofStatus =
+              (r['proof_status'] ?? '').toString().trim().toLowerCase();
+          if (_tournament != null &&
+              _isActiveProofStatus(regProofStatus, regProofUrl)) {
+            final curTProofUrl =
+                (_tournament!['proof_url'] ?? '').toString().trim();
+            final curTProofStatus = (_tournament!['proof_status'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase();
+            if (!_isActiveProofStatus(curTProofStatus, curTProofUrl)) {
+              _tournament!['proof_url'] = regProofUrl;
+              _tournament!['proof_status'] =
+                  regProofStatus.isEmpty ? 'under_review' : regProofStatus;
+              if (rTeam.isNotEmpty) {
+                _tournament!['proof_team_id'] = rTeam;
+              }
+              final regTeamName =
+                  (r['teams'] as Map?)?['name']?.toString() ?? _myTeamName;
+              if (regTeamName != null && regTeamName.isNotEmpty) {
+                _tournament!['proof_team_name'] = regTeamName;
+              }
+            }
+          }
         }
       }
 
@@ -879,6 +914,196 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     );
   }
 
+  bool _isActiveProofStatus(String status, String url) {
+    final s = status.trim().toLowerCase();
+    final u = url.trim();
+    if (s == 'rejected') return false;
+    if (s == 'under_review' ||
+        s == 'pending' ||
+        s == 'approved' ||
+        s == 'accepted') {
+      return u.isNotEmpty || s == 'approved' || s == 'accepted';
+    }
+    return u.isNotEmpty;
+  }
+
+  bool _doesProofBelongToMyTeam(Map<String, dynamic>? tournamentData) {
+    if (tournamentData == null) return false;
+    final myTid = (_myTeamId ?? '').trim();
+    final myTName = (_myTeamName ?? '').trim().toLowerCase();
+    final proofTid = (tournamentData['proof_team_id'] ??
+            tournamentData['submitted_team_id'] ??
+            tournamentData['winner_team_id'] ??
+            '')
+        .toString()
+        .trim();
+    final proofTName = (tournamentData['proof_team_name'] ??
+            tournamentData['winner_team_name'] ??
+            '')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    if (myTid.isNotEmpty && proofTid.isNotEmpty && myTid == proofTid) {
+      return true;
+    }
+    if (myTName.isNotEmpty && proofTName.isNotEmpty && myTName == proofTName) {
+      return true;
+    }
+    if (currentUid.isNotEmpty && _winnerMemberIds.contains(currentUid)) {
+      return true;
+    }
+    return false;
+  }
+
+  Future<Map<String, dynamic>?> _fetchExistingProofState({
+    required String tournamentId,
+    required String teamId,
+  }) async {
+    if (tournamentId.isEmpty) return null;
+
+    // 1. Check tournament_registrations for this (tournament_id, team_id) first
+    if (teamId.isNotEmpty) {
+      try {
+        final regRow = await SupabaseService.client
+            .from('tournament_registrations')
+            .select()
+            .eq('tournament_id', tournamentId)
+            .eq('team_id', teamId)
+            .maybeSingle();
+        if (regRow != null) {
+          final regProofUrl = (regRow['proof_url'] ?? '').toString().trim();
+          final regProofStatus =
+              (regRow['proof_status'] ?? '').toString().trim().toLowerCase();
+          if (_isActiveProofStatus(regProofStatus, regProofUrl)) {
+            return {
+              'proof_url': regProofUrl,
+              'proof_status':
+                  regProofStatus.isEmpty ? 'under_review' : regProofStatus,
+              'proof_team_id': teamId,
+              'proof_team_name': _myTeamName ?? 'Your Team',
+            };
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Check the tournaments row for tournament_id
+    try {
+      final latestTournament = await SupabaseService.client
+          .from('tournaments')
+          .select()
+          .eq('id', tournamentId)
+          .maybeSingle();
+      if (latestTournament != null) {
+        final tProofUrl =
+            (latestTournament['proof_url'] ?? '').toString().trim();
+        final tProofStatus = (latestTournament['proof_status'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        final tStatus =
+            (latestTournament['status'] ?? '').toString().trim().toLowerCase();
+        final bool isCompletedOrActiveProof = tStatus == 'completed' ||
+            _isActiveProofStatus(tProofStatus, tProofUrl);
+        if (isCompletedOrActiveProof) {
+          return Map<String, dynamic>.from(latestTournament);
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  void _openProofImagePreview(String imageUrl, String teamLabel) {
+    final cleanUrl = imageUrl.trim();
+    if (cleanUrl.isEmpty) return;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.92),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4.5,
+                child: Center(
+                  child: CachedNetworkImage(
+                    imageUrl: cleanUrl,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF00FF88),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => const Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white54,
+                      size: 56,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(ctx).padding.top + 12,
+              left: 16,
+              right: 72,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.65),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Text(
+                  teamLabel.isNotEmpty
+                      ? 'Win Proof • $teamLabel'
+                      : 'Winning Match Proof',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(ctx).padding.top + 12,
+              right: 16,
+              child: Material(
+                color: Colors.black.withOpacity(0.65),
+                shape: const CircleBorder(
+                  side: BorderSide(color: Colors.white24),
+                ),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => Navigator.of(ctx).pop(),
+                  child: const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickAndUploadProof() async {
     final rawStatus =
         (_tournament?['status'] ?? 'upcoming').toString().trim().toLowerCase();
@@ -898,6 +1123,73 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       return;
     }
 
+    final tId = effectiveTournamentId;
+    String teamId = _myTeamId ?? '';
+    String teamName = _myTeamName ?? 'Gamer Squad';
+    if (teamId.isEmpty && currentUid.isNotEmpty) {
+      await _resolveMyTeam();
+      teamId = _myTeamId ?? '';
+      teamName = _myTeamName ?? teamName;
+    }
+
+    if (teamId.isEmpty && _registrations.isNotEmpty) {
+      for (final r in _registrations) {
+        final rLeader = (r['leader_id'] ?? r['user_id'] ?? '').toString();
+        final tMap = r['teams'] as Map?;
+        if (currentUid.isNotEmpty &&
+            rLeader == currentUid &&
+            r['team_id'] != null) {
+          teamId = r['team_id'].toString();
+          teamName = tMap?['name']?.toString() ?? teamName;
+          break;
+        }
+      }
+      if (teamId.isEmpty) {
+        for (final r in _registrations) {
+          final tMap = r['teams'] as Map?;
+          if (tMap != null && r['team_id'] != null) {
+            teamId = r['team_id'].toString();
+            teamName = tMap['name']?.toString() ?? teamName;
+            break;
+          }
+        }
+      }
+    }
+
+    // Check existing proof submissions for current tournament_id and team_id before opening picker
+    final existingBeforePick = await _fetchExistingProofState(
+      tournamentId: tId,
+      teamId: teamId,
+    );
+    if (existingBeforePick != null) {
+      if (mounted) {
+        setState(() {
+          if (_tournament != null) {
+            _tournament!.addAll(existingBeforePick);
+          }
+        });
+        final existingStatus = (existingBeforePick['proof_status'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        final isApprovedAlready = existingStatus == 'approved' ||
+            existingStatus == 'accepted' ||
+            (existingBeforePick['status'] ?? '').toString().toLowerCase() ==
+                'completed';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isApprovedAlready
+                  ? 'Proof Submitted by Team has already been approved!'
+                  : 'Proof Submitted by Team! Another team member already uploaded the win proof (pending review).',
+            ),
+            backgroundColor: const Color(0xFFFF8A00),
+          ),
+        );
+      }
+      return;
+    }
+
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
@@ -909,8 +1201,32 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     setState(() => _isUploadingProof = true);
 
     try {
+      // Re-verify right before uploading in case a teammate submitted while the gallery picker was open
+      final existingAfterPick = await _fetchExistingProofState(
+        tournamentId: tId,
+        teamId: teamId,
+      );
+      if (existingAfterPick != null) {
+        if (mounted) {
+          setState(() {
+            if (_tournament != null) {
+              _tournament!.addAll(existingAfterPick);
+            }
+            _isUploadingProof = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Proof Submitted by Team! A teammate just submitted the win proof — no duplicate upload needed.',
+              ),
+              backgroundColor: Color(0xFFFF8A00),
+            ),
+          );
+        }
+        return;
+      }
+
       final file = File(picked.path);
-      final tId = effectiveTournamentId;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'tournament_${tId}_$timestamp.jpg';
 
@@ -938,25 +1254,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         throw 'Image upload failed. Please try again.';
       }
 
-      String teamId = _myTeamId ?? '';
-      String teamName = _myTeamName ?? 'Gamer Squad';
-      if (teamId.isEmpty && currentUid.isNotEmpty) {
-        await _resolveMyTeam();
-        teamId = _myTeamId ?? '';
-        teamName = _myTeamName ?? teamName;
-      }
-
-      if (teamId.isEmpty && _registrations.isNotEmpty) {
-        for (final r in _registrations) {
-          final tMap = r['teams'] as Map?;
-          if (tMap != null && r['team_id'] != null) {
-            teamId = r['team_id'].toString();
-            teamName = tMap['name']?.toString() ?? teamName;
-            break;
-          }
-        }
-      }
-
       final nowIso = DateTime.now().toUtc().toIso8601String();
       await SupabaseService.client.from('tournaments').update({
         'proof_url': uploadedUrl,
@@ -966,19 +1263,48 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         'submitted_at': nowIso,
       }).eq('id', tId);
 
+      // Clear any previous rejection reason best-effort
+      try {
+        await SupabaseService.client.from('tournaments').update({
+          'rejection_reason': null,
+          'proof_reject_reason': null,
+        }).eq('id', tId);
+      } catch (_) {}
+
+      // Also sync proof submission on tournament_registrations for (tournament_id, team_id) best-effort
+      if (teamId.isNotEmpty) {
+        try {
+          await SupabaseService.client
+              .from('tournament_registrations')
+              .update({
+                'proof_url': uploadedUrl,
+                'proof_status': 'under_review',
+              })
+              .eq('tournament_id', tId)
+              .eq('team_id', teamId);
+        } catch (_) {}
+      }
+
       if (mounted) {
         setState(() {
           if (_tournament != null) {
             _tournament!['proof_url'] = uploadedUrl;
             _tournament!['proof_status'] = 'under_review';
+            if (teamId.isNotEmpty) {
+              _tournament!['proof_team_id'] = teamId;
+            }
             _tournament!['proof_team_name'] = teamName;
+            _tournament!['rejection_reason'] = null;
+            _tournament!['proof_reject_reason'] = null;
           }
           _isUploadingProof = false;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Match Proof uploaded! Now under admin review. 🚀'),
+            content: Text(
+              'Proof Submitted by Team! Now under admin review. 🚀',
+            ),
             backgroundColor: Color(0xFF00FF88),
           ),
         );
@@ -1050,7 +1376,22 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         final rawProofStatus =
             (_tournament?['proof_status'] ?? '').toString().toLowerCase();
         final proofUrl = (_tournament?['proof_url'] ?? '').toString().trim();
-        final bool hasProofUploaded = proofUrl.isNotEmpty;
+        final bool isProofRejected = rawProofStatus == 'rejected';
+        final String proofRejectionReason = (_tournament?['rejection_reason'] ??
+                _tournament?['proof_reject_reason'] ??
+                '')
+            .toString()
+            .trim();
+        final bool hasProofUploaded =
+            !isProofRejected && _isActiveProofStatus(rawProofStatus, proofUrl);
+        final bool isProofFromMyTeam = _doesProofBelongToMyTeam(_tournament);
+        final String proofSubmittingTeamName =
+            (_tournament?['proof_team_name'] ??
+                    _winnerTeamName ??
+                    _myTeamName ??
+                    'Winning Team')
+                .toString()
+                .trim();
 
         final bool isProofApproved =
             rawProofStatus == 'approved' || rawProofStatus == 'accepted';
@@ -1120,7 +1461,8 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
             !isEntryLockedProceeding &&
             !isSlotsFull;
 
-        // Win proof upload is ONLY unlocked after match start/active status (and not cancelled)
+        // Win proof upload is ONLY unlocked after match start/active status (and not cancelled),
+        // and ONLY when no active proof exists (or if a previous proof was rejected by admin).
         final bool isMatchActiveOrStarted =
             !isCancelledUnder2 && _hasMatchStarted(matchTime, rawStatus);
         final bool canUploadWinProof = isMatchActiveOrStarted &&
@@ -1133,6 +1475,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
             currentUid.isNotEmpty &&
             (_winnerMemberIds.contains(currentUid) ||
                 (_winnerLeaderId != null && _winnerLeaderId == currentUid) ||
+                isProofFromMyTeam ||
                 (_winnerMemberIds.isEmpty &&
                     _winnerLeaderId == null &&
                     _registrations.any((r) =>
@@ -1895,13 +2238,40 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Match Result & Win Proof',
-                                  style: TextStyle(
-                                    color: textPri,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 15,
-                                  ),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'Match Result & Win Proof',
+                                        style: TextStyle(
+                                          color: textPri,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: accentGreen.withOpacity(0.16),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: accentGreen),
+                                      ),
+                                      child: Text(
+                                        'PROOF APPROVED',
+                                        style: TextStyle(
+                                          color: accentGreen,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 12),
                                 Container(
@@ -1985,6 +2355,126 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: accentGreen.withOpacity(0.10),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color:
+                                                accentGreen.withOpacity(0.35),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.verified_rounded,
+                                              color: accentGreen,
+                                              size: 17,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                isUserInWinningTeam
+                                                    ? 'Proof Submitted by Team • Approved by Admin'
+                                                    : 'Winning Proof Submitted by Team ($winnerDisplay) • Approved',
+                                                style: TextStyle(
+                                                  color: accentGreen,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (proofUrl.isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        GestureDetector(
+                                          onTap: () => _openProofImagePreview(
+                                            proofUrl,
+                                            winnerDisplay,
+                                          ),
+                                          child: Stack(
+                                            alignment: Alignment.bottomRight,
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: CachedNetworkImage(
+                                                  imageUrl: proofUrl,
+                                                  height: 130,
+                                                  width: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                  memCacheWidth: 720,
+                                                  maxWidthDiskCache: 720,
+                                                  placeholder: (_, __) =>
+                                                      Container(
+                                                    height: 130,
+                                                    color: isDark
+                                                        ? Colors.black26
+                                                        : Colors.black12,
+                                                    child: Center(
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        color: accentGreen,
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  errorWidget: (_, __, ___) =>
+                                                      const SizedBox.shrink(),
+                                                ),
+                                              ),
+                                              Positioned(
+                                                right: 8,
+                                                bottom: 8,
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withOpacity(0.7),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.zoom_in_rounded,
+                                                        color: Colors.white,
+                                                        size: 14,
+                                                      ),
+                                                      SizedBox(width: 4),
+                                                      Text(
+                                                        'View Proof',
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 10.5,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                       if (isUserInWinningTeam) ...[
                                         const SizedBox(height: 12),
                                         SizedBox(
@@ -2031,7 +2521,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                           ),
                           const SizedBox(height: 14),
                         ] else if (hasProofUploaded) ...[
-                          // Case 2: Proof Uploaded & Under Admin Review
+                          // Case 2: Proof Submitted by Team & Under Admin Review (No duplicate uploads allowed)
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
@@ -2080,7 +2570,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                         ),
                                       ),
                                       child: const Text(
-                                        'UNDER REVIEW',
+                                        'PENDING REVIEW',
                                         style: TextStyle(
                                           color: Color(0xFFFF8A00),
                                           fontWeight: FontWeight.bold,
@@ -2103,13 +2593,26 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                     ),
                                   ),
                                   child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          const Icon(
-                                            Icons.hourglass_top_rounded,
-                                            color: Color(0xFFFF8A00),
-                                            size: 22,
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFF8A00)
+                                                  .withOpacity(0.14),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: const Icon(
+                                              Icons.fact_check_rounded,
+                                              color: Color(0xFFFF8A00),
+                                              size: 20,
+                                            ),
                                           ),
                                           const SizedBox(width: 10),
                                           Expanded(
@@ -2117,20 +2620,32 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
-                                                const Text(
-                                                  'Proof submitted and under admin review.',
-                                                  style: TextStyle(
+                                                Text(
+                                                  isProofFromMyTeam
+                                                      ? 'Proof Submitted by Team • Pending Review'
+                                                      : 'Proof Submitted by Team ($proofSubmittingTeamName)',
+                                                  style: const TextStyle(
                                                     color: Color(0xFFFF8A00),
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 13.5,
                                                   ),
                                                 ),
-                                                const SizedBox(height: 2),
+                                                const SizedBox(height: 3),
                                                 Text(
-                                                  'Submitted by: ${(_tournament?['proof_team_name'] ?? 'Squad').toString()}',
+                                                  'Submitted by Team: $proofSubmittingTeamName',
+                                                  style: TextStyle(
+                                                    color: textPri,
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  'Only one proof submission is needed per winning team. Admin is reviewing this screenshot — other team members do not need to submit duplicate proofs.',
                                                   style: TextStyle(
                                                     color: textSec,
                                                     fontSize: 11.5,
+                                                    height: 1.35,
                                                   ),
                                                 ),
                                               ],
@@ -2140,31 +2655,83 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                       ),
                                       if (proofUrl.isNotEmpty) ...[
                                         const SizedBox(height: 12),
-                                        ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          child: CachedNetworkImage(
-                                            imageUrl: proofUrl,
-                                            height: 130,
-                                            width: double.infinity,
-                                            fit: BoxFit.cover,
-                                            memCacheWidth: 720,
-                                            maxWidthDiskCache: 720,
-                                            placeholder: (_, __) => Container(
-                                              height: 130,
-                                              color: isDark
-                                                  ? Colors.black26
-                                                  : Colors.black12,
-                                              child: const Center(
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  color: Color(0xFFFF8A00),
-                                                  strokeWidth: 2,
+                                        GestureDetector(
+                                          onTap: () => _openProofImagePreview(
+                                            proofUrl,
+                                            proofSubmittingTeamName,
+                                          ),
+                                          child: Stack(
+                                            alignment: Alignment.bottomRight,
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: CachedNetworkImage(
+                                                  imageUrl: proofUrl,
+                                                  height: 130,
+                                                  width: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                  memCacheWidth: 720,
+                                                  maxWidthDiskCache: 720,
+                                                  placeholder: (_, __) =>
+                                                      Container(
+                                                    height: 130,
+                                                    color: isDark
+                                                        ? Colors.black26
+                                                        : Colors.black12,
+                                                    child: const Center(
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        color:
+                                                            Color(0xFFFF8A00),
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  errorWidget: (_, __, ___) =>
+                                                      const SizedBox.shrink(),
                                                 ),
                                               ),
-                                            ),
-                                            errorWidget: (_, __, ___) =>
-                                                const SizedBox.shrink(),
+                                              Positioned(
+                                                right: 8,
+                                                bottom: 8,
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withOpacity(0.7),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.zoom_in_rounded,
+                                                        color: Colors.white,
+                                                        size: 14,
+                                                      ),
+                                                      SizedBox(width: 4),
+                                                      Text(
+                                                        'Tap to Preview',
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 10.5,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ],
@@ -2176,7 +2743,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                           ),
                           const SizedBox(height: 14),
                         ] else if (canUploadWinProof) ...[
-                          // Case 3: Match has started / is active -> Win Proof Upload is unlocked
+                          // Case 3: Match has started / is active -> Win Proof Upload is unlocked (or previous proof was rejected)
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
@@ -2217,17 +2784,25 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                         vertical: 3,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF00B4D8)
+                                        color: (isProofRejected
+                                                ? const Color(0xFFFF4655)
+                                                : const Color(0xFF00B4D8))
                                             .withOpacity(0.15),
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
-                                          color: const Color(0xFF00B4D8),
+                                          color: isProofRejected
+                                              ? const Color(0xFFFF4655)
+                                              : const Color(0xFF00B4D8),
                                         ),
                                       ),
-                                      child: const Text(
-                                        'AWAITING PROOF',
+                                      child: Text(
+                                        isProofRejected
+                                            ? 'PROOF REJECTED'
+                                            : 'AWAITING PROOF',
                                         style: TextStyle(
-                                          color: Color(0xFF00B4D8),
+                                          color: isProofRejected
+                                              ? const Color(0xFFFF4655)
+                                              : const Color(0xFF00B4D8),
                                           fontWeight: FontWeight.bold,
                                           fontSize: 10,
                                         ),
@@ -2236,6 +2811,61 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 12),
+                                if (isProofRejected) ...[
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF4655)
+                                          .withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: const Color(0xFFFF4655)
+                                            .withOpacity(0.45),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Icon(
+                                          Icons.error_outline_rounded,
+                                          color: Color(0xFFFF4655),
+                                          size: 19,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                'Previous Team Proof Rejected by Admin',
+                                                style: TextStyle(
+                                                  color: Color(0xFFFF4655),
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 12.5,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                proofRejectionReason.isNotEmpty
+                                                    ? 'Reason: $proofRejectionReason\nYour team may now submit a new winning screenshot.'
+                                                    : 'Your team may now upload a new winning screenshot for admin review.',
+                                                style: TextStyle(
+                                                  color: textSec,
+                                                  fontSize: 11.5,
+                                                  height: 1.35,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                                 Container(
                                   width: double.infinity,
                                   padding: const EdgeInsets.all(14),
@@ -2259,7 +2889,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                       ),
                                       const SizedBox(height: 8),
                                       Text(
-                                        'Submit Winning Match Screenshot',
+                                        isProofRejected
+                                            ? 'Re-Submit Team Winning Screenshot'
+                                            : 'Submit Winning Match Screenshot',
                                         style: TextStyle(
                                           color: textPri,
                                           fontWeight: FontWeight.bold,
@@ -2268,11 +2900,12 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Once the match finishes, upload your winning screenshot for admin verification & G-Coins prize distribution.',
+                                        'Only one proof submission is needed per winning team. Once any member of your team uploads the winning screenshot, all teammates will see the submitted status.',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           color: textSec,
                                           fontSize: 11.5,
+                                          height: 1.35,
                                         ),
                                       ),
                                       const SizedBox(height: 12),
@@ -2310,7 +2943,9 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                                           label: Text(
                                             _isUploadingProof
                                                 ? 'Uploading Proof...'
-                                                : 'Upload Win Proof 📸',
+                                                : (isProofRejected
+                                                    ? 'Re-Upload Team Win Proof 📸'
+                                                    : 'Upload Win Proof 📸'),
                                             style: const TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 13,

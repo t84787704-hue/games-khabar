@@ -1,5 +1,5 @@
 // ===============================================================================
-// GAMER CHAT SCREEN — Adaptive Day/Night Theme with UTC Presence & Delete
+// GAMER CHAT SCREEN — Adaptive Day/Night Theme with UTC Presence, Profile Tap & Delete
 // File: lib/screens/gamer_chat_screen.dart
 // ===============================================================================
 
@@ -14,6 +14,7 @@ import '../services/direct_message_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
+import 'gamer_profile_screen.dart';
 
 class GamerChatScreen extends StatefulWidget {
   final String otherUserId;
@@ -83,6 +84,26 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       _dmService.updateUserPresence(userId: _effectiveMyId, force: true);
       _fetchOtherUserStatus();
     }
+  }
+
+  Future<void> _openOtherUserProfile() async {
+    String targetUserId = _effectiveOtherId.trim().isNotEmpty
+        ? _effectiveOtherId.trim()
+        : widget.otherUserId.trim();
+    if (targetUserId.isEmpty) return;
+
+    final resolved = await _dmService.resolveToTableId(targetUserId);
+    if (resolved.isNotEmpty) {
+      targetUserId = resolved;
+    }
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GamerProfileScreen(userId: targetUserId),
+      ),
+    );
   }
 
   Future<void> _fetchOtherUserStatus() async {
@@ -474,102 +495,119 @@ class _GamerChatScreenState extends State<GamerChatScreen>
               onPressed: () => Navigator.pop(context),
             ),
             titleSpacing: 0,
-            title: Row(
-              children: [
-                Stack(
+            title: InkWell(
+              onTap: _openOtherUserProfile,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                child: Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: ThemeService.cardSecondary,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: ThemeService.border, width: 1.2),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: widget.otherUserPhoto.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: widget.otherUserPhoto,
-                                fit: BoxFit.cover,
-                                placeholder: (_, __) => const Center(
-                                  child: SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: neonCyan,
-                                    ),
-                                  ),
-                                ),
-                                errorWidget: (_, __, ___) =>
-                                    _buildInitials(widget.otherUserName, 40),
-                              )
-                            : _buildInitials(widget.otherUserName, 40),
-                      ),
-                    ),
-                    if (_isOtherUserOnline)
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 11,
-                          height: 11,
+                    Stack(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
                           decoration: BoxDecoration(
-                            color: neonGreen,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: ThemeService.card, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: neonGreen.withOpacity(0.6),
-                                blurRadius: 4,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              widget.otherUserName,
-                              style: TextStyle(
-                                color: ThemeService.textPrimary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                            color: ThemeService.cardSecondary,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: ThemeService.border,
+                              width: 1.2,
                             ),
                           ),
-                          if (widget.otherUserVerified) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.verified, color: neonCyan, size: 14),
-                          ],
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: widget.otherUserPhoto.isNotEmpty
+                                ? CachedNetworkImage(
+                                    imageUrl: widget.otherUserPhoto,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, __) => const Center(
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: neonCyan,
+                                        ),
+                                      ),
+                                    ),
+                                    errorWidget: (_, __, ___) =>
+                                        _buildInitials(widget.otherUserName, 40),
+                                  )
+                                : _buildInitials(widget.otherUserName, 40),
+                          ),
+                        ),
+                        if (_isOtherUserOnline)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 11,
+                              height: 11,
+                              decoration: BoxDecoration(
+                                color: neonGreen,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: ThemeService.card,
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: neonGreen.withOpacity(0.6),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  widget.otherUserName,
+                                  style: TextStyle(
+                                    color: ThemeService.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (widget.otherUserVerified) ...[
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.verified,
+                                  color: neonCyan,
+                                  size: 14,
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _isOtherUserOnline ? 'Online' : 'Offline',
+                            style: TextStyle(
+                              color: _isOtherUserOnline
+                                  ? neonGreen
+                                  : ThemeService.textSecondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _isOtherUserOnline ? 'Online' : 'Offline',
-                        style: TextStyle(
-                          color: _isOtherUserOnline
-                              ? neonGreen
-                              : ThemeService.textSecondary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
           body: Column(
@@ -660,26 +698,32 @@ class _GamerChatScreenState extends State<GamerChatScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: ThemeService.card,
-                shape: BoxShape.circle,
-                border: Border.all(color: ThemeService.border),
-              ),
-              child: const Icon(
-                Icons.chat_bubble_outline_rounded,
-                size: 46,
-                color: neonCyan,
+            GestureDetector(
+              onTap: _openOtherUserProfile,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: ThemeService.card,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: const Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 46,
+                  color: neonCyan,
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            Text(
-              widget.otherUserName,
-              style: TextStyle(
-                color: ThemeService.textPrimary,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
+            GestureDetector(
+              onTap: _openOtherUserProfile,
+              child: Text(
+                widget.otherUserName,
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: 6),

@@ -62,6 +62,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
   String _selectedGame = 'BGMI';
   String _selectedRankGame = 'BGMI (Battlegrounds Mobile India)';
   String _selectedRole = 'All-Rounder';
+  String _selectedGender = '';
   String _photoUrl = '';
   String _coverUrl = '';
   File? _pickedImageFile;
@@ -92,6 +93,18 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     {'label': 'All-Rounder', 'icon': Icons.stars_rounded},
   ];
 
+  static const List<Map<String, dynamic>> _genderOptions = [
+    {'label': 'Male', 'icon': Icons.male_rounded},
+    {'label': 'Female', 'icon': Icons.female_rounded},
+  ];
+
+  String _normalizeGender(String? raw) {
+    final s = (raw ?? '').trim().toLowerCase();
+    if (s == 'male' || s == 'm') return 'Male';
+    if (s == 'female' || s == 'f') return 'Female';
+    return '';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -100,6 +113,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
     final meta = fbUser?.userMetadata ?? {};
     final authName = (meta['full_name'] ?? meta['name'] ?? meta['display_name'] ?? '').toString();
     final authAvatar = (meta['avatar_url'] ?? meta['picture'] ?? '').toString();
+    final authGender = _normalizeGender(meta['gender']?.toString());
 
     if (sourceUser != null) {
       final existingUsername = sourceUser.username.trim();
@@ -114,6 +128,10 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _selectedRole = sourceUser.preferredRole.trim().isNotEmpty
           ? sourceUser.preferredRole.trim()
           : 'All-Rounder';
+      final normalizedSourceGender = _normalizeGender(sourceUser.gender);
+      _selectedGender = normalizedSourceGender.isNotEmpty
+          ? normalizedSourceGender
+          : authGender;
       _bioController.text = sourceUser.bio;
       _selectedGame = GamerTheme.favoriteGames.contains(sourceUser.favoriteGame)
           ? sourceUser.favoriteGame
@@ -152,6 +170,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
       _gameIdController.text = '';
       _ignController.text = '';
       _selectedRole = 'All-Rounder';
+      _selectedGender = authGender;
       _selectedDob = null;
       _legacyAge = null;
     }
@@ -170,6 +189,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
           : null;
       final localIgn = prefs.getString('user_ign_$uid');
       final localRole = prefs.getString('user_role_$uid');
+      final localGender = prefs.getString('user_gender_$uid');
       final data = await SupabaseService.getUser(uid);
       if (mounted) {
         setState(() {
@@ -184,6 +204,13 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
           final resolvedRole = dbRole.isNotEmpty ? dbRole : (localRole?.trim() ?? '');
           if (resolvedRole.isNotEmpty) {
             _selectedRole = resolvedRole;
+          }
+          final dbGender = _normalizeGender((data?['gender'] ?? data?['sex'] ?? '').toString());
+          final resolvedGender = dbGender.isNotEmpty
+              ? dbGender
+              : _normalizeGender(localGender);
+          if (resolvedGender.isNotEmpty) {
+            _selectedGender = resolvedGender;
           }
           if (_selectedDob == null) {
             final rawDbDob = data?['date_of_birth'] ?? data?['dateOfBirth'] ?? data?['dob'];
@@ -497,6 +524,7 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
         gameId: enteredGameId,
         inGameName: enteredIgn,
         preferredRole: _selectedRole,
+        gender: _selectedGender,
         age: parsedAge,
         dateOfBirth: _selectedDob,
         createdAt: widget.existingUser?.createdAt ?? DateTime.now(),
@@ -1142,6 +1170,82 @@ class _CreateGamerIdScreenState extends State<CreateGamerIdScreen> {
                                     ),
                                   ),
                                 ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Gender Selector (Male / Female)
+                      Text(
+                        'Gender',
+                        style: TextStyle(
+                          color: primaryTextColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: _genderOptions.map((genderData) {
+                          final genderLabel = genderData['label'] as String;
+                          final genderIcon = genderData['icon'] as IconData;
+                          final isSelected =
+                              _selectedGender.toLowerCase() == genderLabel.toLowerCase();
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                right: genderLabel == 'Male' ? 6 : 0,
+                                left: genderLabel == 'Female' ? 6 : 0,
+                              ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () => setState(() => _selectedGender = genderLabel),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 11,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? const Color(0xFFFF7A00) : cardColor,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isSelected ? const Color(0xFFFF7A00) : borderColor,
+                                      width: isSelected ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        genderIcon,
+                                        size: 18,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : const Color(0xFFFF7A00),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        genderLabel,
+                                        style: TextStyle(
+                                          color: isSelected ? Colors.white : primaryTextColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      if (isSelected) ...[
+                                        const SizedBox(width: 6),
+                                        const Icon(
+                                          Icons.check_circle_rounded,
+                                          size: 15,
+                                          color: Colors.white,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           );

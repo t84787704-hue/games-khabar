@@ -175,6 +175,7 @@ class GamerUser {
   final String gameId;
   final String inGameName;
   final String preferredRole;
+  final String gender;
   final int? age;
   final DateTime? dateOfBirth;
   final int coins;
@@ -246,6 +247,7 @@ class GamerUser {
     this.gameId = '',
     this.inGameName = '',
     this.preferredRole = 'All-Rounder',
+    this.gender = '',
     this.age,
     this.dateOfBirth,
     this.coins = 100,
@@ -703,6 +705,13 @@ class GamerUser {
             (s) => s.isNotEmpty,
             orElse: () => 'All-Rounder',
           ),
+      gender: [
+        data['gender'],
+        data['sex'],
+      ].map((e) => e?.toString().trim() ?? '').firstWhere(
+            (s) => s.isNotEmpty,
+            orElse: () => '',
+          ),
       age: resolvedAge,
       dateOfBirth: parsedDob,
       coins: (data['g_coins'] as num?)?.toInt() ??
@@ -800,6 +809,7 @@ class GamerUser {
       'in_game_name': inGameName.trim(),
       'preferredRole': preferredRole,
       'preferred_role': preferredRole,
+      if (gender.trim().isNotEmpty) 'gender': gender.trim(),
       if (age != null) 'age': age,
       if (dateOfBirth != null)
         'dateOfBirth': dateOfBirth!.toIso8601String(),
@@ -888,6 +898,7 @@ class GamerUser {
     String? gameId,
     String? inGameName,
     String? preferredRole,
+    String? gender,
     int? age,
     DateTime? dateOfBirth,
     int? coins,
@@ -956,6 +967,7 @@ class GamerUser {
       gameId: gameId ?? this.gameId,
       inGameName: inGameName ?? this.inGameName,
       preferredRole: preferredRole ?? this.preferredRole,
+      gender: gender ?? this.gender,
       age: age ?? this.age,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       coins: coins ?? this.coins,
