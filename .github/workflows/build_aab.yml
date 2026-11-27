@@ -34,52 +34,18 @@ jobs:
 
       - name: Configure Gradle Maven Mirror & HTTP Retry (Fix 429 Too Many Requests)
         run: |
-          mkdir -p ~/.gradle/init.d
-          cat << 'EOF' > ~/.gradle/init.d/maven-mirror.init.gradle
-          def GOOGLE_MAVEN_CENTRAL = "https://maven-central.storage-download.googleapis.com/maven2/"
-
-          settingsEvaluated { settings ->
-              settings.pluginManagement {
-                  repositories {
-                      maven { url GOOGLE_MAVEN_CENTRAL }
-                      google()
-                      mavenCentral()
-                      gradlePluginPortal()
-                  }
-              }
-          }
-
-          allprojects {
-              buildscript {
-                  repositories {
-                      maven { url GOOGLE_MAVEN_CENTRAL }
-                      google()
-                      mavenCentral()
-                      gradlePluginPortal()
-                  }
-              }
-              repositories {
-                  maven { url GOOGLE_MAVEN_CENTRAL }
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          EOF
-
+          mkdir -p ~/.gradle
+          rm -rf ~/.gradle/init.d
           cat << 'EOF' >> ~/.gradle/gradle.properties
           org.gradle.jvmargs=-Xmx4G -Dorg.gradle.internal.http.connectionTimeout=120000 -Dorg.gradle.internal.http.socketTimeout=120000 -Dorg.gradle.internal.repository.max.tentatives=6 -Dorg.gradle.internal.repository.initial.backoff=3000
           org.gradle.caching=true
           org.gradle.parallel=true
           EOF
 
-          # Also patch Flutter SDK's included gradle build so :gradle:compileGroovy uses Google Maven Central mirror first
+          # Patch Flutter SDK's included gradle settings.gradle.kts so :gradle:compileGroovy uses Google Maven Central mirror without adding project repos
           FLUTTER_GRADLE_DIR="$(dirname $(which flutter))/../packages/flutter_tools/gradle"
-          if [ -f "$FLUTTER_GRADLE_DIR/build.gradle.kts" ]; then
-            sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }\n    mavenCentral()|g' "$FLUTTER_GRADLE_DIR/build.gradle.kts" || true
-          fi
-          if [ -f "$FLUTTER_GRADLE_DIR/build.gradle" ]; then
-            sed -i 's|mavenCentral()|maven { url "https://maven-central.storage-download.googleapis.com/maven2/" }\n        mavenCentral()|g' "$FLUTTER_GRADLE_DIR/build.gradle" || true
+          if [ -f "$FLUTTER_GRADLE_DIR/settings.gradle.kts" ]; then
+            sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }\n        mavenCentral()|g' "$FLUTTER_GRADLE_DIR/settings.gradle.kts" || true
           fi
 
       - name: Accept Android SDK Licenses
