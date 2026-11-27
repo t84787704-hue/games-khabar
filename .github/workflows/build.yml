@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: android-release-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,12 +26,64 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
+          cache: 'gradle'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.1'
           channel: 'stable'
+          cache: true
+
+      - name: Configure Gradle Maven Mirror & HTTP Retry (Fix 429 Too Many Requests)
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat << 'EOF' > ~/.gradle/init.d/maven-mirror.init.gradle
+          def GOOGLE_MAVEN_CENTRAL = "https://maven-central.storage-download.googleapis.com/maven2/"
+
+          settingsEvaluated { settings ->
+              settings.pluginManagement {
+                  repositories {
+                      maven { url GOOGLE_MAVEN_CENTRAL }
+                      google()
+                      mavenCentral()
+                      gradlePluginPortal()
+                  }
+              }
+          }
+
+          allprojects {
+              buildscript {
+                  repositories {
+                      maven { url GOOGLE_MAVEN_CENTRAL }
+                      google()
+                      mavenCentral()
+                      gradlePluginPortal()
+                  }
+              }
+              repositories {
+                  maven { url GOOGLE_MAVEN_CENTRAL }
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          EOF
+
+          cat << 'EOF' >> ~/.gradle/gradle.properties
+          org.gradle.jvmargs=-Xmx4G -Dorg.gradle.internal.http.connectionTimeout=120000 -Dorg.gradle.internal.http.socketTimeout=120000 -Dorg.gradle.internal.repository.max.tentatives=6 -Dorg.gradle.internal.repository.initial.backoff=3000
+          org.gradle.caching=true
+          org.gradle.parallel=true
+          EOF
+
+          # Also patch Flutter SDK's included gradle build so :gradle:compileGroovy uses Google Maven Central mirror first
+          FLUTTER_GRADLE_DIR="$(dirname $(which flutter))/../packages/flutter_tools/gradle"
+          if [ -f "$FLUTTER_GRADLE_DIR/build.gradle.kts" ]; then
+            sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }\n    mavenCentral()|g' "$FLUTTER_GRADLE_DIR/build.gradle.kts" || true
+          fi
+          if [ -f "$FLUTTER_GRADLE_DIR/build.gradle" ]; then
+            sed -i 's|mavenCentral()|maven { url "https://maven-central.storage-download.googleapis.com/maven2/" }\n        mavenCentral()|g' "$FLUTTER_GRADLE_DIR/build.gradle" || true
+          fi
 
       - name: Accept Android SDK Licenses
         run: |
@@ -57,10 +113,32 @@ jobs:
           fi
 
       - name: Build AAB
-        run: flutter build appbundle --release --android-skip-build-dependency-validation
+        run: |
+          for attempt in 1 2 3; do
+            echo "Building AAB (Attempt $attempt)..."
+            if flutter build appbundle --release --android-skip-build-dependency-validation; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "Retrying after 10 seconds..."
+            sleep 10
+          done
 
       - name: Build Split APKs (Lightweight ~25MB)
-        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+        run: |
+          for attempt in 1 2 3; do
+            echo "Building Split APKs (Attempt $attempt)..."
+            if flutter build apk --release --split-per-abi --android-skip-build-dependency-validation; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "Retrying after 10 seconds..."
+            sleep 10
+          done
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4

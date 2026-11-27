@@ -9,10 +9,22 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
     repositories {
         google()
+        maven { url "https://maven-central.storage-download.googleapis.com/maven2/" }
         mavenCentral()
         gradlePluginPortal()
     }
 }
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    repositories {
+        google()
+        maven { url "https://maven-central.storage-download.googleapis.com/maven2/" }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
     id "com.android.application" version "8.3.2" apply false
