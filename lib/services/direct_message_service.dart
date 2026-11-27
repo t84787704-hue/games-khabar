@@ -1,11 +1,13 @@
-// DIFF:
-// - resolveToTableId: Safely queries users table by UUID id first, then fallback to uid text; prevents PostgreSQL uuid syntax crash; returns canonical users.id UUID.
-// - getUserAliases: Safe non-crashing queries by checking valid UUID format before querying id; returns complete alias set containing table id, auth uid, and fallback uuid.
-// - sendMessage: Resolves both senderId and receiverId to canonical table UUIDs, prevents self-messaging.
-// - getConversations: Robust alias matching including auth.currentUser.id and canonical table id; safe user profile lookup by id then uid; correctly identifies sender/receiver to prevent self-chat.
+// ===============================================================================
+// DIRECT MESSAGE SERVICE — User Resolution, Presence Heartbeat, Search & Chat
+// File: lib/services/direct_message_service.dart
+// ===============================================================================
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/chat_model.dart';
+import '../models/gamer_user_model.dart';
+import 'gamer_auth_service.dart';
 import 'supabase_service.dart';
 
 class DirectMessageService {
@@ -15,9 +17,403 @@ class DirectMessageService {
 
   final _client = SupabaseService.client;
   static final Map<String, String> _resolvedUuidCache = {};
+  DateTime? _lastPresenceUpdateUtc;
 
   static final RegExp _uuidRegex = RegExp(
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+
+  /// Window in minutes within which a user's `last_seen` UTC timestamp is considered Online.
+  static const int onlineWindowMinutes = 5;
+
+  /// Parses a timestamp from Supabase (with or without timezone suffix) into UTC.
+  static DateTime? parseToUtc(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is DateTime) return raw.toUtc();
+    if (raw is int) {
+      return DateTime.fromMillisecondsSinceEpoch(raw, isUtc: true);
+    }
+    final str = raw.toString().trim();
+    if (str.isEmpty) return null;
+    final hasTz = str.endsWith('Z') ||
+        str.endsWith('z') ||
+        RegExp(r'[+-]\d{2}(:?\d{2})?$').hasMatch(str);
+    final normalized = hasTz ? str : '${str.replaceFirst(' ', 'T')}Z';
+    return (DateTime.tryParse(normalized) ?? DateTime.tryParse(str))?.toUtc();
+  }
+
+  /// Checks if a UTC timestamp is within the recent activity window (default 5 minutes).
+  static bool isTimestampRecentlyActive(
+    DateTime? timestampUtc, {
+    int windowMinutes = onlineWindowMinutes,
+  }) {
+    if (timestampUtc == null) return false;
+    final nowUtc = DateTime.now().toUtc();
+    final diffSeconds = nowUtc.difference(timestampUtc.toUtc()).inSeconds;
+    // Allow up to 5 minutes in the past and up to 5 minutes clock skew
+    return diffSeconds >= -300 && diffSeconds <= (windowMinutes * 60);
+  }
+
+  /// Evaluates whether a user row from `users` / `profiles` represents an Online user,
+  /// comparing `last_seen` (and fallback `updated_at` / latest message timestamp) in UTC.
+  static bool evaluateOnlineStatus(
+    Map<String, dynamic>? row, {
+    DateTime? latestActivityUtc,
+    int windowMinutes = onlineWindowMinutes,
+  }) {
+    if (isTimestampRecentlyActive(latestActivityUtc, windowMinutes: windowMinutes)) {
+      return true;
+    }
+    if (row == null) return false;
+
+    final lastSeenUtc = parseToUtc(
+      row['last_seen'] ?? row['lastSeen'] ?? row['last_active'] ?? row['lastActive'],
+    );
+    if (lastSeenUtc != null) {
+      return isTimestampRecentlyActive(lastSeenUtc, windowMinutes: windowMinutes);
+    }
+
+    final updatedAtUtc = parseToUtc(row['updated_at'] ?? row['updatedAt']);
+    if (updatedAtUtc != null &&
+        isTimestampRecentlyActive(updatedAtUtc, windowMinutes: windowMinutes)) {
+      return true;
+    }
+
+    if (row['is_online'] == true || row['isOnline'] == true) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Updates the current user's activity timestamp (`last_seen`, `updated_at`, `is_online`)
+  /// in UTC across `users` (and `profiles` if present).
+  Future<void> updateUserPresence({
+    String? userId,
+    bool force = false,
+  }) async {
+    final nowUtc = DateTime.now().toUtc();
+    if (!force &&
+        _lastPresenceUpdateUtc != null &&
+        nowUtc.difference(_lastPresenceUpdateUtc!).inSeconds < 20) {
+      return;
+    }
+
+    final authUid = _client.auth.currentUser?.id ?? '';
+    final gamerUid = GamerAuthService().currentGamer?.uid ?? '';
+    final rawUid = (userId != null && userId.trim().isNotEmpty)
+        ? userId.trim()
+        : (gamerUid.isNotEmpty ? gamerUid : authUid);
+    if (rawUid.isEmpty) return;
+
+    _lastPresenceUpdateUtc = nowUtc;
+    final nowIso = nowUtc.toIso8601String();
+
+    try {
+      final canonicalId = await resolveToTableId(rawUid);
+      final targetId = canonicalId.isNotEmpty ? canonicalId : rawUid;
+      final isUuid = _uuidRegex.hasMatch(targetId);
+
+      Future<bool> tryUpdateTable(String table, Map<String, dynamic> payload) async {
+        try {
+          if (isUuid) {
+            await _client.from(table).update(payload).eq('id', targetId);
+            return true;
+          } else {
+            await _client.from(table).update(payload).eq('uid', targetId);
+            return true;
+          }
+        } catch (_) {
+          if (authUid.isNotEmpty && _uuidRegex.hasMatch(authUid)) {
+            try {
+              await _client.from(table).update(payload).eq('id', authUid);
+              return true;
+            } catch (_) {}
+          }
+          try {
+            await _client.from(table).update(payload).eq('uid', rawUid);
+            return true;
+          } catch (_) {}
+          return false;
+        }
+      }
+
+      // 1. Try updating users table with last_seen, is_online, updated_at
+      bool updatedUsers = await tryUpdateTable('users', {
+        'last_seen': nowIso,
+        'is_online': true,
+        'updated_at': nowIso,
+      });
+
+      if (!updatedUsers) {
+        updatedUsers = await tryUpdateTable('users', {
+          'last_seen': nowIso,
+          'updated_at': nowIso,
+        });
+      }
+
+      if (!updatedUsers) {
+        await tryUpdateTable('users', {
+          'updated_at': nowIso,
+        });
+      }
+
+      // 2. Best-effort update on profiles table if it exists in the Supabase schema
+      try {
+        await tryUpdateTable('profiles', {
+          'last_seen': nowIso,
+          'is_online': true,
+          'updated_at': nowIso,
+        });
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('[DMS] updateUserPresence note: $e');
+    }
+  }
+
+  /// Fetches the latest presence status (`isOnline`, `game`, `lastSeen`) for a chat partner.
+  Future<Map<String, dynamic>> fetchUserPresenceStatus(
+    String otherUserId, {
+    DateTime? latestMessageUtc,
+  }) async {
+    final clean = otherUserId.trim();
+    if (clean.isEmpty) {
+      return {'isOnline': false, 'game': '', 'lastSeen': null};
+    }
+
+    Map<String, dynamic>? userRow;
+    final canonicalId = await resolveToTableId(clean);
+    final lookupIds = <String>{
+      if (canonicalId.isNotEmpty) canonicalId,
+      clean,
+    };
+
+    for (final candidate in lookupIds) {
+      final isUuid = _uuidRegex.hasMatch(candidate);
+      if (isUuid && userRow == null) {
+        try {
+          userRow = await _client
+              .from('users')
+              .select()
+              .eq('id', candidate)
+              .maybeSingle();
+        } catch (_) {}
+      }
+      if (userRow == null) {
+        try {
+          userRow = await _client
+              .from('users')
+              .select()
+              .eq('uid', candidate)
+              .maybeSingle();
+        } catch (_) {}
+      }
+      if (userRow != null) break;
+    }
+
+    // Fallback to profiles table if not found in users
+    if (userRow == null) {
+      for (final candidate in lookupIds) {
+        final isUuid = _uuidRegex.hasMatch(candidate);
+        if (isUuid) {
+          try {
+            userRow = await _client
+                .from('profiles')
+                .select()
+                .eq('id', candidate)
+                .maybeSingle();
+          } catch (_) {}
+        }
+        if (userRow != null) break;
+      }
+    }
+
+    DateTime? recentPartnerActivityUtc = latestMessageUtc;
+
+    // Also check latest message sent by this user in direct_messages
+    if (recentPartnerActivityUtc == null) {
+      try {
+        final queryId = canonicalId.isNotEmpty && _uuidRegex.hasMatch(canonicalId)
+            ? canonicalId
+            : (_uuidRegex.hasMatch(clean) ? clean : '');
+        if (queryId.isNotEmpty) {
+          final lastMsgRow = await _client
+              .from('direct_messages')
+              .select('created_at')
+              .eq('sender_id', queryId)
+              .order('created_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+          if (lastMsgRow != null) {
+            recentPartnerActivityUtc = parseToUtc(lastMsgRow['created_at']);
+          }
+        }
+      } catch (_) {}
+    }
+
+    final isOnline = evaluateOnlineStatus(
+      userRow,
+      latestActivityUtc: recentPartnerActivityUtc,
+    );
+
+    String game = '';
+    if (userRow != null) {
+      game = (userRow['primary_game'] ??
+              userRow['selected_game'] ??
+              userRow['selectedGame'] ??
+              userRow['favorite_game'] ??
+              userRow['favoriteGame'] ??
+              userRow['game_name'] ??
+              userRow['game'] ??
+              '')
+          .toString()
+          .trim();
+    }
+
+    final lastSeenUtc = userRow != null
+        ? (parseToUtc(userRow['last_seen'] ?? userRow['lastSeen']) ??
+            parseToUtc(userRow['updated_at'] ?? userRow['updatedAt']) ??
+            recentPartnerActivityUtc)
+        : recentPartnerActivityUtc;
+
+    return {
+      'isOnline': isOnline,
+      'game': game,
+      'lastSeen': lastSeenUtc,
+    };
+  }
+
+  /// Searches registered app users (`users` and `profiles`) by display name, username,
+  /// game ID, or user ID (`id` / `uid`) so they can be messaged directly from Direct Messages.
+  Future<List<GamerUser>> searchRegisteredUsers(
+    String query, {
+    String? currentUserId,
+  }) async {
+    final rawQuery = query.trim();
+    if (rawQuery.isEmpty) return [];
+
+    final cleanQuery = rawQuery.startsWith('@')
+        ? rawQuery.substring(1).trim().toLowerCase()
+        : rawQuery.toLowerCase();
+    if (cleanQuery.isEmpty) return [];
+
+    final myAuthUid = _client.auth.currentUser?.id ?? '';
+    final myGamerUid = GamerAuthService().currentGamer?.uid ?? '';
+    final effectiveMyUid = (currentUserId != null && currentUserId.isNotEmpty)
+        ? currentUserId
+        : (myGamerUid.isNotEmpty ? myGamerUid : myAuthUid);
+    final myAliases = await getUserAliases(effectiveMyUid);
+    if (myAuthUid.isNotEmpty) {
+      myAliases.add(myAuthUid);
+      myAliases.add(myAuthUid.toLowerCase());
+    }
+    if (myGamerUid.isNotEmpty) {
+      myAliases.add(myGamerUid);
+      myAliases.add(myGamerUid.toLowerCase());
+    }
+
+    final Map<String, GamerUser> matchedById = {};
+    final isUuidQuery = _uuidRegex.hasMatch(cleanQuery);
+
+    void collectRows(List<dynamic> rows) {
+      for (final raw in rows) {
+        if (raw is! Map) continue;
+        final row = Map<String, dynamic>.from(raw);
+        final rowId = (row['id'] ?? '').toString().trim();
+        final rowUid = (row['uid'] ?? '').toString().trim();
+        final canonicalId = rowId.isNotEmpty ? rowId : rowUid;
+        if (canonicalId.isEmpty) continue;
+
+        // Exclude current logged-in user
+        if (myAliases.any((a) =>
+            a.toLowerCase() == canonicalId.toLowerCase() ||
+            (rowId.isNotEmpty && a.toLowerCase() == rowId.toLowerCase()) ||
+            (rowUid.isNotEmpty && a.toLowerCase() == rowUid.toLowerCase()))) {
+          continue;
+        }
+
+        final user = GamerUser.fromMap(row, canonicalId);
+        // Ensure uid is set to canonical table id when available so DM routing works cleanly
+        final normalizedUser = rowId.isNotEmpty && user.uid != rowId
+            ? user.copyWith(uid: rowId)
+            : user;
+        matchedById[canonicalId.toLowerCase()] = normalizedUser;
+      }
+    }
+
+    // 1. Primary server-side search on `users` table
+    try {
+      final orParts = <String>[
+        'username.ilike.%$cleanQuery%',
+        'display_name.ilike.%$cleanQuery%',
+        'uid.ilike.%$cleanQuery%',
+        'game_id.ilike.%$cleanQuery%',
+        if (isUuidQuery) 'id.eq.$cleanQuery',
+      ];
+      final rows = await _client
+          .from('users')
+          .select()
+          .or(orParts.join(','))
+          .limit(25);
+      collectRows(rows as List);
+    } catch (_) {
+      // Fallback if uid or game_id is not a text column in a custom schema
+      try {
+        final orParts = <String>[
+          'username.ilike.%$cleanQuery%',
+          'display_name.ilike.%$cleanQuery%',
+          if (isUuidQuery) 'id.eq.$cleanQuery',
+        ];
+        final rows = await _client
+            .from('users')
+            .select()
+            .or(orParts.join(','))
+            .limit(25);
+        collectRows(rows as List);
+      } catch (_) {}
+    }
+
+    // 2. Fallback / additional search for partial UUID `id` or custom columns on `users`
+    if (matchedById.length < 10) {
+      try {
+        final recentUsers = await _client
+            .from('users')
+            .select()
+            .order('created_at', ascending: false)
+            .limit(100);
+        final filtered = (recentUsers as List).where((raw) {
+          if (raw is! Map) return false;
+          final idStr = (raw['id'] ?? '').toString().toLowerCase();
+          final uidStr = (raw['uid'] ?? '').toString().toLowerCase();
+          final uname = (raw['username'] ?? '').toString().toLowerCase();
+          final dname = (raw['display_name'] ?? raw['displayName'] ?? '').toString().toLowerCase();
+          final gid = (raw['game_id'] ?? raw['gameId'] ?? '').toString().toLowerCase();
+          return dname.contains(cleanQuery) ||
+              uname.contains(cleanQuery) ||
+              idStr.contains(cleanQuery) ||
+              uidStr.contains(cleanQuery) ||
+              gid.contains(cleanQuery);
+        }).toList();
+        collectRows(filtered);
+      } catch (_) {}
+    }
+
+    // 3. Best-effort check on `profiles` table if present
+    try {
+      final orParts = <String>[
+        'username.ilike.%$cleanQuery%',
+        'display_name.ilike.%$cleanQuery%',
+        if (isUuidQuery) 'id.eq.$cleanQuery',
+      ];
+      final profileRows = await _client
+          .from('profiles')
+          .select()
+          .or(orParts.join(','))
+          .limit(20);
+      collectRows(profileRows as List);
+    } catch (_) {}
+
+    return matchedById.values.toList();
+  }
 
   /// Resolves any user identifier (auth.uid or users.uid or users.id)
   /// to the canonical UUID `id` from the `users` table.
@@ -152,7 +548,7 @@ class DirectMessageService {
     return aliases;
   }
 
-  /// Send a message
+  /// Send a message and update the sender's `last_seen` presence timestamp in UTC.
   Future<bool> sendMessage({
     required String senderId,
     required String receiverId,
@@ -177,14 +573,19 @@ class DirectMessageService {
         return false;
       }
 
+      final nowUtcIso = DateTime.now().toUtc().toIso8601String();
+
       await _client.from('direct_messages').insert({
         'sender_id': senderUuid,
         'receiver_id': receiverUuid,
         'message': message.trim(),
         'message_type': messageType,
         'is_read': false,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'created_at': nowUtcIso,
       });
+
+      // Immediately update sender's presence timestamp in UTC
+      unawaited(updateUserPresence(userId: senderUuid, force: true));
       return true;
     } catch (e) {
       debugPrint('[DMS] sendMessage error: $e');
@@ -258,6 +659,8 @@ class DirectMessageService {
   Future<List<ChatConversation>> getConversations(String userId) async {
     if (userId.isEmpty) return [];
     try {
+      unawaited(updateUserPresence(userId: userId));
+
       final myAliases = await getUserAliases(userId);
       final myCanonicalId = await resolveToTableId(userId);
       if (myCanonicalId.isNotEmpty) {
@@ -291,7 +694,7 @@ class DirectMessageService {
           .select()
           .or(orFilter)
           .order('created_at', ascending: false)
-          .limit(500);
+          .limit(300);
 
       if (rows.isEmpty) return [];
 
@@ -329,22 +732,32 @@ class DirectMessageService {
         final lastMsg = msgs.first;
         final lastText = (lastMsg['message'] ?? '').toString();
         final lastType = (lastMsg['message_type'] ?? 'text').toString();
-        final lastTime = DateTime.tryParse(
-                (lastMsg['created_at'] ?? '').toString()) ??
-            DateTime.now();
+        final lastTimeUtc = parseToUtc(lastMsg['created_at']);
+        final lastTime = (lastTimeUtc ?? DateTime.now().toUtc()).toLocal();
 
         int unread = 0;
+        DateTime? latestPartnerMsgUtc;
         for (final m in msgs) {
           final s = (m['sender_id'] ?? '').toString();
-          final isRead = m['is_read'] == true;
-          if (!myAliases.any((a) => a.toLowerCase() == s.toLowerCase()) && !isRead) {
-            unread++;
+          final isFromPartner =
+              !myAliases.any((a) => a.toLowerCase() == s.toLowerCase());
+          if (isFromPartner) {
+            latestPartnerMsgUtc ??= parseToUtc(m['created_at']);
+            final isRead = m['is_read'] == true;
+            if (!isRead) {
+              unread++;
+            }
           }
         }
 
         String name = 'Gamer';
+        String username = '';
         String photo = '';
+        String gameTag = 'PUBG';
+        String gameId = '';
         bool verified = false;
+        bool isOnline = false;
+        DateTime? lastSeenUtc;
         String canonicalOtherId = otherRawId;
 
         // Safe profile lookup without crashing on non-UUID
@@ -355,7 +768,7 @@ class DirectMessageService {
             try {
               userRow = await _client
                   .from('users')
-                  .select('id, uid, username, display_name, avatar_url, is_verified')
+                  .select()
                   .eq('id', otherRawId)
                   .maybeSingle();
             } catch (_) {}
@@ -364,21 +777,47 @@ class DirectMessageService {
             try {
               userRow = await _client
                   .from('users')
-                  .select('id, uid, username, display_name, avatar_url, is_verified')
+                  .select()
                   .eq('uid', otherRawId)
                   .maybeSingle();
             } catch (_) {}
           }
 
           if (userRow != null) {
-            name = (userRow['display_name'] ??
-                    userRow['username'] ??
-                    'Gamer')
-                .toString();
-            photo = (userRow['avatar_url'] ?? '').toString();
+            username = (userRow['username'] ?? '').toString().trim();
+            final rawDisplayName =
+                (userRow['display_name'] ?? userRow['displayName'] ?? '').toString().trim();
+            name = rawDisplayName.isNotEmpty
+                ? rawDisplayName
+                : (username.isNotEmpty ? username : 'Gamer');
+            photo = (userRow['avatar_url'] ?? userRow['photoUrl'] ?? '').toString();
             verified = userRow['is_verified'] == true;
             canonicalOtherId =
                 (userRow['id'] ?? userRow['uid'] ?? otherRawId).toString();
+            gameId = (userRow['game_id'] ?? userRow['gameId'] ?? '').toString().trim();
+
+            final rawGame = (userRow['primary_game'] ??
+                    userRow['selected_game'] ??
+                    userRow['favorite_game'] ??
+                    userRow['game_name'] ??
+                    userRow['game'] ??
+                    '')
+                .toString()
+                .trim();
+            if (rawGame.isNotEmpty) {
+              gameTag = rawGame.toUpperCase().contains('PUBG') ? 'PUBG' : rawGame;
+            }
+
+            isOnline = evaluateOnlineStatus(
+              userRow,
+              latestActivityUtc: latestPartnerMsgUtc,
+            );
+            lastSeenUtc = parseToUtc(userRow['last_seen'] ?? userRow['lastSeen']) ??
+                parseToUtc(userRow['updated_at'] ?? userRow['updatedAt']) ??
+                latestPartnerMsgUtc;
+          } else {
+            isOnline = isTimestampRecentlyActive(latestPartnerMsgUtc);
+            lastSeenUtc = latestPartnerMsgUtc;
           }
         } catch (_) {}
 
@@ -390,12 +829,17 @@ class DirectMessageService {
         conversations.add(ChatConversation(
           otherUserId: canonicalOtherId,
           otherUserName: name,
+          otherUsername: username,
           otherUserPhoto: photo,
+          otherUserGame: gameTag,
+          otherUserGameId: gameId,
           lastMessage: lastType == 'image' ? '📷 Photo' : lastText,
           lastMessageType: lastType,
           lastMessageTime: lastTime,
           unreadCount: unread,
           isVerified: verified,
+          isOnline: isOnline,
+          lastSeen: lastSeenUtc,
         ));
       }
 
@@ -416,6 +860,8 @@ class DirectMessageService {
   }) async {
     if (currentUserId.isEmpty || otherUserId.isEmpty) return;
     try {
+      unawaited(updateUserPresence(userId: currentUserId));
+
       final myAliases = await getUserAliases(currentUserId);
       final otherAliases = await getUserAliases(otherUserId);
       final myUuids = myAliases.where((a) => _uuidRegex.hasMatch(a)).toSet();

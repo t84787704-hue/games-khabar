@@ -67,8 +67,8 @@ class ChatMessage {
       if (conversationId.isNotEmpty) 'conversation_id': conversationId,
       'message': message,
       'text': message,
-      'created_at': createdAt.toIso8601String(),
-      'timestamp': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'timestamp': createdAt.toUtc().toIso8601String(),
       'is_read': isRead,
       'isRead': isRead,
       if (imageUrl != null) 'image_url': imageUrl,
@@ -107,25 +107,35 @@ class ChatConversation implements Comparable<ChatConversation> {
   final String id;
   final String otherUserId;
   final String otherUserName;
+  final String otherUsername;
   final String otherUserAvatar;
+  final String otherUserGame;
+  final String otherUserGameId;
   final String lastMessage;
   final String lastMessageType;
   final DateTime lastMessageAt;
   final int unreadCount;
   final bool isVerified;
+  final bool isOnline;
+  final DateTime? lastSeen;
 
   ChatConversation({
     this.id = '',
     this.otherUserId = '',
     this.otherUserName = '',
+    this.otherUsername = '',
     String otherUserAvatar = '',
     String? otherUserPhoto,
+    this.otherUserGame = '',
+    this.otherUserGameId = '',
     this.lastMessage = '',
     this.lastMessageType = 'text',
     DateTime? lastMessageAt,
     DateTime? lastMessageTime,
     this.unreadCount = 0,
     this.isVerified = false,
+    this.isOnline = false,
+    this.lastSeen,
   })  : otherUserAvatar =
             (otherUserPhoto != null && otherUserPhoto.isNotEmpty)
                 ? otherUserPhoto
@@ -136,7 +146,7 @@ class ChatConversation implements Comparable<ChatConversation> {
   String get peerId => otherUserId;
   String get userId => otherUserId;
   String get peerName => otherUserName;
-  String get username => otherUserName;
+  String get username => otherUsername.isNotEmpty ? otherUsername : otherUserName;
   String get displayName => otherUserName;
   String get name => otherUserName;
   String get peerAvatar => otherUserAvatar;
@@ -159,11 +169,21 @@ class ChatConversation implements Comparable<ChatConversation> {
           '',
       otherUserName: map['other_user_name']?.toString() ??
           map['otherUserName']?.toString() ??
+          map['display_name']?.toString() ??
+          map['username']?.toString() ??
+          '',
+      otherUsername: map['other_username']?.toString() ??
           map['username']?.toString() ??
           '',
       otherUserAvatar: map['other_user_avatar']?.toString() ??
           map['otherUserAvatar']?.toString() ??
           map['avatar_url']?.toString() ??
+          '',
+      otherUserGame: map['other_user_game']?.toString() ??
+          map['game']?.toString() ??
+          '',
+      otherUserGameId: map['other_user_game_id']?.toString() ??
+          map['game_id']?.toString() ??
           '',
       lastMessage: map['last_message']?.toString() ??
           map['lastMessage']?.toString() ??
@@ -179,6 +199,8 @@ class ChatConversation implements Comparable<ChatConversation> {
           : (map['unreadCount'] is num)
               ? (map['unreadCount'] as num).toInt()
               : 0,
+      isOnline: map['is_online'] == true || map['isOnline'] == true,
+      lastSeen: map['last_seen'] != null ? _parseDate(map['last_seen']) : null,
     );
   }
 
@@ -189,14 +211,19 @@ class ChatConversation implements Comparable<ChatConversation> {
       'otherUserId': otherUserId,
       'other_user_name': otherUserName,
       'otherUserName': otherUserName,
+      'other_username': otherUsername,
       'other_user_avatar': otherUserAvatar,
       'otherUserAvatar': otherUserAvatar,
+      'other_user_game': otherUserGame,
+      'other_user_game_id': otherUserGameId,
       'last_message': lastMessage,
       'lastMessage': lastMessage,
-      'last_message_at': lastMessageAt.toIso8601String(),
-      'lastMessageAt': lastMessageAt.toIso8601String(),
+      'last_message_at': lastMessageAt.toUtc().toIso8601String(),
+      'lastMessageAt': lastMessageAt.toUtc().toIso8601String(),
       'unread_count': unreadCount,
       'unreadCount': unreadCount,
+      'is_online': isOnline,
+      if (lastSeen != null) 'last_seen': lastSeen!.toUtc().toIso8601String(),
     };
   }
 
@@ -212,12 +239,20 @@ class ChatConversation implements Comparable<ChatConversation> {
 
 DateTime _parseDate(dynamic val) {
   if (val == null) return DateTime.now();
-  if (val is DateTime) return val;
-  if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
-  if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+  if (val is DateTime) return val.toLocal();
+  if (val is String) {
+    final str = val.trim();
+    if (str.isEmpty) return DateTime.now();
+    final hasTz = str.endsWith('Z') ||
+        str.endsWith('z') ||
+        RegExp(r'[+-]\d{2}(:?\d{2})?$').hasMatch(str);
+    final normalized = hasTz ? str : '${str.replaceFirst(' ', 'T')}Z';
+    return (DateTime.tryParse(normalized) ?? DateTime.tryParse(str) ?? DateTime.now()).toLocal();
+  }
+  if (val is int) return DateTime.fromMillisecondsSinceEpoch(val).toLocal();
   try {
     final result = (val as dynamic).toDate();
-    if (result is DateTime) return result;
+    if (result is DateTime) return result.toLocal();
     return DateTime.now();
   } catch (_) {
     return DateTime.now();

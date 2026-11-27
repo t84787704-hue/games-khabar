@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../models/gamer_user_model.dart';
+import '../services/direct_message_service.dart';
 import '../services/supabase_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../widgets/gamer_avatar.dart';
+import 'gamer_chat_screen.dart';
 import 'squad_chat_screen.dart';
 
 class DirectMessagesScreen extends StatefulWidget {
@@ -14,7 +18,11 @@ class DirectMessagesScreen extends StatefulWidget {
 
 class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final DirectMessageService _dmService = DirectMessageService();
   String _searchQuery = '';
+  List<GamerUser> _searchedUsers = [];
+  bool _searchingUsers = false;
+  Timer? _searchDebounce;
 
   // Local cache for instantly hiding deleted conversations
   final Set<String> _deletedChatIds = {};
@@ -28,14 +36,72 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
   static const Color neonGreen = Color(0xFF00FF88);
 
   @override
+  void initState() {
+    super.initState();
+    _dmService.updateUserPresence(force: true);
+  }
+
+  @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String val) {
+    final trimmed = val.trim();
+    setState(() {
+      _searchQuery = trimmed;
+      if (trimmed.isEmpty) {
+        _searchedUsers = [];
+        _searchingUsers = false;
+      } else {
+        _searchingUsers = true;
+      }
+    });
+
+    _searchDebounce?.cancel();
+    if (trimmed.isEmpty) return;
+
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () async {
+      final currentUid = GamerAuthService().currentUid ??
+          (SupabaseService.client.auth.currentUser?.id ?? '');
+      final users = await _dmService.searchRegisteredUsers(
+        trimmed,
+        currentUserId: currentUid,
+      );
+      if (!mounted || _searchQuery != trimmed) return;
+      setState(() {
+        _searchedUsers = users;
+        _searchingUsers = false;
+      });
+    });
+  }
+
+  Future<void> _openDirectChatWithUser(GamerUser u) async {
+    final otherTableId = await _dmService.resolveToTableId(u.uid);
+    final finalOtherId = otherTableId.isNotEmpty ? otherTableId : u.uid;
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GamerChatScreen(
+          otherUserId: finalOtherId,
+          otherUserName: u.displayName.isNotEmpty
+              ? u.displayName
+              : (u.username.isNotEmpty ? u.username : 'Gamer'),
+          otherUserPhoto: u.photoUrl,
+          otherUserVerified: u.isVerified,
+        ),
+      ),
+    );
   }
 
   Color _getGameBadgeColor(String game) {
     switch (game.toUpperCase()) {
       case 'PUBG':
+      case 'PUBG MOBILE':
+      case 'BGMI':
         return const Color(0xFF1877F2);
       case 'VALORANT':
         return const Color(0xFF8B5CF6);
@@ -95,13 +161,11 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
 
     if (confirm != true) return;
 
-    // 0ms Optimistic local removal
     setState(() {
       _deletedChatIds.add(chatId);
     });
 
     try {
-      // 1. Delete associated messages first if present
       try {
         await SupabaseService.client
             .from('messages')
@@ -109,7 +173,6 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
             .eq('chat_id', chatId);
       } catch (_) {}
 
-      // 2. Delete the conversation record from chats table
       await SupabaseService.client
           .from('chats')
           .delete()
@@ -140,6 +203,105 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
     }
   }
 
+  Widget _buildSearchedUserCard(GamerUser u) {
+    final displayTitle = u.displayName.trim().isNotEmpty
+        ? u.displayName.trim()
+        : (u.username.trim().isNotEmpty ? u.username.trim() : 'Gamer');
+    final rawGame = u.gameName.trim();
+    final gameTag = rawGame.isNotEmpty
+        ? (rawGame.toUpperCase().contains('PUBG') ? 'PUBG' : rawGame.toUpperCase())
+        : 'PUBG';
+    final shortId = u.gameId.trim().isNotEmpty
+        ? u.gameId.trim()
+        : (u.uid.length > 8 ? u.uid.substring(0, 8) : u.uid);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cardBorder, width: 1.2),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openDirectChatWithUser(u),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                GamerAvatar(
+                  photoUrl: u.photoUrl,
+                  displayName: displayTitle,
+                  radius: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              displayTitle,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _getGameBadgeColor(gameTag).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              gameTag,
+                              style: TextStyle(
+                                color: _getGameBadgeColor(gameTag),
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        shortId.isNotEmpty
+                            ? '@${u.username} • ID: $shortId'
+                            : '@${u.username}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  color: neonBlue,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUid = GamerAuthService().currentUid ??
@@ -159,15 +321,6 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
             letterSpacing: 0.5,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_note_rounded, color: neonBlue, size: 28),
-            onPressed: () {
-              // Open user search or start new DM
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: Column(
         children: [
@@ -193,19 +346,19 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
                           icon: const Icon(Icons.clear, size: 18, color: Colors.white54),
                           onPressed: () {
                             _searchController.clear();
-                            setState(() => _searchQuery = '');
+                            _onSearchChanged('');
                           },
                         )
                       : null,
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                onChanged: _onSearchChanged,
               ),
             ),
           ),
 
-          // Chats List Stream
+          // Chats List Stream + Searched Users
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: SupabaseService.client
@@ -230,13 +383,17 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
                     if (members.isNotEmpty) return false;
                   }
                   if (_searchQuery.isNotEmpty) {
+                    final q = _searchQuery.toLowerCase();
                     final title = (chat['title'] ?? chat['displayName'] ?? '').toString().toLowerCase();
-                    return title.contains(_searchQuery.toLowerCase());
+                    final lastMsg = (chat['lastMessage'] ?? '').toString().toLowerCase();
+                    return title.contains(q) || lastMsg.contains(q) || chatId.toLowerCase().contains(q);
                   }
                   return true;
                 }).toList();
 
-                if (userChats.isEmpty) {
+                if (userChats.isEmpty &&
+                    _searchedUsers.isEmpty &&
+                    !_searchingUsers) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -244,9 +401,11 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
                         const Icon(Icons.mark_chat_unread_outlined,
                             size: 48, color: Colors.white24),
                         const SizedBox(height: 12),
-                        const Text(
-                          'No Messages Yet',
-                          style: TextStyle(
+                        Text(
+                          _searchQuery.isNotEmpty
+                              ? 'No matching players or messages'
+                              : 'No Messages Yet',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -262,172 +421,193 @@ class _DirectMessagesScreenState extends State<DirectMessagesScreen> {
                   );
                 }
 
-                return ListView.builder(
+                return ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  itemCount: userChats.length,
-                  itemBuilder: (context, index) {
-                    final chat = userChats[index];
-                    final chatId = chat['id']?.toString() ?? '';
-                    final title = chat['title'] ?? chat['displayName'] ?? 'Gamer';
-                    final lastMessage = chat['lastMessage'] ?? 'Tap to chat';
-                    final avatarUrl = (chat['avatarUrl'] ?? '').toString();
-                    
-                    final dynamic rawGame = chat['game'] ?? chat['mode'];
-                    final String gameTag = (rawGame != null && rawGame.toString().trim().isNotEmpty)
-                        ? rawGame.toString().trim()
-                        : '';
-                        
-                    final unreadCount = (chat['unreadCount'] as num?)?.toInt() ?? 0;
-                    final isOnline = chat['isOnline'] == true;
+                  children: [
+                    ...userChats.map((chat) {
+                      final chatId = chat['id']?.toString() ?? '';
+                      final title = chat['title'] ?? chat['displayName'] ?? 'Gamer';
+                      final lastMessage = chat['lastMessage'] ?? 'Tap to chat';
+                      final avatarUrl = (chat['avatarUrl'] ?? '').toString();
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      decoration: BoxDecoration(
-                        color: cardBg,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: cardBorder, width: 1.2),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(16),
-                        child: InkWell(
+                      final dynamic rawGame = chat['game'] ?? chat['mode'];
+                      final String gameTag =
+                          (rawGame != null && rawGame.toString().trim().isNotEmpty)
+                              ? rawGame.toString().trim()
+                              : '';
+
+                      final unreadCount = (chat['unreadCount'] as num?)?.toInt() ?? 0;
+                      final isOnline = chat['isOnline'] == true;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(16),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => SquadChatScreen(postId: chatId),
-                              ),
-                            );
-                          },
-                          // Long press activates conversation deletion
-                          onLongPress: () => _handleDeleteChat(chatId, title.toString()),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                // Avatar with Glowing Online Dot
-                                Stack(
-                                  children: [
-                                    GamerAvatar(
-                                      photoUrl: avatarUrl,
-                                      displayName: title,
-                                      radius: 24,
-                                    ),
-                                    if (isOnline)
-                                      Positioned(
-                                        bottom: 0,
-                                        right: 0,
-                                        child: Container(
-                                          width: 12,
-                                          height: 12,
-                                          decoration: BoxDecoration(
-                                            color: neonGreen,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(color: cardBg, width: 2),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: neonGreen.withOpacity(0.6),
-                                                blurRadius: 4,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                          border: Border.all(color: cardBorder, width: 1.2),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => SquadChatScreen(postId: chatId),
                                 ),
-                                const SizedBox(width: 12),
-
-                                // Chat Details
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                              );
+                            },
+                            onLongPress: () =>
+                                _handleDeleteChat(chatId, title.toString()),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  Stack(
                                     children: [
-                                      Row(
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              title,
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                      GamerAvatar(
+                                        photoUrl: avatarUrl,
+                                        displayName: title,
+                                        radius: 24,
+                                      ),
+                                      if (isOnline)
+                                        Positioned(
+                                          bottom: 0,
+                                          right: 0,
+                                          child: Container(
+                                            width: 12,
+                                            height: 12,
+                                            decoration: BoxDecoration(
+                                              color: neonGreen,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                  color: cardBg, width: 2),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color:
+                                                      neonGreen.withOpacity(0.6),
+                                                  blurRadius: 4,
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                          if (gameTag.isNotEmpty) ...[
-                                            const SizedBox(width: 6),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: _getGameBadgeColor(gameTag).withOpacity(0.2),
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                gameTag.toUpperCase(),
-                                                style: TextStyle(
-                                                  color: _getGameBadgeColor(gameTag),
-                                                  fontSize: 9.5,
-                                                  fontWeight: FontWeight.w900,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        lastMessage,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white60,
-                                          fontSize: 13,
                                         ),
-                                      ),
                                     ],
                                   ),
-                                ),
-
-                                // Timestamp & Unread Badge
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    if (unreadCount > 0)
-                                      Container(
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: const BoxDecoration(
-                                          color: neonCyan,
-                                          shape: BoxShape.circle,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                title,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 15,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (gameTag.isNotEmpty) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: _getGameBadgeColor(
+                                                          gameTag)
+                                                      .withOpacity(0.2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  gameTag.toUpperCase(),
+                                                  style: TextStyle(
+                                                    color: _getGameBadgeColor(
+                                                        gameTag),
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
-                                        child: Text(
-                                          '$unreadCount',
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          lastMessage,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 10,
+                                            color: Colors.white60,
+                                            fontSize: 13,
                                           ),
                                         ),
-                                      )
-                                    else
-                                      const Text(
-                                        '2m ago',
-                                        style: TextStyle(
-                                          color: Colors.white38,
-                                          fontSize: 11,
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      if (unreadCount > 0)
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: const BoxDecoration(
+                                            color: neonCyan,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Text(
+                                            '$unreadCount',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        const Text(
+                                          'now',
+                                          style: TextStyle(
+                                            color: Colors.white38,
+                                            fontSize: 11,
+                                          ),
                                         ),
-                                      ),
-                                  ],
-                                ),
-                              ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                    if (_searchQuery.isNotEmpty && _searchingUsers)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: neonBlue,
                             ),
                           ),
                         ),
                       ),
-                    );
-                  },
+                    if (_searchQuery.isNotEmpty && _searchedUsers.isNotEmpty)
+                      ..._searchedUsers.map(_buildSearchedUserCard),
+                  ],
                 );
               },
             ),

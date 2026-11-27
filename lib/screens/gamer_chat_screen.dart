@@ -1,8 +1,9 @@
 // ===============================================================================
-// GAMER CHAT SCREEN — Adaptive Day/Night Theme with Dynamic Online Status & Delete
+// GAMER CHAT SCREEN — Adaptive Day/Night Theme with UTC Presence & Delete
 // File: lib/screens/gamer_chat_screen.dart
 // ===============================================================================
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -32,7 +33,8 @@ class GamerChatScreen extends StatefulWidget {
   State<GamerChatScreen> createState() => _GamerChatScreenState();
 }
 
-class _GamerChatScreenState extends State<GamerChatScreen> {
+class _GamerChatScreenState extends State<GamerChatScreen>
+    with WidgetsBindingObserver {
   final _dmService = DirectMessageService();
   final _authService = GamerAuthService();
   final _messageController = TextEditingController();
@@ -41,11 +43,12 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
   bool _isSending = false;
   bool _initialLoad = true;
   bool _isOtherUserOnline = false;
-  String _otherUserGame = '';
+  DateTime? _latestPartnerMessageUtc;
   Set<String> _myAliases = {};
   String _effectiveMyId = '';
   String _effectiveOtherId = '';
   Stream<List<ChatMessage>>? _chatStream;
+  Timer? _presencePollTimer;
 
   static const Color neonBlue = Color(0xFF1877F2);
   static const Color neonCyan = Color(0xFF00E5FF);
@@ -54,6 +57,7 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final myAuthUid = _authService.currentUid ?? '';
     final myGamerUid = _authService.currentGamer?.uid ?? '';
     _effectiveMyId = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
@@ -62,24 +66,45 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
       userId1: _effectiveMyId,
       userId2: _effectiveOtherId,
     );
+    _dmService.updateUserPresence(userId: _effectiveMyId, force: true);
     _initIds();
     _fetchOtherUserStatus();
     _markAsRead();
+
+    _presencePollTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      _dmService.updateUserPresence(userId: _effectiveMyId);
+      _fetchOtherUserStatus();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _dmService.updateUserPresence(userId: _effectiveMyId, force: true);
+      _fetchOtherUserStatus();
+    }
   }
 
   Future<void> _fetchOtherUserStatus() async {
     try {
-      final res = await SupabaseService.client
-          .from('gamers')
-          .select('is_online, primary_game, last_seen')
-          .or('id.eq.${widget.otherUserId},uid.eq.${widget.otherUserId}')
-          .maybeSingle();
+      final targetId = _effectiveOtherId.isNotEmpty
+          ? _effectiveOtherId
+          : widget.otherUserId;
+      final status = await _dmService.fetchUserPresenceStatus(
+        targetId,
+        latestMessageUtc: _latestPartnerMessageUtc,
+      );
 
-      if (res != null && mounted) {
-        setState(() {
-          _isOtherUserOnline = res['is_online'] == true;
-          _otherUserGame = (res['primary_game'] ?? '').toString();
-        });
+      if (mounted) {
+        final online = status['isOnline'] == true ||
+            DirectMessageService.isTimestampRecentlyActive(
+              _latestPartnerMessageUtc,
+            );
+        if (_isOtherUserOnline != online) {
+          setState(() {
+            _isOtherUserOnline = online;
+          });
+        }
       }
     } catch (_) {}
   }
@@ -107,12 +132,15 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
             userId2: _effectiveOtherId,
           );
         });
+        _fetchOtherUserStatus();
       }
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _presencePollTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -121,11 +149,15 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
   Future<void> _markAsRead() async {
     final myAuthUid = _authService.currentUid ?? '';
     final myGamerUid = _authService.currentGamer?.uid ?? '';
-    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : (myGamerUid.isNotEmpty ? myGamerUid : myAuthUid);
+    final myUid = _effectiveMyId.isNotEmpty
+        ? _effectiveMyId
+        : (myGamerUid.isNotEmpty ? myGamerUid : myAuthUid);
     if (myUid.isEmpty) return;
     await _dmService.markAsRead(
       currentUserId: myUid,
-      otherUserId: _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId,
+      otherUserId: _effectiveOtherId.isNotEmpty
+          ? _effectiveOtherId
+          : widget.otherUserId,
     );
   }
 
@@ -155,7 +187,8 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
     final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : sourceUid;
     if (myUid.isEmpty) return;
 
-    final targetOtherId = _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId;
+    final targetOtherId =
+        _effectiveOtherId.isNotEmpty ? _effectiveOtherId : widget.otherUserId;
 
     if (_myAliases.any((a) => a.toLowerCase() == targetOtherId.toLowerCase()) ||
         myUid.toLowerCase() == targetOtherId.toLowerCase()) {
@@ -182,6 +215,7 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
 
     if (ok) {
       _scrollToBottom();
+      _fetchOtherUserStatus();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -239,7 +273,6 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
       final msgId = message.id;
       bool deleted = false;
 
-      // 1. Try deleting from direct_messages table
       try {
         await SupabaseService.client
             .from('direct_messages')
@@ -248,7 +281,6 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
         deleted = true;
       } catch (_) {}
 
-      // 2. Fallback to messages table if needed
       if (!deleted) {
         try {
           await SupabaseService.client
@@ -302,7 +334,13 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.copy_rounded, color: neonCyan),
-              title: Text('Copy Text', style: TextStyle(color: ThemeService.textPrimary, fontWeight: FontWeight.bold)),
+              title: Text(
+                'Copy Text',
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 Clipboard.setData(ClipboardData(text: m.message));
@@ -317,8 +355,17 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
             ),
             if (isMyMsg)
               ListTile(
-                leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4655)),
-                title: const Text('Delete Message', style: TextStyle(color: Color(0xFFFF4655), fontWeight: FontWeight.bold)),
+                leading: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Color(0xFFFF4655),
+                ),
+                title: const Text(
+                  'Delete Message',
+                  style: TextStyle(
+                    color: Color(0xFFFF4655),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _deleteMessage(m);
@@ -373,6 +420,40 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
     );
   }
 
+  void _checkRecentPartnerActivityFromMessages(
+    List<ChatMessage> messages,
+    String myUid,
+  ) {
+    if (messages.isEmpty) return;
+    DateTime? latestPartnerUtc;
+    for (int i = messages.length - 1; i >= 0; i--) {
+      final m = messages[i];
+      final sLower = m.senderId.toLowerCase();
+      final isMyMsg = _myAliases.any((a) => a.toLowerCase() == sLower) ||
+          sLower == _effectiveMyId.toLowerCase() ||
+          sLower == myUid.toLowerCase() ||
+          sLower == SupabaseService.toUuid(myUid).toLowerCase();
+      if (!isMyMsg) {
+        latestPartnerUtc = m.createdAt.toUtc();
+        break;
+      }
+    }
+
+    if (latestPartnerUtc != null) {
+      _latestPartnerMessageUtc = latestPartnerUtc;
+      if (DirectMessageService.isTimestampRecentlyActive(latestPartnerUtc) &&
+          !_isOtherUserOnline) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_isOtherUserOnline) {
+            setState(() {
+              _isOtherUserOnline = true;
+            });
+          }
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final myAuthUid = _authService.currentUid ?? '';
@@ -415,10 +496,14 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
                                   child: SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: neonCyan),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: neonCyan,
+                                    ),
                                   ),
                                 ),
-                                errorWidget: (_, __, ___) => _buildInitials(widget.otherUserName, 40),
+                                errorWidget: (_, __, ___) =>
+                                    _buildInitials(widget.otherUserName, 40),
                               )
                             : _buildInitials(widget.otherUserName, 40),
                       ),
@@ -472,11 +557,11 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _isOtherUserOnline
-                            ? (_otherUserGame.isNotEmpty ? '$_otherUserGame • Online' : 'Online')
-                            : (_otherUserGame.isNotEmpty ? '$_otherUserGame • Offline' : 'Offline'),
+                        _isOtherUserOnline ? 'Online' : 'Offline',
                         style: TextStyle(
-                          color: _isOtherUserOnline ? neonGreen : ThemeService.textSecondary,
+                          color: _isOtherUserOnline
+                              ? neonGreen
+                              : ThemeService.textSecondary,
                           fontWeight: FontWeight.w600,
                           fontSize: 11,
                         ),
@@ -501,6 +586,8 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
                     }
 
                     final messages = snapshot.data ?? [];
+                    _checkRecentPartnerActivityFromMessages(messages, myUid);
+
                     if (_initialLoad) {
                       _initialLoad = false;
                       _scrollToBottom(animate: false);
@@ -512,32 +599,44 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
 
                     return ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       itemCount: messages.length,
                       itemBuilder: (context, i) {
                         final m = messages[i];
                         final sLower = m.senderId.toLowerCase();
-                        final isMyMsg = _myAliases.any((a) => a.toLowerCase() == sLower) ||
-                            sLower == _effectiveMyId.toLowerCase() ||
-                            sLower == myUid.toLowerCase() ||
-                            sLower == SupabaseService.toUuid(myUid).toLowerCase();
+                        final isMyMsg =
+                            _myAliases.any((a) => a.toLowerCase() == sLower) ||
+                                sLower == _effectiveMyId.toLowerCase() ||
+                                sLower == myUid.toLowerCase() ||
+                                sLower ==
+                                    SupabaseService.toUuid(myUid).toLowerCase();
 
                         bool showDate = false;
                         if (i == 0) {
                           showDate = true;
                         } else {
                           final prev = messages[i - 1];
-                          final prevDay = DateTime(prev.createdAt.year,
-                              prev.createdAt.month, prev.createdAt.day);
-                          final curDay = DateTime(m.createdAt.year,
-                              m.createdAt.month, m.createdAt.day);
+                          final prevDay = DateTime(
+                            prev.createdAt.year,
+                            prev.createdAt.month,
+                            prev.createdAt.day,
+                          );
+                          final curDay = DateTime(
+                            m.createdAt.year,
+                            m.createdAt.month,
+                            m.createdAt.day,
+                          );
                           if (prevDay != curDay) showDate = true;
                         }
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (showDate) _buildDatePill(_formatDateDivider(m.createdAt)),
+                            if (showDate)
+                              _buildDatePill(_formatDateDivider(m.createdAt)),
                             _buildMessageBubble(m, isMyMsg),
                           ],
                         );
@@ -623,7 +722,8 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
               BoxShadow(
                 color: isMyMsg
                     ? neonCyan.withOpacity(0.18)
-                    : Colors.black.withOpacity(ThemeService.isDarkMode ? 0.2 : 0.04),
+                    : Colors.black
+                        .withOpacity(ThemeService.isDarkMode ? 0.2 : 0.04),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -642,11 +742,14 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
               ),
               const SizedBox(height: 3),
               Align(
-                alignment: isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
+                alignment:
+                    isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
                 child: Text(
                   _formatTime(m.createdAt),
                   style: TextStyle(
-                    color: isMyMsg ? Colors.white70 : ThemeService.textSecondary.withOpacity(0.8),
+                    color: isMyMsg
+                        ? Colors.white70
+                        : ThemeService.textSecondary.withOpacity(0.8),
                     fontSize: 10,
                   ),
                 ),
@@ -687,9 +790,15 @@ class _GamerChatScreenState extends State<GamerChatScreen> {
                 onSubmitted: (_) => _sendMessage(),
                 decoration: InputDecoration(
                   hintText: 'Type message...',
-                  hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
+                  hintStyle: TextStyle(
+                    color: ThemeService.textSecondary.withOpacity(0.6),
+                    fontSize: 13,
+                  ),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ),

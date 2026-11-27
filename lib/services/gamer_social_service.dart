@@ -1367,19 +1367,84 @@ class GamerSocialService {
   }
 
   Future<List<GamerUser>> searchUsers(String query) async {
-    if (query.trim().isEmpty) return [];
+    final raw = query.trim();
+    if (raw.isEmpty) return [];
     try {
-      final q = query.trim().toLowerCase();
-      final rows = await _supabase
-          .from('users')
-          .select()
-          .or('username.ilike.%$q%,display_name.ilike.%$q%')
-          .limit(20);
+      final q = raw.startsWith('@')
+          ? raw.substring(1).trim().toLowerCase()
+          : raw.toLowerCase();
+      if (q.isEmpty) return [];
 
-      return (rows as List)
-          .map((r) => _rowToGamerUser(r))
-          .whereType<GamerUser>()
-          .toList();
+      final uuidRegex = RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+      final isUuid = uuidRegex.hasMatch(q);
+
+      final Map<String, GamerUser> matched = {};
+
+      void addRows(List<dynamic> rows) {
+        for (final r in rows) {
+          if (r is! Map) continue;
+          final map = Map<String, dynamic>.from(r);
+          final u = _rowToGamerUser(map);
+          if (u != null && u.uid.isNotEmpty) {
+            matched[u.uid.toLowerCase()] = u;
+          }
+        }
+      }
+
+      try {
+        final filters = <String>[
+          'username.ilike.%$q%',
+          'display_name.ilike.%$q%',
+          'uid.ilike.%$q%',
+          'game_id.ilike.%$q%',
+          if (isUuid) 'id.eq.$q',
+        ];
+        final rows = await _supabase
+            .from('users')
+            .select()
+            .or(filters.join(','))
+            .limit(25);
+        addRows(rows as List);
+      } catch (_) {
+        final filters = <String>[
+          'username.ilike.%$q%',
+          'display_name.ilike.%$q%',
+          if (isUuid) 'id.eq.$q',
+        ];
+        final rows = await _supabase
+            .from('users')
+            .select()
+            .or(filters.join(','))
+            .limit(25);
+        addRows(rows as List);
+      }
+
+      if (matched.length < 10) {
+        try {
+          final fallbackRows = await _supabase
+              .from('users')
+              .select()
+              .order('created_at', ascending: false)
+              .limit(80);
+          final filtered = (fallbackRows as List).where((r) {
+            if (r is! Map) return false;
+            final idStr = (r['id'] ?? '').toString().toLowerCase();
+            final uidStr = (r['uid'] ?? '').toString().toLowerCase();
+            final uname = (r['username'] ?? '').toString().toLowerCase();
+            final dname = (r['display_name'] ?? '').toString().toLowerCase();
+            final gid = (r['game_id'] ?? '').toString().toLowerCase();
+            return dname.contains(q) ||
+                uname.contains(q) ||
+                idStr.contains(q) ||
+                uidStr.contains(q) ||
+                gid.contains(q);
+          }).toList();
+          addRows(filtered);
+        } catch (_) {}
+      }
+
+      return matched.values.toList();
     } catch (e) {
       debugPrint('[GamerSocialService] searchUsers error: $e');
       return [];

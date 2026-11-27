@@ -1,13 +1,13 @@
 // ===============================================================================
-// GAMER MESSAGES SCREEN — Adaptive Day/Night Theme with Dynamic Presence & Delete
+// GAMER MESSAGES SCREEN — Adaptive Day/Night Theme with Dynamic Presence & Search
 // File: lib/screens/gamer_messages_screen.dart
 // ===============================================================================
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
-import '../constants/gamer_theme.dart';
 import '../models/chat_model.dart';
 import '../models/gamer_user_model.dart';
 import '../services/direct_message_service.dart';
@@ -24,14 +24,19 @@ class GamerMessagesScreen extends StatefulWidget {
   State<GamerMessagesScreen> createState() => _GamerMessagesScreenState();
 }
 
-class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
+class _GamerMessagesScreenState extends State<GamerMessagesScreen>
+    with WidgetsBindingObserver {
   final _dmService = DirectMessageService();
   final _authService = GamerAuthService();
   final TextEditingController _searchController = TextEditingController();
 
   List<ChatConversation> _conversations = [];
+  List<GamerUser> _searchedUsers = [];
   bool _loading = true;
+  bool _searchingUsers = false;
   String _searchQuery = '';
+  Timer? _searchDebounce;
+  Timer? _presenceTimer;
 
   static const Color neonBlue = Color(0xFF1877F2);
   static const Color neonCyan = Color(0xFF00E5FF);
@@ -40,11 +45,26 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _dmService.updateUserPresence(force: true);
     _loadConversations();
+    _presenceTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      _dmService.updateUserPresence();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _dmService.updateUserPresence(force: true);
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchDebounce?.cancel();
+    _presenceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -54,6 +74,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
     final myAuthUid = _authService.currentUid ?? '';
     final myGamerUid = _authService.currentGamer?.uid ?? '';
     final effectiveUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    unawaited(_dmService.updateUserPresence(userId: effectiveUid));
     final canonicalId = await _dmService.resolveToTableId(effectiveUid);
     final list = await _dmService.getConversations(
       canonicalId.isNotEmpty ? canonicalId : effectiveUid,
@@ -63,6 +84,72 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
       _conversations = list;
       _loading = false;
     });
+  }
+
+  void _onSearchChanged(String rawVal) {
+    final trimmed = rawVal.trim();
+    setState(() {
+      _searchQuery = trimmed;
+      if (trimmed.isEmpty) {
+        _searchedUsers = [];
+        _searchingUsers = false;
+      } else {
+        _searchingUsers = true;
+      }
+    });
+
+    _searchDebounce?.cancel();
+    if (trimmed.isEmpty) return;
+
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () async {
+      final myAuthUid = _authService.currentUid ?? '';
+      final myGamerUid = _authService.currentGamer?.uid ?? '';
+      final effectiveUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+      final users = await _dmService.searchRegisteredUsers(
+        trimmed,
+        currentUserId: effectiveUid,
+      );
+      if (!mounted || _searchQuery != trimmed) return;
+      setState(() {
+        _searchedUsers = users;
+        _searchingUsers = false;
+      });
+    });
+  }
+
+  Future<void> _openChatWithUser(GamerUser user) async {
+    final otherTableId = await _dmService.resolveToTableId(user.uid);
+    final finalOtherId = otherTableId.isNotEmpty ? otherTableId : user.uid;
+
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final effectiveUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final myAliases = await _dmService.getUserAliases(effectiveUid);
+
+    if (myAliases.any((a) => a.toLowerCase() == finalOtherId.toLowerCase())) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('cannot_message_self'.tr())),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GamerChatScreen(
+          otherUserId: finalOtherId,
+          otherUserName: user.displayName.isNotEmpty
+              ? user.displayName
+              : (user.username.isNotEmpty ? user.username : 'Gamer'),
+          otherUserPhoto: user.photoUrl,
+          otherUserVerified: user.isVerified,
+        ),
+      ),
+    );
+    _loadConversations();
   }
 
   Future<void> _deleteConversation(ChatConversation c) async {
@@ -132,7 +219,6 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
         otherTableId,
       }..removeWhere((id) => id.isEmpty);
 
-      // Dono taraf ke messages database se delete karein
       for (final mId in allMyIds) {
         for (final oId in allOtherIds) {
           await SupabaseService.client
@@ -149,7 +235,6 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
         }
       }
 
-      // Local list se remove karein
       setState(() {
         _conversations.removeWhere((item) => item.otherUserId == c.otherUserId);
       });
@@ -182,36 +267,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
     );
 
     if (selectedUser != null && mounted) {
-      final otherTableId = await _dmService.resolveToTableId(selectedUser.uid);
-      final finalOtherId =
-          otherTableId.isNotEmpty ? otherTableId : selectedUser.uid;
-
-      final myAuthUid = _authService.currentUid ?? '';
-      final myGamerUid = _authService.currentGamer?.uid ?? '';
-      final effectiveUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
-      final myAliases = await _dmService.getUserAliases(effectiveUid);
-
-      if (myAliases.any((a) => a.toLowerCase() == finalOtherId.toLowerCase())) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('cannot_message_self'.tr())),
-          );
-        }
-        return;
-      }
-
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => GamerChatScreen(
-            otherUserId: finalOtherId,
-            otherUserName: selectedUser.displayName,
-            otherUserPhoto: selectedUser.photoUrl,
-            otherUserVerified: selectedUser.isVerified,
-          ),
-        ),
-      );
-      _loadConversations();
+      await _openChatWithUser(selectedUser);
     }
   }
 
@@ -228,6 +284,8 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
   Color _getGameBadgeColor(String game) {
     switch (game.toUpperCase()) {
       case 'PUBG':
+      case 'PUBG MOBILE':
+      case 'BGMI':
         return const Color(0xFF1877F2);
       case 'VALORANT':
         return const Color(0xFF8B5CF6);
@@ -240,13 +298,42 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
     }
   }
 
+  String _formatShortId(GamerUser u) {
+    if (u.gameId.trim().isNotEmpty) {
+      return u.gameId.trim();
+    }
+    final raw = u.uid.trim();
+    if (raw.length > 8) {
+      return raw.substring(0, 8);
+    }
+    return raw;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final filteredList = _conversations.where((c) {
-      if (_searchQuery.isEmpty) return true;
-      return c.otherUserName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          c.lastMessage.toLowerCase().contains(_searchQuery.toLowerCase());
+    final qLower = _searchQuery.startsWith('@')
+        ? _searchQuery.substring(1).trim().toLowerCase()
+        : _searchQuery.toLowerCase();
+
+    final filteredConversations = _conversations.where((c) {
+      if (qLower.isEmpty) return true;
+      return c.otherUserName.toLowerCase().contains(qLower) ||
+          c.otherUsername.toLowerCase().contains(qLower) ||
+          c.otherUserId.toLowerCase().contains(qLower) ||
+          c.otherUserGameId.toLowerCase().contains(qLower) ||
+          c.lastMessage.toLowerCase().contains(qLower);
     }).toList();
+
+    final existingConversationUserIds = filteredConversations
+        .map((c) => c.otherUserId.toLowerCase())
+        .toSet();
+
+    final unmatchedUsers = qLower.isEmpty
+        ? <GamerUser>[]
+        : _searchedUsers
+            .where((u) =>
+                !existingConversationUserIds.contains(u.uid.toLowerCase()))
+            .toList();
 
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
@@ -278,7 +365,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
           ),
           body: Column(
             children: [
-              // Search Messages Input Bar
+              // Search Messages & Registered Users Input Bar
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
                 child: Container(
@@ -293,44 +380,93 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                     style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Search messages...',
-                      hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
-                      prefixIcon: Icon(Icons.search, size: 20, color: ThemeService.textSecondary),
+                      hintStyle: TextStyle(
+                        color: ThemeService.textSecondary.withOpacity(0.6),
+                        fontSize: 13,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        size: 20,
+                        color: ThemeService.textSecondary,
+                      ),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                              icon: Icon(Icons.clear, size: 18, color: ThemeService.textSecondary),
+                              icon: Icon(
+                                Icons.clear,
+                                size: 18,
+                                color: ThemeService.textSecondary,
+                              ),
                               onPressed: () {
                                 _searchController.clear();
-                                setState(() => _searchQuery = '');
+                                _onSearchChanged('');
                               },
                             )
                           : null,
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                    onChanged: _onSearchChanged,
                   ),
                 ),
               ),
 
-              // Conversation List / Loading / Empty
+              // Conversation List & User Search Results
               Expanded(
                 child: _loading
                     ? const Center(
                         child: CircularProgressIndicator(color: neonCyan),
                       )
-                    : filteredList.isEmpty
+                    : (filteredConversations.isEmpty &&
+                            unmatchedUsers.isEmpty &&
+                            !_searchingUsers)
                         ? _buildEmptyState()
                         : RefreshIndicator(
                             color: neonCyan,
                             backgroundColor: ThemeService.card,
                             onRefresh: _loadConversations,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                              itemCount: filteredList.length,
-                              itemBuilder: (context, i) {
-                                final c = filteredList[i];
-                                return _buildConversationCard(c);
-                              },
+                            child: ListView(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              children: [
+                                ...filteredConversations.map(_buildConversationCard),
+                                if (_searchQuery.isNotEmpty && _searchingUsers)
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 16),
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: neonCyan,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (_searchQuery.isNotEmpty &&
+                                    unmatchedUsers.isNotEmpty) ...[
+                                  if (filteredConversations.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: 8,
+                                        bottom: 8,
+                                        left: 4,
+                                      ),
+                                      child: Text(
+                                        'PLAYERS',
+                                        style: TextStyle(
+                                          color: ThemeService.textSecondary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                    ),
+                                  ...unmatchedUsers.map(_buildSearchedUserCard),
+                                ],
+                              ],
                             ),
                           ),
               ),
@@ -342,6 +478,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
   }
 
   Widget _buildEmptyState() {
+    final isSearching = _searchQuery.isNotEmpty;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -355,15 +492,17 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: ThemeService.border),
               ),
-              child: const Icon(
-                Icons.chat_bubble_outline_rounded,
+              child: Icon(
+                isSearching
+                    ? Icons.person_search_rounded
+                    : Icons.chat_bubble_outline_rounded,
                 size: 50,
                 color: neonCyan,
               ),
             ),
             const SizedBox(height: 18),
             Text(
-              'no_messages_yet'.tr(),
+              isSearching ? 'No players or messages found' : 'no_messages_yet'.tr(),
               style: TextStyle(
                 color: ThemeService.textPrimary,
                 fontSize: 18,
@@ -372,7 +511,9 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'start_conversation_desc'.tr(),
+              isSearching
+                  ? 'Try searching by username, display name, or user ID'
+                  : 'start_conversation_desc'.tr(),
               textAlign: TextAlign.center,
               style: TextStyle(color: ThemeService.textSecondary, fontSize: 13),
             ),
@@ -400,8 +541,173 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
     );
   }
 
+  Widget _buildSearchedUserCard(GamerUser u) {
+    final rawGame = u.gameName.trim();
+    final gameTag = rawGame.isNotEmpty
+        ? (rawGame.toUpperCase().contains('PUBG') ? 'PUBG' : rawGame.toUpperCase())
+        : 'PUBG';
+    final gameColor = _getGameBadgeColor(gameTag);
+    final isDark = ThemeService.isDarkMode;
+    final displayTitle = u.displayName.trim().isNotEmpty
+        ? u.displayName.trim()
+        : (u.username.trim().isNotEmpty ? u.username.trim() : 'Gamer');
+    final shortId = _formatShortId(u);
+    final subtitleParts = <String>[
+      if (u.username.trim().isNotEmpty) '@${u.username.trim()}',
+      if (shortId.isNotEmpty) 'ID: $shortId',
+    ];
+    final subtitleText = subtitleParts.isNotEmpty
+        ? subtitleParts.join(' • ')
+        : 'Tap to start chat';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ThemeService.border, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openChatWithUser(u),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: ThemeService.cardSecondary,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: ThemeService.border, width: 1.5),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: u.photoUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: u.photoUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => const Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: neonCyan,
+                                ),
+                              ),
+                            ),
+                            errorWidget: (_, __, ___) =>
+                                _buildInitials(displayTitle, 50),
+                          )
+                        : _buildInitials(displayTitle, 50),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              displayTitle,
+                              style: TextStyle(
+                                color: ThemeService.textPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (u.isVerified) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.verified, color: neonCyan, size: 14),
+                          ],
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: gameColor.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              gameTag,
+                              style: TextStyle(
+                                color: gameColor,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitleText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: ThemeService.textSecondary,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: neonBlue.withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: neonCyan.withOpacity(0.4)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.chat_bubble_outline_rounded,
+                          color: neonCyan, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'Message',
+                        style: TextStyle(
+                          color: neonCyan,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildConversationCard(ChatConversation c) {
-    final gameTag = 'PUBG';
+    final gameTag = c.otherUserGame.trim().isNotEmpty
+        ? c.otherUserGame.trim().toUpperCase()
+        : 'PUBG';
     final gameColor = _getGameBadgeColor(gameTag);
     final isDark = ThemeService.isDarkMode;
 
@@ -463,34 +769,59 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: ThemeService.cardSecondary,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: ThemeService.border, width: 1.5),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: c.otherUserPhoto.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: c.otherUserPhoto,
-                              fit: BoxFit.cover,
-                              placeholder: (_, __) => const Center(
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: neonCyan,
+                  Stack(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: ThemeService.cardSecondary,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: ThemeService.border, width: 1.5),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: c.otherUserPhoto.isNotEmpty
+                              ? CachedNetworkImage(
+                                  imageUrl: c.otherUserPhoto,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => const Center(
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: neonCyan,
+                                      ),
+                                    ),
                                   ),
+                                  errorWidget: (_, __, ___) =>
+                                      _buildInitials(c.otherUserName, 50),
+                                )
+                              : _buildInitials(c.otherUserName, 50),
+                        ),
+                      ),
+                      if (c.isOnline)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: neonGreen,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: ThemeService.card, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: neonGreen.withOpacity(0.6),
+                                  blurRadius: 4,
                                 ),
-                              ),
-                              errorWidget: (_, __, ___) => _buildInitials(c.otherUserName, 50),
-                            )
-                          : _buildInitials(c.otherUserName, 50),
-                    ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(width: 12),
 
@@ -536,9 +867,12 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: c.unreadCount > 0 ? ThemeService.textPrimary : ThemeService.textSecondary,
+                            color: c.unreadCount > 0
+                                ? ThemeService.textPrimary
+                                : ThemeService.textSecondary,
                             fontSize: 13,
-                            fontWeight: c.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
+                            fontWeight:
+                                c.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -552,9 +886,12 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen> {
                       Text(
                         _formatTime(c.lastMessageTime),
                         style: TextStyle(
-                          color: c.unreadCount > 0 ? neonCyan : ThemeService.textSecondary.withOpacity(0.7),
+                          color: c.unreadCount > 0
+                              ? neonCyan
+                              : ThemeService.textSecondary.withOpacity(0.7),
                           fontSize: 11,
-                          fontWeight: c.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                          fontWeight:
+                              c.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                       if (c.unreadCount > 0) ...[
@@ -625,6 +962,7 @@ class _UserSearchSheet extends StatefulWidget {
 
 class _UserSearchSheetState extends State<_UserSearchSheet> {
   final _controller = TextEditingController();
+  final _dmService = DirectMessageService();
   final _socialService = GamerSocialService();
   List<GamerUser> _results = [];
   bool _searching = false;
@@ -644,12 +982,19 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
       _searching = true;
       _query = q;
     });
-    final results = await _socialService.searchUsers(q);
-    if (!mounted) return;
     final myAuthUid = GamerAuthService().currentUid ?? '';
     final myGamerUid = GamerAuthService().currentGamer?.uid ?? '';
     final effectiveMyUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
-    final myAliases = await DirectMessageService().getUserAliases(effectiveMyUid);
+
+    List<GamerUser> results = await _dmService.searchRegisteredUsers(
+      q,
+      currentUserId: effectiveMyUid,
+    );
+    if (results.isEmpty) {
+      results = await _socialService.searchUsers(q);
+    }
+    if (!mounted) return;
+    final myAliases = await _dmService.getUserAliases(effectiveMyUid);
     final filtered = results.where((u) {
       final uId = u.uid.toLowerCase();
       return !myAliases.any((a) => a.toLowerCase() == uId);
@@ -723,8 +1068,15 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                 style: TextStyle(color: ThemeService.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'search_users_hint'.tr(),
-                  hintStyle: TextStyle(color: ThemeService.textSecondary.withOpacity(0.6), fontSize: 13),
-                  prefixIcon: Icon(Icons.search, color: ThemeService.textSecondary, size: 20),
+                  hintStyle: TextStyle(
+                    color: ThemeService.textSecondary.withOpacity(0.6),
+                    fontSize: 13,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: ThemeService.textSecondary,
+                    size: 20,
+                  ),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -757,6 +1109,9 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                         itemCount: _results.length,
                         itemBuilder: (context, i) {
                           final u = _results[i];
+                          final idTag = u.gameId.trim().isNotEmpty
+                              ? u.gameId.trim()
+                              : (u.uid.length > 8 ? u.uid.substring(0, 8) : u.uid);
                           return ListTile(
                             onTap: () => Navigator.pop(context, u),
                             leading: CircleAvatar(
@@ -781,7 +1136,9 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                               children: [
                                 Flexible(
                                   child: Text(
-                                    u.displayName,
+                                    u.displayName.isNotEmpty
+                                        ? u.displayName
+                                        : u.username,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
@@ -797,7 +1154,9 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                               ],
                             ),
                             subtitle: Text(
-                              '@${u.username}',
+                              idTag.isNotEmpty
+                                  ? '@${u.username} • ID: $idTag'
+                                  : '@${u.username}',
                               style: TextStyle(
                                 color: ThemeService.textSecondary,
                                 fontSize: 12,
