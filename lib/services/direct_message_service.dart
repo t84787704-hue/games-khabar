@@ -519,8 +519,11 @@ class DirectMessageService {
     return matchedById.values.toList();
   }
 
-  /// Resolves any user identifier (auth.uid or users.uid or users.id)
-  /// to the canonical UUID `id` from the `users` table.
+  /// Holds the most recent human-readable error message when sending a direct message fails.
+  String? lastSendErrorMessage;
+
+  /// Resolves any user identifier (auth.uid, users.uid, users.id, profiles.id, or username)
+  /// to the canonical UUID `id` from the `users` or `profiles` table.
   Future<String> resolveToTableId(String idOrUid) async {
     final clean = idOrUid.trim();
     if (clean.isEmpty) return '';
@@ -532,7 +535,7 @@ class DirectMessageService {
 
     try {
       Map<String, dynamic>? row;
-      // 1. If clean matches UUID format, check table primary key `id` first
+      // 1. If clean matches UUID format, check `users` primary key `id` first
       if (isUuid) {
         try {
           row = await _client
@@ -543,7 +546,7 @@ class DirectMessageService {
         } catch (_) {}
       }
 
-      // 2. If not found by `id`, check by `uid` (text column)
+      // 2. If not found by `id`, check `users` by `uid` (text column)
       if (row == null) {
         try {
           row = await _client
@@ -554,21 +557,54 @@ class DirectMessageService {
         } catch (_) {}
       }
 
-      // 3. Return canonical UUID `id` from table
-      if (row != null && row['id'] != null) {
-        final tableId = row['id'].toString();
-        _resolvedUuidCache[clean] = tableId;
-        _resolvedUuidCache[tableId] = tableId;
-        if (row['uid'] != null) {
-          _resolvedUuidCache[row['uid'].toString()] = tableId;
+      // 3. If not found in `users`, check `profiles` by `id` (or `username` if non-UUID)
+      if (row == null) {
+        if (isUuid) {
+          try {
+            final profRow = await _client
+                .from('profiles')
+                .select()
+                .eq('id', clean)
+                .maybeSingle();
+            if (profRow != null && profRow['id'] != null) {
+              row = Map<String, dynamic>.from(profRow);
+              // Automatically link/sync this unlinked profile into `public.users`
+              unawaited(_syncProfileRowToUsersTable(row));
+            }
+          } catch (_) {}
+        } else {
+          try {
+            final profRow = await _client
+                .from('profiles')
+                .select()
+                .or('username.ilike.$clean,display_name.ilike.$clean')
+                .limit(1)
+                .maybeSingle();
+            if (profRow != null && profRow['id'] != null) {
+              row = Map<String, dynamic>.from(profRow);
+              unawaited(_syncProfileRowToUsersTable(row));
+            }
+          } catch (_) {}
         }
-        return tableId;
+      }
+
+      // 4. Return canonical UUID `id` from table
+      if (row != null && row['id'] != null) {
+        final tableId = row['id'].toString().trim();
+        if (tableId.isNotEmpty) {
+          _resolvedUuidCache[clean] = tableId;
+          _resolvedUuidCache[tableId] = tableId;
+          if (row['uid'] != null && row['uid'].toString().trim().isNotEmpty) {
+            _resolvedUuidCache[row['uid'].toString().trim()] = tableId;
+          }
+          return tableId;
+        }
       }
     } catch (e) {
       debugPrint('[DMS] resolveToTableId error: $e');
     }
 
-    // 4. Fallback: if already a valid UUID format, use it; else convert via toUuid
+    // 5. Fallback: if already a valid UUID format, use it; else convert via toUuid
     if (isUuid) {
       final res = clean.toLowerCase();
       _resolvedUuidCache[clean] = res;
@@ -577,6 +613,119 @@ class DirectMessageService {
     final fallback = SupabaseService.toUuid(clean);
     _resolvedUuidCache[clean] = fallback;
     return fallback;
+  }
+
+  /// Ensures that a user who exists only in `public.profiles` (or auth) has a corresponding
+  /// linked row in `public.users` so foreign-key constraints on `direct_messages` and
+  /// `GamerProfileScreen` lookups never fail.
+  Future<void> _syncProfileRowToUsersTable(Map<String, dynamic> profileRow) async {
+    final rawId = (profileRow['id'] ?? profileRow['uid'] ?? '').toString().trim();
+    if (rawId.isEmpty || !_uuidRegex.hasMatch(rawId)) return;
+
+    try {
+      final existing = await _client
+          .from('users')
+          .select('id')
+          .eq('id', rawId)
+          .maybeSingle();
+      if (existing != null) return;
+
+      final rawUsername = (profileRow['username'] ?? '').toString().trim();
+      final rawDisplayName = (profileRow['display_name'] ??
+              profileRow['displayName'] ??
+              rawUsername)
+          .toString()
+          .trim();
+      final shortId = rawId.length >= 8 ? rawId.substring(0, 8) : rawId;
+      final cleanUsername = rawUsername.isNotEmpty
+          ? rawUsername
+          : 'user_$shortId';
+      final cleanDisplayName =
+          rawDisplayName.isNotEmpty ? rawDisplayName : cleanUsername;
+      final rawEmail = (profileRow['email'] ?? '').toString().trim();
+      final fallbackEmail = rawEmail.isNotEmpty
+          ? rawEmail
+          : '${cleanUsername.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '')}_$shortId@gamersid.local';
+      final avatarUrl = extractAvatarFromMap(profileRow);
+
+      final payload = <String, dynamic>{
+        'id': rawId,
+        'uid': rawId,
+        'email': fallbackEmail,
+        'username': cleanUsername,
+        'display_name': cleanDisplayName,
+        if (avatarUrl.isNotEmpty) 'avatar_url': avatarUrl,
+        'favorite_game': (profileRow['favorite_game'] ??
+                profileRow['game_name'] ??
+                profileRow['game'] ??
+                'BGMI')
+            .toString(),
+        'selected_rank':
+            (profileRow['selected_rank'] ?? profileRow['rank'] ?? 'Bronze')
+                .toString(),
+      };
+
+      await _client.from('users').upsert(payload, onConflict: 'id');
+    } catch (e) {
+      debugPrint('[DMS] _syncProfileRowToUsersTable note: $e');
+    }
+  }
+
+  /// Ensures a recipient/sender user ID is present in `public.users` before inserting
+  /// a direct message (hydrating from `public.profiles` if the user hasn't completed Gamer ID setup yet).
+  Future<String> ensureUserRecordLinked(
+    String userId, {
+    String? fallbackDisplayName,
+    String? fallbackPhotoUrl,
+  }) async {
+    final resolved = await resolveToTableId(userId);
+    final candidateId = resolved.isNotEmpty ? resolved : userId.trim();
+    if (candidateId.isEmpty || !_uuidRegex.hasMatch(candidateId)) {
+      return candidateId;
+    }
+
+    try {
+      final userRow = await _client
+          .from('users')
+          .select('id')
+          .eq('id', candidateId)
+          .maybeSingle();
+      if (userRow != null) {
+        return candidateId;
+      }
+
+      // Check `profiles` table for this UUID
+      Map<String, dynamic>? profRow;
+      try {
+        profRow = await _client
+            .from('profiles')
+            .select()
+            .eq('id', candidateId)
+            .maybeSingle();
+      } catch (_) {}
+
+      if (profRow != null) {
+        await _syncProfileRowToUsersTable(Map<String, dynamic>.from(profRow));
+        return candidateId;
+      }
+
+      // If we have a fallback display name (e.g., from a chat header or search result), create a minimal linked row
+      if (fallbackDisplayName != null && fallbackDisplayName.trim().isNotEmpty) {
+        final shortId =
+            candidateId.length >= 8 ? candidateId.substring(0, 8) : candidateId;
+        await _syncProfileRowToUsersTable({
+          'id': candidateId,
+          'uid': candidateId,
+          'username': 'user_$shortId',
+          'display_name': fallbackDisplayName.trim(),
+          if (fallbackPhotoUrl != null && fallbackPhotoUrl.trim().isNotEmpty)
+            'avatar_url': fallbackPhotoUrl.trim(),
+        });
+      }
+    } catch (e) {
+      debugPrint('[DMS] ensureUserRecordLinked note: $e');
+    }
+    return candidateId;
   }
 
   /// Collects all valid identifier representations for a user (canonical UUID, auth uid, toUuid).
@@ -611,6 +760,18 @@ class DirectMessageService {
               .select('id, uid')
               .eq('uid', clean)
               .maybeSingle();
+        } catch (_) {}
+      }
+      if (row == null && isUuid) {
+        try {
+          final profRow = await _client
+              .from('profiles')
+              .select('id')
+              .eq('id', clean)
+              .maybeSingle();
+          if (profRow != null && profRow['id'] != null) {
+            row = {'id': profRow['id'], 'uid': profRow['id']};
+          }
         } catch (_) {}
       }
 
@@ -697,6 +858,31 @@ class DirectMessageService {
     return null;
   }
 
+  /// Converts a raw Supabase / PostgREST exception into a clear, actionable message.
+  String _describeSupabaseInsertError(Object error) {
+    final raw = error.toString();
+    final lower = raw.toLowerCase();
+    if (lower.contains('42501') || lower.contains('row-level security')) {
+      return 'Session expired or unauthorized (RLS). Please sign in again.';
+    }
+    if (lower.contains('23503') || lower.contains('foreign key constraint')) {
+      return 'Recipient profile is not linked yet. Please retry.';
+    }
+    if (lower.contains('22p02') || lower.contains('invalid input syntax for type uuid')) {
+      return 'Invalid recipient user ID format.';
+    }
+    if (lower.contains('socketexception') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network is unreachable') ||
+        lower.contains('clientexception')) {
+      return 'Network connection error. Check your internet and tap to retry.';
+    }
+    if (lower.contains('timeout')) {
+      return 'Request timed out. Tap the message to retry.';
+    }
+    return 'Failed to send message. Tap the message to retry.';
+  }
+
   /// Send a message, persist it to Supabase, and return the persisted ChatMessage (or null on failure).
   /// Supports optional image URL and reply-to message reference.
   Future<ChatMessage?> sendMessageReturningRecord({
@@ -710,26 +896,49 @@ class DirectMessageService {
     String? replyToSenderId,
     String? replyToSenderName,
     String? replyToImageUrl,
+    String? receiverDisplayName,
+    String? receiverPhotoUrl,
     DateTime? clientCreatedAt,
   }) async {
+    lastSendErrorMessage = null;
     final cleanImageUrl = (imageUrl ?? '').trim();
     final cleanMessage = message.trim();
-    if (senderId.isEmpty ||
-        receiverId.isEmpty ||
+    if (senderId.trim().isEmpty ||
+        receiverId.trim().isEmpty ||
         (cleanMessage.isEmpty && cleanImageUrl.isEmpty)) {
+      lastSendErrorMessage = 'Missing sender or recipient ID.';
       return null;
     }
-    try {
-      final senderUuid = await resolveToTableId(senderId);
-      final receiverUuid = await resolveToTableId(receiverId);
 
-      if (senderUuid.isEmpty || receiverUuid.isEmpty) {
-        debugPrint('[DMS] senderUuid or receiverUuid is empty');
+    try {
+      // Prefer authenticated Supabase session user ID for sender_id so RLS `auth.uid() = sender_id` always passes
+      final authUserId = _client.auth.currentUser?.id?.trim() ?? '';
+      final resolvedSender = await ensureUserRecordLinked(
+        authUserId.isNotEmpty ? authUserId : senderId,
+      );
+      final resolvedReceiver = await ensureUserRecordLinked(
+        receiverId,
+        fallbackDisplayName: receiverDisplayName,
+        fallbackPhotoUrl: receiverPhotoUrl,
+      );
+
+      final senderUuid = (authUserId.isNotEmpty && _uuidRegex.hasMatch(authUserId))
+          ? authUserId
+          : resolvedSender;
+      final receiverUuid = resolvedReceiver;
+
+      if (senderUuid.isEmpty ||
+          receiverUuid.isEmpty ||
+          !_uuidRegex.hasMatch(senderUuid) ||
+          !_uuidRegex.hasMatch(receiverUuid)) {
+        lastSendErrorMessage = 'Invalid user ID for direct chat.';
+        debugPrint('[DMS] Invalid senderUuid ($senderUuid) or receiverUuid ($receiverUuid)');
         return null;
       }
 
       // Prevent chatting with self
       if (senderUuid.toLowerCase() == receiverUuid.toLowerCase()) {
+        lastSendErrorMessage = 'You cannot send a message to yourself.';
         debugPrint('[DMS] Cannot send message to self');
         return null;
       }
@@ -827,10 +1036,28 @@ class DirectMessageService {
             insertedRow = Map<String, dynamic>.from(res);
           }
           inserted = true;
-        } catch (_) {
+        } catch (selectErr) {
           // Fallback if `.select()` is restricted by RLS policy on return
-          await _client.from('direct_messages').insert(basePayload);
-          inserted = true;
+          try {
+            await _client.from('direct_messages').insert(basePayload);
+            inserted = true;
+          } catch (insertErr) {
+            // If foreign key constraint failed because receiver row was missing in `users`,
+            // force-sync receiver to `users` and retry once
+            final errStr = insertErr.toString().toLowerCase();
+            if (errStr.contains('23503') || errStr.contains('foreign key')) {
+              await _syncProfileRowToUsersTable({
+                'id': receiverUuid,
+                'uid': receiverUuid,
+                'display_name': receiverDisplayName ?? 'Gamer',
+                if (receiverPhotoUrl != null) 'avatar_url': receiverPhotoUrl,
+              });
+              await _client.from('direct_messages').insert(basePayload);
+              inserted = true;
+            } else {
+              rethrow;
+            }
+          }
         }
       }
 
@@ -842,7 +1069,8 @@ class DirectMessageService {
         if (cleanImageUrl.isNotEmpty && !parsed.hasImage) {
           parsed = parsed.copyWith(imageUrl: cleanImageUrl);
         }
-        if (replyToId != null && (parsed.replyToId == null || parsed.replyToId!.isEmpty)) {
+        if (replyToId != null &&
+            (parsed.replyToId == null || parsed.replyToId!.isEmpty)) {
           parsed = parsed.copyWith(
             replyToId: replyToId,
             replyToText: replyToText,
@@ -868,6 +1096,7 @@ class DirectMessageService {
         isRead: false,
       );
     } catch (e) {
+      lastSendErrorMessage = _describeSupabaseInsertError(e);
       debugPrint('[DMS] sendMessageReturningRecord error: $e');
       return null;
     }

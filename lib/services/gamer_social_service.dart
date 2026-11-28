@@ -1444,6 +1444,32 @@ class GamerSocialService {
         } catch (_) {}
       }
 
+      // Also query `public.profiles` so users who registered an account before creating a `users` row are found cleanly
+      try {
+        final profFilters = <String>[
+          'username.ilike.%$q%',
+          'display_name.ilike.%$q%',
+          if (isUuid) 'id.eq.$q',
+        ];
+        final profRows = await _supabase
+            .from('profiles')
+            .select()
+            .or(profFilters.join(','))
+            .limit(25);
+        for (final r in (profRows as List)) {
+          if (r is! Map) continue;
+          final map = Map<String, dynamic>.from(r);
+          final rawId = (map['id'] ?? '').toString().trim();
+          if (rawId.isEmpty) continue;
+          if (!matched.containsKey(rawId.toLowerCase())) {
+            final u = GamerUser.fromMap(map, rawId);
+            if (u.uid.isNotEmpty) {
+              matched[u.uid.toLowerCase()] = u;
+            }
+          }
+        }
+      } catch (_) {}
+
       return matched.values.toList();
     } catch (e) {
       debugPrint('[GamerSocialService] searchUsers error: $e');

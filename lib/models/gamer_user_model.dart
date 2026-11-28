@@ -592,9 +592,13 @@ class GamerUser {
 
     final String rawUidStr = (data['uid'] ?? '').toString().trim();
     final String rawIdStr = (data['id'] ?? '').toString().trim();
-    final String resolvedUid = rawUidStr.isNotEmpty
-        ? rawUidStr
-        : (rawIdStr.isNotEmpty ? rawIdStr : (fallbackUid ?? ''));
+    final RegExp uuidPattern = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    final String resolvedUid = (rawIdStr.isNotEmpty && uuidPattern.hasMatch(rawIdStr))
+        ? rawIdStr
+        : (rawUidStr.isNotEmpty
+            ? rawUidStr
+            : (rawIdStr.isNotEmpty ? rawIdStr : (fallbackUid ?? '')));
 
     bool parseBoolFlag(dynamic val) {
       if (val == true || val == 1) return true;

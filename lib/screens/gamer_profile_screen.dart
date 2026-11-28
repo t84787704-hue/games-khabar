@@ -398,12 +398,98 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                 .eq('id', resolvedId)
                 .maybeSingle();
           } catch (_) {}
+
+          if (row == null) {
+            try {
+              final profRow = await SupabaseService.client
+                  .from('profiles')
+                  .select()
+                  .eq('id', resolvedId)
+                  .maybeSingle();
+              if (profRow != null) {
+                await _dmService.ensureUserRecordLinked(
+                  resolvedId,
+                  fallbackDisplayName:
+                      (profRow['display_name'] ?? profRow['username'] ?? '')
+                          .toString(),
+                  fallbackPhotoUrl: (profRow['avatar_url'] ?? '').toString(),
+                );
+                row = Map<String, dynamic>.from(profRow);
+              }
+            } catch (_) {}
+          }
         }
+      }
+
+      if (row == null) {
+        try {
+          Map<String, dynamic>? profRow;
+          if (isUuid) {
+            profRow = await SupabaseService.client
+                .from('profiles')
+                .select()
+                .eq('id', cleanId)
+                .maybeSingle();
+          }
+          profRow ??= await SupabaseService.client
+              .from('profiles')
+              .select()
+              .or('username.ilike.$cleanId,display_name.ilike.$cleanId')
+              .limit(1)
+              .maybeSingle();
+
+          if (profRow != null) {
+            final profId = (profRow['id'] ?? cleanId).toString().trim();
+            await _dmService.ensureUserRecordLinked(
+              profId,
+              fallbackDisplayName:
+                  (profRow['display_name'] ?? profRow['username'] ?? '')
+                      .toString(),
+              fallbackPhotoUrl: (profRow['avatar_url'] ?? '').toString(),
+            );
+            row = Map<String, dynamic>.from(profRow);
+          }
+        } catch (_) {}
       }
 
       if (row != null) {
         final resolvedId = (row['id'] ?? row['uid'] ?? cleanId).toString();
         var gamer = GamerUser.fromMap(row, resolvedId);
+
+        // Enrich missing avatar or display name from public.profiles if available
+        if ((gamer.photoUrl.isEmpty ||
+                gamer.displayName.isEmpty ||
+                gamer.displayName == 'Gamer') &&
+            uuidRegex.hasMatch(resolvedId)) {
+          try {
+            final profRow = await SupabaseService.client
+                .from('profiles')
+                .select('username, display_name, avatar_url')
+                .eq('id', resolvedId)
+                .maybeSingle();
+            if (profRow != null) {
+              final profAvatar = DirectMessageService.normalizeAvatarUrl(
+                profRow['avatar_url']?.toString(),
+              );
+              final profName =
+                  (profRow['display_name'] ?? profRow['username'] ?? '')
+                      .toString()
+                      .trim();
+              final profUsername =
+                  (profRow['username'] ?? '').toString().trim();
+              gamer = gamer.copyWith(
+                photoUrl: gamer.photoUrl.isNotEmpty ? gamer.photoUrl : profAvatar,
+                displayName: (gamer.displayName.isNotEmpty &&
+                        gamer.displayName != 'Gamer')
+                    ? gamer.displayName
+                    : (profName.isNotEmpty ? profName : gamer.displayName),
+                username: gamer.username.isNotEmpty
+                    ? gamer.username
+                    : profUsername,
+              );
+            }
+          } catch (_) {}
+        }
 
         // Always read authoritative G-Coins balance from public.coin_wallets.g_coins
         try {
@@ -1026,21 +1112,111 @@ class _GamerProfileScreenState extends State<GamerProfileScreen>
                   title: Text('nav_profile'.tr()),
                 ),
                 body: Center(
-                  child: isMe
-                      ? ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const CreateGamerIdScreen(),
-                              ),
-                            );
-                          },
-                          child: Text('btn_create_gamer_id'.tr()),
-                        )
-                      : Text(
-                          'gamer_id_not_found'.tr(),
-                          style: TextStyle(color: ThemeService.textPrimary),
-                        ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: isMe
+                        ? ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const CreateGamerIdScreen(),
+                                ),
+                              );
+                            },
+                            child: Text('btn_create_gamer_id'.tr()),
+                          )
+                        : Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: ThemeService.card,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: ThemeService.border),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 64,
+                                  height: 64,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1877F2)
+                                        .withOpacity(0.14),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.sports_esports_outlined,
+                                    color: Color(0xFF00E5FF),
+                                    size: 32,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Gamer Profile Not Linked Yet',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: ThemeService.textPrimary,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'This user has registered an account but has not finished setting up their Gamer ID details yet.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: ThemeService.textSecondary,
+                                    fontSize: 13,
+                                    height: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        if (Navigator.canPop(context)) {
+                                          Navigator.pop(context);
+                                        }
+                                      },
+                                      icon: const Icon(
+                                        Icons.arrow_back_rounded,
+                                        size: 16,
+                                      ),
+                                      label: const Text('Go Back'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor:
+                                            ThemeService.textPrimary,
+                                        side: BorderSide(
+                                          color: ThemeService.border,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        setState(() {
+                                          _initialFetchDone = false;
+                                        });
+                                        _prefetchCurrentUser();
+                                      },
+                                      icon: const Icon(
+                                        Icons.refresh_rounded,
+                                        size: 16,
+                                      ),
+                                      label: const Text('Retry'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            const Color(0xFF1877F2),
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                  ),
                 ),
               );
             }

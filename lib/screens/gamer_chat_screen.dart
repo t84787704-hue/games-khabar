@@ -135,9 +135,19 @@ class _GamerChatScreenState extends State<GamerChatScreen>
         : widget.otherUserId.trim();
     if (targetUserId.isEmpty) return;
 
-    final resolved = await _dmService.resolveToTableId(targetUserId);
+    final resolved = await _dmService.ensureUserRecordLinked(
+      targetUserId,
+      fallbackDisplayName: widget.otherUserName,
+      fallbackPhotoUrl:
+          _otherUserPhoto.isNotEmpty ? _otherUserPhoto : widget.otherUserPhoto,
+    );
     if (resolved.isNotEmpty) {
       targetUserId = resolved;
+      if (mounted && _effectiveOtherId != resolved) {
+        setState(() {
+          _effectiveOtherId = resolved;
+        });
+      }
     }
 
     if (!mounted) return;
@@ -189,7 +199,13 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     if (sourceUid.isNotEmpty) {
       final myAliases = await _dmService.getUserAliases(sourceUid);
       final myTableId = await _dmService.resolveToTableId(sourceUid);
-      final otherTableId = await _dmService.resolveToTableId(widget.otherUserId);
+      final otherTableId = await _dmService.ensureUserRecordLinked(
+        widget.otherUserId,
+        fallbackDisplayName: widget.otherUserName,
+        fallbackPhotoUrl: _otherUserPhoto.isNotEmpty
+            ? _otherUserPhoto
+            : widget.otherUserPhoto,
+      );
       if (mounted) {
         setState(() {
           _myAliases = myAliases;
@@ -734,6 +750,9 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       replyToSenderName: entry.message.replyToSenderName,
       replyToImageUrl: entry.message.replyToImageUrl,
       clientCreatedAt: entry.message.createdAt,
+      receiverDisplayName: widget.otherUserName,
+      receiverPhotoUrl:
+          _otherUserPhoto.isNotEmpty ? _otherUserPhoto : widget.otherUserPhoto,
     );
 
     if (!mounted) return;
@@ -742,6 +761,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       setState(() {
         entry.isSending = false;
         entry.hasFailed = false;
+        entry.errorMessage = null;
         final resolvedImg = persisted.resolvedImageUrl.isNotEmpty
             ? persisted.resolvedImageUrl
             : uploadedImageUrl;
@@ -770,16 +790,21 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       });
       _fetchOtherUserStatus();
     } else {
+      final detailedError = (_dmService.lastSendErrorMessage ?? '').trim();
       setState(() {
         entry.isSending = false;
         entry.hasFailed = true;
+        entry.errorMessage = detailedError.isNotEmpty ? detailedError : null;
       });
+      final defaultMsg = entry.isImageMessage
+          ? 'Failed to send image. Tap the image to retry.'
+          : 'Failed to send message. Tap the message to retry.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            entry.isImageMessage
-                ? 'Failed to send image. Tap the image to retry.'
-                : 'Failed to send message. Tap the message to retry.',
+            detailedError.isNotEmpty
+                ? '$detailedError Tap the message to retry.'
+                : defaultMsg,
           ),
           backgroundColor: const Color(0xFFFF4655),
           action: SnackBarAction(
@@ -804,6 +829,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     setState(() {
       entry.isSending = true;
       entry.hasFailed = false;
+      entry.errorMessage = null;
     });
 
     await _persistOptimisticMessage(entry, myUid, targetOtherId);
@@ -2365,6 +2391,7 @@ class _OptimisticMessage {
   String? serverId;
   bool isSending;
   bool hasFailed;
+  String? errorMessage;
 
   _OptimisticMessage({
     required this.tempId,
@@ -2374,6 +2401,7 @@ class _OptimisticMessage {
     this.serverId,
     this.isSending = true,
     this.hasFailed = false,
+    this.errorMessage,
   });
 
   bool get isImageMessage =>
