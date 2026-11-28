@@ -5049,17 +5049,7 @@ class _CoinWalletScreenState extends State<CoinWalletScreen> {
                 onTap: _watchAdFor25Coins,
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _earnCard(
-                title: 'Daily Bonus',
-                reward: '+50 Coins',
-                icon: Icons.card_giftcard_rounded,
-                color: GamerTheme.neonGreen,
-                onTap: _claimDailyBonus,
-              ),
-            ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: _earnCard(
                 title: 'Invite Friend',

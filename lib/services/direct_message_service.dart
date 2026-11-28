@@ -20,6 +20,9 @@ class DirectMessageService {
   static final Map<String, String> _resolvedUuidCache = {};
   DateTime? _lastPresenceUpdateUtc;
 
+  /// Reactive unread direct message count notifier observed by the bottom navigation Messages tab.
+  static final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
+
   static final RegExp _uuidRegex = RegExp(
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
 
@@ -695,12 +698,18 @@ class DirectMessageService {
   }
 
   /// Send a message, persist it to Supabase, and return the persisted ChatMessage (or null on failure).
+  /// Supports optional image URL and reply-to message reference.
   Future<ChatMessage?> sendMessageReturningRecord({
     required String senderId,
     required String receiverId,
     required String message,
     String messageType = 'text',
     String? imageUrl,
+    String? replyToId,
+    String? replyToText,
+    String? replyToSenderId,
+    String? replyToSenderName,
+    String? replyToImageUrl,
     DateTime? clientCreatedAt,
   }) async {
     final cleanImageUrl = (imageUrl ?? '').trim();
@@ -728,23 +737,67 @@ class DirectMessageService {
       final createdUtc = (clientCreatedAt ?? DateTime.now()).toUtc();
       final nowUtcIso = createdUtc.toIso8601String();
       final effectiveType = cleanImageUrl.isNotEmpty ? 'image' : messageType;
-      final storedMessageText =
+      final plainMessageText =
           cleanMessage.isNotEmpty ? cleanMessage : cleanImageUrl;
+
+      // Encode reply/image metadata into a zero-width suffix on `message` so it persists
+      // even if optional columns (`reply_to_id`, `reply_to_text`, `image_url`) aren't in the DB table
+      final encodedMessageText = ChatMessage.encodeMessageWithMetadata(
+        cleanMessage: plainMessageText,
+        imageUrl: cleanImageUrl.isNotEmpty ? cleanImageUrl : null,
+        replyToId: replyToId,
+        replyToText: replyToText,
+        replyToSenderId: replyToSenderId,
+        replyToSenderName: replyToSenderName,
+        replyToImageUrl: replyToImageUrl,
+      );
 
       final basePayload = <String, dynamic>{
         'sender_id': senderUuid,
         'receiver_id': receiverUuid,
-        'message': storedMessageText,
+        'message': encodedMessageText,
         'message_type': effectiveType,
         'is_read': false,
         'created_at': nowUtcIso,
       };
 
+      final extendedPayload = <String, dynamic>{
+        ...basePayload,
+        if (cleanImageUrl.isNotEmpty) 'image_url': cleanImageUrl,
+        if (replyToId != null && replyToId.trim().isNotEmpty)
+          'reply_to_id': replyToId.trim(),
+        if (replyToText != null && replyToText.trim().isNotEmpty)
+          'reply_to_text': replyToText.trim(),
+        if (replyToSenderId != null && replyToSenderId.trim().isNotEmpty)
+          'reply_to_sender_id': replyToSenderId.trim(),
+        if (replyToSenderName != null && replyToSenderName.trim().isNotEmpty)
+          'reply_to_sender_name': replyToSenderName.trim(),
+        if (replyToImageUrl != null && replyToImageUrl.trim().isNotEmpty)
+          'reply_to_image_url': replyToImageUrl.trim(),
+      };
+
       Map<String, dynamic>? insertedRow;
       bool inserted = false;
 
-      // If sending an image, first try including `image_url` if the schema supports it
-      if (cleanImageUrl.isNotEmpty) {
+      // 1. Try inserting with extended columns if any optional fields are present
+      if (extendedPayload.length > basePayload.length) {
+        try {
+          final res = await _client
+              .from('direct_messages')
+              .insert(extendedPayload)
+              .select()
+              .maybeSingle();
+          if (res != null) {
+            insertedRow = Map<String, dynamic>.from(res);
+          }
+          inserted = true;
+        } catch (_) {
+          // Schema may not have optional columns; fall through
+        }
+      }
+
+      // 2. If extended failed and we have an image, try with just `image_url`
+      if (!inserted && cleanImageUrl.isNotEmpty) {
         final payloadWithImageCol = <String, dynamic>{
           ...basePayload,
           'image_url': cleanImageUrl,
@@ -759,11 +812,10 @@ class DirectMessageService {
             insertedRow = Map<String, dynamic>.from(res);
           }
           inserted = true;
-        } catch (_) {
-          // Schema may not have `image_url` column; fall through to standard basePayload
-        }
+        } catch (_) {}
       }
 
+      // 3. Standard guaranteed insert using core columns (with embedded metadata in `message`)
       if (!inserted) {
         try {
           final res = await _client
@@ -786,9 +838,18 @@ class DirectMessageService {
       unawaited(updateUserPresence(userId: senderUuid, force: true));
 
       if (insertedRow != null) {
-        final parsed = ChatMessage.fromMap(insertedRow);
+        var parsed = ChatMessage.fromMap(insertedRow);
         if (cleanImageUrl.isNotEmpty && !parsed.hasImage) {
-          return parsed.copyWith(imageUrl: cleanImageUrl);
+          parsed = parsed.copyWith(imageUrl: cleanImageUrl);
+        }
+        if (replyToId != null && (parsed.replyToId == null || parsed.replyToId!.isEmpty)) {
+          parsed = parsed.copyWith(
+            replyToId: replyToId,
+            replyToText: replyToText,
+            replyToSenderId: replyToSenderId,
+            replyToSenderName: replyToSenderName,
+            replyToImageUrl: replyToImageUrl,
+          );
         }
         return parsed;
       }
@@ -796,13 +857,109 @@ class DirectMessageService {
         id: '',
         senderId: senderUuid,
         receiverId: receiverUuid,
-        message: storedMessageText,
+        message: plainMessageText,
         imageUrl: cleanImageUrl.isNotEmpty ? cleanImageUrl : null,
+        replyToId: replyToId,
+        replyToText: replyToText,
+        replyToSenderId: replyToSenderId,
+        replyToSenderName: replyToSenderName,
+        replyToImageUrl: replyToImageUrl,
         createdAt: createdUtc.toLocal(),
         isRead: false,
       );
     } catch (e) {
       debugPrint('[DMS] sendMessageReturningRecord error: $e');
+      return null;
+    }
+  }
+
+  /// Toggles or sets a user's emoji reaction on a specific message and persists it to Supabase.
+  Future<Map<String, List<String>>?> toggleMessageReaction({
+    required ChatMessage message,
+    required String emoji,
+    required String currentUserId,
+  }) async {
+    final msgId = message.id.trim();
+    final cleanEmoji = emoji.trim();
+    if (msgId.isEmpty || msgId.startsWith('temp_') || cleanEmoji.isEmpty) {
+      return null;
+    }
+
+    try {
+      final canonicalUserId = await resolveToTableId(currentUserId);
+      final effectiveUid =
+          canonicalUserId.isNotEmpty ? canonicalUserId : currentUserId.trim();
+      if (effectiveUid.isEmpty) return null;
+
+      final myAliases = await getUserAliases(effectiveUid);
+      myAliases.add(effectiveUid);
+      myAliases.add(effectiveUid.toLowerCase());
+
+      // Clone current reactions map
+      final updatedReactions = <String, List<String>>{};
+      message.reactions.forEach((k, v) {
+        updatedReactions[k] = List<String>.from(v);
+      });
+
+      final existingUsersForEmoji = updatedReactions[cleanEmoji] ?? <String>[];
+      final alreadyReactedWithSame = existingUsersForEmoji.any(
+        (u) => myAliases.contains(u) || myAliases.contains(u.toLowerCase()),
+      );
+
+      // Remove any existing reaction by this user across all emojis (one active reaction per user)
+      for (final entry in updatedReactions.entries.toList()) {
+        entry.value.removeWhere(
+          (u) => myAliases.contains(u) || myAliases.contains(u.toLowerCase()),
+        );
+        if (entry.value.isEmpty) {
+          updatedReactions.remove(entry.key);
+        }
+      }
+
+      // If the user tapped a different emoji (or hadn't reacted yet), add it
+      if (!alreadyReactedWithSame) {
+        updatedReactions.putIfAbsent(cleanEmoji, () => []).add(effectiveUid);
+      }
+
+      final encodedMessageText = ChatMessage.encodeMessageWithMetadata(
+        cleanMessage: message.message.isNotEmpty
+            ? message.message
+            : message.resolvedImageUrl,
+        imageUrl: message.hasImage ? message.resolvedImageUrl : null,
+        reactions: updatedReactions,
+        replyToId: message.replyToId,
+        replyToText: message.replyToText,
+        replyToSenderId: message.replyToSenderId,
+        replyToSenderName: message.replyToSenderName,
+        replyToImageUrl: message.replyToImageUrl,
+      );
+
+      bool persisted = false;
+      // 1. Try updating both native `reactions` JSONB column and `message`
+      try {
+        await _client
+            .from('direct_messages')
+            .update({
+              'reactions': updatedReactions,
+              'message': encodedMessageText,
+            })
+            .eq('id', msgId);
+        persisted = true;
+      } catch (_) {}
+
+      // 2. Fallback: update `message` column with embedded metadata
+      if (!persisted) {
+        await _client
+            .from('direct_messages')
+            .update({
+              'message': encodedMessageText,
+            })
+            .eq('id', msgId);
+      }
+
+      return updatedReactions;
+    } catch (e) {
+      debugPrint('[DMS] toggleMessageReaction error: $e');
       return null;
     }
   }
@@ -814,6 +971,11 @@ class DirectMessageService {
     required String message,
     String messageType = 'text',
     String? imageUrl,
+    String? replyToId,
+    String? replyToText,
+    String? replyToSenderId,
+    String? replyToSenderName,
+    String? replyToImageUrl,
   }) async {
     final record = await sendMessageReturningRecord(
       senderId: senderId,
@@ -821,6 +983,11 @@ class DirectMessageService {
       message: message,
       messageType: messageType,
       imageUrl: imageUrl,
+      replyToId: replyToId,
+      replyToText: replyToText,
+      replyToSenderId: replyToSenderId,
+      replyToSenderName: replyToSenderName,
+      replyToImageUrl: replyToImageUrl,
     );
     return record != null;
   }
@@ -961,7 +1128,8 @@ class DirectMessageService {
           final msgs = entry.value;
 
           final lastMsg = msgs.first;
-          final lastText = (lastMsg['message'] ?? '').toString();
+          final parsedLastMsg = ChatMessage.fromMap(lastMsg);
+          final lastText = parsedLastMsg.message;
           final lastType = (lastMsg['message_type'] ?? 'text').toString();
           final lastTimeUtc = parseToUtc(lastMsg['created_at']);
           final lastTime = (lastTimeUtc ?? DateTime.now().toUtc()).toLocal();
@@ -1281,11 +1449,38 @@ class DirectMessageService {
       conversations.sort((ChatConversation a, ChatConversation b) {
         return b.lastMessageTime.compareTo(a.lastMessageTime);
       });
+      final totalUnreadFromList = conversations.fold<int>(
+        0,
+        (sum, item) => sum + item.unreadCount,
+      );
+      if (unreadCountNotifier.value != totalUnreadFromList) {
+        unreadCountNotifier.value = totalUnreadFromList;
+      }
       return conversations;
     } catch (e) {
       debugPrint('[DMS] getConversations error: $e');
       return [];
     }
+  }
+
+  /// Refreshes the global `unreadCountNotifier` for the current user.
+  Future<int> refreshUnreadCount([String? userId]) async {
+    final authUid = _client.auth.currentUser?.id ?? '';
+    final gamerUid = GamerAuthService().currentGamer?.uid ?? '';
+    final effectiveUid = (userId != null && userId.trim().isNotEmpty)
+        ? userId.trim()
+        : (gamerUid.isNotEmpty ? gamerUid : authUid);
+    if (effectiveUid.isEmpty) {
+      if (unreadCountNotifier.value != 0) {
+        unreadCountNotifier.value = 0;
+      }
+      return 0;
+    }
+    final count = await getTotalUnreadCount(effectiveUid);
+    if (unreadCountNotifier.value != count) {
+      unreadCountNotifier.value = count;
+    }
+    return count;
   }
 
   /// Mark all messages from a specific user as read
@@ -1319,6 +1514,7 @@ class DirectMessageService {
           } catch (_) {}
         }
       }
+      await refreshUnreadCount(currentUserId);
     } catch (e) {
       debugPrint('[DMS] markAsRead error: $e');
     }
@@ -1341,13 +1537,25 @@ class DirectMessageService {
 
       final rows = await _client
           .from('direct_messages')
-          .select('id')
+          .select('id, sender_id')
           .or(filterList)
           .eq('is_read', false);
-      return (rows as List).length;
+      int count = 0;
+      for (final r in (rows as List)) {
+        if (r is Map) {
+          final sender = (r['sender_id'] ?? '').toString();
+          if (!myAliases.any((a) => a.toLowerCase() == sender.toLowerCase())) {
+            count++;
+          }
+        }
+      }
+      if (unreadCountNotifier.value != count) {
+        unreadCountNotifier.value = count;
+      }
+      return count;
     } catch (e) {
       debugPrint('[DMS] getTotalUnreadCount error: $e');
-      return 0;
+      return unreadCountNotifier.value;
     }
   }
 
@@ -1362,7 +1570,7 @@ class DirectMessageService {
     }
     while (true) {
       yield await getTotalUnreadCount(userId);
-      await Future.delayed(const Duration(seconds: 5));
+      await Future.delayed(const Duration(seconds: 4));
     }
   }
 

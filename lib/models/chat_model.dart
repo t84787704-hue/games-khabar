@@ -4,7 +4,12 @@
 /// Time should be injected by the repository/service layer.
 /// Fallback time is applied ONLY when parsing legacy/incomplete data.
 
+import 'dart:convert';
+
 class ChatMessage {
+  static const String _metaSuffixStart = '\u200B\u2063[[GM_META:';
+  static const String _metaSuffixEnd = ']]\u2063\u200B';
+
   final String id;
   final String senderId;
   final String receiverId;
@@ -14,6 +19,17 @@ class ChatMessage {
   final bool isRead;
   final String? imageUrl;
   final String? mediaUrl;
+
+  /// Map of emoji -> list of userIds (or single userId) who reacted with that emoji,
+  /// normalized here as `Map<String, List<String>>` (emoji -> list of userIds).
+  final Map<String, List<String>> reactions;
+
+  /// Reply metadata when this message is a reply to an earlier message.
+  final String? replyToId;
+  final String? replyToText;
+  final String? replyToSenderId;
+  final String? replyToSenderName;
+  final String? replyToImageUrl;
 
   const ChatMessage({
     this.id = '',
@@ -25,12 +41,26 @@ class ChatMessage {
     this.isRead = false,
     this.imageUrl,
     this.mediaUrl,
+    this.reactions = const {},
+    this.replyToId,
+    this.replyToText,
+    this.replyToSenderId,
+    this.replyToSenderName,
+    this.replyToImageUrl,
   });
 
   String get text => message;
   String get content => message;
   DateTime get timestamp => createdAt;
   DateTime get time => createdAt;
+
+  bool get isReply =>
+      (replyToId != null && replyToId!.trim().isNotEmpty) ||
+      (replyToText != null && replyToText!.trim().isNotEmpty) ||
+      (replyToImageUrl != null && replyToImageUrl!.trim().isNotEmpty);
+
+  bool get hasReactions =>
+      reactions.entries.any((entry) => entry.key.trim().isNotEmpty && entry.value.isNotEmpty);
 
   /// Resolves the image URL for an image message whether stored in `image_url`, `media_url`,
   /// or directly in `message` when `message_type == 'image'`.
@@ -67,14 +97,146 @@ class ChatMessage {
     return false;
   }
 
+  /// Strips any embedded metadata suffix from a raw database message string and returns
+  /// `{ 'cleanMessage': String, 'meta': Map<String, dynamic>? }`.
+  static Map<String, dynamic> decodeEmbeddedMetadata(String rawMessage) {
+    final startIdx = rawMessage.indexOf(_metaSuffixStart);
+    if (startIdx == -1) {
+      return {'cleanMessage': rawMessage, 'meta': null};
+    }
+    final endIdx = rawMessage.indexOf(_metaSuffixEnd, startIdx);
+    if (endIdx == -1) {
+      return {'cleanMessage': rawMessage, 'meta': null};
+    }
+    final cleanText = rawMessage.substring(0, startIdx);
+    final b64Payload = rawMessage.substring(
+      startIdx + _metaSuffixStart.length,
+      endIdx,
+    );
+    try {
+      final jsonStr = utf8.decode(base64Decode(b64Payload));
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is Map) {
+        return {
+          'cleanMessage': cleanText,
+          'meta': Map<String, dynamic>.from(decoded),
+        };
+      }
+    } catch (_) {}
+    return {'cleanMessage': cleanText, 'meta': null};
+  }
+
+  /// Encodes reply/reaction/image metadata into a compact suffix appended to `cleanMessage`
+  /// so databases without dedicated `reactions` or `reply_to_*` columns still persist them.
+  static String encodeMessageWithMetadata({
+    required String cleanMessage,
+    String? imageUrl,
+    Map<String, List<String>>? reactions,
+    String? replyToId,
+    String? replyToText,
+    String? replyToSenderId,
+    String? replyToSenderName,
+    String? replyToImageUrl,
+  }) {
+    final meta = <String, dynamic>{};
+    if (imageUrl != null && imageUrl.trim().isNotEmpty) {
+      meta['img'] = imageUrl.trim();
+    }
+    if (replyToId != null && replyToId.trim().isNotEmpty) {
+      meta['r_id'] = replyToId.trim();
+    }
+    if (replyToText != null && replyToText.trim().isNotEmpty) {
+      meta['r_txt'] = replyToText.trim();
+    }
+    if (replyToSenderId != null && replyToSenderId.trim().isNotEmpty) {
+      meta['r_sid'] = replyToSenderId.trim();
+    }
+    if (replyToSenderName != null && replyToSenderName.trim().isNotEmpty) {
+      meta['r_sname'] = replyToSenderName.trim();
+    }
+    if (replyToImageUrl != null && replyToImageUrl.trim().isNotEmpty) {
+      meta['r_img'] = replyToImageUrl.trim();
+    }
+    if (reactions != null && reactions.isNotEmpty) {
+      final cleanReactions = <String, List<String>>{};
+      reactions.forEach((emoji, users) {
+        if (emoji.trim().isNotEmpty && users.isNotEmpty) {
+          cleanReactions[emoji.trim()] = users;
+        }
+      });
+      if (cleanReactions.isNotEmpty) {
+        meta['rx'] = cleanReactions;
+      }
+    }
+
+    if (meta.isEmpty) return cleanMessage;
+    try {
+      final b64 = base64Encode(utf8.encode(jsonEncode(meta)));
+      return '$cleanMessage$_metaSuffixStart$b64$_metaSuffixEnd';
+    } catch (_) {
+      return cleanMessage;
+    }
+  }
+
+  static Map<String, List<String>> parseReactionsMap(dynamic raw) {
+    final result = <String, List<String>>{};
+    if (raw == null) return result;
+    dynamic parsed = raw;
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        parsed = jsonDecode(raw);
+      } catch (_) {
+        return result;
+      }
+    }
+    if (parsed is Map) {
+      parsed.forEach((key, value) {
+        final k = key.toString().trim();
+        if (k.isEmpty) return;
+        if (value is List) {
+          // Format: { "👍": ["userId1", "userId2"] }
+          final users = value
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList();
+          if (users.isNotEmpty) {
+            result[k] = users;
+          }
+        } else if (value is String && value.trim().isNotEmpty) {
+          // Format: { "userId1": "👍" } or { "👍": "userId1" }
+          final v = value.trim();
+          // Check if key looks like an emoji (short length <= 8 and non-ASCII) vs userId
+          final isKeyEmoji = k.runes.length <= 4 && k.codeUnits.any((c) => c > 127);
+          if (isKeyEmoji) {
+            result.putIfAbsent(k, () => []).add(v);
+          } else {
+            result.putIfAbsent(v, () => []).add(k);
+          }
+        }
+      });
+    }
+    return result;
+  }
+
   factory ChatMessage.fromMap(Map<String, dynamic> map) {
-    final rawMsg = map['message']?.toString() ??
+    final rawField = map['message']?.toString() ??
         map['text']?.toString() ??
         map['content']?.toString() ??
         '';
-    final msgType =
-        (map['message_type'] ?? map['messageType'] ?? 'text').toString().trim().toLowerCase();
-    String? imgUrl = map['image_url']?.toString() ?? map['imageUrl']?.toString();
+    final decodedPayload = decodeEmbeddedMetadata(rawField);
+    final String rawMsg = decodedPayload['cleanMessage'] as String;
+    final Map<String, dynamic>? embeddedMeta =
+        decodedPayload['meta'] as Map<String, dynamic>?;
+
+    final msgType = (map['message_type'] ?? map['messageType'] ?? 'text')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    String? imgUrl = map['image_url']?.toString() ??
+        map['imageUrl']?.toString() ??
+        embeddedMeta?['img']?.toString();
     String? medUrl = map['media_url']?.toString() ?? map['mediaUrl']?.toString();
 
     if ((imgUrl == null || imgUrl.trim().isEmpty || imgUrl == 'null') &&
@@ -86,6 +248,36 @@ class ChatMessage {
         imgUrl = rawMsg.trim();
       }
     }
+
+    // Parse reactions from native `reactions` column or embedded metadata
+    Map<String, List<String>> parsedReactions = parseReactionsMap(map['reactions']);
+    if (parsedReactions.isEmpty && embeddedMeta != null && embeddedMeta['rx'] != null) {
+      parsedReactions = parseReactionsMap(embeddedMeta['rx']);
+    }
+
+    // Parse reply reference from native columns or embedded metadata
+    final String? replyId = (map['reply_to_id'] ??
+            map['replyToId'] ??
+            map['reply_to_message_id'] ??
+            embeddedMeta?['r_id'])
+        ?.toString();
+    final String? replyText = (map['reply_to_text'] ??
+            map['replyToText'] ??
+            map['reply_to_message'] ??
+            embeddedMeta?['r_txt'])
+        ?.toString();
+    final String? replySenderId = (map['reply_to_sender_id'] ??
+            map['replyToSenderId'] ??
+            embeddedMeta?['r_sid'])
+        ?.toString();
+    final String? replySenderName = (map['reply_to_sender_name'] ??
+            map['replyToSenderName'] ??
+            embeddedMeta?['r_sname'])
+        ?.toString();
+    final String? replyImage = (map['reply_to_image_url'] ??
+            map['replyToImageUrl'] ??
+            embeddedMeta?['r_img'])
+        ?.toString();
 
     return ChatMessage(
       id: map['id']?.toString() ?? '',
@@ -103,8 +295,35 @@ class ChatMessage {
         map['created_at'] ?? map['createdAt'] ?? map['timestamp'],
       ),
       isRead: map['is_read'] == true || map['isRead'] == true,
-      imageUrl: imgUrl,
-      mediaUrl: medUrl,
+      imageUrl: (imgUrl != null && imgUrl != 'null' && imgUrl.trim().isNotEmpty)
+          ? imgUrl.trim()
+          : null,
+      mediaUrl: (medUrl != null && medUrl != 'null' && medUrl.trim().isNotEmpty)
+          ? medUrl.trim()
+          : null,
+      reactions: parsedReactions,
+      replyToId: (replyId != null && replyId != 'null' && replyId.trim().isNotEmpty)
+          ? replyId.trim()
+          : null,
+      replyToText:
+          (replyText != null && replyText != 'null' && replyText.trim().isNotEmpty)
+              ? replyText.trim()
+              : null,
+      replyToSenderId: (replySenderId != null &&
+              replySenderId != 'null' &&
+              replySenderId.trim().isNotEmpty)
+          ? replySenderId.trim()
+          : null,
+      replyToSenderName: (replySenderName != null &&
+              replySenderName != 'null' &&
+              replySenderName.trim().isNotEmpty)
+          ? replySenderName.trim()
+          : null,
+      replyToImageUrl: (replyImage != null &&
+              replyImage != 'null' &&
+              replyImage.trim().isNotEmpty)
+          ? replyImage.trim()
+          : null,
     );
   }
 
@@ -124,6 +343,12 @@ class ChatMessage {
       'isRead': isRead,
       if (imageUrl != null) 'image_url': imageUrl,
       if (mediaUrl != null) 'media_url': mediaUrl,
+      if (reactions.isNotEmpty) 'reactions': reactions,
+      if (replyToId != null) 'reply_to_id': replyToId,
+      if (replyToText != null) 'reply_to_text': replyToText,
+      if (replyToSenderId != null) 'reply_to_sender_id': replyToSenderId,
+      if (replyToSenderName != null) 'reply_to_sender_name': replyToSenderName,
+      if (replyToImageUrl != null) 'reply_to_image_url': replyToImageUrl,
     };
   }
 
@@ -137,6 +362,12 @@ class ChatMessage {
     bool? isRead,
     String? imageUrl,
     String? mediaUrl,
+    Map<String, List<String>>? reactions,
+    String? replyToId,
+    String? replyToText,
+    String? replyToSenderId,
+    String? replyToSenderName,
+    String? replyToImageUrl,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -148,6 +379,12 @@ class ChatMessage {
       isRead: isRead ?? this.isRead,
       imageUrl: imageUrl ?? this.imageUrl,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      reactions: reactions ?? this.reactions,
+      replyToId: replyToId ?? this.replyToId,
+      replyToText: replyToText ?? this.replyToText,
+      replyToSenderId: replyToSenderId ?? this.replyToSenderId,
+      replyToSenderName: replyToSenderName ?? this.replyToSenderName,
+      replyToImageUrl: replyToImageUrl ?? this.replyToImageUrl,
     );
   }
 }

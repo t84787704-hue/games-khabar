@@ -239,6 +239,7 @@ class _GamerMessagesScreenState extends State<GamerMessagesScreen>
       setState(() {
         _conversations.removeWhere((item) => item.otherUserId == c.otherUserId);
       });
+      unawaited(_dmService.refreshUnreadCount());
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

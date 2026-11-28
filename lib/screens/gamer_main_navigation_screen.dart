@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import '../constants/gamer_theme.dart';
+import '../services/direct_message_service.dart';
 import '../services/gamer_auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/theme_service.dart';
@@ -38,6 +39,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
   late int _currentIndex;
   bool _isAdmin = false;
   StreamSubscription? _adminSub;
+  Timer? _unreadMessagesPollTimer;
 
   @override
   void initState() {
@@ -47,6 +49,20 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     _checkAdminStatus();
     _checkDailyLoginStreak();
     _initActiveStayTracker();
+    _initUnreadMessagesWatcher();
+  }
+
+  void _initUnreadMessagesWatcher() {
+    DirectMessageService().refreshUnreadCount();
+    _unreadMessagesPollTimer?.cancel();
+    _unreadMessagesPollTimer = Timer.periodic(
+      const Duration(seconds: 4),
+      (_) {
+        if (mounted) {
+          DirectMessageService().refreshUnreadCount();
+        }
+      },
+    );
   }
 
   void _initActiveStayTracker() {
@@ -126,6 +142,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
   @override
   void dispose() {
     _adminSub?.cancel();
+    _unreadMessagesPollTimer?.cancel();
     super.dispose();
   }
 
@@ -223,12 +240,19 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
                           isSelected: _currentIndex == 2,
                           isDark: isDark,
                         ),
-                        _buildNavItem(
-                          index: 3, // پہلے 4 تھا، اب 3
-                          icon: Icons.chat_bubble_rounded,
-                          label: 'Messages',
-                          isSelected: _currentIndex == 3,
-                          isDark: isDark,
+                        ValueListenableBuilder<int>(
+                          valueListenable:
+                              DirectMessageService.unreadCountNotifier,
+                          builder: (context, unreadCount, _) {
+                            return _buildNavItem(
+                              index: 3, // پہلے 4 تھا، اب 3
+                              icon: Icons.chat_bubble_rounded,
+                              label: 'Messages',
+                              isSelected: _currentIndex == 3,
+                              isDark: isDark,
+                              showUnreadDot: unreadCount > 0,
+                            );
+                          },
                         ),
                         _buildNavItem(
                           index: 4, // پہلے 5 تھا، اب 4
@@ -262,6 +286,9 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     if (_currentIndex != index) {
       setState(() => _currentIndex = index);
     }
+    if (index == 3) {
+      DirectMessageService().refreshUnreadCount();
+    }
   }
 
   Widget _buildNavItem({
@@ -271,6 +298,7 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
     required bool isSelected,
     required bool isDark,
     Color activeColor = const Color(0xFF1877F2),
+    bool showUnreadDot = false,
   }) {
     final unselectedColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF65676B);
 
@@ -282,10 +310,38 @@ class _GamerMainNavigationScreenState extends State<GamerMainNavigationScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 21,
-              color: isSelected ? activeColor : unselectedColor,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  size: 21,
+                  color: isSelected ? activeColor : unselectedColor,
+                ),
+                if (showUnreadDot)
+                  Positioned(
+                    top: -2,
+                    right: -4,
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF4655),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: ThemeService.bottomNavBg,
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF4655).withOpacity(0.55),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 3),
             Text(

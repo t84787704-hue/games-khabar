@@ -42,6 +42,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
   final _dmService = DirectMessageService();
   final _authService = GamerAuthService();
   final _messageController = TextEditingController();
+  final _inputFocusNode = FocusNode();
   final _scrollController = ScrollController();
   final _imagePicker = ImagePicker();
 
@@ -55,10 +56,42 @@ class _GamerChatScreenState extends State<GamerChatScreen>
   Stream<List<ChatMessage>>? _chatStream;
   Timer? _presencePollTimer;
 
-  // Optimistic messages and locally deleted message IDs for instant UI feedback
+  // Optimistic messages, locally deleted message IDs, reply target & reaction overrides
   final List<_OptimisticMessage> _optimisticMessages = [];
   final Set<String> _deletedMessageIds = {};
+  final Map<String, Map<String, List<String>>> _optimisticReactionsByMsgId = {};
+  ChatMessage? _replyingToMessage;
   int _tempIdCounter = 0;
+  int _lastMarkedUnreadCount = 0;
+
+  static const List<String> _quickReactionEmojis = [
+    '👍',
+    '❤️',
+    '😂',
+    '🔥',
+    '😢',
+    '🙏',
+  ];
+  static const List<String> _extendedReactionEmojis = [
+    '👍',
+    '❤️',
+    '😂',
+    '🔥',
+    '😢',
+    '🙏',
+    '😮',
+    '🎉',
+    '💯',
+    '👏',
+    '🎮',
+    '🏆',
+    '⚡',
+    '😎',
+    '🤝',
+    '🫡',
+    '💀',
+    '👑',
+  ];
 
   static const Color neonBlue = Color(0xFF1877F2);
   static const Color neonCyan = Color(0xFF00E5FF);
@@ -181,6 +214,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     WidgetsBinding.instance.removeObserver(this);
     _presencePollTimer?.cancel();
     _messageController.dispose();
+    _inputFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -224,6 +258,13 @@ class _GamerChatScreenState extends State<GamerChatScreen>
         sLower == SupabaseService.toUuid(myUid).toLowerCase();
   }
 
+  ChatMessage _applyOptimisticReactions(ChatMessage msg) {
+    if (msg.id.isEmpty) return msg;
+    final override = _optimisticReactionsByMsgId[msg.id];
+    if (override == null) return msg;
+    return msg.copyWith(reactions: override);
+  }
+
   /// Combines server stream messages with pending/confirmed/failed optimistic messages,
   /// deduplicating any optimistic item that has already arrived in the server snapshot.
   List<ChatMessage> _mergeMessagesWithOptimistic(
@@ -232,6 +273,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
   ) {
     final filteredServer = serverMessages
         .where((m) => m.id.isEmpty || !_deletedMessageIds.contains(m.id))
+        .map(_applyOptimisticReactions)
         .toList();
 
     if (_optimisticMessages.isEmpty) {
@@ -273,11 +315,13 @@ class _GamerChatScreenState extends State<GamerChatScreen>
           final srv = filteredServer[i];
           if (!_isMessageFromMe(srv.senderId, myUid)) continue;
           final srvImgUrl = srv.resolvedImageUrl;
-          final isSameText = srv.message.trim().isNotEmpty &&
-              srv.message.trim() == opt.message.message.trim();
           final isSameImage = optImgUrl.isNotEmpty &&
               srvImgUrl.isNotEmpty &&
               srvImgUrl == optImgUrl;
+          final isSameText = !opt.isImageMessage &&
+              srvImgUrl.isEmpty &&
+              srv.message.trim().isNotEmpty &&
+              srv.message.trim() == opt.message.message.trim();
           if (!isSameText && !isSameImage) continue;
           final diffSeconds =
               srv.createdAt.difference(opt.message.createdAt).inSeconds.abs();
@@ -293,7 +337,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
         }
       }
 
-      remainingOptimistic.add(opt.displayMessage);
+      remainingOptimistic.add(_applyOptimisticReactions(opt.displayMessage));
     }
 
     if (remainingOptimistic.isEmpty) {
@@ -320,6 +364,105 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     return null;
   }
 
+  String _resolveReplySenderName(ChatMessage target, String myUid) {
+    if (_isMessageFromMe(target.senderId, myUid)) {
+      return 'You';
+    }
+    return widget.otherUserName;
+  }
+
+  String _resolveReplySnippetText(ChatMessage target) {
+    final cleanText = target.message.trim();
+    final imgUrl = target.resolvedImageUrl;
+    if (cleanText.isNotEmpty &&
+        cleanText != imgUrl &&
+        !cleanText.startsWith('http://') &&
+        !cleanText.startsWith('https://')) {
+      return cleanText;
+    }
+    if (target.hasImage) {
+      return '📷 Photo';
+    }
+    return cleanText;
+  }
+
+  void _startReplyToMessage(ChatMessage m) {
+    setState(() {
+      _replyingToMessage = m;
+    });
+    _inputFocusNode.requestFocus();
+  }
+
+  void _cancelReply() {
+    if (_replyingToMessage == null) return;
+    setState(() {
+      _replyingToMessage = null;
+    });
+  }
+
+  Future<void> _toggleReaction(ChatMessage m, String emoji) async {
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final sourceUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : sourceUid;
+    if (myUid.isEmpty) return;
+
+    final currentReactions = <String, List<String>>{};
+    final baseMap = _optimisticReactionsByMsgId[m.id] ?? m.reactions;
+    baseMap.forEach((k, v) {
+      currentReactions[k] = List<String>.from(v);
+    });
+
+    final myAliasesLower = <String>{
+      myUid.toLowerCase(),
+      SupabaseService.toUuid(myUid).toLowerCase(),
+      ..._myAliases.map((a) => a.toLowerCase()),
+    };
+
+    final existingUsers = currentReactions[emoji] ?? <String>[];
+    final alreadyReactedWithSame =
+        existingUsers.any((u) => myAliasesLower.contains(u.toLowerCase()));
+
+    for (final key in currentReactions.keys.toList()) {
+      currentReactions[key]!.removeWhere(
+        (u) => myAliasesLower.contains(u.toLowerCase()),
+      );
+      if (currentReactions[key]!.isEmpty) {
+        currentReactions.remove(key);
+      }
+    }
+
+    if (!alreadyReactedWithSame) {
+      currentReactions.putIfAbsent(emoji, () => <String>[]).add(myUid);
+    }
+
+    final opt = _findOptimisticForMessage(m);
+    setState(() {
+      if (m.id.isNotEmpty) {
+        _optimisticReactionsByMsgId[m.id] = currentReactions;
+      }
+      if (opt != null) {
+        opt.message = opt.message.copyWith(reactions: currentReactions);
+        if (opt.serverId != null && opt.serverId!.isNotEmpty) {
+          _optimisticReactionsByMsgId[opt.serverId!] = currentReactions;
+        }
+      }
+    });
+
+    final targetServerId = (opt?.serverId != null && opt!.serverId!.isNotEmpty)
+        ? opt.serverId!
+        : m.id;
+    if (targetServerId.isEmpty || targetServerId.startsWith('temp_')) {
+      return;
+    }
+
+    await _dmService.toggleMessageReaction(
+      message: m.copyWith(id: targetServerId, reactions: baseMap),
+      emoji: emoji,
+      currentUserId: myUid,
+    );
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
@@ -344,6 +487,19 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       return;
     }
 
+    final replyTarget = _replyingToMessage;
+    final replyToId = replyTarget?.id;
+    final replyToText =
+        replyTarget != null ? _resolveReplySnippetText(replyTarget) : null;
+    final replyToSenderId = replyTarget?.senderId;
+    final replyToSenderName = replyTarget != null
+        ? _resolveReplySenderName(replyTarget, myUid)
+        : null;
+    final replyToImageUrl =
+        (replyTarget != null && replyTarget.resolvedImageUrl.isNotEmpty)
+            ? replyTarget.resolvedImageUrl
+            : null;
+
     final nowLocal = DateTime.now();
     final tempId =
         'temp_${nowLocal.microsecondsSinceEpoch}_${++_tempIdCounter}';
@@ -354,6 +510,11 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       message: text,
       createdAt: nowLocal,
       isRead: false,
+      replyToId: replyToId,
+      replyToText: replyToText,
+      replyToSenderId: replyToSenderId,
+      replyToSenderName: replyToSenderName,
+      replyToImageUrl: replyToImageUrl,
     );
 
     final entry = _OptimisticMessage(
@@ -361,9 +522,10 @@ class _GamerChatScreenState extends State<GamerChatScreen>
       message: optimisticMsg,
     );
 
-    // 1. Immediately clear input, append optimistic bubble, and scroll to bottom
+    // 1. Immediately clear input & reply state, append optimistic bubble, and scroll to bottom
     _messageController.clear();
     setState(() {
+      _replyingToMessage = null;
       _optimisticMessages.add(entry);
     });
     _scrollToBottom();
@@ -372,6 +534,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     await _persistOptimisticMessage(entry, myUid, targetOtherId);
   }
 
+  /// Allows picking and sending up to 10 images at once from the gallery.
   Future<void> _pickAndSendImage() async {
     final myAuthUid = _authService.currentUid ?? '';
     final myGamerUid = _authService.currentGamer?.uid ?? '';
@@ -394,53 +557,118 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     }
 
     try {
-      final picked = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 82,
-        maxWidth: 1600,
-      );
-      if (picked == null) return;
+      List<XFile> pickedList = [];
+      try {
+        pickedList = await _imagePicker.pickMultiImage(
+          imageQuality: 82,
+          maxWidth: 1600,
+        );
+      } catch (_) {
+        final single = await _imagePicker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 82,
+          maxWidth: 1600,
+        );
+        if (single != null) {
+          pickedList = [single];
+        }
+      }
 
-      final imageFile = File(picked.path);
-      if (!await imageFile.exists()) return;
+      if (pickedList.isEmpty) return;
+
+      if (pickedList.length > 10) {
+        pickedList = pickedList.take(10).toList();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'You can send up to 10 images at once. Sending the first 10 images.',
+              ),
+              backgroundColor: neonBlue,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+
+      final validFiles = <File>[];
+      for (final xfile in pickedList) {
+        final f = File(xfile.path);
+        if (await f.exists()) {
+          validFiles.add(f);
+        }
+      }
+      if (validFiles.isEmpty) return;
 
       final captionText = _messageController.text.trim();
       if (captionText.isNotEmpty) {
         _messageController.clear();
       }
 
-      final nowLocal = DateTime.now();
-      final tempId =
-          'temp_img_${nowLocal.microsecondsSinceEpoch}_${++_tempIdCounter}';
-      final optimisticMsg = ChatMessage(
-        id: tempId,
-        senderId: myUid,
-        receiverId: targetOtherId,
-        message: captionText,
-        createdAt: nowLocal,
-        isRead: false,
-      );
+      final replyTarget = _replyingToMessage;
+      final replyToId = replyTarget?.id;
+      final replyToText =
+          replyTarget != null ? _resolveReplySnippetText(replyTarget) : null;
+      final replyToSenderId = replyTarget?.senderId;
+      final replyToSenderName = replyTarget != null
+          ? _resolveReplySenderName(replyTarget, myUid)
+          : null;
+      final replyToImageUrl =
+          (replyTarget != null && replyTarget.resolvedImageUrl.isNotEmpty)
+              ? replyTarget.resolvedImageUrl
+              : null;
 
-      final entry = _OptimisticMessage(
-        tempId: tempId,
-        message: optimisticMsg,
-        localImageFile: imageFile,
-        isSending: true,
-      );
+      final baseNow = DateTime.now();
+      final batchEntries = <_OptimisticMessage>[];
+
+      for (int i = 0; i < validFiles.length; i++) {
+        final itemTime = baseNow.add(Duration(milliseconds: i * 15));
+        final tempId =
+            'temp_img_${itemTime.microsecondsSinceEpoch}_${++_tempIdCounter}';
+        final isFirstInBatch = i == 0;
+        final optimisticMsg = ChatMessage(
+          id: tempId,
+          senderId: myUid,
+          receiverId: targetOtherId,
+          message: isFirstInBatch ? captionText : '',
+          createdAt: itemTime,
+          isRead: false,
+          replyToId: isFirstInBatch ? replyToId : null,
+          replyToText: isFirstInBatch ? replyToText : null,
+          replyToSenderId: isFirstInBatch ? replyToSenderId : null,
+          replyToSenderName: isFirstInBatch ? replyToSenderName : null,
+          replyToImageUrl: isFirstInBatch ? replyToImageUrl : null,
+        );
+
+        batchEntries.add(
+          _OptimisticMessage(
+            tempId: tempId,
+            message: optimisticMsg,
+            localImageFile: validFiles[i],
+            isSending: true,
+          ),
+        );
+      }
 
       if (!mounted) return;
       setState(() {
-        _optimisticMessages.add(entry);
+        _replyingToMessage = null;
+        _optimisticMessages.addAll(batchEntries);
       });
       _scrollToBottom();
 
-      await _persistOptimisticMessage(entry, myUid, targetOtherId);
+      // Upload and persist all selected images concurrently (up to 10)
+      await Future.wait(
+        batchEntries.map(
+          (entry) => _persistOptimisticMessage(entry, myUid, targetOtherId),
+        ),
+      );
     } catch (e) {
-      debugPrint('[GamerChatScreen] Image picker error: $e');
+      debugPrint('[GamerChatScreen] Multi-image picker error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not select image.'),
+            content: Text('Could not select images.'),
             backgroundColor: Color(0xFFFF4655),
           ),
         );
@@ -500,6 +728,11 @@ class _GamerChatScreenState extends State<GamerChatScreen>
           ? 'image'
           : 'text',
       imageUrl: uploadedImageUrl,
+      replyToId: entry.message.replyToId,
+      replyToText: entry.message.replyToText,
+      replyToSenderId: entry.message.replyToSenderId,
+      replyToSenderName: entry.message.replyToSenderName,
+      replyToImageUrl: entry.message.replyToImageUrl,
       clientCreatedAt: entry.message.createdAt,
     );
 
@@ -513,6 +746,12 @@ class _GamerChatScreenState extends State<GamerChatScreen>
             ? persisted.resolvedImageUrl
             : uploadedImageUrl;
         if (persisted.id.isNotEmpty) {
+          final existingOptimisticReaction =
+              _optimisticReactionsByMsgId[entry.tempId];
+          if (existingOptimisticReaction != null) {
+            _optimisticReactionsByMsgId[persisted.id] =
+                existingOptimisticReaction;
+          }
           entry.serverId = persisted.id;
           entry.message = entry.message.copyWith(
             id: persisted.id,
@@ -674,8 +913,106 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     }
   }
 
+  bool _hasMyReactionForEmoji(ChatMessage m, String emoji) {
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final sourceUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : sourceUid;
+    final myAliasesLower = <String>{
+      myUid.toLowerCase(),
+      SupabaseService.toUuid(myUid).toLowerCase(),
+      ..._myAliases.map((a) => a.toLowerCase()),
+    };
+    final users =
+        (_optimisticReactionsByMsgId[m.id] ?? m.reactions)[emoji] ?? const [];
+    return users.any((u) => myAliasesLower.contains(u.toLowerCase()));
+  }
+
+  void _showExtendedEmojiReactionPicker(ChatMessage m) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ThemeService.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: ThemeService.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Text(
+                'React with Emoji',
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                alignment: WrapAlignment.center,
+                children: _extendedReactionEmojis.map((emoji) {
+                  final isSelected = _hasMyReactionForEmoji(m, emoji);
+                  return InkWell(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _toggleReaction(m, emoji);
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? neonBlue.withOpacity(0.25)
+                            : ThemeService.cardSecondary,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isSelected ? neonCyan : ThemeService.border,
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Text(
+                        emoji,
+                        style: const TextStyle(fontSize: 23),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showMessageOptions(ChatMessage m, bool isMyMsg) {
     final opt = _findOptimisticForMessage(m);
+    final rawText = m.message.trim();
+    final imageUrl = m.resolvedImageUrl.isNotEmpty
+        ? m.resolvedImageUrl
+        : (opt?.uploadedImageUrl ?? '');
+    final localFile = opt?.localImageFile;
+    final hasImage = localFile != null || imageUrl.isNotEmpty;
+    final hasCopyableText = rawText.isNotEmpty &&
+        rawText != imageUrl &&
+        !(hasImage &&
+            (rawText.startsWith('http://') || rawText.startsWith('https://')));
+
     showModalBottomSheet(
       context: context,
       backgroundColor: ThemeService.card,
@@ -697,6 +1034,84 @@ class _GamerChatScreenState extends State<GamerChatScreen>
                 ),
               ),
             ),
+            // Quick Emoji Reaction Bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: ThemeService.cardSecondary,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ..._quickReactionEmojis.map((emoji) {
+                      final isSelected = _hasMyReactionForEmoji(m, emoji);
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _toggleReaction(m, emoji);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? neonBlue.withOpacity(0.28)
+                                : Colors.transparent,
+                            shape: BoxShape.circle,
+                            border: isSelected
+                                ? Border.all(color: neonCyan, width: 1.2)
+                                : null,
+                          ),
+                          child: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 22),
+                          ),
+                        ),
+                      );
+                    }),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _showExtendedEmojiReactionPicker(m);
+                      },
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: ThemeService.card,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: ThemeService.border),
+                        ),
+                        child: Icon(
+                          Icons.add_rounded,
+                          color: ThemeService.textSecondary,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.reply_rounded, color: neonCyan),
+              title: Text(
+                'Reply',
+                style: TextStyle(
+                  color: ThemeService.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _startReplyToMessage(m);
+              },
+            ),
             if (opt != null && opt.hasFailed)
               ListTile(
                 leading: const Icon(Icons.refresh_rounded, color: neonCyan),
@@ -712,27 +1127,47 @@ class _GamerChatScreenState extends State<GamerChatScreen>
                   _retryFailedMessage(opt);
                 },
               ),
-            ListTile(
-              leading: const Icon(Icons.copy_rounded, color: neonCyan),
-              title: Text(
-                'Copy Text',
-                style: TextStyle(
-                  color: ThemeService.textPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                Clipboard.setData(ClipboardData(text: m.message));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Copied to clipboard!'),
-                    backgroundColor: neonBlue,
-                    duration: Duration(seconds: 2),
+            if (hasImage)
+              ListTile(
+                leading:
+                    const Icon(Icons.fullscreen_rounded, color: neonCyan),
+                title: Text(
+                  'View Full Image',
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.bold,
                   ),
-                );
-              },
-            ),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openFullScreenImageViewer(
+                    imageUrl: imageUrl,
+                    localFile: localFile,
+                  );
+                },
+              ),
+            if (hasCopyableText)
+              ListTile(
+                leading: const Icon(Icons.copy_rounded, color: neonCyan),
+                title: Text(
+                  'Copy Text',
+                  style: TextStyle(
+                    color: ThemeService.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Clipboard.setData(ClipboardData(text: m.message));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Copied to clipboard!'),
+                      backgroundColor: neonBlue,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
             if (isMyMsg)
               ListTile(
                 leading: const Icon(
@@ -806,6 +1241,7 @@ class _GamerChatScreenState extends State<GamerChatScreen>
   ) {
     if (messages.isEmpty) return;
     DateTime? latestPartnerUtc;
+    int unreadPartnerCount = 0;
     for (int i = messages.length - 1; i >= 0; i--) {
       final m = messages[i];
       final sLower = m.senderId.toLowerCase();
@@ -814,9 +1250,19 @@ class _GamerChatScreenState extends State<GamerChatScreen>
           sLower == myUid.toLowerCase() ||
           sLower == SupabaseService.toUuid(myUid).toLowerCase();
       if (!isMyMsg) {
-        latestPartnerUtc = m.createdAt.toUtc();
-        break;
+        latestPartnerUtc ??= m.createdAt.toUtc();
+        if (!m.isRead) {
+          unreadPartnerCount++;
+        }
       }
+    }
+
+    if (unreadPartnerCount > 0 &&
+        unreadPartnerCount != _lastMarkedUnreadCount) {
+      _lastMarkedUnreadCount = unreadPartnerCount;
+      unawaited(_markAsRead());
+    } else if (unreadPartnerCount == 0) {
+      _lastMarkedUnreadCount = 0;
     }
 
     if (latestPartnerUtc != null) {
@@ -1276,6 +1722,149 @@ class _GamerChatScreenState extends State<GamerChatScreen>
     );
   }
 
+  Widget _buildQuotedReplyBoxInBubble(ChatMessage m, bool isMyMsg) {
+    final senderLabel = (m.replyToSenderName ?? '').trim().isNotEmpty
+        ? m.replyToSenderName!.trim()
+        : ((m.replyToSenderId != null &&
+                _isMessageFromMe(
+                  m.replyToSenderId!,
+                  _effectiveMyId,
+                ))
+            ? 'You'
+            : widget.otherUserName);
+    final snippet = (m.replyToText ?? '').trim().isNotEmpty
+        ? m.replyToText!.trim()
+        : ((m.replyToImageUrl ?? '').trim().isNotEmpty ? '📷 Photo' : 'Message');
+    final replyImg = (m.replyToImageUrl ?? '').trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: isMyMsg
+            ? Colors.black.withOpacity(0.22)
+            : ThemeService.cardSecondary.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(
+          left: BorderSide(
+            color: isMyMsg ? neonCyan : neonBlue,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  senderLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isMyMsg ? neonCyan : neonBlue,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  snippet,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isMyMsg
+                        ? Colors.white.withOpacity(0.88)
+                        : ThemeService.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (replyImg.isNotEmpty &&
+              (replyImg.startsWith('http://') ||
+                  replyImg.startsWith('https://'))) ...[
+            const SizedBox(width: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: CachedNetworkImage(
+                imageUrl: replyImg,
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReactionsRow(ChatMessage m, bool isMyMsg) {
+    final reactionsMap = _optimisticReactionsByMsgId[m.id] ?? m.reactions;
+    if (reactionsMap.isEmpty) return const SizedBox.shrink();
+
+    final nonEmptyEntries =
+        reactionsMap.entries.where((e) => e.value.isNotEmpty).toList();
+    if (nonEmptyEntries.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 3, bottom: 2),
+      child: Wrap(
+        spacing: 5,
+        runSpacing: 4,
+        alignment: isMyMsg ? WrapAlignment.end : WrapAlignment.start,
+        children: nonEmptyEntries.map((entry) {
+          final emoji = entry.key;
+          final count = entry.value.length;
+          final iReacted = _hasMyReactionForEmoji(m, emoji);
+          return GestureDetector(
+            onTap: () => _toggleReaction(m, emoji),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+              decoration: BoxDecoration(
+                color: iReacted
+                    ? neonBlue.withOpacity(0.28)
+                    : ThemeService.cardSecondary,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: iReacted ? neonCyan : ThemeService.border,
+                  width: iReacted ? 1.2 : 0.9,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    emoji,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  if (count > 1) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '$count',
+                      style: TextStyle(
+                        color: iReacted
+                            ? Colors.white
+                            : ThemeService.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(ChatMessage m, bool isMyMsg) {
     final opt = isMyMsg ? _findOptimisticForMessage(m) : null;
     final hasFailed = opt != null && opt.hasFailed;
@@ -1293,124 +1882,256 @@ class _GamerChatScreenState extends State<GamerChatScreen>
         !(hasImage &&
             (rawText.startsWith('http://') || rawText.startsWith('https://')));
 
+    final reactionsMap = _optimisticReactionsByMsgId[m.id] ?? m.reactions;
+    final hasReactions = reactionsMap.values.any((list) => list.isNotEmpty);
+
     return Align(
       alignment: isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onTap: hasFailed
-            ? () => _retryFailedMessage(opt!)
-            : (hasImage
-                ? () => _openFullScreenImageViewer(
+      child: Column(
+        crossAxisAlignment:
+            isMyMsg ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: hasFailed
+                ? () => _retryFailedMessage(opt!)
+                : (hasImage
+                    ? () => _openFullScreenImageViewer(
+                          imageUrl: imageUrl,
+                          localFile: localFile,
+                        )
+                    : () => _showMessageOptions(m, isMyMsg)),
+            onLongPress: () => _showMessageOptions(m, isMyMsg),
+            child: Container(
+              margin: EdgeInsets.only(
+                top: 5,
+                bottom: hasReactions ? 1 : 5,
+              ),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
+              ),
+              padding: hasImage
+                  ? const EdgeInsets.fromLTRB(6, 6, 6, 8)
+                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isMyMsg ? null : ThemeService.card,
+                gradient: isMyMsg
+                    ? LinearGradient(
+                        colors: hasFailed
+                            ? const [Color(0xFFB91C1C), Color(0xFFEF4444)]
+                            : const [Color(0xFF1877F2), Color(0xFF00A3FF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: hasFailed
+                      ? const Color(0xFFFF4655)
+                      : (isMyMsg
+                          ? neonCyan.withOpacity(0.5)
+                          : ThemeService.border),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: isMyMsg
+                        ? (hasFailed
+                            ? const Color(0xFFFF4655).withOpacity(0.22)
+                            : neonCyan.withOpacity(0.18))
+                        : Colors.black.withOpacity(
+                            ThemeService.isDarkMode ? 0.2 : 0.04,
+                          ),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (m.isReply) _buildQuotedReplyBoxInBubble(m, isMyMsg),
+                  if (hasImage)
+                    _buildChatImageContent(
                       imageUrl: imageUrl,
                       localFile: localFile,
-                    )
-                : null),
-        onLongPress: () => _showMessageOptions(m, isMyMsg),
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 5),
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.75,
-          ),
-          padding: hasImage
-              ? const EdgeInsets.fromLTRB(6, 6, 6, 8)
-              : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: isMyMsg ? null : ThemeService.card,
-            gradient: isMyMsg
-                ? LinearGradient(
-                    colors: hasFailed
-                        ? const [Color(0xFFB91C1C), Color(0xFFEF4444)]
-                        : const [Color(0xFF1877F2), Color(0xFF00A3FF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: hasFailed
-                  ? const Color(0xFFFF4655)
-                  : (isMyMsg ? neonCyan.withOpacity(0.5) : ThemeService.border),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isMyMsg
-                    ? (hasFailed
-                        ? const Color(0xFFFF4655).withOpacity(0.22)
-                        : neonCyan.withOpacity(0.18))
-                    : Colors.black
-                        .withOpacity(ThemeService.isDarkMode ? 0.2 : 0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (hasImage)
-                _buildChatImageContent(
-                  imageUrl: imageUrl,
-                  localFile: localFile,
-                  isUploading: isUploadingImage,
-                  hasFailed: hasFailed,
-                ),
-              if (hasCaption)
-                Padding(
-                  padding: hasImage
-                      ? const EdgeInsets.fromLTRB(8, 8, 8, 2)
-                      : EdgeInsets.zero,
-                  child: Text(
-                    m.message,
-                    style: TextStyle(
-                      color: isMyMsg ? Colors.white : ThemeService.textPrimary,
-                      fontSize: 13.5,
-                      height: 1.3,
+                      isUploading: isUploadingImage,
+                      hasFailed: hasFailed,
+                    ),
+                  if (hasCaption)
+                    Padding(
+                      padding: hasImage
+                          ? const EdgeInsets.fromLTRB(8, 8, 8, 2)
+                          : EdgeInsets.zero,
+                      child: Text(
+                        m.message,
+                        style: TextStyle(
+                          color:
+                              isMyMsg ? Colors.white : ThemeService.textPrimary,
+                          fontSize: 13.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 3),
+                  Padding(
+                    padding: hasImage
+                        ? const EdgeInsets.symmetric(horizontal: 6)
+                        : EdgeInsets.zero,
+                    child: Align(
+                      alignment: isMyMsg
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (hasFailed) ...[
+                            const Icon(
+                              Icons.error_outline_rounded,
+                              color: Colors.white,
+                              size: 12,
+                            ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'Failed • Tap to retry',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ] else
+                            Text(
+                              _formatTime(m.createdAt),
+                              style: TextStyle(
+                                color: isMyMsg
+                                    ? Colors.white70
+                                    : ThemeService.textSecondary
+                                        .withOpacity(0.8),
+                                fontSize: 10,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              const SizedBox(height: 3),
-              Padding(
-                padding: hasImage
-                    ? const EdgeInsets.symmetric(horizontal: 6)
-                    : EdgeInsets.zero,
-                child: Align(
-                  alignment:
-                      isMyMsg ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (hasFailed) ...[
-                        const Icon(
-                          Icons.error_outline_rounded,
-                          color: Colors.white,
-                          size: 12,
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          'Failed • Tap to retry',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ] else
-                        Text(
-                          _formatTime(m.createdAt),
-                          style: TextStyle(
-                            color: isMyMsg
-                                ? Colors.white70
-                                : ThemeService.textSecondary.withOpacity(0.8),
-                            fontSize: 10,
-                          ),
-                        ),
-                    ],
+                ],
+              ),
+            ),
+          ),
+          if (hasReactions) _buildReactionsRow(m, isMyMsg),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReplyingToBanner() {
+    final target = _replyingToMessage;
+    if (target == null) return const SizedBox.shrink();
+
+    final myAuthUid = _authService.currentUid ?? '';
+    final myGamerUid = _authService.currentGamer?.uid ?? '';
+    final sourceUid = myGamerUid.isNotEmpty ? myGamerUid : myAuthUid;
+    final myUid = _effectiveMyId.isNotEmpty ? _effectiveMyId : sourceUid;
+
+    final senderName = _resolveReplySenderName(target, myUid);
+    final snippetText = _resolveReplySnippetText(target);
+    final targetOpt = _findOptimisticForMessage(target);
+    final replyImgUrl = target.resolvedImageUrl.isNotEmpty
+        ? target.resolvedImageUrl
+        : (targetOpt?.uploadedImageUrl ?? '');
+    final replyLocalFile = targetOpt?.localImageFile;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: ThemeService.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: neonCyan.withOpacity(0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 34,
+            decoration: BoxDecoration(
+              color: neonCyan,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Icon(
+            Icons.reply_rounded,
+            color: neonCyan,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Replying to $senderName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: neonCyan,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11.5,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  snippetText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: ThemeService.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+          if (replyLocalFile != null) ...[
+            const SizedBox(width: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.file(
+                replyLocalFile,
+                width: 34,
+                height: 34,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ] else if (replyImgUrl.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: CachedNetworkImage(
+                imageUrl: replyImgUrl,
+                width: 34,
+                height: 34,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          ],
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: _cancelReply,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                Icons.close_rounded,
+                color: ThemeService.textSecondary,
+                size: 18,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1427,78 +2148,94 @@ class _GamerChatScreenState extends State<GamerChatScreen>
         color: ThemeService.bg,
         border: Border(top: BorderSide(color: ThemeService.border, width: 0.8)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: ThemeService.card,
-              shape: BoxShape.circle,
-              border: Border.all(color: ThemeService.border),
-            ),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              tooltip: 'Send Image',
-              icon: const Icon(
-                Icons.image_outlined,
-                color: neonCyan,
-                size: 21,
-              ),
-              onPressed: _pickAndSendImage,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                color: ThemeService.card,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: ThemeService.border),
-              ),
-              child: TextField(
-                controller: _messageController,
-                style: TextStyle(color: ThemeService.textPrimary, fontSize: 13.5),
-                textCapitalization: TextCapitalization.sentences,
-                onSubmitted: (_) => _sendMessage(),
-                decoration: InputDecoration(
-                  hintText: 'Type message...',
-                  hintStyle: TextStyle(
-                    color: ThemeService.textSecondary.withOpacity(0.6),
-                    fontSize: 13,
+          if (_replyingToMessage != null) _buildReplyingToBanner(),
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: ThemeService.card,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ThemeService.border),
+                ),
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  tooltip: 'Send Images (Up to 10)',
+                  icon: const Icon(
+                    Icons.add_photo_alternate_outlined,
+                    color: neonCyan,
+                    size: 21,
                   ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+                  onPressed: _pickAndSendImage,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: ThemeService.card,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: ThemeService.border),
+                  ),
+                  child: TextField(
+                    controller: _messageController,
+                    focusNode: _inputFocusNode,
+                    style: TextStyle(
+                      color: ThemeService.textPrimary,
+                      fontSize: 13.5,
+                    ),
+                    textCapitalization: TextCapitalization.sentences,
+                    onSubmitted: (_) => _sendMessage(),
+                    decoration: InputDecoration(
+                      hintText: _replyingToMessage != null
+                          ? 'Type a reply...'
+                          : 'Type message...',
+                      hintStyle: TextStyle(
+                        color: ThemeService.textSecondary.withOpacity(0.6),
+                        fontSize: 13,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1877F2), Color(0xFF00E5FF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: neonCyan.withOpacity(0.35),
-                  blurRadius: 8,
+              const SizedBox(width: 10),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1877F2), Color(0xFF00E5FF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: neonCyan.withOpacity(0.35),
+                      blurRadius: 8,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-              onPressed: _sendMessage,
-            ),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.send_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  onPressed: _sendMessage,
+                ),
+              ),
+            ],
           ),
         ],
       ),
